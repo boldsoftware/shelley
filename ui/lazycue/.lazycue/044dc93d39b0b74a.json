@@ -1,0 +1,59 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The transcript keeps the bottom when a tool card replaces its placeholder. The test seeds a conversation at /c/{{SLUG}} whose second, finished turn ends in a tall patch, so the page loads the patch as a completed tool card behind a placeholder (\".tool-card-mount-placeholder--patch\"). The page holds back IntersectionObserver reports about \".tool-card-mount-placeholder\" elements until window.releaseToolCards() delivers them, which swaps the placeholder for the card. \"The gap\" is the messages container's (\".messages-container\") scrollHeight - scrollTop - clientHeight. Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait for an element \".tool-card-mount-placeholder--patch\" to exist (allow 30s).\n2. Wait until the gap is below 2 (an eval of gap \u003c 2 expecting true).\n3. The placeholder's offsetHeight must be greater than 2 (an eval of offsetHeight \u003e 2 expecting true): without it the transcript would end above the current offset, the case that clamped.\n4. In one async eval (no expect, it has side effects), on the messages container: record before = its scrollTop; call window.releaseToolCards(); await Promise.resolve() (Vue flushes on a microtask queued during the release, so the card is in place but no frame has run); record after = its scrollTop and mounted = whether the container contains a \".patch-tool\"; store window.__swap = JSON.stringify({unchanged: after === before, mounted, scrolled: before \u003e 0}).\n5. window.__swap must be exactly {\"unchanged\":true,\"mounted\":true,\"scrolled\":true}.\n6. Wait for an element \".patch-tool diffs-container\" to exist.\n7. Wait until the gap is below 120 (allow 15s).\n8. document.querySelectorAll(\".scroll-to-bottom-button\").length must be exactly 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".tool-card-mount-placeholder--patch",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "const c = document.querySelector('.messages-container'); c.scrollHeight - c.scrollTop - c.clientHeight \u003c 2",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.tool-card-mount-placeholder--patch').offsetHeight \u003e 2",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const c = document.querySelector('.messages-container'); const before = c.scrollTop; window.releaseToolCards(); await Promise.resolve(); const after = c.scrollTop; const mounted = !!c.querySelector('.patch-tool'); window.__swap = JSON.stringify({unchanged: after === before, mounted, scrolled: before \u003e 0}); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__swap",
+      "expect": "{\"unchanged\":true,\"mounted\":true,\"scrolled\":true}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".patch-tool diffs-container",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const mc = document.querySelector('.messages-container'); return mc.scrollHeight - mc.scrollTop - mc.clientHeight \u003c 120; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.scroll-to-bottom-button').length",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:18:50.859729972Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 62318,
+    "output_tokens": 2127,
+    "estimated_cost_usd": 0.06953265,
+    "mode": "generated"
+  }
+}

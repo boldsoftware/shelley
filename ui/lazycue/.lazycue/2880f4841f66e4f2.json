@@ -1,0 +1,37 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A diff with no hunks does not strand its placeholder. The test seeds a conversation at /c/{{SLUG}} with two identical patch turns; the second one's diff is a no-op with no hunks, so it renders nothing. \"The second diff host\" is the second element matching \".patch-tool-diff-host\" (document.querySelectorAll(\".patch-tool-diff-host\")[1]); it is zero-height, so wait for it to exist, not to be visible. Wait with evals that have \"expect\" and a timeout, not with polling loops inside the expression. Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait until the second diff host exists (allow 30s).\n2. Wait until the second diff host's style.minHeight is empty, i.e. (host.style.minHeight || \"-\") is exactly \"-\" (allow 15s): the placeholder was released.\n3. Then the diff must really have hydrated and rendered nothing: for the second diff host's \"diffs-container\" element, JSON.stringify({hydrated: !!container?.shadowRoot, renderedDiff: !!container?.shadowRoot?.querySelector(\"pre\")}) must be exactly {\"hydrated\":true,\"renderedDiff\":false}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.patch-tool-diff-host').length \u003e= 2",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const host = document.querySelectorAll('.patch-tool-diff-host')[1]; return (host?.style.minHeight || '-'); })()",
+      "expect": "-",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const host = document.querySelectorAll('.patch-tool-diff-host')[1]; const container = host?.querySelector('diffs-container'); return JSON.stringify({hydrated: !!container?.shadowRoot, renderedDiff: !!container?.shadowRoot?.querySelector('pre')}); })()",
+      "expect": "{\"hydrated\":true,\"renderedDiff\":false}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:17:47.324257893Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 64252,
+    "output_tokens": 1817,
+    "estimated_cost_usd": 0.06400005,
+    "mode": "generated"
+  }
+}

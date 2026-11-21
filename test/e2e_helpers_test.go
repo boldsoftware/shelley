@@ -4,15 +4,18 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Helpers several ported Playwright specs share (ui/e2e/helpers.ts,
@@ -129,4 +132,23 @@ func (s *shelley) loremipsum(size string) convo {
 	}
 	s.api("GET", "/api/conversation/"+created.ID, nil, &got)
 	return convo{ID: created.ID, Slug: got.Conversation.Slug}
+}
+
+// sendChat sends a message to a conversation without waiting for the reply.
+func (s *shelley) sendChat(id, message string) {
+	s.api("POST", "/api/conversation/"+id+"/chat", map[string]string{"message": message, "model": "predictable"}, nil)
+}
+
+// waitTurns waits until a conversation has n finished agent turns.
+func (s *shelley) waitTurns(id string, n int) {
+	s.poll(30*time.Second, func() error {
+		var got struct {
+			Messages []apiMessage `json:"messages"`
+		}
+		s.api("GET", "/api/conversation/"+id, nil, &got)
+		if c := len(slices.DeleteFunc(got.Messages, func(m apiMessage) bool { return !m.endsTurn() })); c < n {
+			return errors.New("turn not finished yet")
+		}
+		return nil
+	})
 }

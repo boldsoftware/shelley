@@ -1,0 +1,133 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Autoscroll stays pinned to the bottom while tall diffs hydrate. The test seeds a conversation at /c/{{SLUG}}. Call \"big patch\" sends it the message \"big patch\", whose reply ends in a patch with a diff many viewports tall, and returns without waiting for the reply. The page already runs a sampler that the test installed before the page's own scripts; do not create, reset or replace the sampler, window.__sampledHosts or window.__emptyGaps (only read them, in step 4). It checks every \".patch-tool-diff-host\" element once per animation frame from page load on: window.__sampledHosts is the Set of hosts it has seen, and window.__emptyGaps counts the samples where a host had neither an inline style.minHeight (its placeholder) nor a rendered diff (a \"pre\" in the shadowRoot of its \"diffs-container\"). \"The gap\" is the messages container's (\".messages-container\") scrollHeight - scrollTop - clientHeight. Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) and the messages container to be visible.\n2. Then four turns, for N = 1, 2, 3 and 4 in turn (spell out each turn's steps with its own N): call \"big patch\"; wait until document.querySelectorAll(\".patch-tool\").length is exactly N (allow 30s); wait until the number of \"diffs-container\" elements whose shadow root has content, [...document.querySelectorAll(\"diffs-container\")].filter((el) =\u003e (el.shadowRoot?.innerHTML.length ?? 0) \u003e 0).length, is exactly N (allow 30s); then wait until the gap is below 120 (allow 15s).\n3. document.querySelectorAll(\".scroll-to-bottom-button\").length must be exactly 0: never scrolled away, so the button must not exist at all.\n4. window.__sampledHosts.size must be at least 4, and window.__emptyGaps must be exactly 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "big patch"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.patch-tool').length",
+      "expect": "1",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('diffs-container')].filter((el) =\u003e (el.shadowRoot?.innerHTML.length ?? 0) \u003e 0).length",
+      "expect": "1",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var c = document.querySelector('.messages-container'); return c.scrollHeight - c.scrollTop - c.clientHeight \u003c 120; })()",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "big patch"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.patch-tool').length",
+      "expect": "2",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('diffs-container')].filter((el) =\u003e (el.shadowRoot?.innerHTML.length ?? 0) \u003e 0).length",
+      "expect": "2",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var c = document.querySelector('.messages-container'); return c.scrollHeight - c.scrollTop - c.clientHeight \u003c 120; })()",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "big patch"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.patch-tool').length",
+      "expect": "3",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('diffs-container')].filter((el) =\u003e (el.shadowRoot?.innerHTML.length ?? 0) \u003e 0).length",
+      "expect": "3",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var c = document.querySelector('.messages-container'); return c.scrollHeight - c.scrollTop - c.clientHeight \u003c 120; })()",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "big patch"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.patch-tool').length",
+      "expect": "4",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('diffs-container')].filter((el) =\u003e (el.shadowRoot?.innerHTML.length ?? 0) \u003e 0).length",
+      "expect": "4",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var c = document.querySelector('.messages-container'); return c.scrollHeight - c.scrollTop - c.clientHeight \u003c 120; })()",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".scroll-to-bottom-button",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.__sampledHosts.size \u003e= 4",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__emptyGaps",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:34:23.452793332Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 58213,
+    "output_tokens": 3609,
+    "estimated_cost_usd": 0.09416820000000001,
+    "mode": "generated"
+  }
+}
