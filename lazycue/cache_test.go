@@ -138,6 +138,14 @@ func TestStepSummary(t *testing.T) {
 		{Step{Action: "click", Selector: "button", HasText: "Archive"}, `click button with text "Archive"`},
 		{Step{Action: "click", Role: "button", Name: "Archive"}, `click button "Archive"`},
 		{Step{Action: "assert_count", Selector: "nav", Role: "link", HasText: "x", Visible: true, Count: 2}, `assert_count visible link in nav with text "x" 2`},
+		{Step{Action: "assert_texts", Selector: "li", Texts: []string{"One", "Two"}}, `assert_texts li ["One","Two"]`},
+		{Step{Action: "assert_text_not_contains", Selector: "#p", Text: "bye"}, `assert_text_not_contains #p bye`},
+		{Step{Action: "assert_in_viewport", Selector: "#top"}, `assert_in_viewport #top`},
+		{Step{Action: "assert_not_in_viewport", Selector: "#top", Ratio: 0.5}, `assert_not_in_viewport #top ratio 0.5`},
+		{Step{Action: "click", Point: "cell(1, 2)"}, `click point cell(1, 2)`},
+		{Step{Action: "mouse_down", Point: "handle()", Button: "right"}, `mouse_down point handle() right`},
+		{Step{Action: "wheel", Point: "p", X: ptr(0.0), Y: ptr(10.0)}, `wheel 0,10 at point p`},
+		{Step{Action: "touch", Value: "start", Point: "p", Points: "0,0 9,9"}, `touch start point p at 0,0 9,9`},
 	}
 	for _, tt := range tests {
 		got := StepSummary(tt.step)

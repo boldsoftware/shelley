@@ -261,3 +261,13 @@ func mustSplit(t *testing.T, s string) []string {
 	}
 	return args
 }
+
+// The agent hears which device the test launched, so it doesn't set one.
+func TestEnvPromptNamesTheDevice(t *testing.T) {
+	if got := envPrompt(&Env{}); !strings.Contains(got, "DEVICE: a Pixel 5 (the default): 393x727 CSS pixels at scale 2.75, mobile, with a touch screen") {
+		t.Errorf("default device prompt = %q", got)
+	}
+	if got := envPrompt(&Env{Launch: Launch{Device: &Device{Width: 1280, Height: 800, Scale: 1}}}); !strings.Contains(got, "DEVICE: 1280x800 CSS pixels at scale 1, not mobile, without a touch screen") {
+		t.Errorf("launched device prompt = %q", got)
+	}
+}

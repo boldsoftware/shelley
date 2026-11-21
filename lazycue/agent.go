@@ -200,9 +200,9 @@ Available DSL actions:
 - insert_text: {"action": "insert_text", "value": "..."} - Insert text at the caret of the focused element as an IME or emoji picker would: one input event, no key events.
 - click: {"action": "click", "selector": "..."} - Click the element's center. Like a user, it waits until the element is visible, holding still, enabled and not covered by another element there, scrolling it into view. Optional: "x" and "y" (both or neither) click that many CSS pixels from the element's top-left corner instead (without a selector, at that point of the viewport); "button": "right" or "middle"; "count": 2 for a double click; "modifiers": "Shift" (as for press_key) to hold keys during it.
 - hover: {"action": "hover", "selector": "..."} - Move the mouse over the element (mouseenter fires and CSS :hover applies) without clicking; waits like click, takes "x"/"y" like click, and "count": N moves there in N steps from where the pointer was (to drag).
-- mouse_down / mouse_up: {"action": "mouse_down", "button": "left"} - Press or release a mouse button where the pointer is. Drag: hover the start, mouse_down, hover the end with "count": 10, mouse_up. Hover, mouse_down, mouse_up and wheel take "modifiers" like click.
-- wheel: {"action": "wheel", "x": 0, "y": 300} - Turn the mouse wheel where the pointer is, scrolling by x,y pixels.
-- touch: {"action": "touch", "value": "start", "selector": "..."} - Touch screen: "value" is start (fingers down), move, end or cancel (all fingers up; no selector). Start and move put one finger where a click would land ("x"/"y" as for click), or several at "points": "10,10 60,10" (x,y offsets from the element's top-left corner, or the viewport's without a selector). A move with "count": N gets there in N even steps from where each finger was (to drag).
+- mouse_down / mouse_up: {"action": "mouse_down", "button": "left"} - Press or release a mouse button where the pointer is (or first move it to "point"). Drag: hover the start, mouse_down, hover the end with "count": 10, mouse_up. Hover, mouse_down, mouse_up and wheel take "modifiers" like click.
+- wheel: {"action": "wheel", "x": 0, "y": 300} - Turn the mouse wheel where the pointer is (or first move it to "point"), scrolling by x,y pixels.
+- touch: {"action": "touch", "value": "start", "selector": "..."} - Touch screen: "value" is start (fingers down), move, end or cancel (all fingers up; no selector). Start and move put one finger where a click would land ("x"/"y" as for click), or several at "points": "10,10 60,10" (x,y offsets from the element's top-left corner, or the viewport's without a selector). A move with "count": N gets there in N even steps from where each finger was (to drag). With "point", "points" are offsets from the point.
 - press_key: {"action": "press_key", "key": "Enter", "modifiers": "Shift"} - Press one key on the focused element. "key" is a KeyboardEvent.key name (Enter, Tab, Escape, Backspace, Delete, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown, F1-F12, Insert), "Space", or a single character. A capital letter or shifted symbol ("P", "?") also holds Shift, as on a real keyboard, so a shortcut written Ctrl+P is key "p" with modifiers "Control". Optional modifiers: Shift, Control, Alt, Meta (combine with "+"). Focus the target first (click or fill it).
 - key_down / key_up: {"action": "key_down", "key": "Shift"} - Press a key and keep it held until key_up, as for press_key. A held Shift, Control, Alt or Meta modifies every later key and mouse step. A key_down of a key already held repeats it (KeyboardEvent.repeat), as holding a key does.
 - set_viewport: {"action": "set_viewport", "width": 1280, "height": 800, "scale": 1, "mobile": false, "touch": false} - Change the emulated device for the rest of the test; omitted fields keep their value. Whether the page sees a touch screen changes on the next navigate.
@@ -213,7 +213,9 @@ Available DSL actions:
 - assert_visible: {"action": "assert_visible", "selector": "..."} - Assert element is visible
 - assert_not_visible: {"action": "assert_not_visible", "selector": "..."} - Assert element is not visible
 - assert_text: {"action": "assert_text", "selector": "...", "text": "..."} - Assert exact text content
-- assert_text_contains: {"action": "assert_text_contains", "selector": "...", "text": "..."} - Assert text contains substring
+- assert_text_contains / assert_text_not_contains: {"action": "assert_text_contains", "selector": "...", "text": "..."} - Assert the element's text contains, or does not contain, the text, whitespace collapsed. When the description names an element, assert on that element this way rather than with a page-wide wait_text.
+- assert_texts: {"action": "assert_texts", "selector": "li", "texts": ["One", "Two"]} - Assert the texts of ALL the matches, whitespace collapsed: as many as listed, equal, in that order, like Playwright's toHaveText([...]). "texts": [] (or none) asserts there are no matches.
+- assert_in_viewport / assert_not_in_viewport: {"action": "assert_in_viewport", "selector": "...", "ratio": 0.5} - Assert any part of the element (or, with "ratio", at least that share of it) is or is not inside the viewport, after clipping by scrolling ancestors, like Playwright's toBeInViewport. The element must exist.
 - assert_attribute: {"action": "assert_attribute", "selector": "...", "attribute": "...", "value": "..."} - Assert an attribute is present with this value; it fails when the attribute is absent, even for value "". To check that an attribute is present or absent, use assert_count with an attribute selector, e.g. {"action": "assert_count", "selector": "details:not([open])", "count": 1}. For disabled state use assert_enabled / assert_disabled.
 - assert_value: {"action": "assert_value", "selector": "...", "value": "..."} - Assert the current value of an input, textarea or select (the DOM property, which typing changes; not the value attribute).
 - assert_enabled / assert_disabled: {"action": "assert_enabled", "selector": "..."} - Assert a control is enabled or disabled: disabled means a disabled form control (or one in a disabled fieldset) or inside aria-disabled="true".
@@ -231,6 +233,8 @@ Every assert_* and wait_* step retries until it holds or its timeout (default 15
 Visible means rendered with a box of some size and not visibility: hidden; opacity does not matter. Selectors are CSS and match the first element. Any step with a selector may add "has_text": "..." to keep only the elements whose text contains it (whitespace collapsed), e.g. {"action": "click", "selector": "button", "has_text": "Archive"}; prefer it to eval for picking an element by its text. Of nested matches only the innermost counts, so {"selector": "*", "has_text": "Saved"} is the element that holds the text itself, not <html>. The browser emulates a Pixel 5 phone (393x727, touch screen) that prefers reduced motion and may use the clipboard, unless the test launched it otherwise.
 
 ROLES: like Playwright's getByRole, any step that takes a selector may instead pick elements by "role" and accessible "name": {"action": "click", "role": "button", "name": "Archive"}. Prefer them to CSS for controls, dialogs, menus and headings. The role is an ARIA role, explicit or implicit: button, link, textbox (<input>, <textarea>), searchbox (<input type=search>), checkbox, radio, switch, combobox (<select>), listbox, option, menu, menuitem, menuitemcheckbox, menuitemradio, tab, tablist, tabpanel, dialog, alertdialog, heading, img, list, listitem, region (<section> with a label), navigation, main, group, toolbar, tooltip, status, alert, progressbar, slider, table, row, cell, … The name is what a screen reader announces (aria-label, aria-labelledby, a <label>, alt, placeholder, or the text inside), matched as a case-insensitive substring with whitespace collapsed. Elements hidden from screen readers (display: none, visibility: hidden, aria-hidden) never match. With a "selector" too, only role matches inside an element it matches count, e.g. {"selector": "[role=dialog]", "role": "button", "name": "Save"}; "has_text" further keeps those whose text contains it. Two more fields narrow any element step: "exact": true matches the whole name and has_text, case-sensitively; "visible": true keeps only visible matches, e.g. {"selector": "button", "has_text": "Copy", "visible": true}.
+
+POINTS: click, hover, mouse_down, mouse_up, touch and wheel may aim at "point" instead: a JS expression giving {x, y} in viewport CSS pixels, computed as the step runs (and awaited), e.g. {"action": "click", "point": "(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return {x: r.left + 5 * r.width / 80, y: r.top + 2 * r.height / 24}; })()"} for a cell of a terminal, or a handle's center plus an offset to drag from just outside it. It is re-run until it gives a finite point inside the viewport; nothing there is waited for or checked, like Playwright's page.mouse. Use a selector or role when the target is an element.
 
 TABS: any step may add "tab": "<name>" to act in another tab of the same browser profile — like a user with two tabs open, the tabs share localStorage, cookies and IndexedDB but have their own windows. The tab the browser started with has no name: steps without "tab" act in it, and a description's "this tab", "the first tab" or "tab A" means it, so never give it a name (a navigate with a new name opens ANOTHER tab). A navigate step with a not-yet-open tab name opens that tab; {"action": "navigate", "tab": "B"} with no url opens it on the page the first tab is currently on (use this for a URL the app assigned, like a conversation's /c/<slug>). When a description says "in tab B" or "another tab", use this rather than iframes or window.open.
 
@@ -384,9 +388,22 @@ func buildTools() []apiTool {
 	}
 }
 
-// envPrompt tells the agent about the placeholders and calls its app offers.
+// envPrompt tells the agent about the device its test launched and the
+// placeholders and calls its app offers.
 func envPrompt(env *Env) string {
 	var sb strings.Builder
+	d := env.Launch.device()
+	name, mobile, touch := "", "not mobile", "without"
+	if d == Pixel5 {
+		name = "a Pixel 5 (the default): "
+	}
+	if d.Mobile {
+		mobile = "mobile"
+	}
+	if d.Touch {
+		touch = "with"
+	}
+	fmt.Fprintf(&sb, "\n\nDEVICE: %s%dx%d CSS pixels at scale %g, %s, %s a touch screen. The test launched it, so don't set_viewport unless the description asks for another device or size.\n", name, d.Width, d.Height, d.Scale, mobile, touch)
 	if len(env.Vars) > 0 {
 		sb.WriteString("\n\nPLACEHOLDERS: their values change from run to run (each run_steps result lists that run's). Steps must write the placeholder, never the value; the harness substitutes it in every string field. In the first run:\n")
 		for _, name := range slices.Sorted(maps.Keys(env.Vars)) {

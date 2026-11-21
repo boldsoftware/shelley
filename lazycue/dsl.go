@@ -3,6 +3,7 @@ package lazycue
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -31,6 +32,15 @@ type Step struct {
 	Key        string  `json:"key,omitempty"`
 	Modifiers  string  `json:"modifiers,omitempty"`
 	Count      int     `json:"count,omitempty"`
+	// Texts are what an assert_texts step expects of its matches, in order.
+	Texts []string `json:"texts,omitempty"`
+	// Ratio is the share of an element an assert_in_viewport step needs in
+	// the viewport, or an assert_not_in_viewport step forbids; unset is any.
+	Ratio float64 `json:"ratio,omitempty"`
+	// Point is a JS expression for where a pointer step aims, computed as it
+	// runs: an {x, y} in viewport CSS pixels, in place of a selector, role, x
+	// and y. Nothing there is waited for, as with Playwright's page.mouse.
+	Point string `json:"point,omitempty"`
 	// X and Y are a pointer step's offset in CSS pixels from the element's
 	// top-left corner (unset means its center), a point in the viewport
 	// without a selector, or a wheel step's scroll distances.
@@ -43,8 +53,8 @@ type Step struct {
 	// left (the default), right or middle.
 	Button string `json:"button,omitempty"`
 	// Points lists a touch step's fingers as "x,y" offsets in CSS pixels from
-	// the element's top-left corner, separated by spaces; unset is one finger
-	// at x,y (or the element's center).
+	// the element's top-left corner (or from Point), separated by spaces;
+	// unset is one finger at x,y (or the element's center).
 	Points string `json:"points,omitempty"`
 	// Width, Height, Scale, Mobile and Touch describe a set_viewport step's
 	// device; unset fields keep their current value.
@@ -59,48 +69,52 @@ type Step struct {
 
 // Supported action names.
 const (
-	ActionNavigate           = "navigate"
-	ActionReload             = "reload"
-	ActionGoBack             = "go_back"
-	ActionGoForward          = "go_forward"
-	ActionWaitVisible        = "wait_visible"
-	ActionWaitHidden         = "wait_hidden"
-	ActionWaitText           = "wait_text"
-	ActionWaitTextGone       = "wait_text_gone"
-	ActionFill               = "fill"
-	ActionClick              = "click"
-	ActionHover              = "hover"
-	ActionPressKey           = "press_key"
-	ActionKeyDown            = "key_down"
-	ActionKeyUp              = "key_up"
-	ActionScreenshot         = "screenshot"
-	ActionEval               = "eval"
-	ActionAssertVisible      = "assert_visible"
-	ActionAssertNotVisible   = "assert_not_visible"
-	ActionAssertText         = "assert_text"
-	ActionAssertTextContains = "assert_text_contains"
-	ActionAssertAttribute    = "assert_attribute"
-	ActionAssertValue        = "assert_value"
-	ActionAssertEnabled      = "assert_enabled"
-	ActionAssertDisabled     = "assert_disabled"
-	ActionAssertFocused      = "assert_focused"
-	ActionWaitURL            = "wait_url"
-	ActionAssertURL          = "assert_url"
-	ActionAssertTitle        = "assert_title"
-	ActionAssertCount        = "assert_count"
-	ActionSleep              = "sleep"
-	ActionCloseTab           = "close_tab"
-	ActionSetViewport        = "set_viewport"
-	ActionEmulateMedia       = "emulate_media"
-	ActionCall               = "call"
-	ActionType               = "type"
-	ActionInsertText         = "insert_text"
-	ActionMouseDown          = "mouse_down"
-	ActionMouseUp            = "mouse_up"
-	ActionWheel              = "wheel"
-	ActionTouch              = "touch"
-	ActionCollectGarbage     = "collect_garbage"
-	ActionRetry              = "retry"
+	ActionNavigate              = "navigate"
+	ActionReload                = "reload"
+	ActionGoBack                = "go_back"
+	ActionGoForward             = "go_forward"
+	ActionWaitVisible           = "wait_visible"
+	ActionWaitHidden            = "wait_hidden"
+	ActionWaitText              = "wait_text"
+	ActionWaitTextGone          = "wait_text_gone"
+	ActionFill                  = "fill"
+	ActionClick                 = "click"
+	ActionHover                 = "hover"
+	ActionPressKey              = "press_key"
+	ActionKeyDown               = "key_down"
+	ActionKeyUp                 = "key_up"
+	ActionScreenshot            = "screenshot"
+	ActionEval                  = "eval"
+	ActionAssertVisible         = "assert_visible"
+	ActionAssertNotVisible      = "assert_not_visible"
+	ActionAssertText            = "assert_text"
+	ActionAssertTextContains    = "assert_text_contains"
+	ActionAssertTextNotContains = "assert_text_not_contains"
+	ActionAssertTexts           = "assert_texts"
+	ActionAssertInViewport      = "assert_in_viewport"
+	ActionAssertNotInViewport   = "assert_not_in_viewport"
+	ActionAssertAttribute       = "assert_attribute"
+	ActionAssertValue           = "assert_value"
+	ActionAssertEnabled         = "assert_enabled"
+	ActionAssertDisabled        = "assert_disabled"
+	ActionAssertFocused         = "assert_focused"
+	ActionWaitURL               = "wait_url"
+	ActionAssertURL             = "assert_url"
+	ActionAssertTitle           = "assert_title"
+	ActionAssertCount           = "assert_count"
+	ActionSleep                 = "sleep"
+	ActionCloseTab              = "close_tab"
+	ActionSetViewport           = "set_viewport"
+	ActionEmulateMedia          = "emulate_media"
+	ActionCall                  = "call"
+	ActionType                  = "type"
+	ActionInsertText            = "insert_text"
+	ActionMouseDown             = "mouse_down"
+	ActionMouseUp               = "mouse_up"
+	ActionWheel                 = "wheel"
+	ActionTouch                 = "touch"
+	ActionCollectGarbage        = "collect_garbage"
+	ActionRetry                 = "retry"
 )
 
 // ParseSteps parses a JSON array of steps.
@@ -144,15 +158,23 @@ func stepSummary(s Step) string {
 	case ActionHover:
 		return "hover " + describe(s) + pointSuffix(s)
 	case ActionMouseDown, ActionMouseUp:
+		out := s.Action
+		if s.Point != "" {
+			out += " " + describe(s)
+		}
 		if s.Button != "" {
-			return s.Action + " " + s.Button
+			out += " " + s.Button
 		}
-		return s.Action
+		return out
 	case ActionWheel:
+		out := "wheel"
 		if s.X != nil && s.Y != nil {
-			return fmt.Sprintf("wheel %g,%g", *s.X, *s.Y)
+			out += fmt.Sprintf(" %g,%g", *s.X, *s.Y)
 		}
-		return "wheel"
+		if s.Point != "" {
+			out += " at " + describe(s)
+		}
+		return out
 	case ActionTouch:
 		if s.Points != "" {
 			return "touch " + s.Value + " " + describe(s) + " at " + s.Points + countSuffix(s)
@@ -196,8 +218,15 @@ func stepSummary(s Step) string {
 		return "eval " + expr
 	case ActionAssertText:
 		return "assert_text " + describe(s) + " " + truncateArg(s.Text, 30)
-	case ActionAssertTextContains:
-		return "assert_text_contains " + describe(s) + " " + truncateArg(s.Text, 30)
+	case ActionAssertTextContains, ActionAssertTextNotContains:
+		return s.Action + " " + describe(s) + " " + truncateArg(s.Text, 30)
+	case ActionAssertTexts:
+		return "assert_texts " + describe(s) + " " + truncateArg(quoteList(s.Texts), 40)
+	case ActionAssertInViewport, ActionAssertNotInViewport:
+		if s.Ratio != 0 {
+			return fmt.Sprintf("%s %s ratio %g", s.Action, describe(s), s.Ratio)
+		}
+		return s.Action + " " + describe(s)
 	case ActionAssertAttribute:
 		return "assert_attribute " + describe(s) + " " + s.Attribute + "=" + truncateArg(s.Value, 20)
 	case ActionAssertValue:
@@ -232,8 +261,11 @@ func stepSummary(s Step) string {
 }
 
 // describe names what a step's selector, role, name, has_text and visible
-// pick out, e.g. `button "Archive" in nav`.
+// pick out, e.g. `button "Archive" in nav`, or its point.
 func describe(s Step) string {
+	if s.Point != "" {
+		return "point " + truncateArg(s.Point, 40)
+	}
 	d := s.Selector
 	if s.Role != "" {
 		d = s.Role
@@ -274,6 +306,20 @@ func countSuffix(s Step) string {
 		return fmt.Sprintf(" x%d", s.Count)
 	}
 	return ""
+}
+
+// quoteList quotes ss in a list, e.g. ["a","b"].
+func quoteList(ss []string) string {
+	q := make([]string, len(ss))
+	for i, s := range ss {
+		q[i] = strconv.Quote(s)
+	}
+	return "[" + strings.Join(q, ",") + "]"
+}
+
+// collapse collapses runs of whitespace in s to one space and trims it.
+func collapse(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 func truncateArg(s string, max int) string {

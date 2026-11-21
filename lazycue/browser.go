@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"regexp"
 	"runtime"
 	"slices"
@@ -279,6 +280,7 @@ func substitute(step Step, vars map[string]string) (Step, error) {
 		expect := *step.Expect
 		step.Expect = &expect
 	}
+	step.Texts = slices.Clone(step.Texts)
 	for _, f := range stringFields(&step) {
 		*f = placeholder.ReplaceAllStringFunc(*f, func(m string) string {
 			name := m[2 : len(m)-2]
@@ -299,10 +301,13 @@ func substitute(step Step, vars map[string]string) (Step, error) {
 func stringFields(s *Step) []*string {
 	fields := []*string{
 		&s.URL, &s.Selector, &s.Role, &s.Name, &s.HasText, &s.Value, &s.Text,
-		&s.Expression, &s.Attribute, &s.Key, &s.Points,
+		&s.Expression, &s.Attribute, &s.Key, &s.Points, &s.Point,
 	}
 	if s.Expect != nil {
 		fields = append(fields, s.Expect)
+	}
+	for i := range s.Texts {
+		fields = append(fields, &s.Texts[i])
 	}
 	return fields
 }
@@ -777,6 +782,14 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		if step.Action == ActionMouseUp {
 			typ = input.MouseReleased
 		}
+		if step.Point != "" {
+			return b.atPoint(ctx, tabCtx, timeout, step, false, func(ctx context.Context, x, y float64) error {
+				if err := moveMouse(ctx, st, x, y, 1, mods); err != nil {
+					return err
+				}
+				return mouseButtonEvent(ctx, st, typ, button, 1, mods)
+			})
+		}
 		return runBounded(chromedp.ActionFunc(func(ctx context.Context) error {
 			return mouseButtonEvent(ctx, st, typ, button, 1, mods)
 		}))
@@ -789,7 +802,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		if err != nil {
 			return err
 		}
-		return runBounded(chromedp.ActionFunc(func(ctx context.Context) error {
+		wheel := func(ctx context.Context) error {
 			return (&input.DispatchMouseEventParams{
 				Type:      input.MouseWheel,
 				X:         st.mouseX,
@@ -799,6 +812,19 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 				DeltaY:    *step.Y,
 				Modifiers: st.keys | mods,
 			}).Do(ctx)
+		}
+		if step.Point == "" {
+			return runBounded(chromedp.ActionFunc(wheel))
+		}
+		x, y, err := b.point(ctx, tabCtx, timeout, step)
+		if err != nil {
+			return err
+		}
+		return runBounded(chromedp.ActionFunc(func(ctx context.Context) error {
+			if err := moveMouse(ctx, st, x, y, 1, mods); err != nil {
+				return err
+			}
+			return wheel(ctx)
 		}))
 
 	case ActionTouch:
@@ -931,14 +957,61 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 			return nil
 		})
 
-	case ActionAssertTextContains:
+	case ActionAssertTextContains, ActionAssertTextNotContains:
+		want := step.Action == ActionAssertTextContains
 		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
 			got, err := elementString(runCtx, step, "el.textContent")
 			if err != nil {
-				return fmt.Errorf("assert_text_contains: %w", err)
+				return fmt.Errorf("%s: %w", step.Action, err)
 			}
-			if !strings.Contains(got, step.Text) {
-				return fmt.Errorf("assert_text_contains: %q not found in %q", step.Text, got)
+			got = collapse(got)
+			has := strings.Contains(got, collapse(step.Text))
+			if has && !want {
+				return fmt.Errorf("%s: %q found in %q", step.Action, step.Text, got)
+			}
+			if !has && want {
+				return fmt.Errorf("%s: %q not found in %q", step.Action, step.Text, got)
+			}
+			return nil
+		})
+
+	case ActionAssertTexts:
+		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
+			var got []string
+			if err := evalFind(runCtx, step, findAllJS(step)+`.map(el => el.textContent.replace(/\s+/g, ' ').trim())`, &got); err != nil {
+				return fmt.Errorf("assert_texts: %w", err)
+			}
+			if !slices.Equal(got, step.Texts) {
+				return fmt.Errorf("assert_texts: expected %s, got %s", quoteList(step.Texts), quoteList(got))
+			}
+			return nil
+		})
+
+	case ActionAssertInViewport, ActionAssertNotInViewport:
+		if step.Ratio < 0 || step.Ratio > 1 {
+			return fmt.Errorf("%s: ratio %g is not between 0 and 1", step.Action, step.Ratio)
+		}
+		want := step.Action == ActionAssertInViewport
+		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
+			var ratio float64
+			if err := evalFind(runCtx, step, fmt.Sprintf(`(function(el) {
+				if (!el) throw new Error(%q);
+				return new Promise(resolve => {
+					const o = new IntersectionObserver(entries => {
+						o.disconnect();
+						resolve(entries[0].intersectionRatio);
+					});
+					o.observe(el);
+				});
+			})(%s)`, "no element matches "+describe(step), findJS(step)), &ratio); err != nil {
+				return fmt.Errorf("%s: %w", step.Action, err)
+			}
+			in := ratio > 0
+			if step.Ratio > 0 {
+				in = ratio >= step.Ratio
+			}
+			if in != want {
+				return fmt.Errorf("%s: %s is %s%% in the viewport", step.Action, describe(step), strconv.FormatFloat(math.Round(ratio*1000)/10, 'f', -1, 64))
 			}
 			return nil
 		})
@@ -1150,7 +1223,7 @@ func locate(step Step) chromedp.Action {
 		if err != nil {
 			return fmt.Errorf("query the accessibility tree: %w", err)
 		}
-		want := strings.Join(strings.Fields(step.Name), " ")
+		want := collapse(step.Name)
 		var args []*cdpruntime.CallArgument
 		for _, n := range nodes {
 			if n.Ignored || n.BackendDOMNodeID == 0 {
@@ -1161,7 +1234,7 @@ func locate(step Step) chromedp.Action {
 				if n.Name != nil {
 					_ = json.Unmarshal(n.Name.Value, &name) // not a string: no name
 				}
-				name = strings.Join(strings.Fields(name), " ")
+				name = collapse(name)
 				if step.Exact && name != want || !step.Exact && !strings.Contains(strings.ToLower(name), strings.ToLower(want)) {
 					continue
 				}
@@ -1301,6 +1374,16 @@ func (b *Browser) atPoint(ctx, tabCtx context.Context, timeout time.Duration, st
 		defer cancel()
 		return chromedp.Run(runCtx, chromedp.ActionFunc(func(ctx context.Context) error { return f(ctx, x, y) }))
 	}
+	if step.Point != "" {
+		if step.Selector != "" || step.Role != "" || step.X != nil {
+			return fmt.Errorf("%s: point replaces selector, role, x and y", step.Action)
+		}
+		x, y, err := b.point(ctx, tabCtx, timeout, step)
+		if err != nil {
+			return err
+		}
+		return dispatch(x, y)
+	}
 	if step.Selector == "" && step.Role == "" {
 		if step.X == nil {
 			return fmt.Errorf("%s: set a selector or role, or x and y", step.Action)
@@ -1330,6 +1413,37 @@ func (b *Browser) atPoint(ctx, tabCtx context.Context, timeout time.Duration, st
 		return err
 	}
 	return dispatch(target.X, target.Y)
+}
+
+// point evaluates a step's point until it gives a finite {x, y} inside the
+// viewport.
+func (b *Browser) point(ctx, tabCtx context.Context, timeout time.Duration, step Step) (x, y float64, err error) {
+	expr := fmt.Sprintf(`(async () => {
+		const p = await (
+%s
+		);
+		const ok = p !== null && typeof p === 'object' && Number.isFinite(p.x) && Number.isFinite(p.y);
+		return {ok, got: ok ? '' : String(JSON.stringify(p)), x: ok ? p.x : 0, y: ok ? p.y : 0, w: innerWidth, h: innerHeight};
+	})()`, step.Point)
+	var p struct {
+		OK   bool
+		Got  string
+		X, Y float64
+		W, H float64
+	}
+	err = b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
+		if err := chromedp.Run(runCtx, evaluate(expr, &p)); err != nil {
+			return fmt.Errorf("%s: point: %w", step.Action, err)
+		}
+		if !p.OK {
+			return fmt.Errorf("%s: point is %s, not {x, y}", step.Action, p.Got)
+		}
+		if p.X < 0 || p.X >= p.W || p.Y < 0 || p.Y >= p.H {
+			return fmt.Errorf("%s: point %g,%g is outside the %gx%g viewport", step.Action, p.X, p.Y, p.W, p.H)
+		}
+		return nil
+	})
+	return p.X, p.Y, err
 }
 
 // pollCheck repeatedly runs check until it returns nil or the timeout expires,
@@ -1639,13 +1753,18 @@ func (b *Browser) touch(ctx, tabCtx context.Context, st *tabState, timeout time.
 	if len(offsets) == 0 {
 		return fmt.Errorf("touch: no points in %q", step.Points)
 	}
-	// Aim at the first finger, then place the rest relative to it.
+	// Aim at the first finger, then place the rest relative to it; with a
+	// point, aim at the point the offsets start from.
 	first := step
-	first.X, first.Y = &offsets[0][0], &offsets[0][1]
+	var ox, oy float64
+	if step.Point == "" {
+		first.X, first.Y = &offsets[0][0], &offsets[0][1]
+		ox, oy = offsets[0][0], offsets[0][1]
+	}
 	return b.atPoint(ctx, tabCtx, timeout, first, false, func(ctx context.Context, x, y float64) error {
 		var points []*input.TouchPoint
 		for i, o := range offsets {
-			points = append(points, &input.TouchPoint{X: x + o[0] - offsets[0][0], Y: y + o[1] - offsets[0][1], ID: float64(i + 1)})
+			points = append(points, &input.TouchPoint{X: x + o[0] - ox, Y: y + o[1] - oy, ID: float64(i + 1)})
 		}
 		return send(ctx, points)
 	})

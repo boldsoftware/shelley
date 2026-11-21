@@ -660,3 +660,116 @@ func TestRetry(t *testing.T) {
 		t.Errorf("nested retry = %v", err)
 	}
 }
+
+func TestListAndTextAssertions(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<ul><li> One </li><li>Two
+  words</li><li style="display: none">Three</li></ul>
+<button>Save</button><button>Cancel</button>
+<p id="p">hello world</p>
+<script>setTimeout(() => { document.querySelector('ul').insertAdjacentHTML('beforeend', '<li>Four</li>'); document.getElementById('p').textContent = 'hello there'; }, 300);</script>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionAssertTexts, Selector: "li", Texts: []string{"One", "Two words", "Three", "Four"}},
+		Step{Action: ActionAssertTexts, Selector: "li", Visible: true, Texts: []string{"One", "Two words", "Four"}},
+		Step{Action: ActionAssertTexts, Role: "button", Texts: []string{"Save", "Cancel"}},
+		Step{Action: ActionAssertTexts, Selector: "table"},
+		Step{Action: ActionAssertTextNotContains, Selector: "#p", Text: "world"},
+		Step{Action: ActionAssertTextNotContains, Selector: "#p", Text: "bye"},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		{Step{Action: ActionAssertTexts, Selector: "li", Texts: []string{"One", "Two"}}, `assert_texts: expected ["One","Two"], got ["One","Two words","Three","Four"]`},
+		{Step{Action: ActionAssertTexts, Selector: "li", Texts: []string{"Four", "One", "Two words", "Three"}}, `got ["One","Two words","Three","Four"]`},
+		{Step{Action: ActionAssertTextNotContains, Selector: "#p", Text: "there"}, `assert_text_not_contains: "there" found in "hello there"`},
+		{Step{Action: ActionAssertTextNotContains, Selector: "#q", Text: "there"}, `no element matches #q`},
+	} {
+		c.step.Timeout = "300ms"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+}
+
+func TestViewportAssertions(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0; height: 5000px">
+<div id="top" style="height: 10px"></div>
+<div id="half" style="position: absolute; top: calc(100vh - 50px); height: 100px; width: 50px"></div>
+<div id="far" style="position: absolute; top: 3000px; height: 10px; width: 10px"></div>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionAssertInViewport, Selector: "#top"},
+		Step{Action: ActionAssertNotInViewport, Selector: "#far"},
+		Step{Action: ActionAssertInViewport, Selector: "#half"},
+		Step{Action: ActionAssertInViewport, Selector: "#half", Ratio: 0.4},
+		Step{Action: ActionAssertNotInViewport, Selector: "#half", Ratio: 0.6},
+		Step{Action: ActionEval, Expression: `setTimeout(() => scrollTo(0, 2900), 300)`},
+		Step{Action: ActionAssertInViewport, Selector: "#far", Ratio: 1},
+		Step{Action: ActionAssertNotInViewport, Selector: "#top"},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		{Step{Action: ActionAssertInViewport, Selector: "#top"}, `assert_in_viewport: #top is 0% in the viewport`},
+		{Step{Action: ActionAssertNotInViewport, Selector: "#far", Ratio: 0.5}, `assert_not_in_viewport: #far is 100% in the viewport`},
+		{Step{Action: ActionAssertNotInViewport, Selector: "#none"}, `no element matches #none`},
+	} {
+		c.step.Timeout = "300ms"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+}
+
+// A point computed when the step runs aims the pointer without checking
+// any element, as Playwright's page.mouse does.
+func TestPoint(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, clickPage), Vars: map[string]string{"DX": "10"}}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionClick, Point: "({x: {{DX}}, y: 5})"},
+		Step{Action: ActionEval, Expression: `log.join(' ')`, Expect: ptr("mousedown:b:0:1@10,5 mouseup:b:0:1@10,5 click:b:0:1@10,5")},
+		// No element needs to be ready there.
+		Step{Action: ActionEval, Expression: `log = []; document.getElementById('cover').style.display = 'block'`},
+		Step{Action: ActionClick, Point: "new Promise(r => setTimeout(() => r({x: 20, y: 6}), 50))"},
+		Step{Action: ActionEval, Expression: `log.at(-1)`, Expect: ptr("click:cover:0:1@20,6")},
+		// It is evaluated again until it gives a point in the viewport.
+		Step{Action: ActionEval, Expression: `log = []; setTimeout(() => window.p = {x: 30, y: 7}, 300)`},
+		Step{Action: ActionHover, Point: "window.p"},
+		Step{Action: ActionMouseDown, Point: "({x: 40, y: 8})"},
+		Step{Action: ActionMouseUp, Point: "({x: 50, y: 9})", Button: "left"},
+		Step{Action: ActionEval, Expression: `log.join(' ')`, Expect: ptr("mousedown:cover:0:1@40,8 mouseup:cover:0:1@50,9 click:cover:0:1@50,9")},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		{Step{Action: ActionClick, Point: "({x: -1, y: 5})"}, "click: point -1,5 is outside the 393x727 viewport"},
+		{Step{Action: ActionClick, Point: "({x: 1})"}, `click: point is {"x":1}, not {x, y}`},
+		{Step{Action: ActionClick, Point: "({x: 1, y: 1})", Selector: "#b"}, "click: point replaces selector, role, x and y"},
+	} {
+		c.step.Timeout = "300ms"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+	// A wheel goes where the point is first; a touch's points are offsets
+	// from it.
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: `for (const type of ['wheel', 'touchstart', 'touchmove']) document.addEventListener(type, e => log.push(type + '@' + (e.touches ? [...e.touches].map(t => t.clientX + ',' + t.clientY).join(';') : e.clientX + ',' + e.clientY)), {passive: false})`},
+		Step{Action: ActionWheel, Point: "({x: 60, y: 30})", X: ptr(0.0), Y: ptr(10.0)},
+		Step{Action: ActionTouch, Value: "start", Point: "({x: 30, y: 30})", Points: "0,0 50,50"},
+		Step{Action: ActionTouch, Value: "move", Point: "({x: 40, y: 40})"},
+		Step{Action: ActionTouch, Value: "end"},
+		Step{Action: ActionEval, Expression: `log.filter(e => !e.startsWith('mouse')).join(' ')`, Expect: ptr("wheel@60,30 touchstart@30,30 touchstart@30,30;80,80 touchmove@40,40;80,80")},
+	)
+}
