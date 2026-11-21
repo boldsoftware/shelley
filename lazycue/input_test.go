@@ -1369,7 +1369,7 @@ func TestRetry(t *testing.T) {
 	if want := `step 0 (retry): after 2s, its step 1 (assert_value) still fails: timeout after 1s: assert_value: expected "never", got "output"`; err.Error() != want {
 		t.Errorf("failed retry = %v, want %s", err, want)
 	}
-	if d := time.Since(start); d < 2*time.Second || d > 4*time.Second {
+	if d := time.Since(start); d < 2*time.Second || d > 2*time.Second+defaultStepTimeout/3 {
 		t.Errorf("failed retry took %s", d)
 	}
 	if err := failSteps(t, br, env, Step{Action: ActionRetry, Steps: []Step{{Action: ActionRetry, Steps: []Step{{Action: ActionClick, Selector: "#copy"}}}}}); !strings.Contains(err.Error(), "retry: a retry block cannot hold another") {
