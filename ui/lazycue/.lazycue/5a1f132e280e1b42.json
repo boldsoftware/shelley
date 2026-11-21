@@ -1,0 +1,145 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Git info keeps the approved compact layout in both themes. The conversation /c/{{SLUG}} runs in the git repository {{REPO}}, on the branch \"feature/keep-long-conversation-metadata-readable\", where its agent committed with the subject \"Keep full commit subjects and branch names readable in the compact conversation git strip\"; that commit's short hash is {{HASH}}. \"The strip\" is the element with data-testid \"message-gitinfo\" whose text contains {{HASH}}. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The strip's link named exactly \"Open Diff\" should be visible. 3. The strip's \".msg-subject\" should have exactly the text \"Keep full commit subjects and branch names readable in the compact conversation git strip\" and the title attribute exactly the same. 4. Its \".msg-branch\" should have exactly the text \"feature/keep-long-conversation-metadata-readable\". 5. Its \".msg-worktree\" should have the title attribute exactly \"{{REPO}}\". 6. The Open Diff link's href must contain \"cwd=\" followed by encodeURIComponent(\"{{REPO}}\") (compare in an eval). Then check the layout in the light theme and then in the dark one: 7. Eval document.documentElement.classList.toggle(\"dark\", false). 8. The strip's computed background-color should be exactly \"rgb(243, 244, 246)\". 9. For each viewport width 1280, 960 and 390 in turn: set the viewport to that width and height 900 (only width and height), then poll this eval, with STRIP replaced by an expression for the strip, until it returns \"ok\": ((el) =\u003e { const rect = (s) =\u003e el.querySelector(s).getBoundingClientRect(); const title = rect('.msg-subject'), branch = rect('.msg-branch'), hash = rect('.msg-commit-hash'), path = rect('.msg-worktree'), diff = rect('.msg-diff-link'); const fonts = [...el.querySelectorAll('.msg-subject, .msg-branch, .msg-commit-hash, .msg-worktree')].map((c) =\u003e getComputedStyle(c).fontSize); const actionFont = getComputedStyle(el.querySelector('.msg-diff-link')).fontSize; const pathLabel = el.querySelector('.msg-worktree').textContent.trim(); const overflow = document.documentElement.scrollWidth \u003e window.innerWidth; const b = el.querySelector('.msg-branch'); const branchOverflow = b.scrollWidth \u003e b.clientWidth + 1; const bad = []; if (!fonts.every((f) =\u003e f === '14px')) bad.push('fonts ' + fonts); if (actionFont !== '12px') bad.push('actionFont ' + actionFont); if (overflow) bad.push('page overflows'); if (!(Math.abs(title.x - branch.x) \u003c 1)) bad.push('title.x ' + title.x + ' branch.x ' + branch.x); if (diff.height !== 22) bad.push('diff.height ' + diff.height); if (!pathLabel.endsWith('active-checkout')) bad.push('pathLabel ' + pathLabel); if (window.innerWidth \u003e 640) { if (title.height !== 20) bad.push('title.height ' + title.height); if (diff.y - title.bottom !== 7) bad.push('diff.y - title.bottom ' + (diff.y - title.bottom)); if (!(Math.abs(branch.y + branch.height / 2 - diff.y - diff.height / 2) \u003c 1)) bad.push('branch/diff centers ' + branch.y + ',' + branch.height + ' ' + diff.y + ',' + diff.height); } else { if (branchOverflow) bad.push('branch overflows'); if (!(diff.y \u003e= Math.max(branch.bottom, hash.bottom, path.bottom))) bad.push('diff.y ' + diff.y + ' above ' + Math.max(branch.bottom, hash.bottom, path.bottom)); } return bad.length ? bad.join('; ') : 'ok'; })(STRIP). 10. Eval document.documentElement.classList.toggle(\"dark\", true). 11. The strip's computed background-color should be exactly \"rgb(31, 41, 55)\". 12. Again for each viewport width 1280, 960 and 390 in turn: set the viewport to that width and height 900, then poll the same eval until it returns \"ok\". 13. Click the strip's \"Open Diff\" link. 14. \".diff-viewer-overlay\" should be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-gitinfo']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='message-gitinfo'] a",
+      "has_text": "Open Diff"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='message-gitinfo'] .msg-subject",
+      "text": "Keep full commit subjects and branch names readable in the compact conversation git strip"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='message-gitinfo'] .msg-subject",
+      "attribute": "title",
+      "value": "Keep full commit subjects and branch names readable in the compact conversation git strip"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='message-gitinfo'] .msg-branch",
+      "text": "feature/keep-long-conversation-metadata-readable"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='message-gitinfo'] .msg-worktree",
+      "attribute": "title",
+      "value": "{{REPO}}"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const strip = document.querySelector('[data-testid=\"message-gitinfo\"]'); const link = strip.querySelector('a'); const href = link ? link.href : ''; const encoded = encodeURIComponent('{{REPO}}'); return href.includes('cwd=' + encoded) ? 'ok' : 'FAIL: href=' + href + ' expected cwd=' + encoded; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "document.documentElement.classList.toggle('dark', false)"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=\"message-gitinfo\"]')).backgroundColor",
+      "expect": "rgb(243, 244, 246)"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "action": "eval",
+      "expression": "((el) =\u003e { const rect = (s) =\u003e el.querySelector(s).getBoundingClientRect(); const title = rect('.msg-subject'), branch = rect('.msg-branch'), hash = rect('.msg-commit-hash'), path = rect('.msg-worktree'), diff = rect('.msg-diff-link'); const fonts = [...el.querySelectorAll('.msg-subject, .msg-branch, .msg-commit-hash, .msg-worktree')].map((c) =\u003e getComputedStyle(c).fontSize); const actionFont = getComputedStyle(el.querySelector('.msg-diff-link')).fontSize; const pathLabel = el.querySelector('.msg-worktree').textContent.trim(); const overflow = document.documentElement.scrollWidth \u003e window.innerWidth; const b = el.querySelector('.msg-branch'); const branchOverflow = b.scrollWidth \u003e b.clientWidth + 1; const bad = []; if (!fonts.every((f) =\u003e f === '14px')) bad.push('fonts ' + fonts); if (actionFont !== '12px') bad.push('actionFont ' + actionFont); if (overflow) bad.push('page overflows'); if (!(Math.abs(title.x - branch.x) \u003c 1)) bad.push('title.x ' + title.x + ' branch.x ' + branch.x); if (diff.height !== 22) bad.push('diff.height ' + diff.height); if (!pathLabel.endsWith('active-checkout')) bad.push('pathLabel ' + pathLabel); if (window.innerWidth \u003e 640) { if (title.height !== 20) bad.push('title.height ' + title.height); if (diff.y - title.bottom !== 7) bad.push('diff.y - title.bottom ' + (diff.y - title.bottom)); if (!(Math.abs(branch.y + branch.height / 2 - diff.y - diff.height / 2) \u003c 1)) bad.push('branch/diff centers ' + branch.y + ',' + branch.height + ' ' + diff.y + ',' + diff.height); } else { if (branchOverflow) bad.push('branch overflows'); if (!(diff.y \u003e= Math.max(branch.bottom, hash.bottom, path.bottom))) bad.push('diff.y ' + diff.y + ' above ' + Math.max(branch.bottom, hash.bottom, path.bottom)); } return bad.length ? bad.join('; ') : 'ok'; })(document.querySelector('[data-testid=\"message-gitinfo\"]'))",
+      "expect": "ok"
+    },
+    {
+      "action": "set_viewport",
+      "width": 960,
+      "height": 900
+    },
+    {
+      "action": "eval",
+      "expression": "((el) =\u003e { const rect = (s) =\u003e el.querySelector(s).getBoundingClientRect(); const title = rect('.msg-subject'), branch = rect('.msg-branch'), hash = rect('.msg-commit-hash'), path = rect('.msg-worktree'), diff = rect('.msg-diff-link'); const fonts = [...el.querySelectorAll('.msg-subject, .msg-branch, .msg-commit-hash, .msg-worktree')].map((c) =\u003e getComputedStyle(c).fontSize); const actionFont = getComputedStyle(el.querySelector('.msg-diff-link')).fontSize; const pathLabel = el.querySelector('.msg-worktree').textContent.trim(); const overflow = document.documentElement.scrollWidth \u003e window.innerWidth; const b = el.querySelector('.msg-branch'); const branchOverflow = b.scrollWidth \u003e b.clientWidth + 1; const bad = []; if (!fonts.every((f) =\u003e f === '14px')) bad.push('fonts ' + fonts); if (actionFont !== '12px') bad.push('actionFont ' + actionFont); if (overflow) bad.push('page overflows'); if (!(Math.abs(title.x - branch.x) \u003c 1)) bad.push('title.x ' + title.x + ' branch.x ' + branch.x); if (diff.height !== 22) bad.push('diff.height ' + diff.height); if (!pathLabel.endsWith('active-checkout')) bad.push('pathLabel ' + pathLabel); if (window.innerWidth \u003e 640) { if (title.height !== 20) bad.push('title.height ' + title.height); if (diff.y - title.bottom !== 7) bad.push('diff.y - title.bottom ' + (diff.y - title.bottom)); if (!(Math.abs(branch.y + branch.height / 2 - diff.y - diff.height / 2) \u003c 1)) bad.push('branch/diff centers ' + branch.y + ',' + branch.height + ' ' + diff.y + ',' + diff.height); } else { if (branchOverflow) bad.push('branch overflows'); if (!(diff.y \u003e= Math.max(branch.bottom, hash.bottom, path.bottom))) bad.push('diff.y ' + diff.y + ' above ' + Math.max(branch.bottom, hash.bottom, path.bottom)); } return bad.length ? bad.join('; ') : 'ok'; })(document.querySelector('[data-testid=\"message-gitinfo\"]'))",
+      "expect": "ok"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 900
+    },
+    {
+      "action": "eval",
+      "expression": "((el) =\u003e { const rect = (s) =\u003e el.querySelector(s).getBoundingClientRect(); const title = rect('.msg-subject'), branch = rect('.msg-branch'), hash = rect('.msg-commit-hash'), path = rect('.msg-worktree'), diff = rect('.msg-diff-link'); const fonts = [...el.querySelectorAll('.msg-subject, .msg-branch, .msg-commit-hash, .msg-worktree')].map((c) =\u003e getComputedStyle(c).fontSize); const actionFont = getComputedStyle(el.querySelector('.msg-diff-link')).fontSize; const pathLabel = el.querySelector('.msg-worktree').textContent.trim(); const overflow = document.documentElement.scrollWidth \u003e window.innerWidth; const b = el.querySelector('.msg-branch'); const branchOverflow = b.scrollWidth \u003e b.clientWidth + 1; const bad = []; if (!fonts.every((f) =\u003e f === '14px')) bad.push('fonts ' + fonts); if (actionFont !== '12px') bad.push('actionFont ' + actionFont); if (overflow) bad.push('page overflows'); if (!(Math.abs(title.x - branch.x) \u003c 1)) bad.push('title.x ' + title.x + ' branch.x ' + branch.x); if (diff.height !== 22) bad.push('diff.height ' + diff.height); if (!pathLabel.endsWith('active-checkout')) bad.push('pathLabel ' + pathLabel); if (window.innerWidth \u003e 640) { if (title.height !== 20) bad.push('title.height ' + title.height); if (diff.y - title.bottom !== 7) bad.push('diff.y - title.bottom ' + (diff.y - title.bottom)); if (!(Math.abs(branch.y + branch.height / 2 - diff.y - diff.height / 2) \u003c 1)) bad.push('branch/diff centers ' + branch.y + ',' + branch.height + ' ' + diff.y + ',' + diff.height); } else { if (branchOverflow) bad.push('branch overflows'); if (!(diff.y \u003e= Math.max(branch.bottom, hash.bottom, path.bottom))) bad.push('diff.y ' + diff.y + ' above ' + Math.max(branch.bottom, hash.bottom, path.bottom)); } return bad.length ? bad.join('; ') : 'ok'; })(document.querySelector('[data-testid=\"message-gitinfo\"]'))",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "document.documentElement.classList.toggle('dark', true)"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=\"message-gitinfo\"]')).backgroundColor",
+      "expect": "rgb(31, 41, 55)"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "action": "eval",
+      "expression": "((el) =\u003e { const rect = (s) =\u003e el.querySelector(s).getBoundingClientRect(); const title = rect('.msg-subject'), branch = rect('.msg-branch'), hash = rect('.msg-commit-hash'), path = rect('.msg-worktree'), diff = rect('.msg-diff-link'); const fonts = [...el.querySelectorAll('.msg-subject, .msg-branch, .msg-commit-hash, .msg-worktree')].map((c) =\u003e getComputedStyle(c).fontSize); const actionFont = getComputedStyle(el.querySelector('.msg-diff-link')).fontSize; const pathLabel = el.querySelector('.msg-worktree').textContent.trim(); const overflow = document.documentElement.scrollWidth \u003e window.innerWidth; const b = el.querySelector('.msg-branch'); const branchOverflow = b.scrollWidth \u003e b.clientWidth + 1; const bad = []; if (!fonts.every((f) =\u003e f === '14px')) bad.push('fonts ' + fonts); if (actionFont !== '12px') bad.push('actionFont ' + actionFont); if (overflow) bad.push('page overflows'); if (!(Math.abs(title.x - branch.x) \u003c 1)) bad.push('title.x ' + title.x + ' branch.x ' + branch.x); if (diff.height !== 22) bad.push('diff.height ' + diff.height); if (!pathLabel.endsWith('active-checkout')) bad.push('pathLabel ' + pathLabel); if (window.innerWidth \u003e 640) { if (title.height !== 20) bad.push('title.height ' + title.height); if (diff.y - title.bottom !== 7) bad.push('diff.y - title.bottom ' + (diff.y - title.bottom)); if (!(Math.abs(branch.y + branch.height / 2 - diff.y - diff.height / 2) \u003c 1)) bad.push('branch/diff centers ' + branch.y + ',' + branch.height + ' ' + diff.y + ',' + diff.height); } else { if (branchOverflow) bad.push('branch overflows'); if (!(diff.y \u003e= Math.max(branch.bottom, hash.bottom, path.bottom))) bad.push('diff.y ' + diff.y + ' above ' + Math.max(branch.bottom, hash.bottom, path.bottom)); } return bad.length ? bad.join('; ') : 'ok'; })(document.querySelector('[data-testid=\"message-gitinfo\"]'))",
+      "expect": "ok"
+    },
+    {
+      "action": "set_viewport",
+      "width": 960,
+      "height": 900
+    },
+    {
+      "action": "eval",
+      "expression": "((el) =\u003e { const rect = (s) =\u003e el.querySelector(s).getBoundingClientRect(); const title = rect('.msg-subject'), branch = rect('.msg-branch'), hash = rect('.msg-commit-hash'), path = rect('.msg-worktree'), diff = rect('.msg-diff-link'); const fonts = [...el.querySelectorAll('.msg-subject, .msg-branch, .msg-commit-hash, .msg-worktree')].map((c) =\u003e getComputedStyle(c).fontSize); const actionFont = getComputedStyle(el.querySelector('.msg-diff-link')).fontSize; const pathLabel = el.querySelector('.msg-worktree').textContent.trim(); const overflow = document.documentElement.scrollWidth \u003e window.innerWidth; const b = el.querySelector('.msg-branch'); const branchOverflow = b.scrollWidth \u003e b.clientWidth + 1; const bad = []; if (!fonts.every((f) =\u003e f === '14px')) bad.push('fonts ' + fonts); if (actionFont !== '12px') bad.push('actionFont ' + actionFont); if (overflow) bad.push('page overflows'); if (!(Math.abs(title.x - branch.x) \u003c 1)) bad.push('title.x ' + title.x + ' branch.x ' + branch.x); if (diff.height !== 22) bad.push('diff.height ' + diff.height); if (!pathLabel.endsWith('active-checkout')) bad.push('pathLabel ' + pathLabel); if (window.innerWidth \u003e 640) { if (title.height !== 20) bad.push('title.height ' + title.height); if (diff.y - title.bottom !== 7) bad.push('diff.y - title.bottom ' + (diff.y - title.bottom)); if (!(Math.abs(branch.y + branch.height / 2 - diff.y - diff.height / 2) \u003c 1)) bad.push('branch/diff centers ' + branch.y + ',' + branch.height + ' ' + diff.y + ',' + diff.height); } else { if (branchOverflow) bad.push('branch overflows'); if (!(diff.y \u003e= Math.max(branch.bottom, hash.bottom, path.bottom))) bad.push('diff.y ' + diff.y + ' above ' + Math.max(branch.bottom, hash.bottom, path.bottom)); } return bad.length ? bad.join('; ') : 'ok'; })(document.querySelector('[data-testid=\"message-gitinfo\"]'))",
+      "expect": "ok"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 900
+    },
+    {
+      "action": "eval",
+      "expression": "((el) =\u003e { const rect = (s) =\u003e el.querySelector(s).getBoundingClientRect(); const title = rect('.msg-subject'), branch = rect('.msg-branch'), hash = rect('.msg-commit-hash'), path = rect('.msg-worktree'), diff = rect('.msg-diff-link'); const fonts = [...el.querySelectorAll('.msg-subject, .msg-branch, .msg-commit-hash, .msg-worktree')].map((c) =\u003e getComputedStyle(c).fontSize); const actionFont = getComputedStyle(el.querySelector('.msg-diff-link')).fontSize; const pathLabel = el.querySelector('.msg-worktree').textContent.trim(); const overflow = document.documentElement.scrollWidth \u003e window.innerWidth; const b = el.querySelector('.msg-branch'); const branchOverflow = b.scrollWidth \u003e b.clientWidth + 1; const bad = []; if (!fonts.every((f) =\u003e f === '14px')) bad.push('fonts ' + fonts); if (actionFont !== '12px') bad.push('actionFont ' + actionFont); if (overflow) bad.push('page overflows'); if (!(Math.abs(title.x - branch.x) \u003c 1)) bad.push('title.x ' + title.x + ' branch.x ' + branch.x); if (diff.height !== 22) bad.push('diff.height ' + diff.height); if (!pathLabel.endsWith('active-checkout')) bad.push('pathLabel ' + pathLabel); if (window.innerWidth \u003e 640) { if (title.height !== 20) bad.push('title.height ' + title.height); if (diff.y - title.bottom !== 7) bad.push('diff.y - title.bottom ' + (diff.y - title.bottom)); if (!(Math.abs(branch.y + branch.height / 2 - diff.y - diff.height / 2) \u003c 1)) bad.push('branch/diff centers ' + branch.y + ',' + branch.height + ' ' + diff.y + ',' + diff.height); } else { if (branchOverflow) bad.push('branch overflows'); if (!(diff.y \u003e= Math.max(branch.bottom, hash.bottom, path.bottom))) bad.push('diff.y ' + diff.y + ' above ' + Math.max(branch.bottom, hash.bottom, path.bottom)); } return bad.length ? bad.join('; ') : 'ok'; })(document.querySelector('[data-testid=\"message-gitinfo\"]'))",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-gitinfo'] a",
+      "has_text": "Open Diff"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:12:00.136523713Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 129990,
+    "output_tokens": 11182,
+    "estimated_cost_usd": 0.2511579,
+    "mode": "generated"
+  }
+}
