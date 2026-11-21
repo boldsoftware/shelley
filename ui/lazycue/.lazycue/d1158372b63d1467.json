@@ -1,0 +1,128 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Double-clicking a conversation name renames it and Escape cancels. A conversation exists at /c/{{SLUG}}, row [data-conversation-id=\"{{ID}}\"]; \"the title\" is that row's \".conversation-title\" and \"the input\" its \".drawer-rename-input\". To \"reload\" the page, use the reload action. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /new. 2. A single click still opens the conversation: click the title. 3. The URL should become /c/{{SLUG}} (assert_url value \"/c/{{SLUG}}\"). 4. The row has no \".drawer-rename-input\" element. 5. Double-click the title (click with count 2). 6. The input is focused (document.activeElement) and its value is exactly \"{{SLUG}}\". 7. Fill the input with \"discarded-name\". 8. Press Escape. 9. The title's text is exactly \"{{SLUG}}\". 10. Navigate to /new. 11. Double-click the title. 12. The input is focused. 13. Fill the input with \"{{NEW_SLUG}}\". 14. Press Enter. 15. The title's text should become exactly \"{{NEW_SLUG}}\". 16. Reload. 17. The title's text is exactly \"{{NEW_SLUG}}\". 18. Click the title. 19. The URL should become /c/{{NEW_SLUG}} (assert_url value \"/c/{{NEW_SLUG}}\").",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id='{{ID}}'] .conversation-title",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='{{ID}}'] .conversation-title"
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/{{SLUG}}",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='{{ID}}'] .drawer-rename-input",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='{{ID}}'] .conversation-title",
+      "count": 2
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement.classList.contains('drawer-rename-input')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement.value === '{{SLUG}}'",
+      "expect": "true"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-conversation-id='{{ID}}'] .drawer-rename-input",
+      "value": "discarded-name"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id='{{ID}}'] .conversation-title",
+      "text": "{{SLUG}}"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id='{{ID}}'] .conversation-title",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='{{ID}}'] .conversation-title",
+      "count": 2
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement.classList.contains('drawer-rename-input')",
+      "expect": "true"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-conversation-id='{{ID}}'] .drawer-rename-input",
+      "value": "{{NEW_SLUG}}"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_text",
+      "text": "{{NEW_SLUG}}",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id='{{ID}}'] .conversation-title",
+      "text": "{{NEW_SLUG}}"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id='{{ID}}'] .conversation-title",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id='{{ID}}'] .conversation-title",
+      "text": "{{NEW_SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='{{ID}}'] .conversation-title"
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/{{NEW_SLUG}}",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:28:20.675746546Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 147574,
+    "output_tokens": 3676,
+    "estimated_cost_usd": 0.1299546,
+    "mode": "generated"
+  }
+}

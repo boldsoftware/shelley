@@ -1,0 +1,325 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Search reveals chapters and prioritizes chapter-title matches. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is, in this order, \"message-only\", \"chapter-prefix\", \"chapter-only\" (these three tagged birds) and \"other-tag\" (tagged other). Searches answer with message-only alone, whose search snippet is \"A pelican by the bay\" with \"pelican\" marked. The chapter index (/api/conversations/themes) gives chapter-only the chapters \"Pelican\" (message 12345678-abcd-1234-abcd-123456789abc) and \"Another direction\", chapter-prefix \"Pelican research\", message-only \"Unrelated chapter\" and other-tag \"Pelican\"; call \"themes\" says how many times the page has requested it. \"The row\" is [data-conversation-id=\"chapter-only\"]; \"outlines\" are \".drawer .conversation-themes-list\" elements; \"the search button\" is the button \"Search conversations...\". Lists of texts are checked with assert_texts when a selector picks exactly those elements, else with an eval of JSON.stringify of their trimmed textContents. The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. 1. Navigate to /new. 2. The row is visible. 3. There are no outlines, and call \"themes\" must return exactly \"0\" right now. 4. Click the search button. 5. There should be exactly 4 buttons \"Show chapters\". 6. There are no outlines, and call \"themes\" returns exactly \"1\". 7. Focus the row's \".drawer-chapters-toggle\" (eval its focus()) and press Enter. 8. That toggle's aria-expanded is \"true\". 9. The texts of the row's \".conversation-themes-list a\" are exactly [\"Pelican\",\"Another direction\"]. 10. The URL is still /new (assert_url value \"/new\"). 11. Click the row's button \"Hide chapters\". 12. There are no outlines. 13. Set the query to \"tag:birds \". 14. Click the row's button \"Show chapters\". 15. The row's \".conversation-themes-list\" is visible. 16. Clear the query. 17. There are no outlines. 18. Set the query to \"PELICAN tag:birds \". 19. The texts of \".drawer .conversation-title\" are exactly [\"chapter-only\",\"chapter-prefix\",\"message-only\"]. 20. There are exactly 2 outlines, and the texts of the \"mark\" elements in outlines are exactly [\"Pelican\",\"Pelican\"]. 21. The texts of \"[data-conversation-id=\\\"chapter-only\\\"] .conversation-themes-list a\" are exactly [\"Pelican\",\"Another direction\"], and the first of those links has the href attribute exactly \"/c/chapter-only#m-12345678\". 22. The texts of \".conversation-snippet mark\" are exactly [\"pelican\"]. 23. Call \"themes\" returns exactly \"1\". 24. Click the button \"Select conversations\". 25. There are no outlines and no \".drawer-chapters-toggle\" elements. 26. Click the row. 27. The row's \".drawer-selection-check\" checkbox is checked. 28. The URL is still /new (assert_url value \"/new\"). 29. Click the button \"Cancel selection\". 30. There are exactly 2 outlines and the row's \".conversation-themes-list\" is visible. 31. Clear the query. 32. There are no outlines, and the row's button \"Show chapters\" has aria-expanded \"false\". 33. Click the search button (closing search). 34. There are no outlines. 35. Click the search button again. 36. There should be exactly 4 buttons \"Show chapters\". 37. There are no outlines, and call \"themes\" returns exactly \"2\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id=\"chapter-only\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-themes-list",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "themes",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "role": "button",
+      "name": "Show chapters",
+      "exact": true,
+      "count": 4
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-themes-list",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "themes",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-conversation-id=\"chapter-only\"] .drawer-chapters-toggle').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-conversation-id=\"chapter-only\"] .drawer-chapters-toggle').getAttribute('aria-expanded')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_texts",
+      "selector": "[data-conversation-id=\"chapter-only\"] .conversation-themes-list a",
+      "texts": [
+        "Pelican",
+        "Another direction"
+      ]
+    },
+    {
+      "action": "assert_url",
+      "value": "/new"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"chapter-only\"]",
+      "role": "button",
+      "name": "Hide chapters",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-themes-list",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "tag:birds "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:birds "
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"chapter-only\"]",
+      "role": "button",
+      "name": "Show chapters",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id=\"chapter-only\"] .conversation-themes-list",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-themes-list",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "PELICAN tag:birds "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "PELICAN tag:birds "
+    },
+    {
+      "action": "assert_texts",
+      "selector": ".drawer .conversation-title",
+      "texts": [
+        "chapter-only",
+        "chapter-prefix",
+        "message-only"
+      ]
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-themes-list",
+      "count": 2
+    },
+    {
+      "action": "assert_texts",
+      "selector": ".drawer .conversation-themes-list mark",
+      "texts": [
+        "Pelican",
+        "Pelican"
+      ]
+    },
+    {
+      "action": "assert_texts",
+      "selector": "[data-conversation-id=\"chapter-only\"] .conversation-themes-list a",
+      "texts": [
+        "Pelican",
+        "Another direction"
+      ]
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-conversation-id=\"chapter-only\"] .conversation-themes-list a:first-child",
+      "value": "/c/chapter-only#m-12345678",
+      "attribute": "href"
+    },
+    {
+      "action": "assert_texts",
+      "selector": ".conversation-snippet mark",
+      "texts": [
+        "pelican"
+      ]
+    },
+    {
+      "action": "call",
+      "value": "themes",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-themes-list",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer-chapters-toggle",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"chapter-only\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-conversation-id=\"chapter-only\"] .drawer-selection-check').checked",
+      "expect": "true"
+    },
+    {
+      "action": "assert_url",
+      "value": "/new"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Cancel selection",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-themes-list",
+      "count": 2
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id=\"chapter-only\"] .conversation-themes-list",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-themes-list",
+      "count": 0
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-conversation-id=\"chapter-only\"]",
+      "role": "button",
+      "name": "Show chapters",
+      "exact": true,
+      "value": "false",
+      "attribute": "aria-expanded"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-themes-list",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "role": "button",
+      "name": "Show chapters",
+      "exact": true,
+      "count": 4
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-themes-list",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "themes",
+      "expect": "2"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:24:45.85668186Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 77020,
+    "output_tokens": 6802,
+    "estimated_cost_usd": 0.16235474999999996,
+    "mode": "generated"
+  }
+}

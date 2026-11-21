@@ -1,0 +1,79 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Chapter controls leave room for workspace restore and delete confirmation. The server has the workspace feature on. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"active\"; the archived list is \"archived-chapter-controls\" (\"the row\"), which the chapter index gives the chapter \"Archived topic\". \"The actions\" are the row's \".drawer-actions-top\". \"No overlap\" means eval (() =\u003e { const row = document.querySelector('[data-conversation-id=\"archived-chapter-controls\"]'); const toggle = row.querySelector('.drawer-chapters-toggle').getBoundingClientRect(); const actions = row.querySelector('.drawer-actions-top'); const boxes = [actions, ...[...actions.querySelectorAll('button')].filter(b =\u003e b.checkVisibility({visibilityProperty: true}))].map(e =\u003e e.getBoundingClientRect()); return boxes.every(b =\u003e b.x + b.width \u003c= toggle.x + 0.5); })() returns true (the actions and each of their rendered buttons end left of the row's chapters toggle). Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. 1. Navigate to /new. 2. Click the button \"Search tasks...\". 3. Click data-testid \"archived-toggle\". 4. Hover the row. 5. The actions' button \"Restore\" is visible. 6. No overlap. 7. Click the actions' button \"Delete\". 8. The actions' \".drawer-delete-confirm\" is visible. 9. No overlap. 10. Click the row's button \"Show chapters\". 11. The row's \".conversation-themes-list a\" is exactly one link, with text exactly \"Archived topic\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search tasks...",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='archived-toggle']"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-conversation-id='archived-chapter-controls']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-id='archived-chapter-controls'] .drawer-actions-top",
+      "role": "button",
+      "name": "Restore",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const row = document.querySelector('[data-conversation-id=\"archived-chapter-controls\"]'); const toggle = row.querySelector('.drawer-chapters-toggle').getBoundingClientRect(); const actions = row.querySelector('.drawer-actions-top'); const boxes = [actions, ...[...actions.querySelectorAll('button')].filter(b =\u003e b.checkVisibility({visibilityProperty: true}))].map(e =\u003e e.getBoundingClientRect()); return boxes.every(b =\u003e b.x + b.width \u003c= toggle.x + 0.5); })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='archived-chapter-controls'] .drawer-actions-top",
+      "role": "button",
+      "name": "Delete",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-id='archived-chapter-controls'] .drawer-actions-top .drawer-delete-confirm"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const row = document.querySelector('[data-conversation-id=\"archived-chapter-controls\"]'); const toggle = row.querySelector('.drawer-chapters-toggle').getBoundingClientRect(); const actions = row.querySelector('.drawer-actions-top'); const boxes = [actions, ...[...actions.querySelectorAll('button')].filter(b =\u003e b.checkVisibility({visibilityProperty: true}))].map(e =\u003e e.getBoundingClientRect()); return boxes.every(b =\u003e b.x + b.width \u003c= toggle.x + 0.5); })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='archived-chapter-controls']",
+      "role": "button",
+      "name": "Show chapters",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='archived-chapter-controls'] .conversation-themes-list a",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id='archived-chapter-controls'] .conversation-themes-list a",
+      "text": "Archived topic"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:31:58.049571841Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 11698,
+    "output_tokens": 1494,
+    "estimated_cost_usd": 0.047904,
+    "mode": "generated"
+  }
+}

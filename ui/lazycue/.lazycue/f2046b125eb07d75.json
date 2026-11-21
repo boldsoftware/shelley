@@ -1,0 +1,63 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A manual collapse survives reload with a single conversation. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"only\". To \"reload\" the page, use the reload action. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /new. 2. The drawer (\".drawer\") does not have the class \"collapsed\". 3. Click the button \"Collapse sidebar\". 4. The drawer should have the class \"collapsed\". 5. Reload. 6. The drawer has the class \"collapsed\". 7. Click the button \"Expand sidebar\". 8. The drawer should not have the class \"collapsed\". 9. Reload. 10. The drawer does not have the class \"collapsed\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('collapsed')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Collapse sidebar",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('collapsed')",
+      "expect": "true"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('collapsed')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Expand sidebar",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('collapsed')",
+      "expect": "false"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('collapsed')",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:31:59.193392024Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 4489,
+    "output_tokens": 437,
+    "estimated_cost_usd": 0.010870649999999999,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The mobile drawer follows the finger and cancels safely on a second finger or touchcancel. The phone's screen is 393x851. The page has synthetic touch gestures, run with eval: \"window.__drawerSwipe(selector, x1, y1, x2, y2)\" puts one finger down at viewport point x1,y1 on the first element matching selector, moves it to x2,y2 and lifts it; \"window.__drawerDrag(selector, points, ending, secondFinger, modalAtEnd)\" puts a finger down at the first [x, y] of points and moves it through the rest (with a second finger beside it when secondFinger is true), then ends with ending (\"touchend\" or \"touchcancel\"); when modalAtEnd is true a modal (\".command-palette-overlay\" with aria-modal) appears just before the release and goes after it. __drawerDrag returns the computed styles ({className, transform, translate, opacity}) of every \".drawer, .backdrop, .toc-drawer, .toc-drawer-scrim\" element just before the release, and keeps them in window.__drawerDragStyles. Run each gesture with a single eval, without expect; wait for its target to exist first. \"Open\" means the drawer (\".drawer\") has the class \"open\"; \"closed\" that it exists without it (eval \"document.querySelector('.drawer').classList.contains('open')\" with no guard, so that a missing drawer fails). The test harness has already stubbed the server's conversation list to one conversation, \"first\", and cut off its live update stream; there is nothing to set up or check about that. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /new. 2. Drag \".main-content\" through [[180,300],[260,302],[370,304]] with \"touchend\". 3. Mid-gesture the drawer had moved and its scrim was partly opaque: eval (() =\u003e { const s = window.__drawerDragStyles; const drawer = s.find(x =\u003e x.className.includes('drawer')); const scrim = s.find(x =\u003e x.className.includes('backdrop')); return !!drawer \u0026\u0026 !!scrim \u0026\u0026 drawer.transform !== 'matrix(1, 0, 0, 1, 0, 0)' \u0026\u0026 Number(scrim.opacity) \u003e 0 \u0026\u0026 Number(scrim.opacity) \u003c 1; })() must be true. 4. The drawer should be open. 5. Drag \".backdrop\" through [[350,300],[250,302]] with \"touchend\" and a second finger. 6. The drawer is still open. 7. Swipe \".backdrop\" from 350,300 to 150,304. 8. The drawer should be closed. 9. Drag \".main-content\" through [[180,300],[220,302]] ending with \"touchcancel\". 10. The drawer is closed.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".main-content",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerDrag('.main-content', [[180,300],[260,302],[370,304]], 'touchend', false, false)"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const s = window.__drawerDragStyles; const drawer = s.find(x =\u003e x.className.includes('drawer')); const scrim = s.find(x =\u003e x.className.includes('backdrop')); return !!drawer \u0026\u0026 !!scrim \u0026\u0026 drawer.transform !== 'matrix(1, 0, 0, 1, 0, 0)' \u0026\u0026 Number(scrim.opacity) \u003e 0 \u0026\u0026 Number(scrim.opacity) \u003c 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".backdrop",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerDrag('.backdrop', [[350,300],[250,302]], 'touchend', true, false)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerSwipe('.backdrop', 350, 300, 150, 304)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerDrag('.main-content', [[180,300],[220,302]], 'touchcancel', false, false)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:52:13.081092687Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 50533,
+    "output_tokens": 1823,
+    "estimated_cost_usd": 0.0597033,
+    "mode": "generated"
+  }
+}

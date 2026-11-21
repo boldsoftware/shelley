@@ -1,0 +1,133 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Token query editing completes on Space, keeps quoted spaces and wraps whole tokens. The browser's requests carry the header X-ExeDev-Email: me@example.com, so the current user is me@example.com. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"mine\" (written in by me@example.com and other@example.com; tagged alpha, \"in progress\" and alpine), \"other\" (other@example.com) and \"alpine\" (third@example.com; tagged alpine). \"The tag panel\" is data-testid \"tag-filter-panel\"; its entries are [data-tag=\"\u003ctag\u003e\"]. \"The user panel\" is data-testid \"user-filter-panel\". \"The token T\" (the token whose text contains T) is the element [data-query-raw=\"T\"] inside the editor (for example [data-testid=\"conversation-query-editor\"] [data-query-raw=\"tag:alpha\"]); \"tag tokens\" are [data-testid=\"conversation-query-editor\"] [data-conversation-query-token=\"tag\"]. \"Click the token T\" means click the \".conversation-query-token-value\" inside the token T. \"Press the clear button\" means click the \".drawer-search-clear\" button (never clear with the keyboard here). The clipboard may be read with eval \"navigator.clipboard.readText()\". Type with the type action (key by key) and press keys with press_key, both into the focused element. The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. 1. Navigate to /new. 2. Click the button \"Search conversations...\". 3. Eval \"document.querySelector('.drawer').style.width = '600px'\". 4. Space completion also makes a token and leaves typing outside it: press the clear button, click the editor, type \"tag:alpi\". 5. The tag panel's [data-tag=\"alpine\"] should be visible. 6. Press Space. 7. The query should be \"tag:alpine \" and the token tag:alpine visible. 8. Type \"followup\". 9. The query should be \"tag:alpine followup\". 10. A space inside an open quoted tag stays literal and keeps autocomplete: press the clear button, click the editor, type 'tag:\"in' (with the double quote). 11. The tag panel's [data-tag=\"in progress\"] should be visible. 12. Press Space. 13. The query should be 'tag:\"in ' (ending in a space), and the tag panel itself (data-testid \"tag-filter-panel\") is visible. 14. Tokens wrap only as whole units: press the clear button; click the button \"Add tag filter\" and the tag panel's [data-tag=\"in progress\"]; click the button \"Add tag filter\" and the tag panel's [data-tag=\"alpha\"]. 15. Eval \"document.querySelector('.drawer').style.width = '250px'\". 16. Eval (() =\u003e { const tokens = [...document.querySelectorAll('[data-testid=\"conversation-query-editor\"] [data-conversation-query-token=\"tag\"]')]; return tokens.length === 2 \u0026\u0026 tokens.every(token =\u003e { const prefix = token.querySelector('.conversation-query-token-prefix'); const value = token.querySelector('.conversation-query-token-value'); return !!prefix \u0026\u0026 !!value \u0026\u0026 token.getBoundingClientRect().height \u003c 30 \u0026\u0026 prefix.getBoundingClientRect().top === value.getBoundingClientRect().top \u0026\u0026 getComputedStyle(token).whiteSpace === 'nowrap'; }); })() must be true (exactly two tag tokens, each under 30px tall, its prefix and value tops equal, white-space nowrap).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').style.width = '600px'"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-search-clear"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-query-editor']"
+    },
+    {
+      "action": "type",
+      "value": "tag:alpi"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='tag-filter-panel'] [data-tag='alpine']"
+    },
+    {
+      "action": "press_key",
+      "key": "Space"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "value": "tag:alpine ",
+      "attribute": "data-query-value"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-query-editor'] [data-query-raw='tag:alpine']"
+    },
+    {
+      "action": "type",
+      "value": "followup"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "value": "tag:alpine followup",
+      "attribute": "data-query-value"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-search-clear"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-query-editor']"
+    },
+    {
+      "action": "type",
+      "value": "tag:\"in"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='tag-filter-panel'] [data-tag='in progress']"
+    },
+    {
+      "action": "press_key",
+      "key": "Space"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "value": "tag:\"in ",
+      "attribute": "data-query-value"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-filter-panel']"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-search-clear"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add tag filter",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='tag-filter-panel'] [data-tag='in progress']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add tag filter",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='tag-filter-panel'] [data-tag='alpha']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').style.width = '250px'"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const tokens = [...document.querySelectorAll('[data-testid=\"conversation-query-editor\"] [data-conversation-query-token=\"tag\"]')]; return tokens.length === 2 \u0026\u0026 tokens.every(token =\u003e { const prefix = token.querySelector('.conversation-query-token-prefix'); const value = token.querySelector('.conversation-query-token-value'); return !!prefix \u0026\u0026 !!value \u0026\u0026 token.getBoundingClientRect().height \u003c 30 \u0026\u0026 prefix.getBoundingClientRect().top === value.getBoundingClientRect().top \u0026\u0026 getComputedStyle(token).whiteSpace === 'nowrap'; }); })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:41:44.270217913Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13275,
+    "output_tokens": 1770,
+    "estimated_cost_usd": 0.0415185,
+    "mode": "generated"
+  }
+}

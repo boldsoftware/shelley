@@ -1,0 +1,39 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The drawer batches a frame-burst of conversation list patches before projecting the drawer. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"burst-row\". The page's live stream is a fake the test drives: eval \"window.__drawerBurst()\" sends it 35 list patches in one burst (the k-th sets the row's preview to \"Preview k\"), each in its own microtask, and resolves to the app's perf counters for it, {apply, topLevel} (how often the list applied a patch and the drawer re-projected its rows), also kept in window.__drawerBurstResult. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /new. 2. The row's \".conversation-preview\" text is exactly \"Preview\". 3. Eval \"window.__drawerBurst()\" exactly once, with no expect. 4. The preview's text should become exactly \"Preview 35\". 5. Eval \"JSON.stringify(window.__drawerBurstResult)\" must be exactly {\"apply\":35,\"topLevel\":1}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id='burst-row'] .conversation-preview",
+      "text": "Preview"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerBurst()"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-conversation-id=\\'burst-row\\'] .conversation-preview')?.textContent",
+      "expect": "Preview 35"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__drawerBurstResult)",
+      "expect": "{\"apply\":35,\"topLevel\":1}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:51:05.607337354Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 55266,
+    "output_tokens": 1322,
+    "estimated_cost_usd": 0.05170994999999999,
+    "mode": "generated"
+  }
+}

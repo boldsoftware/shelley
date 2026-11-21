@@ -1,0 +1,186 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Token query editing handles plain text, pasted line breaks and Backspace around tokens. The browser's requests carry the header X-ExeDev-Email: me@example.com, so the current user is me@example.com. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"mine\" (written in by me@example.com and other@example.com; tagged alpha, \"in progress\" and alpine), \"other\" (other@example.com) and \"alpine\" (third@example.com; tagged alpine). \"The tag panel\" is data-testid \"tag-filter-panel\"; its entries are [data-tag=\"\u003ctag\u003e\"]. \"The user panel\" is data-testid \"user-filter-panel\". \"The token T\" (the token whose text contains T) is the element [data-query-raw=\"T\"] inside the editor (for example [data-testid=\"conversation-query-editor\"] [data-query-raw=\"tag:alpha\"]); \"tag tokens\" are [data-testid=\"conversation-query-editor\"] [data-conversation-query-token=\"tag\"]. \"Click the token T\" means click the \".conversation-query-token-value\" inside the token T. \"Press the clear button\" means click the \".drawer-search-clear\" button (never clear with the keyboard here). The clipboard may be read with eval \"navigator.clipboard.readText()\". Type with the type action (key by key) and press keys with press_key, both into the focused element. The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. 1. Navigate to /new. 2. Click the button \"Search conversations...\". 3. Eval \"document.querySelector('.drawer').style.width = '600px'\". 4. Plain structured-looking text is not a token, so Backspace removes only its trailing separator: press the clear button, click the editor, type \"tag:missing \" (with the trailing space), then press Backspace. 5. The query should be \"tag:missing\" and there are no tag tokens. 6. Pasted line breaks become separators without a second paragraph: press the clear button, click the editor, eval \"navigator.clipboard.writeText('alpha\\\\nbeta')\" (a line break between the words), then press \"v\" with modifiers \"Control\". 7. The query should be \"alpha beta\" and the editor holds exactly one \"p\". 8. Extra spaces are deleted normally before Backspace reaches a token: press the clear button; click the button \"Add user filter\" and the user panel's option containing \"me@example.com\"; click the button \"Add tag filter\" and the tag panel's [data-tag=\"alpha\"]; click the button \"Add tag filter\" and the tag panel's [data-tag=\"alpine\"]. 9. The query should be \"user:me@example.com tag:alpha tag:alpine \". 10. Press Space right away (without clicking or moving the caret first). 11. The query should be \"user:me@example.com tag:alpha tag:alpine  \" (two trailing spaces). 12. Press Backspace. 13. The query should be \"user:me@example.com tag:alpha tag:alpine \". 14. Removing the first of adjacent tokens keeps an insertion slot before the second: click the token tag:alpha and press Backspace. 15. The query should be \"user:me@example.com  tag:alpine \" (two spaces after the user token), and there is no token tag:alpha. 16. Type \"Z\". 17. The query should be \"user:me@example.com Z tag:alpine \". 18. Press Backspace. 19. The query should be \"user:me@example.com  tag:alpine \".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').style.width = '600px'"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-search-clear"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-query-editor']"
+    },
+    {
+      "action": "type",
+      "value": "tag:missing "
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "value": "tag:missing",
+      "attribute": "data-query-value"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-query-editor'] [data-conversation-query-token='tag']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-search-clear"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-query-editor']"
+    },
+    {
+      "action": "eval",
+      "expression": "navigator.clipboard.writeText('alpha\\nbeta')"
+    },
+    {
+      "action": "press_key",
+      "key": "v",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "value": "alpha beta",
+      "attribute": "data-query-value"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"conversation-query-editor\"] p').length",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-search-clear"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add user filter",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='user-filter-panel']",
+      "role": "option",
+      "name": "me@example.com"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add tag filter",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='tag-filter-panel'] [data-tag='alpha']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add tag filter",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='tag-filter-panel'] [data-tag='alpine']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "value": "user:me@example.com tag:alpha tag:alpine ",
+      "attribute": "data-query-value"
+    },
+    {
+      "action": "press_key",
+      "key": "Space"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "value": "user:me@example.com tag:alpha tag:alpine  ",
+      "attribute": "data-query-value"
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "value": "user:me@example.com tag:alpha tag:alpine ",
+      "attribute": "data-query-value"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-query-editor'] [data-query-raw='tag:alpha'] .conversation-query-token-value"
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "value": "user:me@example.com  tag:alpine ",
+      "attribute": "data-query-value"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-query-editor'] [data-query-raw='tag:alpha']",
+      "count": 0
+    },
+    {
+      "action": "type",
+      "value": "Z"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "value": "user:me@example.com Z tag:alpine ",
+      "attribute": "data-query-value"
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "value": "user:me@example.com  tag:alpine ",
+      "attribute": "data-query-value"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:41:57.535010967Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13665,
+    "output_tokens": 2303,
+    "estimated_cost_usd": 0.050993250000000004,
+    "mode": "generated"
+  }
+}

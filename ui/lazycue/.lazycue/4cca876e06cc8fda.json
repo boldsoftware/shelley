@@ -1,0 +1,110 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The user picker disables exhausted options and reports no matches. The browser's requests carry the header X-ExeDev-Email: me@example.com, so the current user is me@example.com. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"shared\", written in by me@example.com and other@example.com. \"The user panel\" is data-testid \"user-filter-panel\", whose options are its elements with role option (a \"selector\" scoping a \"role\"; the option containing X is the one whose name contains X, without exact). The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. 1. Navigate to /new. 2. Click the button \"Search conversations...\". 3. Click the button \"Add user filter\". 4. The query should be \"user:me@example.com user:\". 5. Eval the editor's focus() (it keeps the caret where it is) and type \"missing\" key by key. 6. The query should be \"user:me@example.com user:missing\". 7. The text \"No matching users\" inside the user panel is visible. 8. Set the query to \"user:me@example.com \". 9. Click the button \"Add user filter\". 10. Click the user panel's option containing \"other@example.com\". 11. The button \"Add user filter\" should be disabled. 12. Hover that button's parent element. 13. \".p-tooltip\" should contain the text \"All users added\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add user filter",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "user:me@example.com user:"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "type",
+      "value": "missing"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "user:me@example.com user:missing"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='user-filter-panel']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='user-filter-panel']",
+      "text": "No matching users"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "user:me@example.com "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "user:me@example.com "
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add user filter",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='user-filter-panel']",
+      "role": "option",
+      "name": "other@example.com"
+    },
+    {
+      "action": "assert_disabled",
+      "role": "button",
+      "name": "Add user filter",
+      "exact": true
+    },
+    {
+      "action": "hover",
+      "selector": ":has(\u003e button[aria-label='Add user filter'])"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".p-tooltip",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".p-tooltip",
+      "text": "All users added"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:15:52.441947811Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 11734,
+    "output_tokens": 1508,
+    "estimated_cost_usd": 0.03459045,
+    "mode": "generated"
+  }
+}

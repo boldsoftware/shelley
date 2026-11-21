@@ -1,0 +1,34 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The mobile drawer leaves horizontal patch diff scrolling alone. The phone's screen is 393x851. The page has synthetic touch gestures, run with eval: \"window.__drawerSwipe(selector, x1, y1, x2, y2)\" puts one finger down at viewport point x1,y1 on the first element matching selector, moves it to x2,y2 and lifts it; \"window.__drawerDrag(selector, points, ending, secondFinger, modalAtEnd)\" puts a finger down at the first [x, y] of points and moves it through the rest (with a second finger beside it when secondFinger is true), then ends with ending (\"touchend\" or \"touchcancel\"); when modalAtEnd is true a modal (\".command-palette-overlay\" with aria-modal) appears just before the release and goes after it. __drawerDrag returns the computed styles ({className, transform, translate, opacity}) of every \".drawer, .backdrop, .toc-drawer, .toc-drawer-scrim\" element just before the release, and keeps them in window.__drawerDragStyles. Run each gesture with a single eval, without expect; wait for its target to exist first. \"Open\" means the drawer (\".drawer\") has the class \"open\"; \"closed\" that it exists without it (eval \"document.querySelector('.drawer').classList.contains('open')\" with no guard, so that a missing drawer fails). The test harness has already stubbed the server's conversation list to one conversation, \"first\", and cut off its live update stream; there is nothing to set up or check about that. Eval \"window.__drawerSwipePatchDiff(160, 220)\" adds a horizontally scrollable patch diff (in a shadow root) to the main content and swipes one of its lines from x 160 to x 220. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /new. 2. \".main-content\" is visible. 3. Eval \"window.__drawerSwipePatchDiff(160, 220)\". 4. The drawer is closed.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".main-content",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerSwipePatchDiff(160, 220)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:28:50.11475944Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 31444,
+    "output_tokens": 941,
+    "estimated_cost_usd": 0.031270950000000006,
+    "mode": "generated"
+  }
+}
