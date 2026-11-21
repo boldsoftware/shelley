@@ -1,0 +1,628 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Project editor, task creation, failed action retry, and success-only archive. The server runs in workspace mode, on a host without exe.dev integrations (as in CI): the VM choices stay until the editor closes, even after picking this host. \"The project view\" is the element with data-testid \"project-view\"; \"the publish button\" is the button named exactly \"Publish \u0026 archive\"; \"the run card containing\" T is the element with data-testid \"project-action-card\" containing T, and its \"status\" is its element with data-testid \"project-action-status\". Shell commands below are typed exactly as shown; \\n in them is the two characters backslash and n, not a line break. On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. Perform the steps in order. 1. Navigate to /. 2. \"h1.header-title\" should have exactly the text \"Assistant\". 3. Open the drawer. 4. Click the button named exactly \"New project\". 5. Fill the field labelled exactly \"New project\" inside the element with data-testid \"new-project-row\" with \"Publish tasks\", and press Enter in it. 6. There should come to be exactly 0 such fields. 7. Open the settings of \"Publish tasks\" (a project without a page opens on its settings). 8. The URL path should come to match /^\\/project\\/\\d+\\/settings$/. 9. The editor's button named \"Delete project…\" should be enabled. 10. Fill the editor's field labelled exactly \"AGENTS.md (instructions used by every project task)\" with \"Keep publishing tasks brief.\". 11. Fill its field labelled exactly \"Working directory\" with \"{{CWD}}\". 12. Fill its field labelled exactly \"Project page\" with \"https://example.com/\". 13. Click its button named exactly \"Add action\". 14. Fill its field labelled exactly \"ID\" with \"publish\", its \"Button label\" with \"Publish \u0026 archive\", and its \"Shell command\" with: printf 'publishing failed\\n'; exit 7 15. Check its checkbox labelled exactly \"Archive task on success (publish/apply actions)\". 16. Click its button named exactly \"Save project\". 17. Its text \"Saved.\" (exactly) should be visible. 18. The buttons in the project view's navigation should come to be exactly two, with the texts \"example.com\" and \"Settings\", in that order (a page gives the view a tab framing it, first). 19. Click the project view's button named exactly \"example.com\". 20. The URL path should come to match /^\\/project\\/\\d+$/. 21. The editor should be hidden. 22. The link named \"Open example.com in a new tab\" in the project view's \".header\" should have an href of exactly \"https://example.com/\". 23. Go back (the go_back action). 24. The editor should be visible. 25. Open the drawer. 26. Click the button named exactly \"New task in Publish tasks\". 27. \".project-picker\" should have exactly the text \"Publish tasks\" (the regular composer starts it, with the project picked). 28. Fill the element with data-testid \"message-input\" with \"Hello\". 29. Click the button named exactly \"Send message\". 30. The URL path should come to start with \"/c/\". 31. The publish button should be enabled. 32. Click the publish button. 33. The status of the run card containing \"Failed (exit 7)\" should have exactly the text \"Failed (exit 7)\", and that card should contain \"publishing failed\". 34. \"h1.header-title\" must not contain \"archived\". 35. The publish button should be enabled. 36. The element with data-testid \"project-action-card\" inside an element with data-testid \"message\" should contain \"Sent to the agent\" (the agent gets the failure to work on, in the run's card). 37. Edit project \"Publish tasks\" with the change: fill the editor's \"Shell command\" with: printf 'waiting\\n'; sleep 600 38. Click the publish button. 39. The run card containing \"Running\" should contain \"waiting\". 40. Click that card's element with data-testid \"project-action-stop\" (a command that hangs can be stopped). 41. The status of the run card containing \"Stopped by the user\" should have exactly the text \"Interrupted\". 42. The publish button should be enabled. 43. Edit project \"Publish tasks\" with the change: fill the editor's \"Shell command\" with: printf 'published successfully\\n' 44. Click the publish button. 45. The status of the run card containing \"Succeeded\" should have exactly the text \"Succeeded\". 46. \"h1.header-title\" should come to contain \"archived\". 47. The run card containing \"Succeeded\" should contain \"published successfully\". 48. The run card containing \"Failed (exit 7)\" should still be visible. 49. The publish button should be disabled.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_text",
+      "text": "Assistant",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "h1.header-title",
+      "text": "Assistant"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"assistant-row\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Open tasks",
+          "visible": true
+        },
+        {
+          "action": "assert_in_viewport",
+          "selector": "[data-testid=\"assistant-row\"]"
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "New project"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": "[data-testid=\"new-project-row\"]"
+      },
+      "role": "textbox",
+      "name": "New project",
+      "exact": true,
+      "value": "Publish tasks"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid=\"new-project-row\"]"
+      },
+      "role": "textbox",
+      "name": "New project",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label=\"Publish tasks\"] a.project-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"project-view\"]"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"project-view\"] nav"
+      },
+      "role": "button",
+      "name": "Settings",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "/\\/project\\/\\d+\\/settings$/.test(location.href)",
+      "expect": "true"
+    },
+    {
+      "action": "assert_enabled",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "button",
+      "name": "Delete project…"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "textbox",
+      "name": "AGENTS.md (instructions used by every project task)",
+      "value": "Keep publishing tasks brief."
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "textbox",
+      "name": "Working directory",
+      "value": "{{CWD}}"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "textbox",
+      "name": "Project page",
+      "value": "https://example.com/"
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "button",
+      "name": "Add action"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "textbox",
+      "name": "ID",
+      "value": "publish"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "textbox",
+      "name": "Button label",
+      "value": "Publish \u0026 archive"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "textbox",
+      "name": "Shell command",
+      "value": "printf 'publishing failed\\n'; exit 7"
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "checkbox",
+      "name": "Archive task on success (publish/apply actions)",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "button",
+      "name": "Save project",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "selector": "*",
+      "has_text": "Saved.",
+      "exact": true,
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid=\"project-view\"] nav"
+      },
+      "selector": "button",
+      "count": 2
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "selector": "[data-testid=\"project-view\"] nav"
+      },
+      "selector": "button",
+      "texts": [
+        "example.com",
+        "Settings"
+      ]
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"project-view\"]"
+      },
+      "role": "button",
+      "name": "example.com",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "/\\/project\\/\\d+$/.test(location.href)",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "role": "region",
+      "name": "Edit project"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[data-testid=\"project-view\"] .header"
+      },
+      "role": "link",
+      "name": "Open example.com in a new tab",
+      "attribute": "href",
+      "value": "https://example.com/"
+    },
+    {
+      "action": "go_back"
+    },
+    {
+      "action": "assert_visible",
+      "role": "region",
+      "name": "Edit project"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Open tasks",
+          "visible": true
+        },
+        {
+          "action": "assert_in_viewport",
+          "selector": "[data-testid=\"assistant-row\"]"
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "New task in Publish tasks",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".project-picker",
+      "text": "Publish tasks"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Hello"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Send message",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "/^\\/c\\//.test(location.pathname)",
+      "expect": "true"
+    },
+    {
+      "action": "assert_enabled",
+      "role": "button",
+      "name": "Publish \u0026 archive",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Publish \u0026 archive",
+      "exact": true
+    },
+    {
+      "action": "wait_text",
+      "text": "Failed (exit 7)",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": "[data-testid=\"project-action-card\"]",
+        "has_text": "Failed (exit 7)"
+      },
+      "selector": "[data-testid=\"project-action-status\"]",
+      "text": "Failed (exit 7)"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"project-action-card\"]",
+      "has_text": "Failed (exit 7)",
+      "text": "publishing failed"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": "h1.header-title",
+      "text": "archived"
+    },
+    {
+      "action": "assert_enabled",
+      "role": "button",
+      "name": "Publish \u0026 archive",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "within": {
+        "selector": "[data-testid=\"message\"]"
+      },
+      "selector": "[data-testid=\"project-action-card\"]"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": "[data-testid=\"message\"]"
+      },
+      "selector": "[data-testid=\"project-action-card\"]",
+      "text": "Sent to the agent"
+    },
+    {
+      "action": "eval",
+      "expression": "sessionStorage.setItem('editFrom', location.pathname)"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Open tasks",
+          "visible": true
+        },
+        {
+          "action": "assert_in_viewport",
+          "selector": "[data-testid=\"assistant-row\"]"
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label=\"Publish tasks\"] a.project-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"project-view\"]"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"project-view\"] nav"
+      },
+      "role": "button",
+      "name": "Settings",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "textbox",
+      "name": "Shell command",
+      "value": "printf 'waiting\\n'; sleep 600"
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "button",
+      "name": "Save project",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "selector": "*",
+      "has_text": "Saved.",
+      "exact": true,
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem('editFrom')); return 'leaving'; })()",
+      "expect": "leaving"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'",
+      "expect": "true"
+    },
+    {
+      "action": "assert_enabled",
+      "role": "button",
+      "name": "Publish \u0026 archive",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Publish \u0026 archive",
+      "exact": true
+    },
+    {
+      "action": "wait_text",
+      "text": "Running",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"project-action-card\"]",
+      "has_text": "Running",
+      "text": "waiting"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"project-action-card\"]",
+        "has_text": "Running"
+      },
+      "selector": "[data-testid=\"project-action-stop\"]"
+    },
+    {
+      "action": "wait_text",
+      "text": "Stopped by the user",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": "[data-testid=\"project-action-card\"]",
+        "has_text": "Stopped by the user"
+      },
+      "selector": "[data-testid=\"project-action-status\"]",
+      "text": "Interrupted"
+    },
+    {
+      "action": "assert_enabled",
+      "role": "button",
+      "name": "Publish \u0026 archive",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "sessionStorage.setItem('editFrom', location.pathname)"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Open tasks",
+          "visible": true
+        },
+        {
+          "action": "assert_in_viewport",
+          "selector": "[data-testid=\"assistant-row\"]"
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label=\"Publish tasks\"] a.project-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"project-view\"]"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"project-view\"] nav"
+      },
+      "role": "button",
+      "name": "Settings",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "textbox",
+      "name": "Shell command",
+      "value": "printf 'published successfully\\n'"
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "role": "button",
+      "name": "Save project",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "role": "region",
+        "name": "Edit project"
+      },
+      "selector": "*",
+      "has_text": "Saved.",
+      "exact": true,
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem('editFrom')); return 'leaving'; })()",
+      "expect": "leaving"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'",
+      "expect": "true"
+    },
+    {
+      "action": "assert_enabled",
+      "role": "button",
+      "name": "Publish \u0026 archive",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Publish \u0026 archive",
+      "exact": true
+    },
+    {
+      "action": "wait_text",
+      "text": "Succeeded",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": "[data-testid=\"project-action-card\"]",
+        "has_text": "Succeeded"
+      },
+      "selector": "[data-testid=\"project-action-status\"]",
+      "text": "Succeeded"
+    },
+    {
+      "action": "wait_text",
+      "text": "archived",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "h1.header-title",
+      "text": "archived"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"project-action-card\"]",
+      "has_text": "Succeeded",
+      "text": "published successfully"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"project-action-card\"]",
+      "has_text": "Failed (exit 7)"
+    },
+    {
+      "action": "assert_disabled",
+      "role": "button",
+      "name": "Publish \u0026 archive",
+      "exact": true
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:09:33.902856562Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 77374,
+    "output_tokens": 10203,
+    "estimated_cost_usd": 0.24009344999999999,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "With a mouse, a working task's dot sits in the time's place; Archive pushes it left. The server runs in workspace mode, with the idle conversation {{IDLE}} and the conversation {{WORKING}}, whose agent is busy running a command for a minute. \"The row of\" X is \".conversation-item[data-conversation-id=\\\"X\\\"]\"; \"the time\" is the row of {{IDLE}}'s \".conversation-time\"; \"the dot\" is the row of {{WORKING}}'s element with data-testid \"drawer-working-indicator\"; \"Archive\" is the row of {{WORKING}}'s button named exactly \"Archive\". Read boxes with getBoundingClientRect(); an element's right is x + width. On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. Perform the steps in order. 1. Navigate to /. 2. Open the drawer. 3. The time should be visible. 4. The dot should be visible. 5. The row of {{WORKING}} must hold exactly 0 \".conversation-time\" elements. 6. Eval this; it must return true (right-aligned where the times are): Math.abs(the dot's right - the time's right) \u003c 2. 7. Hover the row of {{WORKING}}. 8. Archive's computed opacity should come to not be \"0\". 9. The dot's computed opacity should be \"1\" (still shown). 10. Eval this until it returns true (left of Archive): the dot's right \u003c= Archive's x.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('button[aria-label=\"Open tasks\"]') \u0026\u0026 document.querySelector('button[aria-label=\"Open tasks\"]').offsetParent !== null ? (document.querySelector('button[aria-label=\"Open tasks\"]').click(), 'clicked') : 'skipped'"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{IDLE}}\"] .conversation-time",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{WORKING}}\"] [data-testid='drawer-working-indicator']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id=\"{{WORKING}}\"] .conversation-time",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const dot = document.querySelector('.conversation-item[data-conversation-id=\"{{WORKING}}\"] [data-testid=\"drawer-working-indicator\"]'); const time = document.querySelector('.conversation-item[data-conversation-id=\"{{IDLE}}\"] .conversation-time'); const dotR = dot.getBoundingClientRect(); const timeR = time.getBoundingClientRect(); return Math.abs((dotR.x + dotR.width) - (timeR.x + timeR.width)) \u003c 2; })()",
+      "expect": "true"
+    },
+    {
+      "action": "hover",
+      "selector": ".conversation-item[data-conversation-id=\"{{WORKING}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{WORKING}}\"] button[aria-label=\"Archive\"]')).opacity !== '0'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{WORKING}}\"] [data-testid=\"drawer-working-indicator\"]')).opacity",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const dot = document.querySelector('.conversation-item[data-conversation-id=\"{{WORKING}}\"] [data-testid=\"drawer-working-indicator\"]'); const archive = document.querySelector('.conversation-item[data-conversation-id=\"{{WORKING}}\"] button[aria-label=\"Archive\"]'); const dotR = dot.getBoundingClientRect(); const archiveR = archive.getBoundingClientRect(); return (dotR.x + dotR.width) \u003c= archiveR.x; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:58:31.306322586Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 114822,
+    "output_tokens": 6075,
+    "estimated_cost_usd": 0.1672938,
+    "mode": "generated"
+  }
+}

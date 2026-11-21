@@ -1,0 +1,107 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A row turns bold, unread, only once its agent stops working in workspace mode. The server runs in workspace mode, with the conversation {{CONV_ID}}, which can message the user. Call \"ready\" has its agent message the user \"Ready\" and end its turn; call \"delay\" sends it a message its agent works on for 3 seconds. \"The row\" is \".conversation-item[data-conversation-id=\\\"{{CONV_ID}}\\\"]\", \"the bold row\" is \".conversation-item-unread[data-conversation-id=\\\"{{CONV_ID}}\\\"]\", and \"the title\" is the row's \".conversation-title\". On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. Perform the steps in order. 1. Navigate to /. 2. Open the drawer. 3. The row should be visible. 4. Call \"ready\". 5. The bold row should become visible. 6. The title's computed font-weight should be \"700\". 7. Call \"delay\". 8. The row's \".working-indicator\" should become visible. 9. There should be exactly 0 bold rows. 10. The title's computed font-weight must not be \"700\". 11. The row should come to hold exactly 0 \".working-indicator\" elements (allow up to 15s). 12. The bold row should be visible. 13. The title's computed font-weight should be \"700\". 14. Click the row. 15. The row should come to have aria-current \"page\". 16. There should be exactly 0 bold rows. 17. The title's computed font-weight must not be \"700\". ",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open tasks']",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"]"
+    },
+    {
+      "action": "call",
+      "value": "ready"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item-unread[data-conversation-id=\"{{CONV_ID}}\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.conversation-item-unread[data-conversation-id=\"{{CONV_ID}}\"] .conversation-title')).fontWeight",
+      "expect": "700"
+    },
+    {
+      "action": "call",
+      "value": "delay"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"] .working-indicator",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item-unread[data-conversation-id=\"{{CONV_ID}}\"]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] .conversation-title')).fontWeight !== '700' ? 'not700' : '700'",
+      "expect": "not700"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"] .working-indicator",
+      "count": 0,
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item-unread[data-conversation-id=\"{{CONV_ID}}\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.conversation-item-unread[data-conversation-id=\"{{CONV_ID}}\"] .conversation-title')).fontWeight",
+      "expect": "700"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"]').getAttribute('aria-current')",
+      "expect": "page"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item-unread[data-conversation-id=\"{{CONV_ID}}\"]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] .conversation-title')).fontWeight !== '700' ? 'not700' : '700'",
+      "expect": "not700"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:00:57.198684385Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 119626,
+    "output_tokens": 3596,
+    "estimated_cost_usd": 0.1300209,
+    "mode": "generated"
+  }
+}

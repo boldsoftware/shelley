@@ -1,0 +1,67 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Agent project edits arrive through workspace SSE without navigating away from Assistant. The server runs in workspace mode. Call \"create project\" creates the project \"Agent project\" outside this tab (as the agent would); call \"rename project\" renames it \"Agent project renamed\". On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. Perform the steps in order. 1. Navigate to /. 2. \"h1.header-title\" should have exactly the text \"Assistant\". 3. Open the drawer. 4. Call \"create project\". 5. The button named exactly \"New task in Agent project\" should become visible. 6. Call \"rename project\". 7. The button named exactly \"New task in Agent project renamed\" should become visible. 8. \"h1.header-title\" should still have exactly the text \"Assistant\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_text",
+      "text": "Assistant",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "h1.header-title",
+      "text": "Assistant"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label='Open tasks']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open tasks']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "create project"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label='New task in Agent project']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "rename project"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label='New task in Agent project renamed']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "h1.header-title",
+      "text": "Assistant"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:12:28.964641974Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 90406,
+    "output_tokens": 2481,
+    "estimated_cost_usd": 0.09399584999999999,
+    "mode": "generated"
+  }
+}

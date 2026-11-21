@@ -1,0 +1,204 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The Assistant shows no title, host, working directory, diffs, git graph or message actions; conversations still do. The server runs in workspace mode, with the conversation {{CONV_ID}}, whose first message is \"Hello\". On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. Call \"text the Assistant\" has a text message \"texted from a phone\" arrive at the Assistant through a channel. \"The git buttons\" are the buttons in \".chat-workspace-actions\" named exactly \"Diffs\" or \"Git Graph\". \"The title\" is \"h1.header-title\", \"the header\" is \".header\", and \"the actions\" are \".header-actions\"; read their boxes with getBoundingClientRect(). To \"check the brand rule\" W: click the button named exactly \"Collapse sidebar\" (in the drawer's header); \".header-left .exe-brand\" should have the computed border-right-width W (that brand exists only while the sidebar is collapsed: the open drawer shows its own in \".drawer-header\"); click the button named exactly \"Expand sidebar\" (in the page's header). Perform the steps in order. 1. Navigate to /c/{{CONV_ID}}. 2. \".status-ready\" and \".status-readout-cwd\" should be visible. 3. There should be exactly 2 git buttons. 4. The title's width must be greater than 1. 5. Eval (() =\u003e { const h = document.querySelector(\".header\").getBoundingClientRect(); const a = document.querySelector(\".header-actions\").getBoundingClientRect(); sessionStorage.setItem(\"taskHeader\", JSON.stringify({ height: h.height, right: a.x + a.width })); return \"saved\"; })(), expecting \"saved\" (the task's header). 6. Check the brand rule \"1px\". 7. Hover the first element with data-testid \"message\" containing \"Hello\". 8. Its button named \"Copy\" should be visible. 9. Navigate to /. 10. The title should have exactly the text \"Assistant\", and the class \"sr-only\" (it stays a heading for screen readers). 11. The title's width must be at most 1 (the title row shows no \"Assistant\"). 12. Eval this; it must return true (the header keeps its height and right-aligned actions): (() =\u003e { const saved = JSON.parse(sessionStorage.getItem(\"taskHeader\")); const h = document.querySelector(\".header\").getBoundingClientRect(); const a = document.querySelector(\".header-actions\").getBoundingClientRect(); return h.height === saved.height \u0026\u0026 a.x + a.width === saved.right; })(). 13. Check the brand rule \"0px\" (with the drawer collapsed, the logo has no title to rule off). 14. \".context-usage-label\" should be visible. 15. There must be exactly 0 \".status-ready\" elements and exactly 0 matching \".status-readout-cwd, .status-field-cwd\". 16. The button named exactly \"Terminal\" in \".chat-workspace-actions\" should be visible. 17. There must be exactly 0 git buttons. 18. Call \"text the Assistant\". 19. \"The texted message\" is the element with data-testid \"message\" containing \"texted from a phone\": hover it, then click it. 20. The texted message's element with data-testid \"message-via-text\" should be visible. 21. There must be exactly 0 \".message-action-bar\" elements. 22. Set the viewport to width 390, height 800 (only width and height). 23. Click the button named exactly \"More options\". 24. \".overflow-toolbar-action[aria-label='Terminal']\" should be visible. 25. There must be exactly 0 elements matching \".overflow-toolbar-action[aria-label='Diffs'], .overflow-toolbar-action[aria-label='Git Graph']\". 26. The \".overflow-menu-item\" containing \"Change Language\" should be visible. 27. There must be exactly 0 \".overflow-menu-item\" elements containing \"Directory\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{CONV_ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".status-ready",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".status-ready"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".status-readout-cwd"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-workspace-actions button[aria-label='Diffs'], .chat-workspace-actions button[aria-label='Git Graph']",
+      "count": 2
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('h1.header-title').getBoundingClientRect().width \u003e 1 ? 'yes' : 'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const h = document.querySelector('.header').getBoundingClientRect(); const a = document.querySelector('.header-actions').getBoundingClientRect(); sessionStorage.setItem('taskHeader', JSON.stringify({ height: h.height, right: a.x + a.width })); return 'saved'; })()",
+      "expect": "saved"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Collapse sidebar",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.header-left .exe-brand')).borderRightWidth",
+      "expect": "1px"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Expand sidebar",
+      "exact": true
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='message']",
+      "has_text": "Hello"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='message']",
+        "has_text": "Hello"
+      },
+      "role": "button",
+      "name": "Copy"
+    },
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "assert_text",
+      "selector": "h1.header-title",
+      "text": "Assistant",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('h1.header-title').classList.contains('sr-only') ? 'yes' : 'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('h1.header-title').getBoundingClientRect().width \u003c= 1 ? 'yes' : 'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const saved = JSON.parse(sessionStorage.getItem('taskHeader')); const h = document.querySelector('.header').getBoundingClientRect(); const a = document.querySelector('.header-actions').getBoundingClientRect(); return h.height === saved.height \u0026\u0026 a.x + a.width === saved.right; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Collapse sidebar",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.header-left .exe-brand')).borderRightWidth",
+      "expect": "0px"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Expand sidebar",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".status-ready",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".status-readout-cwd, .status-field-cwd",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-workspace-actions button[aria-label='Terminal']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-workspace-actions button[aria-label='Diffs'], .chat-workspace-actions button[aria-label='Git Graph']",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "text the Assistant"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "texted from a phone",
+      "timeout": "30s"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='message']",
+      "has_text": "texted from a phone"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message']",
+      "has_text": "texted from a phone"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='message-via-text']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-action-bar",
+      "count": 0
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 800
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".overflow-toolbar-action[aria-label='Terminal']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".overflow-toolbar-action[aria-label='Diffs'], .overflow-toolbar-action[aria-label='Git Graph']",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".overflow-menu-item",
+      "has_text": "Change Language"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".overflow-menu-item",
+      "has_text": "Directory",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:51:11.08061879Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 276762,
+    "output_tokens": 7992,
+    "estimated_cost_usd": 0.2560842,
+    "mode": "generated"
+  }
+}

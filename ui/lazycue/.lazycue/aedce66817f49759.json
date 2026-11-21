@@ -1,0 +1,149 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A project's + composes its new conversation there, in the drawer and on the server. The server runs in workspace mode, with the projects \"Plus A\" and \"Plus B\" and no tasks. Call \"new task\" returns the project the server has the one task in, and makes that task {{NEW_TASK}}. \"The composer row of\" P is \"section[aria-label=\\\"P\\\"] [data-conversation-id=\\\"composer\\\"]\". On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. Perform the steps in order. 1. Navigate to /. 2. Open the drawer. 3. The button named exactly \"New task in Plus A\" should have the computed opacity \"1\" (phones, which can't hover, always show a project's +). 4. Click it. 5. \".project-picker\" should have exactly the text \"Plus A\". 6. Open the drawer. 7. The composer row of \"Plus A\" should be visible. 8. Click the button named exactly \"New task in Plus B\" (another project's + moves the new conversation there). 9. \".project-picker\" should have exactly the text \"Plus B\". 10. Open the drawer. 11. The composer row of \"Plus B\" should be visible, and there should be exactly 0 composer rows of \"Plus A\". 12. Click the button named exactly \"Close tasks\". 13. Click the button named exactly \"New Task\" (New Task from its composer stays in the project). 14. \".project-picker\" should have exactly the text \"Plus B\". 15. Fill the element with data-testid \"message-input\" with \"Hello\". 16. Click the button named exactly \"Send message\". 17. The URL path should come to start with \"/c/\". 18. Open the drawer. 19. Call \"new task\": it must return exactly \"Plus B\". 20. There must be exactly 1 element matching \"section[aria-label=\\\"Plus B\\\"] .conversation-item[aria-current=\\\"page\\\"][data-conversation-id=\\\"{{NEW_TASK}}\\\"]\" (the drawer's open row is that task, in that project).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open tasks']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('button[aria-label=\"New task in Plus A\"]')).opacity",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='New task in Plus A']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".project-picker",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".project-picker",
+      "text": "Plus A"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open tasks']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Plus A'] [data-conversation-id='composer']"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='New task in Plus B']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".project-picker",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".project-picker",
+      "text": "Plus B"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open tasks']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "section[aria-label='Plus B'] [data-conversation-id='composer']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='Plus A'] [data-conversation-id='composer']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Close tasks']"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='New Task']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".project-picker",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".project-picker",
+      "text": "Plus B"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Hello"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Send message']"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open tasks']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "new task",
+      "expect": "Plus B"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label='Plus B'] .conversation-item[aria-current='page'][data-conversation-id='{{NEW_TASK}}']",
+      "count": 1
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:14:26.726191642Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 129948,
+    "output_tokens": 4601,
+    "estimated_cost_usd": 0.14883765000000002,
+    "mode": "generated"
+  }
+}

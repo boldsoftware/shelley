@@ -1,0 +1,138 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "With a mouse, a task row's Archive takes its time's place on hover or keyboard focus; no menu. The server runs in workspace mode, with the conversation {{CONV_ID}}. Call \"archived\" says whether the server has it archived (\"true\" or \"false\"). \"The row\" is \".conversation-item[data-conversation-id=\\\"{{CONV_ID}}\\\"]\"; \"the time\" is its \".conversation-time\"; \"Archive\" is its button named exactly \"Archive\". Read boxes with getBoundingClientRect(); an element's right is x + width. On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. Perform the steps in order. 1. Navigate to /. 2. Open the drawer. 3. The time's computed opacity should be \"1\", and Archive's \"0\". 4. Eval (() =\u003e { const b = document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] .conversation-time').getBoundingClientRect(); window.__timeBox = { x: b.x, right: b.x + b.width }; return \"saved\"; })(), expecting \"saved\". 5. Hover the row. 6. The time's computed opacity should come to be \"0\", and Archive's to not be \"0\". 7. Eval this; it must return true (Archive sits where the time was): Archive's x \u003c window.__timeBox.right \u0026\u0026 Archive's right \u003e window.__timeBox.x. 8. The row must hold exactly 0 buttons whose name contains \"Actions\" (no ⋯). 9. Right-click the row. 10. The element with data-testid \"conversation-context-menu\" must be hidden (a right-click leaves the browser's own menu). 11. Move the mouse to the viewport point (0, 0) (a hover step with no selector, at x 0, y 0). 12. Archive's computed opacity should come to be \"0\", and the time's \"1\". 13. Eval the row's focus(). 14. Press \"Tab\". 15. Archive should be focused (document.activeElement is it): from the row, Tab reaches it. 16. Press \"Tab\" with the Shift modifier. 17. The row should be focused. 18. Archive's computed opacity must not be \"0\" (back on the row, it stays). 19. Click Archive. 20. There should come to be exactly 0 rows. 21. Call \"archived\": it must return \"true\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] .conversation-time')).opacity",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] button[aria-label=\"Archive\"]')).opacity",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const b = document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] .conversation-time').getBoundingClientRect(); window.__timeBox = { x: b.x, right: b.x + b.width }; return 'saved'; })()",
+      "expect": "saved"
+    },
+    {
+      "action": "hover",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] .conversation-time')).opacity",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const op = window.getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] button[aria-label=\"Archive\"]')).opacity; return op !== '0' ? 'not-zero' : 'zero'; })()",
+      "expect": "not-zero"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] button[aria-label=\"Archive\"]'); const b = btn.getBoundingClientRect(); const archiveLeft = b.x; const archiveRight = b.x + b.width; return (archiveLeft \u003c window.__timeBox.right \u0026\u0026 archiveRight \u003e window.__timeBox.x); })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"]",
+      "role": "button",
+      "name": "Actions",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"]",
+      "button": "right"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='conversation-context-menu']"
+    },
+    {
+      "action": "hover",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] button[aria-label=\"Archive\"]')).opacity",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] .conversation-time')).opacity",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"]').focus(); 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] button[aria-label=\"Archive\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab",
+      "modifiers": "Shift"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const op = window.getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{CONV_ID}}\"] button[aria-label=\"Archive\"]')).opacity; return op !== '0' ? 'not-zero' : 'zero'; })()",
+      "expect": "not-zero"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"] button[aria-label=\"Archive\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"]",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "archived",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:55:42.704717453Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 221716,
+    "output_tokens": 7485,
+    "estimated_cost_usd": 0.23615025,
+    "mode": "generated"
+  }
+}

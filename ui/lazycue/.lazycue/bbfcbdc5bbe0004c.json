@@ -1,0 +1,77 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The dev-prod-tabs flag adds a prod tab that links to exe.dev integration setup. The server runs in workspace mode with the \"dev-prod-tabs\" flag on, on a host without an exe.dev integration (as in CI): its VM list is empty, with the setup URL \"https://exe.dev/integrations/add?service=exe-dev\u0026attach=vm%3Ahost\u0026source=shelley\". On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. Perform the steps in order. 1. Navigate to /. 2. Open the drawer. 3. Click the element with data-testid \"nav-tab-prod\". 4. The element with data-testid \"assistant-row\" should be visible (prod keeps the pinned Assistant above its VM list), with an href of exactly \"/\" and exactly 0 buttons inside it. 5. The link named \"Set up an exe.dev integration\" should have an href of exactly \"https://exe.dev/integrations/add?service=exe-dev\u0026attach=vm%3Ahost\u0026source=shelley\". 6. There must be exactly 0 elements with the text \"No VMs.\". 7. Click the element with data-testid \"nav-tab-dev\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open tasks']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='nav-tab-prod']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='assistant-row']",
+      "attribute": "href",
+      "value": "/"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='assistant-row']",
+      "role": "button",
+      "count": 0
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "a.vm-setup-link",
+      "attribute": "href",
+      "value": "https://exe.dev/integrations/add?service=exe-dev\u0026attach=vm%3Ahost\u0026source=shelley"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "a.vm-setup-link",
+      "text": "Set up an exe.dev integration"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll(\"body *:not(script):not(style)\")].some(e =\u003e [...e.childNodes].some(n =\u003e n.nodeType === 3 \u0026\u0026 n.textContent.toLowerCase().includes(\"no vms.\")))",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='nav-tab-dev']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='nav-tab-dev'].active"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:19:40.513911906Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 154361,
+    "output_tokens": 2376,
+    "estimated_cost_usd": 0.12597974999999997,
+    "mode": "generated"
+  }
+}

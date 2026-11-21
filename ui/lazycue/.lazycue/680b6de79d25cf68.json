@@ -1,0 +1,170 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Project folds survive reloads and renames; a deleted project's goes. The server runs in workspace mode, with the projects \"Busy tasks\" (id {{BUSY_ID}}), which has a task, and \"Empty tasks\" (id {{EMPTY_ID}}), right after it, which is empty. Call \"order\" returns the server's project names, in order, JSON-encoded; call \"rename and delete\" renames \"Busy tasks\" to \"Renamed tasks\" and deletes \"Empty tasks\". \"The toggle of\" P is \"section[aria-label=\\\"P\\\"] .project-toggle\". On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. Perform the steps in order. 1. Navigate to /. 2. Open the drawer. 3. The toggle of \"Busy tasks\" should have aria-expanded \"true\", and that of \"Empty tasks\" aria-expanded \"false\". 4. Click the toggle of \"Busy tasks\", then the toggle of \"Empty tasks\". 5. The toggle of \"Busy tasks\" should come to have aria-expanded \"false\", and that of \"Empty tasks\" aria-expanded \"true\". 6. Reload. 7. Open the drawer. 8. The toggle of \"Busy tasks\" should have aria-expanded \"false\", and that of \"Empty tasks\" aria-expanded \"true\". 9. Open the settings of \"Empty tasks\". 10. Click the editor's button named exactly \"Move up\" (Move up swaps a project with the one before it, for every list of projects). 11. Call \"order\" until it returns exactly {{AFTER}}. 12. Eval this until it returns true: the aria-labels of the \"section.project-group\" elements, in document order, kept only if \"Busy tasks\" or \"Empty tasks\", are exactly [\"Empty tasks\", \"Busy tasks\"]. 13. Call \"rename and delete\" (folds follow the project's id, not its name). 14. Reload. 15. Open the drawer. 16. The toggle of \"Renamed tasks\" should have aria-expanded \"false\". 17. There must be exactly 0 toggles of \"Empty tasks\". 18. Eval this; it must return true: (() =\u003e { const stored = JSON.parse(localStorage.getItem(\"shelley-project-folds\") ?? \"{}\"); return stored[\"project:{{BUSY_ID}}\"] === true \u0026\u0026 !(\"project:{{EMPTY_ID}}\" in stored); })().",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open tasks",
+      "visible": true
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[data-testid='assistant-row']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label=\"Busy tasks\"] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label=\"Empty tasks\"] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label=\"Busy tasks\"] .project-toggle"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label=\"Empty tasks\"] .project-toggle"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label=\"Busy tasks\"] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label=\"Empty tasks\"] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open tasks",
+      "visible": true
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[data-testid='assistant-row']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label=\"Busy tasks\"] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label=\"Empty tasks\"] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label=\"Empty tasks\"] a.project-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='project-view']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='project-view'] nav",
+      "role": "button",
+      "name": "Settings",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "section[aria-label='Edit project']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Move up",
+      "selector": "section[aria-label='Edit project']"
+    },
+    {
+      "action": "call",
+      "value": "order",
+      "expect": "{{AFTER}}"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(Array.from(document.querySelectorAll('section.project-group')).map(s=\u003es.getAttribute('aria-label')).filter(l=\u003el==='Busy tasks'||l==='Empty tasks')) === JSON.stringify(['Empty tasks','Busy tasks'])",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "rename and delete"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open tasks",
+      "visible": true
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[data-testid='assistant-row']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label=\"Renamed tasks\"] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "assert_count",
+      "selector": "section[aria-label=\"Empty tasks\"] .project-toggle",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const stored = JSON.parse(localStorage.getItem('shelley-project-folds') ?? '{}'); return stored['project:{{BUSY_ID}}'] === true \u0026\u0026 !('project:{{EMPTY_ID}}' in stored); })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:29:38.644081895Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 288481,
+    "output_tokens": 9400,
+    "estimated_cost_usd": 0.28319625,
+    "mode": "generated"
+  }
+}

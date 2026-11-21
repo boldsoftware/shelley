@@ -1,0 +1,152 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The Assistant's one URL is /. The server runs in workspace mode, with the Assistant conversation {{ASSISTANT}} and the conversation {{CONV_ID}} (slug {{CONV_SLUG}}). \"The header title\" is \"h1.header-title\"; \"on the conversation\" means the URL path is /c/{{CONV_SLUG}} or /c/{{CONV_ID}}. On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. Perform the steps in order. 1. Navigate to /c/{{ASSISTANT}}?message_id=m1. 2. The header title should have exactly the text \"Assistant\". 3. The URL's path and query should come to be exactly \"/?message_id=m1\". 4. Navigate to /c/{{CONV_ID}}. 5. The page should come to be on the conversation. 6. Navigate to /. 7. The header title should have exactly the text \"Assistant\". 8. Open the drawer. 9. The element with data-testid \"assistant-row\" should have an href of exactly \"/\". 10. The URL's path and query should be exactly \"/\". 11. Eval: window.history.pushState({}, \"\", \"/c/{{CONV_ID}}\"); window.dispatchEvent(new PopStateEvent(\"popstate\")). 12. The header title should come to not have exactly the text \"Assistant\". 13. Go back (the go_back action). 14. The header title should come to have exactly the text \"Assistant\". 15. The URL's path and query should be exactly \"/\". 16. Go forward (the go_forward action). 17. The header title should come to not have exactly the text \"Assistant\". 18. The page should be on the conversation. 19. Navigate to /c/{{CONV_ID}}. 20. Open the drawer. 21. Click the element with data-testid \"assistant-row\". 22. The header title should come to have exactly the text \"Assistant\". 23. The URL's path and query should come to be exactly \"/\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ASSISTANT}}?message_id=m1"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "h1.header-title",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "h1.header-title",
+      "text": "Assistant",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "location.pathname + location.search",
+      "expect": "/?message_id=m1"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{CONV_ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "h1.header-title",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "[\"/c/{{CONV_SLUG}}\", \"/c/{{CONV_ID}}\"].includes(location.pathname + location.search)",
+      "expect": "true"
+    },
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "h1.header-title",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "h1.header-title",
+      "text": "Assistant",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Open tasks\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"assistant-row\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"assistant-row\"]",
+      "attribute": "href",
+      "value": "/"
+    },
+    {
+      "action": "eval",
+      "expression": "location.pathname + location.search",
+      "expect": "/"
+    },
+    {
+      "action": "eval",
+      "expression": "window.history.pushState({}, \"\", \"/c/{{CONV_ID}}\"); window.dispatchEvent(new PopStateEvent(\"popstate\"))"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('h1.header-title')?.textContent !== 'Assistant'",
+      "expect": "true"
+    },
+    {
+      "action": "go_back"
+    },
+    {
+      "action": "assert_text",
+      "selector": "h1.header-title",
+      "text": "Assistant"
+    },
+    {
+      "action": "eval",
+      "expression": "location.pathname + location.search",
+      "expect": "/"
+    },
+    {
+      "action": "go_forward"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('h1.header-title')?.textContent !== 'Assistant'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "[\"/c/{{CONV_SLUG}}\", \"/c/{{CONV_ID}}\"].includes(location.pathname + location.search)",
+      "expect": "true"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{CONV_ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "h1.header-title",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Open tasks\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"assistant-row\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"assistant-row\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('h1.header-title')?.textContent",
+      "expect": "Assistant"
+    },
+    {
+      "action": "eval",
+      "expression": "location.pathname + location.search",
+      "expect": "/"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:16:18.094932022Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 47287,
+    "output_tokens": 3456,
+    "estimated_cost_usd": 0.09014325000000001,
+    "mode": "generated"
+  }
+}

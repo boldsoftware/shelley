@@ -1,0 +1,197 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A task's title row holds its page tabs and where it runs; actions get the only other row. The server runs in workspace mode as host vm.example, whose menu links include its website \"vm.example\". The project \"Header tasks\" has an action \"Ship it\" and the task {{TASK}}, whose agent linked four pages, \"Page 1\" to \"Page 4\". The workspace the page loads says the task works on a shared VM \"exe-hub\" (integration \"hub\", ready). Call \"start a bare task\" makes a project \"Header tasks bare\" on this host without actions, and starts its task {{PLAIN}}. \"The header\" is \".header\"; \"the place\" is the header's element with data-testid \"conversation-place\", whose accessible name is its aria-label. Perform the steps in order. 1. Navigate to /c/{{TASK}}. 2. The header should come to hold exactly 5 elements with data-testid \"page-tab\" (its VM's site and the pages the agent linked). 3. The header must have exactly 0 buttons named \"All tabs\". 4. The place's aria-label should be exactly \"Shared VM exe-hub · connected\". 5. Click the place. 6. \".conversation-place-popover\" (\"the details\") should contain \"Works on shared VM exe-hub\". 7. The details' element with role \"status\" should have exactly the text \"connected\". 8. The details' link whose accessible name contains \"exe-hub\" should have an href of exactly \"https://exe-hub.exe.xyz/\". 9. Press \"Escape\". 10. The button named exactly \"Ship it\" in \".project-header\" should be visible (the project's actions are its second row). 11. \".project-header\" must not contain \"exe-hub\". 12. The header must hold exactly 0 links named \"vm.example\", hidden or not (tabs show the pages; the host's link stays in the menu). 13. The header must hold exactly 0 \".chat-workspace-divider\" elements. 14. Click the header's button named exactly \"More options\". 15. The \".overflow-menu-item\" containing \"vm.example\" should be visible. 16. Press \"Escape\". 17. Set the viewport to width 390, height 800 (only width and height). 18. The place should come to be entirely inside the viewport (its getBoundingClientRect() within 0..innerWidth and 0..innerHeight): on a phone the title gives way. 19. Click the header's button named \"All tabs\" (tabs that don't fit are in a menu). 20. The menu items (role \"menuitem\") in the element with data-testid \"page-tabs-menu\" should have exactly the texts \"Chat\", \"exe-hub\", \"Page 1\", \"Page 2\", \"Page 3\", \"Page 4\", in that order. 21. Press \"Escape\". 22. Set the viewport to width 1280, height 800 (only width and height). 23. Call \"start a bare task\". 24. Navigate to /c/{{PLAIN}}. 25. The place's aria-label should come to start with \"This host, \" (a task on this host without project machinery has one row). 26. There must be exactly 0 \".project-header\" elements. 27. Navigate to /. 28. \"h1.header-title\" should have exactly the text \"Assistant\". 29. There must be exactly 0 elements with data-testid \"conversation-place\" and exactly 0 \".project-header\" elements.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{TASK}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".header [data-testid='page-tab']",
+      "count": 5
+    },
+    {
+      "action": "assert_count",
+      "selector": ".header button[aria-label='All tabs']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-place\"]')?.getAttribute('aria-label')",
+      "expect": "Shared VM exe-hub · connected"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-place']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-place-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".conversation-place-popover",
+      "text": "Works on shared VM exe-hub"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-place-popover [role='status']",
+      "text": "connected"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".conversation-place-popover"
+      },
+      "role": "link",
+      "name": "exe-hub",
+      "attribute": "href",
+      "value": "https://exe-hub.exe.xyz/"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".conversation-place-popover",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".project-header",
+      "role": "button",
+      "name": "Ship it",
+      "exact": true
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".project-header",
+      "text": "exe-hub"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll(\".header a, .header [role=link]\")].filter(a =\u003e (a.getAttribute(\"aria-label\") || a.textContent || \"\").toLowerCase().includes(\"vm.example\")).length",
+      "expect": "0"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".header .chat-workspace-divider",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".header button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".overflow-menu-item",
+      "has_text": "vm.example",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 800
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": ".header [data-testid='conversation-place']",
+      "ratio": 1
+    },
+    {
+      "action": "click",
+      "selector": ".header button[aria-label='All tabs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='page-tabs-menu']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_texts",
+      "selector": "[data-testid='page-tabs-menu']",
+      "role": "menuitem",
+      "texts": [
+        "Chat",
+        "exe-hub",
+        "Page 1",
+        "Page 2",
+        "Page 3",
+        "Page 4"
+      ]
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "call",
+      "value": "start a bare task"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{PLAIN}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='conversation-place']",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-place\"]')?.getAttribute('aria-label')?.startsWith('This host, ')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".project-header",
+      "count": 0
+    },
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "assert_text",
+      "selector": "h1.header-title",
+      "text": "Assistant"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-place']",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".project-header",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:04:15.793471654Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 95242,
+    "output_tokens": 4825,
+    "estimated_cost_usd": 0.14404095,
+    "mode": "generated"
+  }
+}

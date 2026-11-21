@@ -1,0 +1,242 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A search shows matches in folded projects without unfolding them. The server runs in workspace mode, with the project \"Folded foldsearchword\" (id {{PROJECT_ID}}) holding the task {{TASK}}, titled \"Find me foldsearchword\". \"The toggle\" is \"section[aria-label=\\\"Folded foldsearchword\\\"] .project-toggle\"; \"the row\" is \"[data-conversation-id=\\\"{{TASK}}\\\"]\". \"The saved folds\" are localStorage.getItem(\"shelley-project-folds\"); \"the saved folds are unchanged\" means eval localStorage.getItem(\"shelley-project-folds\") === sessionStorage.getItem(\"folds-before\") returns true. On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. \"The search editor\" is the element with data-testid \"conversation-query-editor\". To \"set the query\" to Q: eval the search editor's focus(); press \"a\" with the Control modifier; insert Q with the insert_text action; the search editor's data-query-value attribute should then be exactly Q. To \"clear the query\": eval its focus(); press \"a\" with the Control modifier; press \"Backspace\"; its data-query-value should then be exactly \"\". Perform the steps in order. 1. Navigate to /. 2. Open the drawer. 3. Click the toggle. 4. The toggle should come to have aria-expanded \"false\". 5. There should be exactly 0 rows. 6. Eval this; it must return true: JSON.parse(localStorage.getItem(\"shelley-project-folds\"))[\"project:{{PROJECT_ID}}\"] === true. 7. Eval (() =\u003e { sessionStorage.setItem(\"folds-before\", localStorage.getItem(\"shelley-project-folds\")); return \"saved\"; })(), expecting \"saved\". 8. Click the button named \"Search tasks...\". 9. The element with data-testid \"archived-toggle\" should be visible. 10. There must be exactly 0 buttons named \"Add tag filter\" (projects, not tags, organize tasks). 11. Set the query to \"tag:\". 12. There must be exactly 0 elements with data-testid \"tag-filter-panel\" (no tag: suggestions). 13. Set the query to \"foldsearchword\". 14. The row should be visible. 15. The toggle should have aria-expanded \"true\". 16. Click the toggle. 17. There should come to be exactly 0 rows (folding during a search lasts only as long as the search). 18. Click the toggle. 19. The row should be visible. 20. The saved folds are unchanged. 21. Reload (a reload mid-search leaves the saved fold as it was). 22. Open the drawer. 23. The toggle should have aria-expanded \"false\". 24. The saved folds are unchanged. 25. Click the button named \"Search tasks...\". 26. Set the query to \"foldsearchword\". 27. The row should be visible. 28. Clear the query. 29. The toggle should have aria-expanded \"false\". 30. There should be exactly 0 rows. 31. The saved folds are unchanged.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"assistant-row\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Open tasks\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"assistant-row\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label=\"Folded foldsearchword\"] .project-toggle"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label=\"Folded foldsearchword\"] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id=\"{{TASK}}\"]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.parse(localStorage.getItem(\"shelley-project-folds\"))[\"project:{{PROJECT_ID}}\"] === true",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { sessionStorage.setItem(\"folds-before\", localStorage.getItem(\"shelley-project-folds\")); return \"saved\"; })()",
+      "expect": "saved"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Search tasks...\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"archived-toggle\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "role": "button",
+      "name": "Add tag filter",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "tag:"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"conversation-query-editor\"]",
+      "attribute": "data-query-value",
+      "value": "tag:"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"tag-filter-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "foldsearchword"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"conversation-query-editor\"]",
+      "attribute": "data-query-value",
+      "value": "foldsearchword"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id=\"{{TASK}}\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label=\"Folded foldsearchword\"] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label=\"Folded foldsearchword\"] .project-toggle"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id=\"{{TASK}}\"]",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "section[aria-label=\"Folded foldsearchword\"] .project-toggle"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id=\"{{TASK}}\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem(\"shelley-project-folds\") === sessionStorage.getItem(\"folds-before\")",
+      "expect": "true"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Open tasks\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"assistant-row\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label=\"Folded foldsearchword\"] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem(\"shelley-project-folds\") === sessionStorage.getItem(\"folds-before\")",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Search tasks...\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"archived-toggle\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "foldsearchword"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"conversation-query-editor\"]",
+      "attribute": "data-query-value",
+      "value": "foldsearchword"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id=\"{{TASK}}\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"conversation-query-editor\"]",
+      "attribute": "data-query-value",
+      "value": ""
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "section[aria-label=\"Folded foldsearchword\"] .project-toggle",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id=\"{{TASK}}\"]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem(\"shelley-project-folds\") === sessionStorage.getItem(\"folds-before\")",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:07:50.120619966Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 117259,
+    "output_tokens": 6436,
+    "estimated_cost_usd": 0.1707723,
+    "mode": "generated"
+  }
+}

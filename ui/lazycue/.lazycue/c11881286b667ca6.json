@@ -1,0 +1,134 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Workspace mode's sidebar rows start short, their title alone. The server runs in workspace mode, with the task {{TASK}} (a fork of a conversation that can message the user), whose Shelley build is installed. Call \"deliver\" has its agent message the user \"Ready\" and end its turn. \"The row\" is \".conversation-item[data-conversation-id=\\\"{{TASK}}\\\"]\", \"the title\" is its \".conversation-title\", and \"the assistant row\" is the element with data-testid \"assistant-row\". On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. Perform the steps in order. 1. Navigate to /. 2. Open the drawer. 3. The title should be visible. 4. The title's computed font-weight must not be \"700\". 5. Call \"deliver\". 6. The title's computed font-weight should come to be \"700\" (unread, its title is bold, like an unread email). 7. The row must hold exactly 0 elements whose text is exactly \"1\" (no count). 8. The row's \".conversation-time\" should have exactly the text \"now\". 9. The row's button named exactly \"Archive\" must be hidden (a touch screen shows it only on the open row). 10. The row must hold exactly 0 buttons whose name contains \"Actions\". 11. The row's element with role \"status\" named \"Shelley build\" should have exactly the text \"Installed\" (a task's build status is a label on its title line). 12. The row must hold exactly 0 elements matching \".conversation-preview, .conversation-meta\". 13. The assistant row must hold exactly 0 \".conversation-preview\" elements. 14. Eval (() =\u003e { window.__shortRow = document.querySelector('.conversation-item[data-conversation-id=\"{{TASK}}\"]').getBoundingClientRect().height; return \"saved\"; })(), expecting \"saved\". 15. Eval this; it must return true (titles line up with their project's name, past its chevron): the x of the title's getBoundingClientRect() differs by less than 1 from the x of the \".conversation-group-label\" in the \".project-group\" that contains the row. 16. Click the button named \"View options\". 17. In the group (role \"group\") named \"Row size\", click the button named \"Full\" (view options make them full). 18. The row should come to hold exactly 1 \".conversation-preview\". 19. The title's computed font-weight should be \"700\". 20. The row should hold exactly 1 \".conversation-meta\". 21. The assistant row should hold exactly 1 \".conversation-preview\". 22. Eval this; it must return true: the row's getBoundingClientRect().height \u003e window.__shortRow * 1.5.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open tasks']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{TASK}}\"] .conversation-title"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector(\".conversation-item[data-conversation-id=\\\"{{TASK}}\\\"] .conversation-title\")).fontWeight !== \"700\"",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "deliver"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{TASK}}\"] .conversation-title')).fontWeight",
+      "expect": "700"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll(\".conversation-item[data-conversation-id=\\\"{{TASK}}\\\"] *\")].filter(e =\u003e e.textContent.trim() === \"1\").length",
+      "expect": "0"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-item[data-conversation-id=\"{{TASK}}\"] .conversation-time",
+      "text": "now"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{TASK}}\"]",
+      "role": "button",
+      "name": "Archive",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id=\"{{TASK}}\"]",
+      "role": "button",
+      "name": "Actions",
+      "count": 0
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-item[data-conversation-id=\"{{TASK}}\"] [role='status'][aria-label='Shelley build']",
+      "text": "Installed"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id=\"{{TASK}}\"] .conversation-preview, .conversation-item[data-conversation-id=\"{{TASK}}\"] .conversation-meta",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='assistant-row'] .conversation-preview",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { window.__shortRow = document.querySelector('.conversation-item[data-conversation-id=\"{{TASK}}\"]').getBoundingClientRect().height; return 'saved'; })()",
+      "expect": "saved"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const row = document.querySelector('.conversation-item[data-conversation-id=\"{{TASK}}\"]'); const title = row.querySelector('.conversation-title'); const projectGroup = row.closest('.project-group'); const label = projectGroup ? projectGroup.querySelector('.conversation-group-label') : null; return Math.abs(title.getBoundingClientRect().x - label.getBoundingClientRect().x) \u003c 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='View options']"
+    },
+    {
+      "action": "click",
+      "selector": "[role='group'] button",
+      "has_text": "Full"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id=\"{{TASK}}\"] .conversation-preview",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.conversation-item[data-conversation-id=\"{{TASK}}\"] .conversation-title')).fontWeight",
+      "expect": "700"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id=\"{{TASK}}\"] .conversation-meta",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='assistant-row'] .conversation-preview",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{TASK}}\"]').getBoundingClientRect().height \u003e window.__shortRow * 1.5",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:01:59.413948481Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 220644,
+    "output_tokens": 5447,
+    "estimated_cost_usd": 0.20135625,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,190 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Root opens the pinned Assistant; explicit conversation links remain selected. The server runs in workspace mode, with the conversation {{CONV_ID}} (slug {{CONV_SLUG}}), and the onboarding card not dismissed. Call \"archive a new task\" starts another conversation, {{ARCHIVED}}, and archives it. \"The row of\" a conversation X is \".conversation-item[data-conversation-id=\\\"X\\\"]\". On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. To \"open the drawer\": click the button named exactly \"Open tasks\" if it is visible (on a phone it is whenever the drawer is closed: it is the header's top-left button; the drawer's own \"Close tasks\" button stays in the page while the drawer is off-canvas, so it says nothing about whether the drawer is open); the element with data-testid \"assistant-row\" should then be visible within the viewport. To \"reload\": the reload action. To \"open the settings of\" a project P: click \"section[aria-label=\\\"P\\\"] a.project-select\", then, in the element with data-testid \"project-view\", click the button named exactly \"Settings\" in its navigation (its \u003cnav\u003e element; click it even when its tab already shows); \"the editor\" is the region (role \"region\"; a \u003csection\u003e with that aria-label) named exactly \"Edit project\". To \"edit project P\" with a change: eval sessionStorage.setItem(\"editFrom\", location.pathname) to remember the page; open the drawer; open the settings of P; make the change in the editor; click the editor's button named exactly \"Save project\"; the editor's text \"Saved.\" should be visible; then return to the remembered page with a full load: eval (() =\u003e { window.__leaving = 1; location.assign(sessionStorage.getItem(\"editFrom\")); return \"leaving\"; })(), expecting \"leaving\", then eval \"window.__leaving === undefined \u0026\u0026 document.readyState === 'complete'\" until it returns true. Perform the steps in order. 1. Navigate to /. 2. \"h1.header-title\" should have exactly the text \"Assistant\". 3. The page title should start with \"Assistant - \". 4. The heading named exactly \"What would you like to get done?\" should be visible. 5. There must be exactly 1 element with data-testid \"onboarding-web-app\" (the onboarding card offers ways to start until the user dismisses it). 6. Open the drawer. 7. There must be exactly 1 element with data-testid \"assistant-row\", and exactly 0 matching \".conversation-group [data-testid=\\\"assistant-row\\\"]\". 8. There must be exactly 0 elements with data-testid \"nav-tab-prod\" (the dev/prod tabs need their own flag). 9. There must be exactly 0 buttons named exactly \"View Archived\" (archived tasks are behind search's Archived toggle; the footer button is stock Shelley's). 10. Call \"archive a new task\". 11. The row of {{CONV_ID}} should be visible. 12. There should be exactly 0 rows of {{ARCHIVED}}. 13. Click the button named exactly \"Search tasks...\". 14. Click the element with data-testid \"archived-toggle\" (\"the toggle\"). 15. The toggle should have aria-pressed \"true\". 16. The row of {{CONV_ID}} should be visible. 17. The row of {{ARCHIVED}} should have the class \"conversation-item-archived\". 18. The assistant row should be visible, with exactly 0 buttons inside it. 19. The button named \"Restore\" in the row of {{ARCHIVED}} must be hidden (an archived row's Restore and Delete take its Archive's place). 20. Click the row of {{ARCHIVED}}. 21. Open the drawer. 22. The button named \"Delete\" in the row of {{ARCHIVED}} should be visible (a touch screen shows them on the open row). 23. Click the button named \"Restore\" in the row of {{ARCHIVED}}. 24. The row of {{ARCHIVED}} should come to not have the class \"conversation-item-archived\". 25. Click the toggle. 26. The row of {{ARCHIVED}} should be visible. 27. Navigate to /c/{{CONV_ID}}. 28. \"h1.header-title\" should come to not have exactly the text \"Assistant\". 29. The URL should end with /c/{{CONV_SLUG}} or /c/{{CONV_ID}}, with nothing after it.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_text",
+      "text": "Assistant",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "h1.header-title",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "h1.header-title",
+      "text": "Assistant"
+    },
+    {
+      "action": "eval",
+      "expression": "document.title.startsWith('Assistant - ')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "role": "heading",
+      "name": "What would you like to get done?"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"onboarding-web-app\"]",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open tasks",
+      "visible": true
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[data-testid=\"assistant-row\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"assistant-row\"]",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-group [data-testid=\"assistant-row\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"nav-tab-prod\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "role": "button",
+      "name": "View Archived",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "archive a new task"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id=\"{{ARCHIVED}}\"]",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search tasks..."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"archived-toggle\"]"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"archived-toggle\"]",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{CONV_ID}}\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item-archived[data-conversation-id=\"{{ARCHIVED}}\"]",
+      "count": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"assistant-row\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"assistant-row\"]",
+      "role": "button",
+      "count": 0
+    },
+    {
+      "action": "assert_not_visible",
+      "role": "button",
+      "name": "Restore",
+      "selector": ".conversation-item[data-conversation-id=\"{{ARCHIVED}}\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{ARCHIVED}}\"]"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open tasks",
+      "visible": true
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Delete",
+      "selector": ".conversation-item[data-conversation-id=\"{{ARCHIVED}}\"]"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Restore",
+      "selector": ".conversation-item[data-conversation-id=\"{{ARCHIVED}}\"]"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "assert_count",
+          "selector": ".conversation-item-archived[data-conversation-id=\"{{ARCHIVED}}\"]",
+          "count": 0
+        }
+      ],
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"archived-toggle\"]"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{ARCHIVED}}\"]"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{CONV_ID}}"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const h = document.querySelector(\"h1.header-title\"); return !!h \u0026\u0026 h.textContent.trim() !== \"Assistant\"; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "/\\/c\\/({{CONV_SLUG}}|{{CONV_ID}})$/.test(location.href)",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:35:58.227882863Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 55069,
+    "output_tokens": 4769,
+    "estimated_cost_usd": 0.11319404999999999,
+    "mode": "generated"
+  }
+}
