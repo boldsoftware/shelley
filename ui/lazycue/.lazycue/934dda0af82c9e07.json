@@ -1,0 +1,92 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a desktop (1280x900, no touch screen), standalone inline-code URLs are clickable. Conversation /c/{{SLUG}} has one agent reply rendered from markdown with five paragraphs: \"Preview: `https://example.com/preview?q=one\u0026other=two#fragment`\", \"Command: `curl https://example.com/command`\", \"Two URLs: `https://one.example https://two.example`\", \"Explicit link: [`https://example.com/label`](https://example.com/destination)\" and a fenced code block holding https://example.com/fenced. The test serves https://example.com itself: every page there is \"\u003ch1\u003ePreview destination\u003c/h1\u003e\". \"The content\" is the last \".message-agent .markdown-content\" element; \"the link\" is the a[href=\"https://example.com/preview?q=one\u0026other=two#fragment\"] inside it. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The link should be visible (allow 30s). 3. The \"code\" inside the link must have exactly the text \"https://example.com/preview?q=one\u0026other=two#fragment\". 4. That code element must have the computed CSS display exactly \"inline\". 5. The link's target attribute must be exactly \"_blank\" and its rel exactly \"noopener noreferrer\". 6. There must be exactly 2 \"a\" elements inside the content. 7. The content's 'a[href=\"https://example.com/destination\"] code' must have exactly the text \"https://example.com/label\". 8. The content's \"pre code\" must have exactly the text \"https://example.com/fenced\". 9. There must be exactly 0 \"pre a\" elements inside the content. 10. Click the link (a real click). 11. It opens a popup: in tab \"popup\", the URL must be exactly \"https://example.com/preview?q=one\u0026other=two#fragment\" (an exact URL check). 12. In tab \"popup\", the \"h1\" must have exactly the text \"Preview destination\". 13. In tab \"popup\", eval window.opener === null must give true. 14. Close tab \"popup\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent .markdown-content a[href=\"https://example.com/preview?q=one\u0026other=two#fragment\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".message-agent .markdown-content a[href=\"https://example.com/preview?q=one\u0026other=two#fragment\"] code",
+      "text": "https://example.com/preview?q=one\u0026other=two#fragment"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.message-agent .markdown-content a[href=\"https://example.com/preview?q=one\u0026other=two#fragment\"] code')).display",
+      "expect": "inline"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent .markdown-content a[href=\"https://example.com/preview?q=one\u0026other=two#fragment\"]",
+      "attribute": "target",
+      "value": "_blank"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent .markdown-content a[href=\"https://example.com/preview?q=one\u0026other=two#fragment\"]",
+      "attribute": "rel",
+      "value": "noopener noreferrer"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-agent .markdown-content a",
+      "count": 2
+    },
+    {
+      "action": "assert_text",
+      "selector": ".message-agent .markdown-content a[href=\"https://example.com/destination\"] code",
+      "text": "https://example.com/label"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".message-agent .markdown-content pre code",
+      "text": "https://example.com/fenced"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-agent .markdown-content pre a",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".message-agent .markdown-content a[href=\"https://example.com/preview?q=one\u0026other=two#fragment\"]"
+    },
+    {
+      "action": "assert_url",
+      "tab": "popup",
+      "value": "https://example.com/preview?q=one\u0026other=two#fragment"
+    },
+    {
+      "action": "assert_text",
+      "tab": "popup",
+      "selector": "h1",
+      "text": "Preview destination"
+    },
+    {
+      "action": "eval",
+      "tab": "popup",
+      "expression": "window.opener === null",
+      "expect": "true"
+    },
+    {
+      "action": "close_tab",
+      "tab": "popup"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:49:44.876861683Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 29978,
+    "output_tokens": 1707,
+    "estimated_cost_usd": 0.04422015,
+    "mode": "generated"
+  }
+}

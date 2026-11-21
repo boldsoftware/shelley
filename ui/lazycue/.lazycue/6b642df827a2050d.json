@@ -1,0 +1,55 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "URLs are linkified in user messages too. \"The user message\" is the \".message-user\" element whose text contains \"echo: Visit https://example.com\". Perform the steps in order. 1. Navigate to /new. 2. [data-testid=\"message-input\"] should be visible (allow 30s). 3. Fill it with \"echo: Visit https://example.com\". 4. Click [data-testid=\"send-button\"]. 5. Wait for a \".message-user\" element to be visible (allow 30s). 6. The user message's text should contain \"echo: Visit https://example.com\". 7. There must be exactly 1 \"a.text-link\" inside the user message. 8. Its href attribute must be exactly \"https://example.com\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: Visit https://example.com"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-user",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-user",
+      "text": "echo: Visit https://example.com"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-user a.text-link",
+      "count": 1
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-user a.text-link",
+      "attribute": "href",
+      "value": "https://example.com"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:32:05.858928506Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13370,
+    "output_tokens": 609,
+    "estimated_cost_usd": 0.0173769,
+    "mode": "generated"
+  }
+}

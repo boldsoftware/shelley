@@ -1,0 +1,75 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "URLs in agent responses are linked (markdown mode). Perform the steps in order. 1. Navigate to /new. 2. [data-testid=\"message-input\"] should be visible (allow 30s). 3. Fill it with \"echo: Check https://example.com and https://test.com\". 4. Click [data-testid=\"send-button\"]. 5. Wait for a \".message-agent\" element to be visible (allow 30s). 6. The first \".message-agent .markdown-content a\" (the agent's first link) should be visible. 7. Its href attribute must be exactly \"https://example.com\", its target exactly \"_blank\" and its rel exactly \"noopener noreferrer\" (pick it with the selector \".message-agent .markdown-content a\" alone, which matches the first). 8. The second such link should be visible and have href exactly \"https://test.com\": eval Array.from(document.querySelectorAll(\".message-agent .markdown-content a\")).slice(0, 2).map(a =\u003e a.getAttribute(\"href\")) must give exactly [\"https://example.com\",\"https://test.com\"], and \".message-agent .markdown-content a[href=\\\"https://test.com\\\"]\" must be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: Check https://example.com and https://test.com"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent .markdown-content a",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".message-agent .markdown-content a"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent .markdown-content a",
+      "attribute": "href",
+      "value": "https://example.com"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent .markdown-content a",
+      "attribute": "target",
+      "value": "_blank"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".message-agent .markdown-content a",
+      "attribute": "rel",
+      "value": "noopener noreferrer"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll(\".message-agent .markdown-content a\")).slice(0, 2).map(a =\u003e a.getAttribute(\"href\"))",
+      "expect": "[\"https://example.com\",\"https://test.com\"]"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".message-agent .markdown-content a[href=\"https://test.com\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:32:05.637636842Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6538,
+    "output_tokens": 484,
+    "estimated_cost_usd": 0.01206615,
+    "mode": "generated"
+  }
+}
