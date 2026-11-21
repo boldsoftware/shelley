@@ -1,0 +1,53 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The mobile Stop button stays static whatever the motion preference. The page /reduced-motion/stop is a phone-width page holding a \".status-stop-button\" button in a \".message-controls-status-slot\", with every stylesheet the server ships. \"Its animation\" is getComputedStyle(document.querySelector('.status-stop-button')).animationName. 1. Navigate to /reduced-motion/stop. 2. Eval [...document.querySelectorAll('link[rel=\"stylesheet\"]')].every((l) =\u003e l.sheet \u0026\u0026 l.sheet.cssRules.length \u003e 0): it must return true (allow 15s): every shipped stylesheet loaded. 3. Emulate the media feature prefers-reduced-motion: reduce. 4. Its animation should be exactly \"none\" (eval with expect, which polls). 5. Emulate prefers-reduced-motion: no-preference. 6. Its animation should be exactly \"none\". 7. Emulate prefers-reduced-motion: reduce. 8. Its animation should be exactly \"none\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/reduced-motion/stop"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('link[rel=\"stylesheet\"]')].every((l) =\u003e l.sheet \u0026\u0026 l.sheet.cssRules.length \u003e 0)",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "emulate_media",
+      "value": "prefers-reduced-motion: reduce"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.status-stop-button')).animationName",
+      "expect": "none"
+    },
+    {
+      "action": "emulate_media",
+      "value": "prefers-reduced-motion: no-preference"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.status-stop-button')).animationName",
+      "expect": "none"
+    },
+    {
+      "action": "emulate_media",
+      "value": "prefers-reduced-motion: reduce"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.status-stop-button')).animationName",
+      "expect": "none"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:40:10.464969056Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6616,
+    "output_tokens": 346,
+    "estimated_cost_usd": 0.00981255,
+    "mode": "generated"
+  }
+}

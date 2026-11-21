@@ -1,0 +1,36 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Every infinite animation still animates under reduced motion. The page /reduced-motion/scan has every stylesheet the server ships, and two helpers: window.__infiniteSelectors() lists the selectors of every rule outside a prefers-reduced-motion block that animates forever, and window.__frozen(selectors) lists those of the given selectors whose element the reduce override has frozen. Motion is reduced (prefers-reduced-motion: reduce). 1. Navigate to /reduced-motion/scan. 2. Eval [...document.querySelectorAll('link[rel=\"stylesheet\"]')].every((l) =\u003e l.sheet \u0026\u0026 l.sheet.cssRules.length \u003e 0): it must return true (allow 15s): every shipped stylesheet loaded. 3. Eval window.__infiniteSelectors().length \u003e 0: it must return true (no infinite animations would mean the scan is broken). 4. Eval JSON.stringify(window.__frozen(window.__infiniteSelectors())): it must return exactly \"[]\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/reduced-motion/scan"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('link[rel=\"stylesheet\"]')].every((l) =\u003e l.sheet \u0026\u0026 l.sheet.cssRules.length \u003e 0)",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__infiniteSelectors().length \u003e 0",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__frozen(window.__infiniteSelectors()))",
+      "expect": "[]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:40:05.698229426Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6609,
+    "output_tokens": 219,
+    "estimated_cost_usd": 0.0078813,
+    "mode": "generated"
+  }
+}
