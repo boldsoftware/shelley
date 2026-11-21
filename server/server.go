@@ -2472,6 +2472,13 @@ func (s *Server) tryAutoUpgrade() {
 		return
 	}
 
+	// Every release looks newer to a dev build, so auto-upgrading would
+	// silently replace the developer's binary with the release.
+	if versionInfo.DevBuild {
+		s.logger.Info("Auto-upgrade: skipping dev build (no release tag)")
+		return
+	}
+
 	s.logger.Info("Auto-upgrade: update available", "current", versionInfo.CurrentTag, "latest", versionInfo.LatestTag)
 
 	// Try to find an idle spot for up to 1 hour (check every 10 minutes)

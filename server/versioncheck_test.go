@@ -762,3 +762,67 @@ func TestDoUpgradeFallsBackToSudo(t *testing.T) {
 		t.Errorf("left behind %v; want only shelley", entries)
 	}
 }
+
+func TestDevBuild(t *testing.T) {
+	t.Setenv("SHELLEY_VERSION_OVERRIDE", "")
+	t.Setenv("SHELLEY_CUSTOMIZED_OVERRIDE", "")
+	if !baseVersionInfo().DevBuild {
+		t.Error("untagged build: DevBuild = false; want true")
+	}
+	t.Setenv("SHELLEY_VERSION_OVERRIDE", "v0.1.0")
+	if baseVersionInfo().DevBuild {
+		t.Error("tagged build: DevBuild = true; want false")
+	}
+	t.Setenv("SHELLEY_VERSION_OVERRIDE", "")
+	t.Setenv("SHELLEY_CUSTOMIZED_OVERRIDE", "true")
+	if baseVersionInfo().DevBuild {
+		t.Error("customized build: DevBuild = true; want false")
+	}
+}
+
+// A dev build must not auto-upgrade: every release looks newer to it, and
+// upgrading would overwrite the developer's binary.
+func TestTryAutoUpgradeSkipsDevBuild(t *testing.T) {
+	t.Setenv("SHELLEY_VERSION_OVERRIDE", "")
+	t.Setenv("SHELLEY_CUSTOMIZED_OVERRIDE", "")
+
+	var fetchedRelease, fetchedBinary atomic.Bool
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("GET /release.json", func(w http.ResponseWriter, r *http.Request) {
+		fetchedRelease.Store(true)
+		json.NewEncoder(w).Encode(ReleaseInfo{
+			TagName:      "v0.2.0",
+			DownloadURLs: map[string]string{runtime.GOOS + "_" + runtime.GOARCH: srv.URL + "/shelley"},
+			ChecksumsURL: srv.URL + "/checksums.txt",
+		})
+	})
+	// Fail any download so a regression can't go on to restart the test.
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		fetchedBinary.Store(true)
+		http.NotFound(w, r)
+	})
+
+	exe := filepath.Join(t.TempDir(), "shelley")
+	if err := os.WriteFile(exe, []byte("dev"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldURL, oldExe, oldErr := staticMetadataURL, startupExecutable, startupExecutableErr
+	staticMetadataURL, startupExecutable, startupExecutableErr = srv.URL, exe, nil
+	t.Cleanup(func() { staticMetadataURL, startupExecutable, startupExecutableErr = oldURL, oldExe, oldErr })
+
+	s, _, _ := newTestServer(t)
+	s.versionChecker = &VersionChecker{}
+	s.tryAutoUpgrade()
+
+	if !fetchedRelease.Load() {
+		t.Fatal("auto-upgrade never checked for a release; the test isn't exercising the dev-build check")
+	}
+	if fetchedBinary.Load() {
+		t.Error("dev build tried to download the release")
+	}
+	if got, _ := os.ReadFile(exe); string(got) != "dev" {
+		t.Errorf("binary = %q; want it untouched", got)
+	}
+}

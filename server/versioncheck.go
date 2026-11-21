@@ -53,6 +53,7 @@ type VersionInfo struct {
 	HasUpdate           bool         `json:"has_update"`    // True if minor version is newer (for showing upgrade button)
 	ShouldNotify        bool         `json:"should_notify"` // True if should show red dot (newer + 5 days old)
 	Customized          bool         `json:"customized"`    // True for user-customized builds (see customizing-shelley skill)
+	DevBuild            bool         `json:"dev_build"`     // True for local builds without a release tag; these never auto-upgrade
 	CustomizationDir    string       `json:"customization_dir,omitempty"`
 	CustomCommits       []CommitInfo `json:"custom_commits,omitempty"` // Commits the customization branch carries on top of mainline
 	DownloadURL         string       `json:"download_url,omitempty"`
@@ -179,6 +180,7 @@ func baseVersionInfo() *VersionInfo {
 		CurrentCommit:       currentInfo.Commit,
 		CurrentCommitTime:   currentInfo.CommitTime,
 		Customized:          currentInfo.Customized,
+		DevBuild:            currentInfo.Tag == "" && !currentInfo.Customized,
 		CustomizationDir:    existingCustomizationDir(),
 		ExecutablePath:      execPath,
 		CheckedAt:           time.Now(),

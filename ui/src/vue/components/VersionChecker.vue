@@ -154,7 +154,10 @@
           </div>
         </template>
         <template v-else>
-          <div v-if="!loadingAutoUpgrade" class="version-auto-upgrade">
+          <div v-if="versionInfo.dev_build" class="version-customized-note">
+            This is a dev build, so it doesn't auto-upgrade.
+          </div>
+          <div v-else-if="!loadingAutoUpgrade" class="version-auto-upgrade">
             <label class="version-checkbox-label">
               <input
                 type="checkbox"
