@@ -8,3 +8,7 @@ import "syscall"
 func serverProcAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{Setpgid: true}
 }
+
+// killStrays would kill the processes working under dir; only Linux says
+// where a process works.
+func killStrays(dir string) {}

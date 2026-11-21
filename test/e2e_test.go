@@ -148,6 +148,7 @@ func stopE2E() {
 	}
 	if e2eRoot != "" {
 		killTerminalSessions(e2eRoot)
+		killStrays(e2eRoot)
 		os.RemoveAll(e2eRoot)
 	}
 }
@@ -163,6 +164,7 @@ func sweepE2E() {
 			continue
 		}
 		killTerminalSessions(dir)
+		killStrays(dir)
 		os.RemoveAll(dir)
 	}
 }
@@ -698,6 +700,7 @@ func (s *shelley) close() {
 		e2eMu.Unlock()
 		s.stop()
 		killTerminalSessions(s.dir)
+		killStrays(s.dir)
 		os.RemoveAll(s.dir)
 	})
 }
