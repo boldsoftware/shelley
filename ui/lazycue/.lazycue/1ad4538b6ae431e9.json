@@ -1,0 +1,44 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The /compact command asks the agent to compact in place, with its instructions appended after a blank line. Perform the steps in order.\n1. Navigate to /c/{{SLUG}}.\n2. Call \"chat\": it returns the message of the first chat request (POST /api/conversation/\u003cid\u003e/chat) the page sent, as a JSON string, or \"none\" before there is one. It must return exactly \"none\" now.\n3. Fill the message input ([data-testid=\"message-input\"]) with \"/compact keep the API notes\" and press Enter in it.\n4. Call \"chat\" again: it must return exactly \"Compact your context in place.\\n\\nkeep the API notes\" (a JSON string, quotes included, with the two newlines written as \\n).\n5. An element with the text \"keep the API notes\" is visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "call",
+      "value": "chat",
+      "expect": "none"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "/compact keep the API notes"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "call",
+      "value": "chat",
+      "expect": "\"Compact your context in place.\\n\\nkeep the API notes\""
+    },
+    {
+      "action": "wait_visible",
+      "selector": "*",
+      "has_text": "keep the API notes"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:53:15.359733715Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 20768,
+    "output_tokens": 383,
+    "estimated_cost_usd": 0.020242049999999998,
+    "mode": "generated"
+  }
+}

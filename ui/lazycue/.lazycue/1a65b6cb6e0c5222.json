@@ -1,0 +1,54 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Compact in Place, in a conversation with the compact_in_place tool on (the default), just asks the agent. Perform the steps in order.\n1. Navigate to /c/{{SLUG}}.\n2. Click the \".context-usage-label\" element, then click the [data-testid=\"compact-in-place-button\"] button.\n3. An element with the text \"Compact your context in place.\" is visible.\n4. Call \"enable requests\": it returns how many requests the page sent whose URL contains \"enable-compact-in-place\"; it must return exactly \"0\".\n5. There is no [data-testid=\"message-modelchange\"] element (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".context-usage-label",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='compact-in-place-button']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='compact-in-place-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "*",
+      "has_text": "Compact your context in place.",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "enable requests",
+      "expect": "0"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='message-modelchange']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:54:01.323289315Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13027,
+    "output_tokens": 567,
+    "estimated_cost_usd": 0.016661250000000002,
+    "mode": "generated"
+  }
+}

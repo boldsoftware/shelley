@@ -1,0 +1,49 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Compact in Place, in a conversation started with the compact_in_place tool off, waits for the current turn to end. The agent is busy running \"sleep 30\" in the conversation at /c/{{SLUG}}. Perform the steps in order.\n1. Navigate to /c/{{SLUG}}.\n2. Click the \".context-usage-label\" element.\n3. The [data-testid=\"compact-in-place-button\"] button is disabled, and an element with the text \"Finish or stop the current turn to compact in place.\" is visible.\n4. Call \"cancel\": it cancels the agent's turn through the API.\n5. The [data-testid=\"compact-in-place-button\"] button becomes enabled.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='compact-in-place-button']"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "[data-testid='compact-in-place-button']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".token-cost-graph-note",
+      "has_text": "Finish or stop the current turn to compact in place."
+    },
+    {
+      "action": "call",
+      "value": "cancel"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='compact-in-place-button']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:55:16.465128406Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 126809,
+    "output_tokens": 2109,
+    "estimated_cost_usd": 0.10212555000000001,
+    "mode": "generated"
+  }
+}

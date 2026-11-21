@@ -1,0 +1,54 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Compact in Place, in a conversation started with the compact_in_place tool off, enables the tool and then asks the agent to compact. Perform the steps in order.\n1. Navigate to /c/{{SLUG}}.\n2. Click the \".context-usage-label\" element, then click the [data-testid=\"compact-in-place-button\"] button.\n3. The [data-testid=\"message-modelchange\"] element has the aria-label exactly \"Enabled the compact_in_place tool.\" and its text contains \"+compact_in_place\".\n4. An element with the text \"Compact your context in place.\" is visible.\n5. Call \"options\": it reads the conversation's stored options and must return exactly \"compact_in_place=on disable_compact_nudges=true\" (the tool is on, without the context nudges).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='compact-in-place-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-modelchange']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='message-modelchange']",
+      "attribute": "aria-label",
+      "value": "Enabled the compact_in_place tool."
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='message-modelchange']",
+      "text": "+compact_in_place"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "*",
+      "has_text": "Compact your context in place.",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "options",
+      "expect": "compact_in_place=on disable_compact_nudges=true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:31:47.554126774Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 124873,
+    "output_tokens": 1683,
+    "estimated_cost_usd": 0.1118217,
+    "mode": "generated"
+  }
+}
