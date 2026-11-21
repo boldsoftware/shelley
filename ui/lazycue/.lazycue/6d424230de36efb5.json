@@ -1,0 +1,120 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Expanded running tools show a live elapsed time that stops on completion. The page runs on a fake clock that flows like real time until a step moves it: \"fast-forward N ms\" means an eval of exactly window.__clock.fastForward(N) (it returns a promise the eval awaits). \"The tool\" is the \".bash-tool\" element; \"the elapsed time\" is the tool's [data-testid=\"tool-running-elapsed\"] element; \"the seconds\" is the number in the elapsed time's text matched by /(\\d+)s/. Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) to be visible.\n2. Fill the message input with \"bash: sleep 100\" and click the send button ([data-testid=\"send-button\"]).\n3. Wait until the tool's data-testid is exactly \"tool-call-running\" (allow 30s).\n4. The tool contains no elapsed-time element (count 0).\n5. Click the tool's \".bash-tool-header\". The elapsed time's text then matches /Running for \\d+s/.\n6. In one eval (no expect), store the seconds in window.__initial.\n7. Fast-forward 5000 ms.\n8. Wait (with an eval that has \"expect\" \"true\") until the seconds are >= window.__initial + 5.\n9. Click the tool's \".bash-tool-header\" (collapsing it). The tool then contains no elapsed-time element (count 0).\n10. Fast-forward 3000 ms.\n11. Click the tool's \".bash-tool-header\" again. Wait (with an eval that has \"expect\" \"true\") until the seconds are >= window.__initial + 8.\n12. Click the stop button (\".status-stop-button\"). Wait until the tool's data-testid is exactly \"tool-call-completed\" (allow 10s).\n13. The tool contains no elapsed-time element (count 0).\n14. Click the tool's \".bash-tool-header\" (the completed card starts collapsed, so this expands it). The tool contains no \".bash-tool-time\" element (count 0) and no elapsed-time element (count 0): a stopped run shows neither.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "bash: sleep 100"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-running\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool[data-testid=\"tool-call-running\"] [data-testid=\"tool-running-elapsed\"]",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool[data-testid=\"tool-call-running\"] .bash-tool-header"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-running\"] [data-testid=\"tool-running-elapsed\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "/Running for \\d+s/.test(document.querySelector('.bash-tool[data-testid=\"tool-call-running\"] [data-testid=\"tool-running-elapsed\"]')?.textContent || '')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__initial = parseInt(document.querySelector('.bash-tool[data-testid=\"tool-call-running\"] [data-testid=\"tool-running-elapsed\"]').textContent.match(/(\\d+)s/)[1]); window.__initial"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.fastForward(5000)"
+    },
+    {
+      "action": "eval",
+      "expression": "parseInt(document.querySelector('.bash-tool[data-testid=\"tool-call-running\"] [data-testid=\"tool-running-elapsed\"]').textContent.match(/(\\d+)s/)[1]) >= window.__initial + 5",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool[data-testid=\"tool-call-running\"] .bash-tool-header"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool[data-testid=\"tool-call-running\"] [data-testid=\"tool-running-elapsed\"]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.fastForward(3000)"
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool[data-testid=\"tool-call-running\"] .bash-tool-header"
+    },
+    {
+      "action": "eval",
+      "expression": "parseInt(document.querySelector('.bash-tool[data-testid=\"tool-call-running\"] [data-testid=\"tool-running-elapsed\"]').textContent.match(/(\\d+)s/)[1]) >= window.__initial + 8",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".status-stop-button"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] [data-testid=\"tool-running-elapsed\"]",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-header"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-time",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] [data-testid=\"tool-running-elapsed\"]",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:16:11.508808073Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 49274,
+    "output_tokens": 2372,
+    "estimated_cost_usd": 0.0715917,
+    "mode": "generated"
+  }
+}
