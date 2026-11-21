@@ -456,10 +456,10 @@ func (s *shelley) initScript(js string) {
 	s.launch.InitScript += "try {\n" + js + "\n} catch (e) { console.error('init script:', e); }\n"
 }
 
-// pageFlag sets a feature flag in the page's localStorage, as the
+// pageFlag sets a boolean feature flag in the page's localStorage, as the
 // browser-side flag overrides do.
-func (s *shelley) pageFlag(name string, value any) {
-	s.initScript(fmt.Sprintf(`localStorage.setItem(%q, %q);`, "ff:"+name, mustJSON(value)))
+func (s *shelley) pageFlag(name string, value bool) {
+	s.initScript(fmt.Sprintf(`localStorage.setItem(%q, "%t");`, "ff:"+name, value))
 }
 
 // patchInit merges patch into window.__SHELLEY_INIT__ as the page sets it.
