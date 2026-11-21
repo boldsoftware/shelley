@@ -1,0 +1,58 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Workspace mode shows the exe logo atop the drawer, stock Shelley doesn't. The server starts in workspace mode (the \"workspace\" feature flag is on); call \"workspace off\" turns the flag off. On a fresh server the first load of a page in workspace mode takes a few seconds while the Assistant is created: wait for elements rather than reading the page right after navigating. Perform the steps in order. 1. Navigate to /. 2. The element \".drawer-header [data-testid='exe-brand']\" (the brand) should be visible. 3. The brand's whole text should be exactly \"exe\". 4. The img inside the brand should load: an eval of document.querySelector(\".drawer-header [data-testid='exe-brand'] img\").naturalWidth \u003e 0 should become true. 5. The img's rendered width (getBoundingClientRect().width) must be greater than 16: eval that comparison, expecting true. 6. Call \"workspace off\". 7. Navigate to / again. 8. \".drawer-header\" should be visible. 9. There must be exactly 0 elements with data-testid \"exe-brand\" anywhere on the page.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer-header [data-testid='exe-brand']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-header [data-testid='exe-brand']",
+      "text": "exe"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".drawer-header [data-testid='exe-brand'] img\").naturalWidth \u003e 0",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".drawer-header [data-testid='exe-brand'] img\").getBoundingClientRect().width \u003e 16",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "workspace off"
+    },
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer-header",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='exe-brand']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:24:22.163338854Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6514,
+    "output_tokens": 358,
+    "estimated_cost_usd": 0.01008615,
+    "mode": "generated"
+  }
+}
