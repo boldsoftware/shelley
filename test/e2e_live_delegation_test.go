@@ -92,22 +92,6 @@ type liveSession struct {
 	Body         map[string]any
 }
 
-// readBody reads r's JSON body, leaving it for the server.
-func readBody(r *http.Request) (map[string]any, error) {
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		return nil, err
-	}
-	r.Body = io.NopCloser(bytes.NewReader(b))
-	var body map[string]any
-	if len(b) > 0 {
-		if err := json.Unmarshal(b, &body); err != nil {
-			return nil, err
-		}
-	}
-	return body, nil
-}
-
 // eventsOf is the events a relay request carries.
 func eventsOf(body map[string]any) []map[string]any {
 	var events []map[string]any
@@ -125,22 +109,14 @@ func eventsOf(body map[string]any) []map[string]any {
 func (s *shelley) recordLive(relay func(w http.ResponseWriter, r *http.Request, events []map[string]any)) *liveRecorder {
 	l := &liveRecorder{s: s}
 	s.route("POST /api/conversation/{id}/live-session", func(w http.ResponseWriter, r *http.Request) {
-		body, err := readBody(r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+		body := object(readBody(r))
 		l.mu.Lock()
 		l.sessions = append(l.sessions, liveSession{r.PathValue("id"), body})
 		l.mu.Unlock()
 		s.pass.ServeHTTP(w, r)
 	})
 	s.route("POST /api/conversation/{id}/live-session/{session}/events", func(w http.ResponseWriter, r *http.Request) {
-		body, err := readBody(r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+		body := object(readBody(r))
 		events := eventsOf(body)
 		l.mu.Lock()
 		l.relayed = append(l.relayed, events)
@@ -239,24 +215,6 @@ func (s *shelley) callLiveTranscripts(id string) {
 	})
 }
 
-// gate holds requests until call "release".
-func (s *shelley) gate() (wait func(r *http.Request) bool) {
-	ch := make(chan struct{})
-	release := sync.OnceFunc(func() { close(ch) })
-	s.call("release", func() string {
-		release()
-		return "released"
-	})
-	return func(r *http.Request) bool {
-		select {
-		case <-ch:
-			return true
-		case <-r.Context().Done():
-			return false
-		}
-	}
-}
-
 // intercepting has a route act only after call "intercept", as the spec
 // routed requests only once the call was up.
 func (s *shelley) intercepting() *atomic.Bool {
@@ -344,7 +302,7 @@ func TestE2ELiveDelegationHangupKeepsSentRequest(t *testing.T) {
 		c := s.conversation("echo: final transcript ready", "final")
 		s.mockVoice(false, false)
 		on := s.intercepting()
-		wait := s.gate()
+		wait := s.gate("release").wait
 		var held atomic.Bool
 		s.recordLive(func(w http.ResponseWriter, r *http.Request, events []map[string]any) {
 			if on.Load() && slices.ContainsFunc(events, func(e map[string]any) bool { return e["delta"] == "The live chat" }) {
@@ -412,7 +370,7 @@ func TestE2ELiveDelegationBacklogDrains(t *testing.T) {
 		c := s.conversation("echo: backlog ready", "backlog")
 		s.mockVoice(false, false)
 		on := s.intercepting()
-		wait := s.gate()
+		wait := s.gate("release").wait
 		var mu sync.Mutex
 		offsets := []float64{}
 		l := s.recordLive(func(w http.ResponseWriter, r *http.Request, events []map[string]any) {
@@ -461,7 +419,7 @@ func failedRelay(t *testing.T, endManually bool) {
 		s.conversation("echo: relay failure ready", "relay")
 		s.mockVoice(false, false)
 		on := s.intercepting()
-		wait := s.gate()
+		wait := s.gate("release").wait
 		var held atomic.Bool
 		l := s.recordLive(func(w http.ResponseWriter, r *http.Request, events []map[string]any) {
 			if !on.Load() {

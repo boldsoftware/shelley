@@ -62,44 +62,6 @@ const (
 	recIDs = `The message input is [data-testid="message-input"], the voice button [data-testid="voice-button"], the recording panel [data-testid="recording-panel"], and its stop, cancel and retry buttons [data-testid="recording-stop-button"], [data-testid="recording-cancel-button"] and [data-testid="recording-retry-button"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. `
 )
 
-// gate holds requests until the call that opens it.
-type gate chan struct{}
-
-// gate makes a gate that call opens.
-func (s *shelley) gate(call string) gate {
-	g := make(gate)
-	open := sync.OnceFunc(func() { close(g) })
-	s.call(call, func() string {
-		open()
-		return "released"
-	})
-	return g
-}
-
-// wait blocks until g opens, reporting false if r was abandoned first.
-func (g gate) wait(r *http.Request) bool {
-	select {
-	case <-g:
-		return true
-	case <-r.Context().Done():
-		return false
-	}
-}
-
-// signal is a flag that call reports, "true" or "false".
-func (s *shelley) signal(call string) *atomic.Bool {
-	var b atomic.Bool
-	s.call(call, func() string { return strconv.FormatBool(b.Load()) })
-	return &b
-}
-
-// counter is a count that call reports.
-func (s *shelley) counter(call string) *atomic.Int64 {
-	var n atomic.Int64
-	s.call(call, func() string { return strconv.FormatInt(n.Load(), 10) })
-	return &n
-}
-
 // fetched is the server's whole response to a request a route forwarded.
 type fetched struct {
 	status int
@@ -156,13 +118,6 @@ func failText(w http.ResponseWriter, status int, text string) {
 	io.WriteString(w, text)
 }
 
-// readBody reads r's body, leaving it readable again for forwarding.
-func readBody(r *http.Request) []byte {
-	b, _ := io.ReadAll(r.Body)
-	r.Body = io.NopCloser(bytes.NewReader(b))
-	return b
-}
-
 // jsonText is v as JSON, without HTML escaping.
 func jsonText(v any) string {
 	var b bytes.Buffer
@@ -192,13 +147,6 @@ func (o ordered) MarshalJSON() ([]byte, error) {
 	}
 	b.WriteByte('}')
 	return b.Bytes(), nil
-}
-
-// object decodes a JSON object, nil if b is not one.
-func object(b []byte) map[string]any {
-	var m map[string]any
-	json.Unmarshal(b, &m)
-	return m
 }
 
 // loggedRequest is a request a route recorded.
