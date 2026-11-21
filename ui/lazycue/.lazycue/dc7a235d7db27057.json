@@ -1,0 +1,38 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a wide screen, Git Graph remains a direct toolbar action. 1. Navigate to /new. 2. The button named exactly \"Git Graph\" directly in the toolbar, \".chat-workspace-actions button[aria-label='Git Graph']\", should be visible. 3. Click it. 4. \".git-graph-container\" should become visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-workspace-actions",
+      "role": "button",
+      "name": "Git Graph",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions",
+      "role": "button",
+      "name": "Git Graph",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:58:41.849353229Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 5906,
+    "output_tokens": 247,
+    "estimated_cost_usd": 0.00756255,
+    "mode": "generated"
+  }
+}

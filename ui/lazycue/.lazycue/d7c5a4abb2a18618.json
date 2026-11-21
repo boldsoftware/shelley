@@ -1,0 +1,137 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The header\" is \".header\"; \"the toolbar\" is \".header .chat-workspace-actions\"; \"the menu\" is \".chat-overflow-popover\"; \"More options\" is the header's button named exactly \"More options\". \"The VM link\" is the header's link a[aria-label=\"vm.example\"]. Names of buttons are accessible names: use role and name. \"Hidden\" means hidden or absent. Links open in a popup (tab \"popup\"); \"it opens P\" means: tab \"popup\" should come to have exactly the URL P (assert_url with value P), and show an element whose whole text is exactly \"Local link fixture\"; then close tab \"popup\". Without a VM link, every configured link stays in the overflow menu, at 1280px. The links are \"Manage on exe.dev\" (it opens https://exe.example/vm/vm) and \"Documentation\" (it opens https://docs.example/documentation). Perform the steps in order. 1. Navigate to /new and wait for the header. 2. Eval window.toolbarCounts() with expect \"{\\\"buttons\\\":3,\\\"links\\\":0}\". The toolbar should have exactly 3 visible buttons (role button, count 3). 3. The header's [data-testid=\"live-call-header\"] should be visible. 4. For each link name in turn, \"Manage on exe.dev\" then \"Documentation\": click More options; the menu's buttons named exactly \"Manage on exe.dev\" and \"Documentation\" should both be visible; click the one named exactly that name; it opens its page; the menu should then be hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "eval",
+      "expression": "window.toolbarCounts()",
+      "expect": "{\"buttons\":3,\"links\":0}"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".header .chat-workspace-actions",
+      "role": "button",
+      "count": 3
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".header [data-testid=\"live-call-header\"]"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".header a[aria-label=\"vm.example\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".header",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-overflow-popover",
+      "role": "button",
+      "name": "Manage on exe.dev",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-overflow-popover",
+      "role": "button",
+      "name": "Documentation",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover",
+      "role": "button",
+      "name": "Manage on exe.dev",
+      "exact": true
+    },
+    {
+      "action": "assert_url",
+      "tab": "popup",
+      "value": "https://exe.example/vm/vm"
+    },
+    {
+      "action": "assert_text",
+      "tab": "popup",
+      "selector": "body",
+      "text": "Local link fixture"
+    },
+    {
+      "action": "close_tab",
+      "tab": "popup"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".header",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-overflow-popover",
+      "role": "button",
+      "name": "Manage on exe.dev",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-overflow-popover",
+      "role": "button",
+      "name": "Documentation",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover",
+      "role": "button",
+      "name": "Documentation",
+      "exact": true
+    },
+    {
+      "action": "assert_url",
+      "tab": "popup",
+      "value": "https://docs.example/documentation"
+    },
+    {
+      "action": "assert_text",
+      "tab": "popup",
+      "selector": "body",
+      "text": "Local link fixture"
+    },
+    {
+      "action": "close_tab",
+      "tab": "popup"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-overflow-popover"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:40:10.631665448Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 125686,
+    "output_tokens": 3180,
+    "estimated_cost_usd": 0.11276069999999999,
+    "mode": "generated"
+  }
+}
