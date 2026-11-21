@@ -11,7 +11,9 @@ import (
 	"log"
 	"maps"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -890,7 +892,7 @@ func executeGitCommand(repoRoot string, hidden []string, cacheFile, command stri
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
-	if len(hidden) > 0 && !slices.Contains(args, cacheFile) {
+	if len(hidden) > 0 && !(cacheFile != "" && slices.Contains(args, cacheFile)) {
 		// Drop what a command turned up in hidden paths anyway.
 		lines := slices.DeleteFunc(strings.Split(out, "\n"), func(l string) bool { return hiddenIn(l, hidden) != "" })
 		out = strings.Join(lines, "\n")
@@ -907,36 +909,41 @@ func executeGitCommand(repoRoot string, hidden []string, cacheFile, command stri
 
 // fenceGit keeps a git command (args after "git") away from hidden paths
 // and in its directory, where other tests are not, and says why it may
-// not run, or returns "". The cache file is fine.
+// not run, or returns "". The cache file is fine. Arguments that may be
+// patterns are refused only for unmistakable escapes.
 func fenceGit(args, hidden []string, cacheFile string) string {
-	sub, pattern := args[0], args[0] == "grep"
+	sub := args[0]
 	for i, a := range args[1:] {
-		if a == cacheFile {
+		if cacheFile != "" && a == cacheFile {
 			continue
 		}
 		if h := hiddenIn(a, hidden); h != "" {
 			return h + " is off limits; follow the description and look at the live page instead."
 		}
-		if a == "--" || strings.HasPrefix(a, "-") && !slices.Contains(args[1:i+1], "--") {
-			continue
-		}
-		if pattern {
-			pattern = false // grep's first operand
-			continue
-		}
-		path := a
-		if sub == "show" || sub == "cat-file" {
-			rev, tree, ok := strings.Cut(a, ":")
-			if ok && rev != "" && !strings.HasPrefix(tree, "./") {
+		pathspec := slices.Contains(args[1:i+1], "--")
+		if (sub == "show" || sub == "cat-file") && !pathspec && !strings.HasPrefix(a, "-") {
+			if rev, tree, ok := strings.Cut(a, ":"); ok && (!strings.HasPrefix(tree, "./") || strings.Contains(tree, "/..")) {
 				return a + " is relative to the repository root; write " + rev + ":./<path> for a path in this directory."
 			}
-			path = tree
 		}
-		if strings.HasPrefix(path, "..") || strings.Contains(path, "/..") || strings.HasPrefix(path, ":") || strings.HasPrefix(path, "/") {
+		// Before --, only shapes no pattern of interest has.
+		escapes := a == ".." || strings.HasPrefix(a, "../") || strings.HasPrefix(a, ":/") || strings.HasPrefix(a, ":(") || isFile(a)
+		exclude := strings.HasPrefix(a, ":!") || strings.HasPrefix(a, ":^") // stays in the directory
+		if pathspec && (strings.HasPrefix(a, "..") || strings.Contains(a, "/..") || strings.HasPrefix(a, ":") && !exclude || strings.HasPrefix(a, "/")) ||
+			!pathspec && !strings.HasPrefix(a, "-") && escapes {
 			return a + " leaves this directory; use paths inside it."
 		}
 	}
 	return ""
+}
+
+// isFile reports whether s is an absolute path that exists.
+func isFile(s string) bool {
+	if !filepath.IsAbs(s) {
+		return false
+	}
+	_, err := os.Stat(s)
+	return err == nil
 }
 
 // hiddenIn returns the first of hidden that s contains, or "".

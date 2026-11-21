@@ -196,17 +196,28 @@ func TestGitCommandHidesPaths(t *testing.T) {
 	hidden := []string{"/e2e"}
 	cache := "/tmp/e2e/cache.json"
 	for cmd, want := range map[string]string{
-		"git show HEAD:../ui/e2e/x.spec.ts": "/e2e is off limits",
-		"git grep -n foo -- ..":             ".. leaves this directory",
-		"git grep foo ../x":                 "../x leaves this directory",
-		"git ls-files :/":                   ":/ leaves this directory",
-		"git show HEAD:shelley/x.js":        "HEAD:./<path>",
-		"git log --oneline -- " + cache:     "",
-		"git log --oneline HEAD~2..HEAD":    "",
-		`git grep -n "Message..." -- vue/`:  "",
-		"git grep -n http:// -- vue/":       "",
-		"git show HEAD:./agent.go":          "",
-		"git diff HEAD -- -x ../y":          "../y leaves", // -x is a path after --
+		"git show HEAD:../ui/e2e/x.spec.ts":             "/e2e is off limits",
+		"git grep -n foo -- ..":                         ".. leaves this directory",
+		"git ls-files -- :/":                            ":/ leaves this directory",
+		`git grep -n -A 3 ":placeholder" -- vue/`:       "",
+		`git grep -n -e "/c/" -e "/new" -- vue/App.vue`: "",
+		`git log -S "/api/conversations" --oneline -1`:  "",
+		"git show HEAD --stat -- ..":                    ".. leaves",
+		"git show HEAD:shelley/x.js":                    "HEAD:./<path>",
+		"git log --oneline -- " + cache:                 "",
+		"git log --oneline HEAD~2..HEAD":                "",
+		`git grep -n "Message..." -- vue/`:              "",
+		"git grep -n http:// -- vue/":                   "",
+		"git show HEAD:./agent.go":                      "",
+		"git show :shelley/x.js":                        ":./<path>",
+		"git grep -n x -- . ':!*.test.ts'":              "",
+		"git grep -n x /tmp":                            "/tmp leaves",
+		"git grep -n /no/such/path":                     "",
+		"git show HEAD:./../x/README.md":                ":./<path>",
+		"git grep -h -m1 toBeFocused ..":                ".. leaves",
+		"git grep --heading x ../ui":                    "../ui leaves",
+		"git show HEAD -- ../lazycue":                   "../lazycue leaves",
+		"git diff HEAD -- -x ../y":                      "../y leaves", // -x is a path after --
 	} {
 		if got := fenceGit(mustSplit(t, cmd)[1:], hidden, cache); want == "" && got != "" || !strings.Contains(got, want) {
 			t.Errorf("%s: %q, want %q", cmd, got, want)
