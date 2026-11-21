@@ -1,0 +1,114 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation table of contents shows timeline images as thumbnails. /c/{{INLINE}} is a conversation whose agent shows an image inline in its reply; /c/{{TOOL}} is one whose agent took a screenshot with its browser tool. Perform the steps in order. 1. Navigate to /c/{{INLINE}}. 2. The first \".message-agent img\" (\"the inline image\") should be visible (allow 30s). 3. Click \".toc-button\". 4. In \".toc-popover\", the \".toc-entry-eot\" containing \"Verified against the real product\" should hold a visible \".toc-entry-thumbnail\" whose src attribute is exactly the inline image's src attribute. 5. Press Escape. 6. Navigate to /c/{{TOOL}}. 7. The first \".screenshot-tool img\" (\"the tool image\") should be visible (allow 30s); remember its src attribute in a window variable. 8. Click the first \".screenshot-tool-header\": the tool image should be hidden (collapsed). 9. Click \".toc-button\". 10. The first \".toc-popover .toc-entry-image\" (\"the tool entry\") should hold a visible \".toc-entry-thumbnail\" whose src attribute is exactly the remembered src. 11. Click the tool entry: \".toc-popover\" should be hidden, the URL should come to match /#t-[a-zA-Z0-9]+$/, and the first \".screenshot-tool\" should have the class \"message-highlight\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{INLINE}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent img",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window._inlineSrc = document.querySelector(\".message-agent img\").getAttribute(\"src\"); window._inlineSrc"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-button"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover .toc-entry-eot .toc-entry-thumbnail"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const entries = [...document.querySelectorAll(\".toc-popover .toc-entry-eot\")].filter(e => e.textContent.includes(\"Verified against the real product\")); if (entries.length !== 1) return \"entries: \" + entries.length; const t = entries[0].querySelector(\".toc-entry-thumbnail\"); if (!t || !t.checkVisibility()) return \"no visible thumbnail\"; return t.getAttribute(\"src\") === window._inlineSrc; })()",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{TOOL}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".screenshot-tool img",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window._toolSrc = document.querySelector(\".screenshot-tool img\").getAttribute(\"src\"); window._toolSrc"
+    },
+    {
+      "action": "click",
+      "selector": ".screenshot-tool-header"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".screenshot-tool img"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-button"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover .toc-entry-image"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const entry = document.querySelector(\".toc-popover .toc-entry-image\"); const t = entry && entry.querySelector(\".toc-entry-thumbnail\"); if (!t || !t.checkVisibility()) return \"no visible thumbnail\"; return t.getAttribute(\"src\") === window._toolSrc; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-popover .toc-entry-image"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "wait_url",
+      "text": "#t-"
+    },
+    {
+      "action": "eval",
+      "expression": "/#t-[a-zA-Z0-9]+$/.test(window.location.href)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".screenshot-tool\")?.classList.contains(\"message-highlight\")",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:37:54.168206604Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 137521,
+    "output_tokens": 3159,
+    "estimated_cost_usd": 0.13169715,
+    "mode": "generated"
+  }
+}

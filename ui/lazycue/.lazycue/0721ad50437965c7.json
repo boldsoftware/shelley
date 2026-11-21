@@ -1,0 +1,149 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The context usage popup toggles from the usage label and closes on outside click. The screen is 1280x800. \"The label\" is \".context-usage-label\"; \"the popup\" is \".chat-context-popup\". Accessible names: an element's name is its aria-label if it has one; otherwise a button's name is its text with whitespace collapsed and trimmed, leaving out aria-hidden parts, and a dialog's name is the text of the element its aria-labelledby refers to; \"named X\" means the name is exactly X. Only elements that are not display: none count. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The label should be visible (allow 30s). Its \".context-usage-label-tokens\" must not be empty (non-empty textContent), its accessible name must match /^Context usage: .+ tokens$/ (read it from the aria-label attribute), and it should have aria-expanded=\"false\". 3. Click the label: the popup should be visible and contain \"LLM call\"; its \".usage-popup-title\" text should match /^Current context: .+ tokens$/; the label should have aria-expanded=\"true\". 4. The label's aria-controls attribute must be non-empty, and the element with that id must have role=\"dialog\". 5. The popup's \".token-cost-graph\" and \".token-cost-graph-svg\" should be visible. 6. Click the label again: the popup should be hidden and the label should have aria-expanded=\"false\". 7. Click the label: the popup should be visible. Click \".messages-container\" 10 pixels right and 10 pixels down from its top-left corner: the popup should be hidden and the label should have aria-expanded=\"false\". 8. Click the label: the popup should be visible. Press Escape: the popup should be hidden and the label should have aria-expanded=\"false\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".context-usage-label",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(document.querySelector('.context-usage-label-tokens')?.textContent?.trim() || '').length > 0 ? 'non-empty' : 'empty'",
+      "expect": "non-empty"
+    },
+    {
+      "action": "eval",
+      "expression": "/^Context usage: .+ tokens$/.test(document.querySelector('.context-usage-label')?.getAttribute('aria-label') || '') ? 'match' : 'no match'",
+      "expect": "match"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".context-usage-label",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-context-popup",
+      "text": "LLM call"
+    },
+    {
+      "action": "eval",
+      "expression": "/^Current context: .+ tokens$/.test(document.querySelector('.usage-popup-title')?.textContent || '') ? 'match' : 'no match'",
+      "expect": "match"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".context-usage-label",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(document.querySelector('.context-usage-label')?.getAttribute('aria-controls') || '').length > 0 ? 'non-empty' : 'empty'",
+      "expect": "non-empty"
+    },
+    {
+      "action": "eval",
+      "expression": "const id = document.querySelector('.context-usage-label')?.getAttribute('aria-controls'); id ? (document.getElementById(id)?.getAttribute('role') || 'no role') : 'no id'",
+      "expect": "dialog"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup .token-cost-graph"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup .token-cost-graph-svg"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".context-usage-label",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".messages-container",
+      "x": 10,
+      "y": 10
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".context-usage-label",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".context-usage-label",
+      "attribute": "aria-expanded",
+      "value": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:31:31.165992461Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 42512,
+    "output_tokens": 2729,
+    "estimated_cost_usd": 0.0727032,
+    "mode": "generated"
+  }
+}

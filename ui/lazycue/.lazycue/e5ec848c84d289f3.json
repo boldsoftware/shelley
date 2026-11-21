@@ -1,0 +1,93 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The status readout's cwd segment moves the conversation, and tells the agent. The screen is 1280x800. The conversation's directory is {{CWD}}; {{TARGET}} is another, small directory (shown as {{TARGET_LABEL}}). Call \"cwd\" returns the conversation's working directory as the server has it. \"The segment\" is the first visible \".status-readout-cwd\"; \"the path\" is its \".status-readout-cwd-path\"; \"the panel\" is \".modal.directory-picker-modal\". Accessible names: an element's name is its aria-label if it has one; otherwise a button's name is its text with whitespace collapsed and trimmed, leaving out aria-hidden parts, and a dialog's name is the text of the element its aria-labelledby refers to; \"named X\" means the name is exactly X. Only elements that are not display: none count. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The segment should be visible (allow 30s), and the path visible with exactly the text \"{{CWD}}\". 3. Click the segment: the panel should be visible. 4. Fill the panel's \".directory-picker-input\" with \"{{TARGET}}/\": the panel's \".directory-picker-current-path\" should contain \"e2e\". 5. Click the button in the panel's \".modal-footer\" whose accessible name contains \"Select\": the panel should be hidden. 6. The path should have exactly the text \"{{TARGET_LABEL}}\" (allow 15s). 7. Call \"cwd\" until it returns \"{{TARGET}}\" (up to 15s). 8. The last data-testid \"message-cwdchange\" should be visible and contain \"working directory\" and \"{{TARGET_LABEL}}\". 9. There must be no '[data-testid=\"message\"].message-user' containing \"{{TARGET}}\" (count 0): the notice is not shown as something the user said.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".status-readout-cwd",
+      "visible": true,
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".status-readout-cwd-path",
+      "visible": true
+    },
+    {
+      "action": "assert_text",
+      "text": "{{CWD}}",
+      "selector": ".status-readout-cwd-path",
+      "visible": true
+    },
+    {
+      "action": "click",
+      "selector": ".status-readout-cwd",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal.directory-picker-modal",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".modal.directory-picker-modal .directory-picker-input",
+      "value": "{{TARGET}}/"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".modal.directory-picker-modal .directory-picker-current-path",
+      "text": "e2e"
+    },
+    {
+      "action": "click",
+      "selector": ".modal.directory-picker-modal .modal-footer",
+      "role": "button",
+      "name": "Select"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".modal.directory-picker-modal",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "text": "{{TARGET_LABEL}}",
+      "timeout": "15s",
+      "selector": ".status-readout-cwd-path",
+      "visible": true
+    },
+    {
+      "action": "call",
+      "value": "cwd",
+      "expect": "{{TARGET}}",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const n = [...document.querySelectorAll('[data-testid=\"message-cwdchange\"]')].at(-1); if (!n || !n.checkVisibility()) return 'no visible notice'; return [n.textContent.includes('working directory'), n.textContent.includes('{{TARGET_LABEL}}')].join(' '); })()",
+      "expect": "true true",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='message'].message-user",
+      "has_text": "{{TARGET}}",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:23:24.577782272Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 35155,
+    "output_tokens": 2166,
+    "estimated_cost_usd": 0.06092715000000001,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The model picker's overlay stays on screen on a narrow viewport. The screen is 360x760. To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". Perform the steps in order. 1. Navigate to /c/{{SLUG}} and open the model picker. 2. The panel and its first \".p-select-option\" should be visible. 3. With B = the panel's getBoundingClientRect(): B.x >= 0, B.x + B.width <= 360, B.y >= 0 and B.y + B.height <= 760. 4. The panel's \"input\" should be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .model-picker.p-select",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel .p-select-option"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const r = document.querySelector('.model-picker-panel').getBoundingClientRect(); return r.x >= 0; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const r = document.querySelector('.model-picker-panel').getBoundingClientRect(); return r.x + r.width <= 360; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const r = document.querySelector('.model-picker-panel').getBoundingClientRect(); return r.y >= 0; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const r = document.querySelector('.model-picker-panel').getBoundingClientRect(); return r.y + r.height <= 760; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel input"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:22:50.521088605Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 33055,
+    "output_tokens": 1777,
+    "estimated_cost_usd": 0.052092,
+    "mode": "generated"
+  }
+}

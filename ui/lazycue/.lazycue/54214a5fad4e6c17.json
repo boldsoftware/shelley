@@ -1,0 +1,129 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The context usage popup advises compacting late, and never when the agent is nudged. The screen is 1280x800. Three conversations each report a large context: /c/{{HIGH}} reports 170000 tokens with the agent's compaction nudges off; /c/{{CRITICAL}} reports 185000 tokens with the nudges off; /c/{{NUDGED}} reports 185000 tokens with the nudges on (the default). \"The label\" is the first visible \".context-usage-label\"; \"the tokens\" is its \".context-usage-label-tokens\"; \"the popup\" is \".chat-context-popup\"; \"the advice\" is an element of the popup containing the text \"This conversation is getting long.\". For each case, in order, do: navigate to the conversation; the tokens' text should match /^1[78]\\dk$/ (allow 30s); check the tokens' class as given; click the label; the popup's data-testid \"compact-in-place-button\" should be visible; check the advice as given; press Escape; the popup should be hidden. The cases: 1. /c/{{HIGH}}: the tokens have the class \"context-usage-label-tokens-high\"; there is no advice (count 0). 2. /c/{{CRITICAL}}: the tokens have the class \"context-usage-label-tokens-critical\"; the advice is visible. 3. /c/{{NUDGED}}: no class of the tokens starts with \"context-usage-label-tokens-\" (it has only \"context-usage-label-tokens\" itself); there is no advice (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{HIGH}}"
+    },
+    {
+      "action": "eval",
+      "expression": "/^1[78]\\dk$/.test([...document.querySelectorAll('.context-usage-label')].find(e => e.checkVisibility())?.querySelector('.context-usage-label-tokens')?.textContent?.trim() || '')",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('.context-usage-label')].find(e => e.checkVisibility())?.querySelector('.context-usage-label-tokens')?.classList.contains('context-usage-label-tokens-high')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup [data-testid='compact-in-place-button']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup *",
+      "has_text": "This conversation is getting long.",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{CRITICAL}}"
+    },
+    {
+      "action": "eval",
+      "expression": "/^1[78]\\dk$/.test([...document.querySelectorAll('.context-usage-label')].find(e => e.checkVisibility())?.querySelector('.context-usage-label-tokens')?.textContent?.trim() || '')",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('.context-usage-label')].find(e => e.checkVisibility())?.querySelector('.context-usage-label-tokens')?.classList.contains('context-usage-label-tokens-critical')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup [data-testid='compact-in-place-button']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup *",
+      "has_text": "This conversation is getting long."
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{NUDGED}}"
+    },
+    {
+      "action": "eval",
+      "expression": "/^1[78]\\dk$/.test([...document.querySelectorAll('.context-usage-label')].find(e => e.checkVisibility())?.querySelector('.context-usage-label-tokens')?.textContent?.trim() || '')",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const t = [...document.querySelectorAll('.context-usage-label')].find(e => e.checkVisibility())?.querySelector('.context-usage-label-tokens'); return !!t && ![...t.classList].some(c => c.startsWith('context-usage-label-tokens-')); })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup [data-testid='compact-in-place-button']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup *",
+      "has_text": "This conversation is getting long.",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:26:26.676058219Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 93160,
+    "output_tokens": 3853,
+    "estimated_cost_usd": 0.1146933,
+    "mode": "generated"
+  }
+}

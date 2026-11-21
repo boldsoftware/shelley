@@ -1,0 +1,135 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The context usage popup lists subagents in the breakdown and includes them in the total. The screen is 1280x900, the page's clock is fake (window.__clock; time flows until fastForward), and every model costs $10 per million tokens of each kind. The server reports the conversation's subagents as one model \"review-model\" with 9 calls costing $55.161; later it reports $60. Call \"mark\" remembers how many times the page has asked for subagent usage so far; call \"asked since mark\" returns \"true\" if the page has asked again since, else \"false\"; call \"hold\" makes the server hold every later subagent usage request instead of answering it, and also marks like \"mark\"; call \"release\" switches the cost to $60, stops holding, answers the held request (it fails if none is held) and waits until it has been answered. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and click \".context-usage-label\". 2. data-testid \"subagent-cost-row\" (\"the subagent row\") should be visible (allow 30s) and contain \"$55.16\". 3. data-testid \"token-cost-total\" (\"the total\") should be visible and contain \"Total\", and its \"th\" should have computed border-top-style \"solid\". 4. A \".token-cost-graph-note\" containing \"main conversation only\" should be visible. 5. Poll eval window.__subagentLayout() (the page already defines it; do not define it yourself) until it returns exactly {\"totalAboveSubtotal\":true,\"subtotalAboveModels\":true,\"graphWide\":true,\"graphAsWideAsTable\":true,\"titleAlignedWithGraph\":true,\"costsAligned\":true} (it measures the popup's boxes all at once, as the popup moves on a later frame after it is resized for the subagents). 6. Call \"hold\". 7. Eval window.__clock.fastForward(5000). 8. Call \"asked since mark\" until it returns \"true\", then call \"mark\". 9. Eval window.__clock.fastForward(15000), then call \"asked since mark\": it must return \"false\" (no second poll while one is outstanding). 10. Call \"release\". 11. The subagent row should contain \"$60.00\". The \".token-cost-model-breakdown\" containing \"review-model\" should contain \"6.0M\" and \"$60.00\". 12. Call \"mark\". Click \".context-usage-label\": the total should be hidden. Click \".context-usage-label\" again: the total should be visible. 13. Call \"asked since mark\" until it returns \"true\" (reopening asks again).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='subagent-cost-row']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='subagent-cost-row']",
+      "text": "$55.16"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='token-cost-total']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='token-cost-total']",
+      "text": "Total"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=\"token-cost-total\"] th')).borderTopStyle",
+      "expect": "solid"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".token-cost-graph-note",
+      "has_text": "main conversation only"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var r = window.__subagentLayout(); var expected = {totalAboveSubtotal:true,subtotalAboveModels:true,graphWide:true,graphAsWideAsTable:true,titleAlignedWithGraph:true,costsAligned:true}; for (var k in expected) { if (r[k] !== expected[k]) return 'MISMATCH:' + k + '=' + r[k]; } for (var k in r) { if (!(k in expected)) return 'EXTRA:' + k; } return 'ok'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "call",
+      "value": "hold"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.fastForward(5000)"
+    },
+    {
+      "action": "call",
+      "value": "asked since mark",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "mark"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.fastForward(15000)"
+    },
+    {
+      "action": "call",
+      "value": "asked since mark",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "wait_text",
+      "text": "$60.00",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='subagent-cost-row']",
+      "text": "$60.00"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".token-cost-model-breakdown",
+      "has_text": "review-model",
+      "text": "6.0M"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".token-cost-model-breakdown",
+      "has_text": "review-model",
+      "text": "$60.00"
+    },
+    {
+      "action": "call",
+      "value": "mark"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='token-cost-total']"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='token-cost-total']"
+    },
+    {
+      "action": "call",
+      "value": "asked since mark",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:30:18.248745282Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 83161,
+    "output_tokens": 5081,
+    "estimated_cost_usd": 0.13924035,
+    "mode": "generated"
+  }
+}

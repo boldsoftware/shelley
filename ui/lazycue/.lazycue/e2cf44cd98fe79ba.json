@@ -1,0 +1,36 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The token count escalates legibly in both themes. The screen is 1280x800. window.__tokenRamp(dark) (the page already defines it; do not define it yourself) switches the page to the dark theme or not, applies each escalation class to the visible token count in turn, and returns {plain, warn, high, critical}, each {color, weight, contrast} (contrast against the status bar). Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The first visible \".context-usage-label-tokens\" should be visible (allow 30s). 3. For dark = false and then dark = true, eval window.__tokenRamp(dark) once, and check on its result r: the four colors r.plain.color, r.warn.color, r.high.color and r.critical.color are all distinct (4 different strings); r.warn.contrast >= r.plain.contrast; r.high.contrast >= r.warn.contrast; r.critical.contrast >= r.high.contrast; and Number(r.critical.weight) > Number(r.plain.weight).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".context-usage-label-tokens",
+      "visible": true,
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var r = window.__tokenRamp(false); var f = []; var colors = [r.plain.color, r.warn.color, r.high.color, r.critical.color]; if (new Set(colors).size !== 4) f.push('not 4 distinct colors: ' + JSON.stringify(colors)); if (!(r.warn.contrast >= r.plain.contrast)) f.push('warn.contrast ' + r.warn.contrast + ' < plain ' + r.plain.contrast); if (!(r.high.contrast >= r.warn.contrast)) f.push('high.contrast ' + r.high.contrast + ' < warn ' + r.warn.contrast); if (!(r.critical.contrast >= r.high.contrast)) f.push('critical.contrast ' + r.critical.contrast + ' < high ' + r.high.contrast); if (!(Number(r.critical.weight) > Number(r.plain.weight))) f.push('critical.weight ' + r.critical.weight + ' not > plain ' + r.plain.weight); return f.length ? f.join('; ') : 'ok'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var r = window.__tokenRamp(true); var f = []; var colors = [r.plain.color, r.warn.color, r.high.color, r.critical.color]; if (new Set(colors).size !== 4) f.push('not 4 distinct colors: ' + JSON.stringify(colors)); if (!(r.warn.contrast >= r.plain.contrast)) f.push('warn.contrast ' + r.warn.contrast + ' < plain ' + r.plain.contrast); if (!(r.high.contrast >= r.warn.contrast)) f.push('high.contrast ' + r.high.contrast + ' < warn ' + r.warn.contrast); if (!(r.critical.contrast >= r.high.contrast)) f.push('critical.contrast ' + r.critical.contrast + ' < high ' + r.high.contrast); if (!(Number(r.critical.weight) > Number(r.plain.weight))) f.push('critical.weight ' + r.critical.weight + ' not > plain ' + r.plain.weight); return f.length ? f.join('; ') : 'ok'; })()",
+      "expect": "ok"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:25:14.510960043Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 53184,
+    "output_tokens": 3295,
+    "estimated_cost_usd": 0.08643225,
+    "mode": "generated"
+  }
+}

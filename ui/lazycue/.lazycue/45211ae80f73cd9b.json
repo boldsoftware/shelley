@@ -1,0 +1,97 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A reasoning pill picked in the status readout's model picker persists server-side. The screen is 1280x800. Call \"mark settings\" remembers how many requests to a /settings URL the page has sent; call \"settings since mark\" returns how many it has sent since. \"The trigger\" is \".model-picker-inline .p-select-label\"; \"the pills\" are the \".model-picker-effort-pills [role=radio]\" elements. Accessible names: an element's name is its aria-label if it has one; otherwise a button's name is its text with whitespace collapsed and trimmed, leaving out aria-hidden parts, and a dialog's name is the text of the element its aria-labelledby refers to; \"named X\" means the name is exactly X. Only elements that are not display: none count. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The trigger should be visible (allow 30s); click it. 3. The first pill should be visible. 4. \"The chosen pill\" is the first pill whose text does not contain \"auto\" and whose aria-checked is \"false\"; there must be one. Remember its trimmed textContent (\"the chosen level\") in a window variable. 5. Click the chosen pill. 6. The last data-testid \"message-modelchange\" should contain the chosen level. 7. Poll (up to 10s) an eval that fetches /api/conversations, takes the JSON's conversations array (or the JSON itself when it is an array), finds the conversation whose slug is \"{{SLUG}}\", and checks that its conversation_options string contains '\"thinking_level\":\"' + the chosen level + '\"'. 8. If the click closed the picker (the first pill is not visible), click the trigger again. The first pill should be visible. 9. The element with role \"radio\" and accessible name exactly the chosen level should have aria-checked=\"true\". 10. Count the data-testid \"message-modelchange\" elements and remember the count. Call \"mark settings\". 11. Click that radio again (it is already selected). Sleep 1000ms. 12. Call \"settings since mark\": it must return \"0\" (re-selecting the current level sends nothing), and the count of data-testid \"message-modelchange\" must still be the remembered one.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-inline .p-select-label",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-inline .p-select-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-effort-pills [role=radio]"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const pills = Array.from(document.querySelectorAll('.model-picker-effort-pills [role=radio]')); const chosen = pills.find(p => !p.textContent.includes('auto') && p.getAttribute('aria-checked') === 'false'); if (!chosen) return 'NO_PILL_FOUND'; document.querySelectorAll('[data-e2e-chosen]').forEach(e => e.removeAttribute('data-e2e-chosen')); chosen.setAttribute('data-e2e-chosen', ''); window._chosenLevel = chosen.textContent.trim(); return window._chosenLevel ? 'chosen' : 'EMPTY_TEXT'; })()",
+      "expect": "chosen"
+    },
+    {
+      "action": "click",
+      "selector": "[data-e2e-chosen]"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('[data-testid=message-modelchange]')).pop()?.textContent.includes(window._chosenLevel) ? 'yes' : 'no'",
+      "expect": "yes",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () => { const r = await fetch('/api/conversations'); const data = await r.json(); const convs = Array.isArray(data) ? data : data.conversations; const conv = convs.find(c => c.slug === '{{SLUG}}'); const opts = typeof conv?.conversation_options === 'string' ? conv.conversation_options : JSON.stringify(conv?.conversation_options); return opts && opts.includes('\"thinking_level\":\"' + window._chosenLevel + '\"') ? 'yes' : 'no:' + opts; })()",
+      "expect": "yes",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window._pillsVisible = Array.from(document.querySelectorAll('.model-picker-effort-pills [role=radio]')).filter(el => getComputedStyle(el).display !== 'none').length > 0; 'done'"
+    },
+    {
+      "action": "eval",
+      "expression": "window._pillsVisible ? 'skip' : (document.querySelector('.model-picker-inline .p-select-label').click(), 'clicked_trigger')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-effort-pills [role=radio]"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const radios = Array.from(document.querySelectorAll('[role=radio]')).filter(r => { const name = r.getAttribute('aria-label') || r.textContent.replace(/\\s+/g, ' ').trim(); return name === window._chosenLevel; }); if (radios.length !== 1) return 'radios named ' + window._chosenLevel + ': ' + radios.length; document.querySelectorAll('[data-e2e-radio]').forEach(e => e.removeAttribute('data-e2e-radio')); radios[0].setAttribute('data-e2e-radio', ''); return radios[0].getAttribute('aria-checked'); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window._modelChangeCount = document.querySelectorAll('[data-testid=message-modelchange]').length; window._modelChangeCount"
+    },
+    {
+      "action": "call",
+      "value": "mark settings"
+    },
+    {
+      "action": "click",
+      "selector": "[data-e2e-radio]"
+    },
+    {
+      "action": "sleep",
+      "timeout": "1000ms"
+    },
+    {
+      "action": "call",
+      "value": "settings since mark",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=message-modelchange]').length === window._modelChangeCount ? 'same' : 'changed'",
+      "expect": "same"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:21:55.359672488Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 102457,
+    "output_tokens": 5588,
+    "estimated_cost_usd": 0.15285345,
+    "mode": "generated"
+  }
+}

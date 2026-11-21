@@ -1,0 +1,131 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The status readout's model picker is disabled while the agent works. The screen is 1280x800. \"The model\" is \".model-picker-inline .p-select-label\"; \"the picker\" is \".model-picker-inline\". Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. data-testid \"message-input\" should be visible (allow 30s). 3. The model should be visible, and the picker must not have the class \"p-disabled\". 4. Fill the message input with \"bash: sleep 8\" and click data-testid \"send-button\". 5. data-testid \"agent-thinking\" should be visible (allow 20s). 6. The picker should have the class \"p-disabled\". 7. Click where the model is, ignoring that it is disabled: a disabled picker takes no pointer events, so click its wrapper \".status-readout-model\" at the model's center (offsets from the wrapper's top-left corner to the center of the model's bounding box). 8. There should be no \".model-picker-panel\" (count 0). 9. The model's computed cursor must be exactly \"default\", and the picker's computed opacity, as a number, must be < 1 and > 0.4. 10. The model's aria-description attribute must contain \"switch models\". 11. Move the pointer to the viewport point (0, 0) (a hover without a selector), then hover \".status-readout-model\": \".p-tooltip-text\" should contain \"switch models\". 12. Move the pointer to the viewport point (0, 0) again: there should be no \".p-tooltip-text\" (count 0). 13. Click \".context-usage-label\": \".chat-context-popup\" should be visible. 14. The first visible \".status-readout-cwd\" should be disabled, and the computed text-decoration-line of its \".status-readout-cwd-path\" must be exactly \"none\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-inline .p-select-label"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.model-picker-inline').classList.contains('p-disabled')",
+      "expect": "false"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "bash: sleep 8"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "20s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.model-picker-inline').classList.contains('p-disabled')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const w = document.querySelector('.status-readout-model').getBoundingClientRect(); const m = document.querySelector('.model-picker-inline .p-select-label').getBoundingClientRect(); return Math.round(m.x + m.width / 2 - w.x) + ',' + Math.round(m.y + m.height / 2 - w.y); })()",
+      "expect": "39,7"
+    },
+    {
+      "action": "click",
+      "selector": ".status-readout-model",
+      "x": 39,
+      "y": 7
+    },
+    {
+      "action": "assert_count",
+      "selector": ".model-picker-panel",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.model-picker-inline .p-select-label')).cursor",
+      "expect": "default"
+    },
+    {
+      "action": "eval",
+      "expression": "parseFloat(window.getComputedStyle(document.querySelector('.model-picker-inline')).opacity) < 1 && parseFloat(window.getComputedStyle(document.querySelector('.model-picker-inline')).opacity) > 0.4",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.model-picker-inline .p-select-label').getAttribute('aria-description').includes('switch models')",
+      "expect": "true"
+    },
+    {
+      "action": "hover",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "action": "hover",
+      "selector": ".status-readout-model"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".p-tooltip-text",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".p-tooltip-text",
+      "text": "switch models"
+    },
+    {
+      "action": "hover",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".p-tooltip-text",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": ".status-readout-cwd",
+      "visible": true
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle([...document.querySelectorAll('.status-readout-cwd')].find(e => e.checkVisibility()).querySelector('.status-readout-cwd-path')).textDecorationLine",
+      "expect": "none"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:21:36.891253895Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 94880,
+    "output_tokens": 5593,
+    "estimated_cost_usd": 0.14709225,
+    "mode": "generated"
+  }
+}

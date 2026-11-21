@@ -1,0 +1,67 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The token count advertises itself as clickable, and is its segment's only content. The screen is 1280x800. \"The tokens\" is the first visible \".context-usage-label-tokens\"; \"the segment\" is the first visible \".context-usage-root\". Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The tokens should be visible (allow 30s). 3. Poll (up to 10s) one eval that reads both texts at once, as the count starts at 0 and changes when usage arrives: the segment's innerText, trimmed, must equal the innerText, trimmed, of the segment's \".context-usage-label-tokens\". 4. The tokens' computed style must have text-decoration-line exactly \"underline\", text-decoration-style exactly \"dotted\" and cursor exactly \"pointer\". 5. Move the pointer to the viewport point (0, 0) (a hover without a selector), then hover the tokens: \".p-tooltip-text\" should contain \"Click for details\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".context-usage-label-tokens",
+      "visible": true,
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const seg = [...document.querySelectorAll('.context-usage-root')].find(e => e.checkVisibility()); const tokens = seg.querySelector('.context-usage-label-tokens'); const st = seg.innerText.trim(); const tt = tokens.innerText.trim(); return (st !== '' && st === tt) ? 'ok' : 'mismatch:seg=' + st + ',tok=' + tt; })()",
+      "expect": "ok",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle([...document.querySelectorAll('.context-usage-label-tokens')].find(e => e.checkVisibility())).textDecorationLine",
+      "expect": "underline"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle([...document.querySelectorAll('.context-usage-label-tokens')].find(e => e.checkVisibility())).textDecorationStyle",
+      "expect": "dotted"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle([...document.querySelectorAll('.context-usage-label-tokens')].find(e => e.checkVisibility())).cursor",
+      "expect": "pointer"
+    },
+    {
+      "action": "hover",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "action": "hover",
+      "selector": ".context-usage-label-tokens",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".p-tooltip-text",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".p-tooltip-text",
+      "text": "Click for details"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:26:26.91025384Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 52613,
+    "output_tokens": 1833,
+    "estimated_cost_usd": 0.0591732,
+    "mode": "generated"
+  }
+}

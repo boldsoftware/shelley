@@ -1,0 +1,58 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The status readout ellipsizes the model name instead of overflowing in a narrow desktop pane. The screen is 1280x800, and every model's display name is \"Predictable model with a very long display name\". \"Overflows\" for a selector S means: take the first element matching S that is visible (non-empty getClientRects()) - there must be one - and compute scrollWidth > clientWidth + 1. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. data-testid \"message-input\" should be visible (allow 30s). 3. Eval document.querySelector(\".main-content\").style.maxWidth = \"320px\". 4. \".context-usage-label\" should be visible. 5. \".status-bar-active\", \".status-readout\" and \".context-usage-label-tokens\" must each not overflow (false). 6. Eval window.__shrinkChain() (the page already defines it; do not define it yourself), which lists every ancestor of the visible \".model-picker-value-name\" up to the \".status-readout\" as {cls, minWidth, isSelectLabel}: the result must not be null, some entry's cls must be exactly \"status-readout\", and every entry whose isSelectLabel is false must have minWidth exactly \"0px\". 7. For the first visible \".model-picker-value-name\": its trimmed textContent must be non-empty, its computed text-overflow must be exactly \"ellipsis\", and it must overflow (scrollWidth > clientWidth + 1 is true).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.main-content').style.maxWidth = '320px'"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(s){const el=[...document.querySelectorAll(s)].find(e=>e.getClientRects().length>0);if(!el)return 'NO_VISIBLE_ELEMENT';return el.scrollWidth > el.clientWidth + 1;}('.status-bar-active'))",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(s){const el=[...document.querySelectorAll(s)].find(e=>e.getClientRects().length>0);if(!el)return 'NO_VISIBLE_ELEMENT';return el.scrollWidth > el.clientWidth + 1;}('.status-readout'))",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(s){const el=[...document.querySelectorAll(s)].find(e=>e.getClientRects().length>0);if(!el)return 'NO_VISIBLE_ELEMENT';return el.scrollWidth > el.clientWidth + 1;}('.context-usage-label-tokens'))",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){const chain=window.__shrinkChain();if(!chain)return 'null';const hasSR=chain.some(e=>e.cls==='status-readout');const badMin=chain.filter(e=>e.isSelectLabel===false&&e.minWidth!=='0px');return JSON.stringify({hasSR,badMin});})()",
+      "expect": "{\"hasSR\":true,\"badMin\":[]}"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){const els=Array.from(document.querySelectorAll('.model-picker-value-name')).filter(el=>el.getClientRects().length>0);if(!els.length)return 'NO_ELEMENT';const el=els[0];const text=el.textContent.trim();const overflow=getComputedStyle(el).textOverflow;const overflows=el.scrollWidth>el.clientWidth+1;return JSON.stringify({hasText:text.length>0,overflow,overflows});})()",
+      "expect": "{\"hasText\":true,\"overflow\":\"ellipsis\",\"overflows\":true}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:24:01.743798797Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 32659,
+    "output_tokens": 1881,
+    "estimated_cost_usd": 0.05487525,
+    "mode": "generated"
+  }
+}

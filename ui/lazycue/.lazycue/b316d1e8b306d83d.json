@@ -1,0 +1,74 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The message action bar follows long messages and flips clipped tooltips below. The screen is 390x667. \"The message\" is the last \"[data-testid=\\\"message\\\"].message-agent\"; \"the entity\" is its [data-content-entity=\"content\"]; \"the container\" is the entity's closest \".messages-container\"; \"the action bar\" is the entity's \".message-action-bar-wrapper\"; \"fork\" is the action bar's button whose accessible name contains \"Fork conversation from here\". Accessible names: an element's name is its aria-label if it has one; otherwise a button's name is its text with whitespace collapsed and trimmed, leaving out aria-hidden parts, and a dialog's name is the text of the element its aria-labelledby refers to; \"named X\" means the name is exactly X. Only elements that are not display: none count. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The message (allow 30s) and the entity should be visible. 3. In one eval on the entity: set its style.minHeight to \"1000px\"; add (entity top - container top + 96) to the container's scrollTop, using getBoundingClientRect() tops; then dispatch new MouseEvent(\"click\", {bubbles: true}) on the entity. 4. The action bar should be visible. Its sticky inset, action bar top - container top (getBoundingClientRect), must be within 0.5 of 8. 5. Hover fork: it should get data-tooltip-placement=\"bottom\". 6. In one eval: add (entity top - container top - 120) to the container's scrollTop, then dispatch new MouseEvent(\"mouseover\", {bubbles: true, cancelable: true, composed: true}) on fork. 7. Fork should get data-tooltip-placement=\"top\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"].message-agent",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const msgs = document.querySelectorAll('[data-testid=\"message\"].message-agent'); const last = msgs[msgs.length - 1]; if (!last || !last.checkVisibility()) return 'no visible message'; const entity = last.querySelector('[data-content-entity=\"content\"]'); if (!entity) return 'no entity'; entity.setAttribute('data-e2e-entity', ''); return 'marked'; })()",
+      "expect": "marked"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-e2e-entity]"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const msgs = document.querySelectorAll('[data-testid=\"message\"].message-agent'); const entity = msgs[msgs.length-1].querySelector('[data-content-entity=\"content\"]'); const container = entity.closest('.messages-container'); entity.style.minHeight = '1000px'; const entityRect = entity.getBoundingClientRect(); const containerRect = container.getBoundingClientRect(); container.scrollTop += (entityRect.top - containerRect.top + 96); entity.dispatchEvent(new MouseEvent('click', {bubbles: true})); return 'done'; })()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-e2e-entity] .message-action-bar-wrapper",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const msgs = document.querySelectorAll('[data-testid=\"message\"].message-agent'); const entity = msgs[msgs.length-1].querySelector('[data-content-entity=\"content\"]'); const container = entity.closest('.messages-container'); const actionBar = entity.querySelector('.message-action-bar-wrapper'); const actionBarRect = actionBar.getBoundingClientRect(); const containerRect = container.getBoundingClientRect(); const diff = Math.abs((actionBarRect.top - containerRect.top) - 8); return diff <= 0.5 ? 'pass' : 'fail:' + diff; })()",
+      "expect": "pass"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-e2e-entity] .message-action-bar-wrapper",
+      "role": "button",
+      "name": "Fork conversation from here"
+    },
+    {
+      "action": "assert_attribute",
+      "attribute": "data-tooltip-placement",
+      "value": "bottom",
+      "selector": "[data-e2e-entity] .message-action-bar-wrapper",
+      "role": "button",
+      "name": "Fork conversation from here"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const msgs = document.querySelectorAll('[data-testid=\"message\"].message-agent'); const entity = msgs[msgs.length-1].querySelector('[data-content-entity=\"content\"]'); const container = entity.closest('.messages-container'); const actionBar = entity.querySelector('.message-action-bar-wrapper'); const fork = actionBar.querySelector('button[aria-label*=\"Fork\"]'); const entityRect = entity.getBoundingClientRect(); const containerRect = container.getBoundingClientRect(); container.scrollTop += (entityRect.top - containerRect.top - 120); fork.dispatchEvent(new MouseEvent('mouseover', {bubbles: true, cancelable: true, composed: true})); return 'done'; })()"
+    },
+    {
+      "action": "assert_attribute",
+      "attribute": "data-tooltip-placement",
+      "value": "top",
+      "selector": "[data-e2e-entity] .message-action-bar-wrapper",
+      "role": "button",
+      "name": "Fork conversation from here"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:34:11.711212631Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 64297,
+    "output_tokens": 4938,
+    "estimated_cost_usd": 0.11977245,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The context usage popup marks cache misses above their calls. The screen is 1280x800, and models cost (per million tokens) $5 input, $25 output, $0.50 cache read and $6.25 cache write. The conversation has three calls: the first writes 10000 tokens to the cache, the second reads them back, and the third finds only 500 still cached. \"The graph\" is \".chat-context-popup .token-cost-graph\"; \"the svg\" is its \".token-cost-graph-svg\"; \"the mark\" is the svg's \".token-cost-miss-mark\"; \"the readout\" is the graph's \".token-cost-readout-live\"; \"box\" means getBoundingClientRect(). Perform the steps in order. 1. Navigate to /c/{{SLUG}} and click \".context-usage-label\". 2. The svg should be visible (allow 30s). 3. There should be exactly 1 mark, and its d attribute must contain exactly one \"M\". The readout should contain \"▼ marks a cache miss.\". 4. The mark's box bottom (y + height) must be <= (the box y of the first \".token-cost-axis\" in the svg's g[data-pane=\"incremental\"]) + 0.5. 5. \"The bars\": for every match of /M([\\d.]+),[\\d.]+V[\\d.]+H([\\d.]+)/g in the d attributes of the svg's g[data-pane=\"incremental\"] path[fill] elements, the pair [left, right] of its two numbers. Their distinct left values, sorted ascending, must be exactly 3; \"bar k\" is the bar whose left is the k-th of them. \"markMid\" is the number right after the leading \"M\" of the mark's d, plus 3: it must be > bar 3's left and < bar 3's right. 6. \"Hover at X\" means: hover the svg at x offset X / W * (the svg's box width), where W is the third number of the svg's viewBox attribute, and y offset half the svg's box height (offsets from its top-left corner). 7. Hover at markMid: the readout's \".token-cost-hover-text\" should match /^call 3,/, and the readout's \".token-cost-call-why\" should match /^▼ Cache miss(, [\\dhms ]+ after the previous call)?: 500 of 11k prompt tokens were still cached\\.$/. 8. Hover at the middle of bar 2 ((left + right) / 2): the hover text should match /^call 2,/, and there should be no \".token-cost-call-why\" in the readout (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup .token-cost-graph-svg",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup .token-cost-graph-svg .token-cost-miss-mark",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "(document.querySelector('.chat-context-popup .token-cost-graph-svg .token-cost-miss-mark').getAttribute('d').match(/M/g) || []).length",
+      "expect": "1"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-context-popup .token-cost-graph .token-cost-readout-live",
+      "text": "▼ marks a cache miss."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); const mark = svg.querySelector('.token-cost-miss-mark'); const markBox = mark.getBoundingClientRect(); const markBottom = markBox.y + markBox.height; const axis = svg.querySelector('g[data-pane=\"incremental\"] .token-cost-axis'); const axisBox = axis.getBoundingClientRect(); return markBottom <= axisBox.y + 0.5 ? 'ok' : 'fail'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); const paths = svg.querySelectorAll('g[data-pane=\"incremental\"] path[fill]'); const bars = []; const re = /M([\\d.]+),[\\d.]+V[\\d.]+H([\\d.]+)/g; for (const p of paths) { const d = p.getAttribute('d'); let m; re.lastIndex=0; while ((m=re.exec(d))!==null) bars.push([parseFloat(m[1]),parseFloat(m[2])]); } const dl = [...new Set(bars.map(b=>b[0]))].sort((a,b)=>a-b); return dl.length; })()",
+      "expect": "3"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); const mark = svg.querySelector('.token-cost-miss-mark'); const d = mark.getAttribute('d'); const mm = d.match(/^M([\\d.]+)/); const markMidX = parseFloat(mm[1]) + 3; const paths = svg.querySelectorAll('g[data-pane=\"incremental\"] path[fill]'); const bars = []; const re = /M([\\d.]+),[\\d.]+V[\\d.]+H([\\d.]+)/g; for (const p of paths) { const pd = p.getAttribute('d'); let m; re.lastIndex=0; while ((m=re.exec(pd))!==null) bars.push([parseFloat(m[1]),parseFloat(m[2])]); } const dl = [...new Set(bars.map(b=>b[0]))].sort((a,b)=>a-b); const b3l=dl[2]; const b3r=bars.find(b=>b[0]===b3l)[1]; return (markMidX>b3l && markMidX<b3r)?'ok':'fail'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); const svgBox = svg.getBoundingClientRect(); const W = parseFloat(svg.getAttribute('viewBox').split(' ')[2]); const mark = svg.querySelector('.token-cost-miss-mark'); const d = mark.getAttribute('d'); const mm = d.match(/^M([\\d.]+)/); const markMidX = parseFloat(mm[1]) + 3; return Math.round(markMidX / W * svgBox.width); })()",
+      "expect": "426"
+    },
+    {
+      "action": "hover",
+      "selector": ".chat-context-popup .token-cost-graph-svg",
+      "x": 426,
+      "y": 165
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-hover-text"
+    },
+    {
+      "action": "eval",
+      "expression": "/^call 3,/.test(document.querySelector('.chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-hover-text').textContent.trim()) ? 'ok' : 'fail'",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('.chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-call-why'); if (!el) return 'NOT FOUND'; return el.textContent.trim(); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "/^▼ Cache miss(, [\\dhms ]+ after the previous call)?: 500 of 11k prompt tokens were still cached\\.$/.test(document.querySelector('.chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-call-why').textContent.trim()) ? 'ok' : 'fail'",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); const svgBox = svg.getBoundingClientRect(); const W = parseFloat(svg.getAttribute('viewBox').split(' ')[2]); const paths = svg.querySelectorAll('g[data-pane=\"incremental\"] path[fill]'); const bars = []; const re = /M([\\d.]+),[\\d.]+V[\\d.]+H([\\d.]+)/g; for (const p of paths) { const d = p.getAttribute('d'); let m; re.lastIndex=0; while ((m=re.exec(d))!==null) bars.push([parseFloat(m[1]),parseFloat(m[2])]); } const dl = [...new Set(bars.map(b=>b[0]))].sort((a,b)=>a-b); const b2l=dl[1]; const b2r=bars.find(b=>b[0]===b2l)[1]; const b2mid=(b2l+b2r)/2; return Math.round(b2mid / W * svgBox.width); })()",
+      "expect": "242"
+    },
+    {
+      "action": "hover",
+      "selector": ".chat-context-popup .token-cost-graph-svg",
+      "x": 242,
+      "y": 165
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-hover-text"
+    },
+    {
+      "action": "eval",
+      "expression": "/^call 2,/.test(document.querySelector('.chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-hover-text').textContent.trim()) ? 'ok' : 'fail'",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-call-why",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:18:29.446198173Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 195021,
+    "output_tokens": 8872,
+    "estimated_cost_usd": 0.25377855,
+    "mode": "generated"
+  }
+}

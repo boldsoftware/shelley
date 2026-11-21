@@ -1,0 +1,193 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The context usage popup's graphs stack, and each can be switched off. The screen is 1280x800, and every model costs $10 per million tokens of each kind. \"The popup\" is \".chat-context-popup\"; \"the graph\" is its \".token-cost-graph\"; \"the svg\" is the graph's \".token-cost-graph-svg\"; \"the switches\" are the popup's element with role \"group\" and accessible name exactly \"Graphs\"; \"the readout\" is the graph's \".token-cost-readout-live\"; \"the hover text\" is the readout's \".token-cost-hover-text\"; \"box\" means getBoundingClientRect(). \"Checkbox X\" is the popup's checkbox whose accessible name contains X. Accessible names: an element's name is its aria-label if it has one; otherwise a button's name is its text with whitespace collapsed and trimmed, leaving out aria-hidden parts, and a dialog's name is the text of the element its aria-labelledby refers to; \"named X\" means the name is exactly X. Only elements that are not display: none count. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and click \".context-usage-label\". 2. The svg should be visible (allow 30s). 3. The switches' \"label\" elements should have exactly the texts [\"context\", \"cumulative\", \"incremental\"], in order, and every checkbox in the switches must be checked. 4. With T the box of the popup's \".usage-popup-title\" and G the switches' box: |(T.y + T.height/2) - (G.y + G.height/2)| < 6, and G.x > T.x + T.width. 5. The popup's button whose accessible name contains \"calls\" should be visible, and the switches must contain no button (count 0). 6. The svg should contain the text \"LLM call\" but not \"LLM call number\". 7. The svg should have exactly 3 \".token-cost-pane-title\"; their aria-label attributes must be exactly [\"Context tokens\", \"Cumulative cost\", \"Incremental cost\"], in order, and the first one's first \"text\" element's transform attribute must contain \"rotate(-90)\". 8. With H(P) the box height of the first \".token-cost-axis\" in the svg's g[data-pane=\"P\"]: |H(context) - H(cumulative)| < 1 and |H(cumulative)/3 - H(incremental)| < 1. 9. Among the d attributes of the svg's g[data-pane=\"cumulative\"] path[fill] elements, some must match /^M[\\d.]+,[\\d.]+L/; among those of g[data-pane=\"incremental\"] path[fill], some must match /^M[\\d.]+,[\\d.]+V[\\d.]+H[\\d.]+V[\\d.]+Z/. 10. The readout should have exactly the text \"Hover a call to see what drove its cost.\". Remember (in window variables) the box height of the graph's \".token-cost-hover-readout\" and the svg's box y. 11. Hover the svg at its horizontal middle and vertical middle (offsets of half its width and half its height from its top-left corner): the hover text should match /^call 1, \\$[\\d.]+, cumulative \\$[\\d.]+, context [\\d.]+k?( \\(.+\\))?$/. 12. The readout's first \".token-cost-call-part\" should match /^(Input|Output) [\\d.]+k? \\$[\\d.]+$/. The computed background-color of its \".token-cost-chip\" must be among the computed fill values of the svg's g[data-pane=\"incremental\"] path[fill] elements. The readout's \".token-cost-call-why\" should have exactly the text \"predictable-v1 reports no prompt caching.\". 13. The \".token-cost-hover-readout\" box height must be within 0.5 of the remembered one, and the svg's box y within 0.5 of the remembered one (hovering did not move the graph). 14. Click checkbox \"Context length\": the svg should have exactly 2 \"g[data-pane]\", no g[data-pane=\"context\"] (count 0), and the graph no \".context-legend\" (count 0). 15. Click checkbox \"Incremental cost\": the svg should have exactly 1 \"g[data-pane]\". Hover the svg at its horizontal middle, 40 pixels below its top: the hover text should match /^call 1, cumulative \\$[\\d.]+( \\(.+\\))?$/. 16. Click checkbox \"Context length\", then checkbox \"Cumulative cost\": the svg should have exactly 1 \"g[data-pane]\" and exactly 1 g[data-pane=\"context\"], and the graph's \".context-legend\" should be visible. 17. Click checkbox \"Context length\": there should be no svg (count 0), and the switches should still have exactly 3 checkboxes.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup .token-cost-graph-svg",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const switches = document.querySelector('.chat-context-popup [role=\"group\"][aria-label=\"Graphs\"]'); const labels = [...switches.querySelectorAll('label')].map(l => l.textContent.trim()); const expected = ['context', 'cumulative', 'incremental']; return JSON.stringify(labels) === JSON.stringify(expected) ? 'ok' : JSON.stringify(labels); })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const switches = document.querySelector('.chat-context-popup [role=\"group\"][aria-label=\"Graphs\"]'); return [...switches.querySelectorAll('input[type=\"checkbox\"]')].every(cb => cb.checked) ? 'ok' : 'not all checked'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const T = document.querySelector('.chat-context-popup .usage-popup-title').getBoundingClientRect(); const G = document.querySelector('.chat-context-popup [role=\"group\"][aria-label=\"Graphs\"]').getBoundingClientRect(); const diff = Math.abs((T.y + T.height/2) - (G.y + G.height/2)); const xOk = G.x > T.x + T.width; return diff < 6 && xOk ? 'ok' : `diff=${diff} xOk=${xOk} T.x=${T.x} T.width=${T.width} G.x=${G.x}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup",
+      "role": "button",
+      "name": "calls"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup [role=\"group\"][aria-label=\"Graphs\"]",
+      "role": "button",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); const text = svg.textContent; return text.includes('LLM call') && !text.includes('LLM call number') ? 'ok' : `bad: ${text.substring(0, 200)}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); const titles = [...svg.querySelectorAll('.token-cost-pane-title')]; if (titles.length !== 3) return `count=${titles.length}`; const labels = titles.map(t => t.getAttribute('aria-label')); const expected = ['Context tokens', 'Cumulative cost', 'Incremental cost']; if (JSON.stringify(labels) !== JSON.stringify(expected)) return JSON.stringify(labels); const textEl = titles[0].querySelector('text'); const transform = textEl.getAttribute('transform'); return transform.includes('rotate(-90)') ? 'ok' : `bad transform: ${transform}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); const hCtx = svg.querySelector('g[data-pane=\"context\"] .token-cost-axis').getBoundingClientRect().height; const hCum = svg.querySelector('g[data-pane=\"cumulative\"] .token-cost-axis').getBoundingClientRect().height; const hInc = svg.querySelector('g[data-pane=\"incremental\"] .token-cost-axis').getBoundingClientRect().height; const diff1 = Math.abs(hCtx - hCum); const diff2 = Math.abs(hCum/3 - hInc); return diff1 < 1 && diff2 < 1 ? 'ok' : `hCtx=${hCtx} hCum=${hCum} hInc=${hInc} diff1=${diff1} diff2=${diff2}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); const cumPaths = [...svg.querySelectorAll('g[data-pane=\"cumulative\"] path[fill]')].map(p => p.getAttribute('d')); const incPaths = [...svg.querySelectorAll('g[data-pane=\"incremental\"] path[fill]')].map(p => p.getAttribute('d')); const cumOk = cumPaths.some(d => /^M[\\d.]+,[\\d.]+L/.test(d)); const incOk = incPaths.some(d => /^M[\\d.]+,[\\d.]+V[\\d.]+H[\\d.]+V[\\d.]+Z/.test(d)); return cumOk && incOk ? 'ok' : `cumOk=${cumOk} incOk=${incOk}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".chat-context-popup .token-cost-graph .token-cost-readout-live",
+      "text": "Hover a call to see what drove its cost."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window._readoutH = document.querySelector('.chat-context-popup .token-cost-graph .token-cost-hover-readout').getBoundingClientRect().height; window._svgY = document.querySelector('.chat-context-popup .token-cost-graph-svg').getBoundingClientRect().y; return 'ok'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const r = document.querySelector('.chat-context-popup .token-cost-graph-svg').getBoundingClientRect(); return r.width / 2 + ',' + r.height / 2; })()",
+      "expect": "220,165"
+    },
+    {
+      "action": "hover",
+      "selector": ".chat-context-popup .token-cost-graph-svg",
+      "x": 220,
+      "y": 165
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const text = document.querySelector('.chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-hover-text')?.textContent || ''; return /^call 1, \\$[\\d.]+, cumulative \\$[\\d.]+, context [\\d.]+k?( \\(.+\\))?$/.test(text) ? 'ok' : `no match: ${text}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const part = document.querySelector('.chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-call-part')?.textContent?.trim() || ''; return /^(Input|Output) [\\d.]+k? \\$[\\d.]+$/.test(part) ? 'ok' : `no match: ${part}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); const fills = [...svg.querySelectorAll('g[data-pane=\"incremental\"] path[fill]')].map(p => window.getComputedStyle(p).fill); const chip = document.querySelector('.chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-call-part').querySelector('.token-cost-chip'); const chipColor = window.getComputedStyle(chip).backgroundColor; return fills.includes(chipColor) ? 'ok' : `chip=${chipColor} fills=${JSON.stringify(fills)}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-call-why",
+      "text": "predictable-v1 reports no prompt caching."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const curH = document.querySelector('.chat-context-popup .token-cost-graph .token-cost-hover-readout').getBoundingClientRect().height; const curY = document.querySelector('.chat-context-popup .token-cost-graph-svg').getBoundingClientRect().y; const diffH = Math.abs(curH - window._readoutH); const diffY = Math.abs(curY - window._svgY); return diffH <= 0.5 && diffY <= 0.5 ? 'ok' : `diffH=${diffH} diffY=${diffY} curH=${curH} savedH=${window._readoutH} curY=${curY} savedY=${window._svgY}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-context-popup",
+      "role": "checkbox",
+      "name": "Context length"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); if (!svg) return 'no svg'; const panes = svg.querySelectorAll('g[data-pane]').length; const ctxPanes = svg.querySelectorAll('g[data-pane=\"context\"]').length; const legend = document.querySelector('.chat-context-popup .token-cost-graph .context-legend'); return panes === 2 && ctxPanes === 0 && !legend ? 'ok' : `panes=${panes} ctx=${ctxPanes} legend=${!!legend}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-context-popup",
+      "role": "checkbox",
+      "name": "Incremental cost"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); return svg ? svg.querySelectorAll('g[data-pane]').length.toString() : 'no svg'; })()",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "String(document.querySelector('.chat-context-popup .token-cost-graph-svg').getBoundingClientRect().width / 2)",
+      "expect": "220"
+    },
+    {
+      "action": "hover",
+      "selector": ".chat-context-popup .token-cost-graph-svg",
+      "x": 220,
+      "y": 40
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const text = document.querySelector('.chat-context-popup .token-cost-graph .token-cost-readout-live .token-cost-hover-text')?.textContent || ''; return /^call 1, cumulative \\$[\\d.]+( \\(.+\\))?$/.test(text) ? 'ok' : `no match: ${text}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-context-popup",
+      "role": "checkbox",
+      "name": "Context length"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-context-popup",
+      "role": "checkbox",
+      "name": "Cumulative cost"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const svg = document.querySelector('.chat-context-popup .token-cost-graph-svg'); if (!svg) return 'no svg'; const panes = svg.querySelectorAll('g[data-pane]').length; const ctxPanes = svg.querySelectorAll('g[data-pane=\"context\"]').length; const legend = document.querySelector('.chat-context-popup .token-cost-graph .context-legend'); return panes === 1 && ctxPanes === 1 && legend && legend.checkVisibility() ? 'ok' : `panes=${panes} ctx=${ctxPanes} legend=${!!legend}`; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-context-popup",
+      "role": "checkbox",
+      "name": "Context length"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup .token-cost-graph-svg",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const switches = document.querySelector('.chat-context-popup [role=\"group\"][aria-label=\"Graphs\"]'); return switches.querySelectorAll('input[type=\"checkbox\"]').length; })()",
+      "expect": "3"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:47:19.270296228Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 147326,
+    "output_tokens": 7993,
+    "estimated_cost_usd": 0.2280219,
+    "mode": "generated"
+  }
+}

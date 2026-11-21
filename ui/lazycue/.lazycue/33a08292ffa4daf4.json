@@ -1,0 +1,117 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The context usage popup remembers which graphs are on across page loads. The screen is 1280x800. \"The popup\" is \".chat-context-popup\"; \"the svg\" is its \".token-cost-graph-svg\"; \"checkbox X\" is the popup's checkbox whose accessible name contains X. Accessible names: an element's name is its aria-label if it has one; otherwise a button's name is its text with whitespace collapsed and trimmed, leaving out aria-hidden parts, and a dialog's name is the text of the element its aria-labelledby refers to; \"named X\" means the name is exactly X. Only elements that are not display: none count. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and click \".context-usage-label\". 2. The svg should be visible (allow 30s) with exactly 3 \"g[data-pane]\". 3. Click checkbox \"Cumulative cost\": the svg should have exactly 2 \"g[data-pane]\". 4. Reload (navigate to /c/{{SLUG}} again) and click \".context-usage-label\". 5. The svg should be visible (allow 30s), with exactly 2 \"g[data-pane]\" and no g[data-pane=\"cumulative\"] (count 0). Checkbox \"Context length\" should be checked, checkbox \"Cumulative cost\" not checked, and checkbox \"Incremental cost\" checked. 6. Click checkbox \"Context length\", then checkbox \"Incremental cost\": there should be no svg (count 0). 7. Reload (navigate to /c/{{SLUG}} again) and click \".context-usage-label\". 8. Checkbox \"Context length\" should be visible and not checked (allow 30s), and there should be no svg (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup .token-cost-graph-svg",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup .token-cost-graph-svg g[data-pane]",
+      "count": 3
+    },
+    {
+      "action": "click",
+      "selector": ".chat-context-popup input[type='checkbox'][aria-label*='Cumulative cost']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup .token-cost-graph-svg g[data-pane]",
+      "count": 2
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup .token-cost-graph-svg",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup .token-cost-graph-svg g[data-pane]",
+      "count": 2
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup .token-cost-graph-svg g[data-pane='cumulative']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-context-popup input[type=\"checkbox\"][aria-label*=\"Context length\"]').checked",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-context-popup input[type=\"checkbox\"][aria-label*=\"Cumulative cost\"]').checked",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-context-popup input[type=\"checkbox\"][aria-label*=\"Incremental cost\"]').checked",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-context-popup input[type='checkbox'][aria-label*='Context length']"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-context-popup input[type='checkbox'][aria-label*='Incremental cost']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup .token-cost-graph-svg",
+      "count": 0
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup input[type='checkbox'][aria-label*='Context length']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-context-popup input[type=\"checkbox\"][aria-label*=\"Context length\"]').checked",
+      "expect": "false"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-context-popup .token-cost-graph-svg",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:27:29.716794495Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 36650,
+    "output_tokens": 2236,
+    "estimated_cost_usd": 0.0576846,
+    "mode": "generated"
+  }
+}

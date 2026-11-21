@@ -1,0 +1,128 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation table of contents popover opens from its nav button, lists entries, and dismisses. \"The button\" is \".toc-button\"; \"the popover\" is \".toc-popover\". Accessible names: an element's name is its aria-label if it has one; otherwise a button's name is its text with whitespace collapsed and trimmed, leaving out aria-hidden parts, and a dialog's name is the text of the element its aria-labelledby refers to; \"named X\" means the name is exactly X. Only elements that are not display: none count. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The button should be visible (allow 30s), with aria-expanded=\"false\" and accessible name exactly \"Conversation table of contents\". 3. Click it: the popover and its \".toc-popover-list\" should be visible, the button should have aria-expanded=\"true\", and \".toc-popover-title\" should have exactly the text \"Jump to…\". 4. The popover's first \".toc-entry\" should contain \"Top of conversation\", its last \".toc-entry\" should contain \"End of conversation\", and its first \".toc-entry-user\" should contain \"echo table of contents\". 5. Press Escape: the popover should be hidden and the button should have aria-expanded=\"false\". 6. Click the button: the popover should be visible. Click \".messages-container\" 10 pixels right and 10 pixels down from its top-left corner: the popover should be hidden. 7. Click the button: the popover should be visible. Click its first \".toc-entry-user\": the popover should be hidden, and location.hash should come to match /^#m-[a-zA-Z0-9]+$/ (poll for up to 5s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-button",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".toc-button",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".toc-button",
+      "attribute": "aria-label",
+      "value": "Conversation table of contents"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-button"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover .toc-popover-list"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".toc-button",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".toc-popover-title",
+      "text": "Jump to…"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const e = [...document.querySelectorAll(\".toc-popover .toc-entry\")]; return e.length > 0 && e[0].textContent.includes(\"Top of conversation\"); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const e = [...document.querySelectorAll(\".toc-popover .toc-entry\")]; return e.length > 0 && e[e.length - 1].textContent.includes(\"End of conversation\"); })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".toc-popover .toc-entry-user",
+      "text": "echo table of contents"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".toc-button",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-button"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".messages-container",
+      "x": 10,
+      "y": 10
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-button"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-popover .toc-entry-user"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "eval",
+      "expression": "/^#m-[a-zA-Z0-9]+$/.test(location.hash)",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:27:41.056674256Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 27378,
+    "output_tokens": 1823,
+    "estimated_cost_usd": 0.050055,
+    "mode": "generated"
+  }
+}

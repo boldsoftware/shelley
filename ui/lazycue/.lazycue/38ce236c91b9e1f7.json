@@ -1,0 +1,55 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The message action bar uses CSS-only hover labels. Accessible names: an element's name is its aria-label if it has one; otherwise a button's name is its text with whitespace collapsed and trimmed, leaving out aria-hidden parts, and a dialog's name is the text of the element its aria-labelledby refers to; \"named X\" means the name is exactly X. Only elements that are not display: none count. 1. Navigate to /c/{{SLUG}}. 2. The first data-testid \"message\" containing \"echo action bar\" (\"the message\") should be visible (allow 30s). 3. Hover the message. 4. The message's one button whose accessible name contains \"Copy\" should be visible and have the attribute data-tooltip exactly \"Copy\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "echo action bar",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const m = [...document.querySelectorAll(\"[data-testid=\\\"message\\\"]\")].find(e => e.textContent.includes(\"echo action bar\")); m.setAttribute(\"data-e2e-message\", \"\"); return \"marked\"; })()"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-e2e-message]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-e2e-message]",
+      "role": "button",
+      "name": "Copy",
+      "count": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-e2e-message]",
+      "role": "button",
+      "name": "Copy"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-e2e-message]",
+      "role": "button",
+      "name": "Copy",
+      "attribute": "data-tooltip",
+      "value": "Copy"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:33:54.604707602Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 117533,
+    "output_tokens": 1760,
+    "estimated_cost_usd": 0.09438989999999998,
+    "mode": "generated"
+  }
+}
