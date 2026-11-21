@@ -1,0 +1,33 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Gemini search suggestions show, and each claim is cited inline. The conversation /c/{{SLUG}} was started with \"gemini grounded search\": its web search tool card (the element with data-testid \"tool-call-completed\") shows Google's search suggestions in a sandboxed iframe. \"The answer\" is the first \".message-agent .markdown-content p\" element whose text contains \"Paris hosted\" (has_text). 1. Navigate to /c/{{SLUG}}. 2. In the frame '[data-testid=\"tool-call-completed\"] iframe' (the step's \"frame\" field), the innermost element containing \"Olympic hosts\" (selector \"*\" with has_text) should be visible (allow 30s). 3. The answer should read exactly \"🏟 Paris hosted.1 Los Angeles follows.2\" (assert_text).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "*",
+      "frame": "[data-testid=\"tool-call-completed\"] iframe",
+      "has_text": "Olympic hosts",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".message-agent .markdown-content p",
+      "has_text": "Paris hosted",
+      "text": "🏟 Paris hosted.1 Los Angeles follows.2"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:44:32.357821533Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13533,
+    "output_tokens": 409,
+    "estimated_cost_usd": 0.0139221,
+    "mode": "generated"
+  }
+}

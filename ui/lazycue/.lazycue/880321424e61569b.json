@@ -1,0 +1,42 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Markdown in agent messages loses inputs other than checkboxes. The conversation /c/{{SLUG}} was started with the message {{MESSAGE}}, which the predictable model answers with that markdown. \"The reply\" is the \".message-agent\" element (the conversation has just one, so select it as plain \".message-agent\", never with :last-of-type). \"The reply's HTML must not contain S\" means: eval [...document.querySelectorAll('.message-agent')].at(-1).innerHTML.includes(S), which must return exactly false (it is the raw HTML, so check it with exactly this eval). \"Holds no X\" means the reply must hold exactly 0 elements matching the CSS selector X (assert_count with \"within\" the reply). \"The reply should contain X\" means assert_text_contains on the selector \".message-agent\", never wait_text (the user message holds the same words). Check exactly the numbered steps below, nothing more. 1. Navigate to /c/{{SLUG}}. 2. The reply should contain \"safe\" (allow 30s). 3. It holds no 'input[type=\"text\"]'. 4. It holds no 'input[type=\"password\"]'.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-agent",
+      "text": "safe",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "input[type=\"text\"]",
+      "within": {
+        "selector": ".message-agent"
+      },
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "input[type=\"password\"]",
+      "within": {
+        "selector": ".message-agent"
+      },
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:24:08.697611769Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13561,
+    "output_tokens": 613,
+    "estimated_cost_usd": 0.017835749999999997,
+    "mode": "generated"
+  }
+}

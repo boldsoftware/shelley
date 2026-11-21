@@ -1,0 +1,40 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Markdown formatting in agent messages renders as HTML. The conversation /c/{{SLUG}} was started with \"markdown: **bold** and *italic* and `code`\", which the predictable model answers with that markdown. \"The reply\" is the \".message-agent\" element (the conversation has just one, so select it as plain \".message-agent\", never with :last-of-type). 1. Navigate to /c/{{SLUG}}. 2. The reply's first \"strong\" element should contain \"bold\" (allow 30s). 3. Its first \"em\" element should contain \"italic\". 4. Its first \"code\" element should contain \"code\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent strong",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-agent strong",
+      "text": "bold"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-agent em",
+      "text": "italic"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-agent code",
+      "text": "code"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:23:53.001923864Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13167,
+    "output_tokens": 384,
+    "estimated_cost_usd": 0.013344149999999999,
+    "mode": "generated"
+  }
+}

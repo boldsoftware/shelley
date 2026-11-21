@@ -1,0 +1,46 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "User messages never render markdown: they show the raw text. The conversation /c/{{SLUG}} was started with the user message \"**bold** and *italic*\". \"The user message\" is the last \".message-user\" element (the conversation has just one). 1. Navigate to /c/{{SLUG}}. 2. The user message should contain \"**bold**\" (allow 30s): the raw markdown characters show. 3. The user message must hold exactly 0 \"strong\" elements and exactly 0 \"em\" elements (assert_count with \"within\" it).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_text",
+      "text": "**bold**",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-user",
+      "text": "**bold** and *italic*"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".message-user"
+      },
+      "selector": "strong",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".message-user"
+      },
+      "selector": "em",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:22:23.619315635Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 20546,
+    "output_tokens": 638,
+    "estimated_cost_usd": 0.0209541,
+    "mode": "generated"
+  }
+}

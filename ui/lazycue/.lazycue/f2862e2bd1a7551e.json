@@ -1,0 +1,45 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Web-search citation blocks coalesce into one paragraph with markers. The conversation /c/{{SLUG}} was started with \"web search\": the reply is many small text blocks, some citing sources. \"The reply\" is the \".message-agent\" element (the conversation has just one, so select it as plain \".message-agent\", never with :last-of-type). \"The content\" is the reply's '[data-testid=\"message-content\"]' element; in evals it is CONTENT = [...document.querySelectorAll('.message-agent')].at(-1).querySelector('[data-testid=\"message-content\"]'). 1. Navigate to /c/{{SLUG}}. 2. The content should contain \"mid-session model switching\" (allow 30s). 3. The sentence once split across blocks reads on (an inline citation marker may sit between its halves): eval /never lose work.*so model switching pairs well/s.test(CONTENT.textContent), which must return true. 4. Eval CONTENT.querySelectorAll('sup.citation-refs a.citation-ref').length \u003e 0: true (inline markers are superscript source links). 5. Eval CONTENT.querySelectorAll('ol.citation-sources li.citation-source').length \u003e 0: true (a numbered Sources list follows). 6. Eval /^https?:\\/\\//.test(CONTENT.querySelector('ol.citation-sources li.citation-source a').getAttribute('href')): true.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_text",
+      "text": "mid-session model switching",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "CONTENT = [...document.querySelectorAll('.message-agent')].at(-1).querySelector('[data-testid=\"message-content\"]'); /never lose work.*so model switching pairs well/s.test(CONTENT.textContent)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "CONTENT = [...document.querySelectorAll('.message-agent')].at(-1).querySelector('[data-testid=\"message-content\"]'); CONTENT.querySelectorAll('sup.citation-refs a.citation-ref').length \u003e 0",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "CONTENT = [...document.querySelectorAll('.message-agent')].at(-1).querySelector('[data-testid=\"message-content\"]'); CONTENT.querySelectorAll('ol.citation-sources li.citation-source').length \u003e 0",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "CONTENT = [...document.querySelectorAll('.message-agent')].at(-1).querySelector('[data-testid=\"message-content\"]'); /^https?:\\/\\//.test(CONTENT.querySelector('ol.citation-sources li.citation-source a').getAttribute('href'))",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:21:42.791346526Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13786,
+    "output_tokens": 837,
+    "estimated_cost_usd": 0.021804900000000002,
+    "mode": "generated"
+  }
+}

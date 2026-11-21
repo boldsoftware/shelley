@@ -1,0 +1,48 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Markdown links open in a new tab with noopener. The conversation /c/{{SLUG}} was started with \"markdown: [example](https://example.com)\", which the predictable model answers with that markdown. \"The reply\" is the \".message-agent\" element (the conversation has just one, so select it as plain \".message-agent\", never with :last-of-type). \"The link\" is the reply's first \"a\" element. 1. Navigate to /c/{{SLUG}}. 2. The link's href attribute should be exactly \"https://example.com\" (allow 30s). 3. Its target attribute should be exactly \"_blank\". 4. Its rel attribute should be exactly \"noopener noreferrer\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".message-agent"
+      },
+      "selector": "a",
+      "attribute": "href",
+      "value": "https://example.com",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".message-agent"
+      },
+      "selector": "a",
+      "attribute": "target",
+      "value": "_blank"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".message-agent"
+      },
+      "selector": "a",
+      "attribute": "rel",
+      "value": "noopener noreferrer"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:22:30.791389344Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6421,
+    "output_tokens": 237,
+    "estimated_cost_usd": 0.0079224,
+    "mode": "generated"
+  }
+}

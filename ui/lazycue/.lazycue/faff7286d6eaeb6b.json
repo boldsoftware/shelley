@@ -1,0 +1,57 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Fence highlighting waits until a block comes near the view. The conversation {{ID}} is a medium /debug/loremipsum conversation: every agent turn carries a code fence. \"The blocks\" are the \".message-agent pre \u003e code\" elements, in document order. 1. Navigate to /c/{{ID}}. 2. The first element with data-testid \"message\" should be visible (allow 30s). 3. Eval (() =\u003e { const b = document.querySelectorAll('.message-agent pre \u003e code'); return b.length \u003e 0 \u0026\u0026 b[b.length - 1].querySelector('.shelley-code-token') !== null; })() until it returns true (allow 30s): the page loads pinned to the bottom, so the newest fence highlights. This wait is the barrier that makes the next checks meaningful: eager highlighting would have tokenized every block by now. 4. Eval document.querySelectorAll('.message-agent pre \u003e code').length: it must be exactly \"50\". 5. Eval document.querySelector('.message-agent pre \u003e code').querySelectorAll('.shelley-code-token').length: exactly \"0\" (the first fence, far above the fold, is still plain text). 6. Eval document.querySelectorAll('.shelley-code-token').length \u003c 200: true (only the few blocks on screen are tokenized; each fence is about 13 tokens, so 50 eager blocks would be about 650). 7. Scroll the first block into the scrollport, disarming auto-follow first (without the wheel event its pin snaps the view back to the bottom), in exactly this eval: (() =\u003e { document.querySelector('.messages-container').dispatchEvent(new WheelEvent('wheel', { deltaY: -200, bubbles: true })); document.querySelector('.message-agent pre \u003e code').scrollIntoView({ block: 'center' }); return 'scrolled'; })(), expecting \"scrolled\". 8. Eval document.querySelector('.message-agent pre \u003e code').querySelector('.shelley-code-token') !== null until it returns true (allow 30s): scrolling it in highlights it.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const b = document.querySelectorAll('.message-agent pre \u003e code'); return b.length \u003e 0 \u0026\u0026 b[b.length - 1].querySelector('.shelley-code-token') !== null; })()",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.message-agent pre \u003e code').length",
+      "expect": "50"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.message-agent pre \u003e code').querySelectorAll('.shelley-code-token').length",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.shelley-code-token').length \u003c 200",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { document.querySelector('.messages-container').dispatchEvent(new WheelEvent('wheel', { deltaY: -200, bubbles: true })); document.querySelector('.message-agent pre \u003e code').scrollIntoView({ block: 'center' }); return 'scrolled'; })()",
+      "expect": "scrolled"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.message-agent pre \u003e code').querySelector('.shelley-code-token') !== null",
+      "expect": "true",
+      "timeout": "30s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:22:53.927459518Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6752,
+    "output_tokens": 448,
+    "estimated_cost_usd": 0.01232865,
+    "mode": "generated"
+  }
+}

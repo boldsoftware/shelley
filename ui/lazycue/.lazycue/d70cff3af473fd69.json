@@ -1,0 +1,92 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A web search without structured results expands to show its queries. The conversation /c/{{SLUG}} was started with \"web search without results\". \"The search\" is the element with data-testid \"tool-call-completed\" whose text contains \"Web Search\" (has_text); the steps below look inside it with \"within\". 1. Navigate to /c/{{SLUG}}. 2. Mount the card: it mounts once its placeholder (the element with aria-label exactly \"web_search tool result\") comes near the viewport, and the page may still be settling and move it away again, so in a retry block (allow 30s) of two steps: eval (() =\u003e { const el = document.querySelector('[aria-label=\"web_search tool result\"]'); if (el) el.scrollIntoView({ block: 'nearest' }); return 'scrolled'; })() expecting \"scrolled\", then the search should be visible. 3. The search should be visible. 4. It must hold exactly 1 \".tool-toggle\" element. 5. Its \".web-search-query-preview\" should read exactly \"pi coding agent switch models\". 6. Its \".web-search-queries\" must not be visible (hidden or absent). 7. Click its \".tool-header\". 8. Its \".web-search-queries\" should be visible and contain \"pi coding agent switch models\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "(() =\u003e { const el = document.querySelector('[aria-label=\"web_search tool result\"]'); if (el) el.scrollIntoView({ block: 'nearest' }); return 'scrolled'; })()",
+          "expect": "scrolled"
+        },
+        {
+          "action": "wait_visible",
+          "selector": "[data-testid='tool-call-completed']",
+          "has_text": "Web Search"
+        }
+      ],
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tool-call-completed']",
+      "has_text": "Web Search"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid='tool-call-completed']",
+        "has_text": "Web Search"
+      },
+      "selector": ".tool-toggle",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": "[data-testid='tool-call-completed']",
+        "has_text": "Web Search"
+      },
+      "selector": ".web-search-query-preview",
+      "text": "pi coding agent switch models"
+    },
+    {
+      "action": "assert_not_visible",
+      "within": {
+        "selector": "[data-testid='tool-call-completed']",
+        "has_text": "Web Search"
+      },
+      "selector": ".web-search-queries"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='tool-call-completed']",
+        "has_text": "Web Search"
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "wait_visible",
+      "within": {
+        "selector": "[data-testid='tool-call-completed']",
+        "has_text": "Web Search"
+      },
+      "selector": ".web-search-queries"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": "[data-testid='tool-call-completed']",
+        "has_text": "Web Search"
+      },
+      "selector": ".web-search-queries",
+      "text": "pi coding agent switch models"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:44:11.790622919Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14240,
+    "output_tokens": 1227,
+    "estimated_cost_usd": 0.0285294,
+    "mode": "generated"
+  }
+}

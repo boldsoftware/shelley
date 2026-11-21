@@ -1,0 +1,244 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Fences in the bundled languages and their aliases are highlighted; fences in an unknown language or none stay plain. The conversation /c/{{SLUG}} was started with a message whose markdown has nine fenced code blocks, which the predictable model answers with. window.__block(i) is the reply's i-th \"pre \u003e code\" element (0-based; the reply being the last \".message-agent\"), and eval window.__scrollToBlock(i) (it returns \"scrolled\") disarms auto-follow with a wheel event and scrolls block i to the middle of the view. \"Block i has tokens\" means eval window.__block(i).querySelector('.shelley-code-token') !== null returns true (allow 30s: highlighting runs once the block is in view). The highlighted blocks, with their exact class attribute and exact textContent (as JSON strings: each ends in a newline): Block 0: class exactly \"language-elixir\", source \"answer = 42\\n\". Block 1: class exactly \"language-haskell\", source \"answer :: Int\\nanswer = 42\\n\". Block 2: class exactly \"language-zig\", source \"const answer: i32 = 42;\\n\". Block 3: class exactly \"language-Dockerfile\", source \"FROM alpine:latest\\n\". Block 4: class exactly \"language-nix\", source \"answer = 42;\\n\". Block 5: class exactly \"language-clojure\", source \"(def answer 42)\\n\". Block 6: class exactly \"language-clj\", source \"(def alias-answer 42)\\n\". 1. Navigate to /c/{{SLUG}}. 2. Eval window.__block(8) !== null \u0026\u0026 window.__block(9) === null: it must return true (exactly nine blocks; allow 30s). 3. For each highlighted block i from 0 to 6, in order: eval window.__block(i).className, which must return exactly its class; eval window.__scrollToBlock(i); block i has tokens; eval window.__block(i).textContent === S, S being its source as a JavaScript string literal, which must return true. 4. Eval window.__scrollToBlock(7), then window.__scrollToBlock(8): so that \"no tokens\" below means the highlighter declined them, not that it never looked. 5. Eval window.__block(7).className: exactly \"language-unknown-language\". 6. Eval window.__block(8).getAttribute('class') === null: true (the unlabeled fence has no class at all). 7. Eval window.__block(7).textContent === \"leave_this_plain();\\n\": true. 8. Eval window.__block(8).textContent === \"also_plain();\\n\": true. 9. Eval window.__block(7).querySelectorAll('.shelley-code-token').length: exactly \"0\". 10. Eval window.__block(8).querySelectorAll('.shelley-code-token').length: exactly \"0\". 11. Eval window.__scrollToBlock(0); block 0 has tokens. 12. In one eval without \"expect\", record window.__tokenCount = window.__block(0).querySelectorAll('.shelley-code-token').length and window.__lightColor = getComputedStyle(window.__block(0).querySelector('.shelley-code-token')).color. 13. Eval document.documentElement.classList.toggle('dark', true), switching to the dark theme. 14. Eval getComputedStyle(window.__block(0).querySelector('.shelley-code-token')).color !== window.__lightColor until it returns true: the tokens recolor. 15. Eval window.__block(0).querySelectorAll('.shelley-code-token').length === window.__tokenCount: true (recoloring does not re-tokenize).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(8) !== null \u0026\u0026 window.__block(9) === null",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(0).className",
+      "expect": "language-elixir"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__scrollToBlock(0)",
+      "expect": "scrolled"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(0).querySelector('.shelley-code-token') !== null",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(0).textContent === 'answer = 42\\n'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(1).className",
+      "expect": "language-haskell"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__scrollToBlock(1)",
+      "expect": "scrolled"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(1).querySelector('.shelley-code-token') !== null",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(1).textContent === 'answer :: Int\\nanswer = 42\\n'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(2).className",
+      "expect": "language-zig"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__scrollToBlock(2)",
+      "expect": "scrolled"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(2).querySelector('.shelley-code-token') !== null",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(2).textContent === 'const answer: i32 = 42;\\n'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(3).className",
+      "expect": "language-Dockerfile"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__scrollToBlock(3)",
+      "expect": "scrolled"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(3).querySelector('.shelley-code-token') !== null",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(3).textContent === 'FROM alpine:latest\\n'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(4).className",
+      "expect": "language-nix"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__scrollToBlock(4)",
+      "expect": "scrolled"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(4).querySelector('.shelley-code-token') !== null",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(4).textContent === 'answer = 42;\\n'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(5).className",
+      "expect": "language-clojure"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__scrollToBlock(5)",
+      "expect": "scrolled"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(5).querySelector('.shelley-code-token') !== null",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(5).textContent === '(def answer 42)\\n'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(6).className",
+      "expect": "language-clj"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__scrollToBlock(6)",
+      "expect": "scrolled"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(6).querySelector('.shelley-code-token') !== null",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(6).textContent === '(def alias-answer 42)\\n'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__scrollToBlock(7)",
+      "expect": "scrolled"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__scrollToBlock(8)",
+      "expect": "scrolled"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(7).className",
+      "expect": "language-unknown-language"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(8).getAttribute('class') === null",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(7).textContent === 'leave_this_plain();\\n'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(8).textContent === 'also_plain();\\n'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(7).querySelectorAll('.shelley-code-token').length",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(8).querySelectorAll('.shelley-code-token').length",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__scrollToBlock(0)",
+      "expect": "scrolled"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(0).querySelector('.shelley-code-token') !== null",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__tokenCount = window.__block(0).querySelectorAll('.shelley-code-token').length; window.__lightColor = getComputedStyle(window.__block(0).querySelector('.shelley-code-token')).color; 'done'"
+    },
+    {
+      "action": "eval",
+      "expression": "document.documentElement.classList.toggle('dark', true)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.__block(0).querySelector('.shelley-code-token')).color !== window.__lightColor",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__block(0).querySelectorAll('.shelley-code-token').length === window.__tokenCount",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:23:43.060147043Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 32708,
+    "output_tokens": 3582,
+    "estimated_cost_usd": 0.0791568,
+    "mode": "generated"
+  }
+}

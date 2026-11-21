@@ -1,0 +1,30 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A local image that is gone says why. The conversation /c/{{SLUG}} was started with \"echo: Before ![Settings page](/tmp/shelley-e2e-deleted-shot.png) after\", and that file does not exist. 1. Navigate to /c/{{SLUG}}. 2. The \".message-agent .markdown-image-missing\" element should read exactly \"Image unavailable (Settings page: /tmp/shelley-e2e-deleted-shot.png: file not found)\". 3. There must be exactly 0 \".message-agent img\" elements.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".message-agent .markdown-image-missing",
+      "text": "Image unavailable (Settings page: /tmp/shelley-e2e-deleted-shot.png: file not found)"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-agent img",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:22:37.203294596Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6406,
+    "output_tokens": 201,
+    "estimated_cost_usd": 0.00732615,
+    "mode": "generated"
+  }
+}
