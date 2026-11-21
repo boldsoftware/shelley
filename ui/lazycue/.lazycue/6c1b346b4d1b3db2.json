@@ -1,0 +1,74 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "After stopping a running command, the page shows the agent idle at once, without a reload, and takes the next message. \"The stop button\" is \".status-stop-button\"; \"the thinking indicator\" is [data-testid=\"agent-thinking\"]. Perform the steps in order. 1. Navigate to /c/cancel-live and wait (up to 30s) for the message input (data-testid \"message-input\") to be visible. 2. Fill the message input with \"bash: sleep 50\" and click the send button (data-testid \"send-button\"). 3. The thinking indicator should become visible (up to 10s), and a running bash tool (.bash-tool[data-testid=\"tool-call-running\"]) containing \"sleep 50\" should become visible (up to 10s). 4. Click the stop button. 5. The thinking indicator should become hidden (up to 5s), and the stop button hidden. 6. Fill the message input with \"echo: after cancel\" and click the send button. 7. The first element containing \"after cancel\" should become visible (up to 10s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/cancel-live"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "bash: sleep 50"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid='tool-call-running']",
+      "has_text": "sleep 50",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".status-stop-button"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".status-stop-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: after cancel"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "*",
+      "has_text": "after cancel",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:02:46.515396129Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 12834,
+    "output_tokens": 807,
+    "estimated_cost_usd": 0.020927849999999998,
+    "mode": "generated"
+  }
+}

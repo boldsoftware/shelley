@@ -1,0 +1,193 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Stopping a long-running command shows its cancelled state, also after a reload, and the conversation goes on. \"The stop button\" is \".status-stop-button\"; \"the thinking indicator\" is [data-testid=\"agent-thinking\"]; \"the cancelled tool\" is the completed bash tool, .bash-tool[data-testid=\"tool-call-completed\"], containing \"sleep 100\"; \"its Output label\" is the cancelled tool's \".bash-tool-label\" that contains \"Output\". \"[Operation cancelled]\" checks are case-insensitive and scoped to \".messages-container\" (the drawer also previews the latest text). Perform the steps in order. 1. Navigate to /c/cancel-command and wait (up to 30s) for the message input (data-testid \"message-input\") to be visible. 2. Fill the message input with \"bash: sleep 100\". The send button (data-testid \"send-button\") should be visible; click it. 3. The thinking indicator should become visible (up to 10s), and a running bash tool (.bash-tool[data-testid=\"tool-call-running\"]) containing \"sleep 100\" should become visible (up to 10s). 4. The stop button should be visible; click it. 5. The stop button should become hidden (up to 5s), and the thinking indicator hidden (up to 5s). 6. The cancelled tool should become visible (up to 5s). Its \".bash-tool-header\" must contain neither \"✓\" nor \"✗\", and it must contain no \".tool-status-icon\" (count 0). 7. Click the cancelled tool's \".bash-tool-header\". Its Output label should contain \"Output (cancelled):\" and must not contain \"exit code\"; the cancelled tool must have no \".bash-tool-time\" (count 0). 8. Inside \".messages-container\", an element containing \"[Operation cancelled]\" should be visible (up to 5s). 9. Reload the page and wait (up to 30s) for the message input to be visible. 10. The thinking indicator should be hidden (within 2s), and the stop button hidden. 11. The cancelled tool should be visible, with no \".bash-tool-details\" (count 0) until expanded. 12. Click its \".bash-tool-header\"; its Output label should contain \"Output (cancelled):\", and it must have no \".bash-tool-time\" (count 0). Inside \".messages-container\", an element containing \"[Operation cancelled]\" should be visible. 13. Fill the message input with \"echo: test after cancel\" and press Control+Enter in it, as a keyboard does: key_down \"Control\", press_key \"Enter\" (the held key applies), key_up \"Control\" (this sends regardless of the phone's Enter-for-newline behaviour). 14. The first element containing \"test after cancel\" should be visible (up to 10s). 15. The thinking indicator should be hidden (up to 5s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/cancel-command"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "bash: sleep 100"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid='tool-call-running']",
+      "has_text": "sleep 100",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".status-stop-button"
+    },
+    {
+      "action": "click",
+      "selector": ".status-stop-button"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".status-stop-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid='tool-call-completed']",
+      "has_text": "sleep 100",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".bash-tool[data-testid='tool-call-completed']",
+      "text": "✓"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".bash-tool[data-testid='tool-call-completed']",
+      "text": "✗"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool[data-testid='tool-call-completed'] .tool-status-icon",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool[data-testid='tool-call-completed'] .bash-tool-header",
+      "has_text": "sleep 100"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool[data-testid='tool-call-completed'] .bash-tool-label",
+      "has_text": "Output",
+      "text": "Output (cancelled):"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".bash-tool[data-testid='tool-call-completed'] .bash-tool-label",
+      "has_text": "Output",
+      "text": "exit code"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool[data-testid='tool-call-completed'] .bash-tool-time",
+      "count": 0
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container *",
+      "has_text": "[Operation cancelled]",
+      "timeout": "5s"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "2s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-stop-button"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".bash-tool[data-testid='tool-call-completed']",
+      "has_text": "sleep 100"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool[data-testid='tool-call-completed'] .bash-tool-details",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool[data-testid='tool-call-completed'] .bash-tool-header",
+      "has_text": "sleep 100"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool[data-testid='tool-call-completed'] .bash-tool-label",
+      "has_text": "Output",
+      "text": "Output (cancelled):"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool[data-testid='tool-call-completed'] .bash-tool-time",
+      "count": 0
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container *",
+      "has_text": "[Operation cancelled]",
+      "timeout": "5s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: test after cancel"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "*",
+      "has_text": "test after cancel",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "5s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:04:32.784792665Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14943,
+    "output_tokens": 2529,
+    "estimated_cost_usd": 0.05319345,
+    "mode": "generated"
+  }
+}

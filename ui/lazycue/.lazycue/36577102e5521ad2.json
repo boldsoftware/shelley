@@ -1,0 +1,70 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Stopping the agent while it is generating text (no tool running) stops it for good. \"The stop button\" is \".status-stop-button\"; \"the thinking indicator\" is [data-testid=\"agent-thinking\"]. Perform the steps in order. 1. Navigate to /c/cancel-text and wait (up to 30s) for the message input (data-testid \"message-input\") to be visible. 2. Fill the message input with \"delay: 5\" and click the send button (data-testid \"send-button\"). 3. The thinking indicator should become visible (up to 5s). 4. The stop button should be visible; click it. 5. The stop button should become hidden (up to 5s), and the thinking indicator hidden (up to 5s). 6. Reload the page and wait (up to 30s) for the message input to be visible. 7. The thinking indicator should be hidden (within 2s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/cancel-text"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 5"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".status-stop-button"
+    },
+    {
+      "action": "click",
+      "selector": ".status-stop-button"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".status-stop-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "5s"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "2s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:03:44.854741671Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6057,
+    "output_tokens": 372,
+    "estimated_cost_usd": 0.010003799999999998,
+    "mode": "generated"
+  }
+}
