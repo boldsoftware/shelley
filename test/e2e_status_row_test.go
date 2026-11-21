@@ -208,8 +208,8 @@ func TestE2EStatusRowContextCountOpensUsage(t *testing.T) {
 // that conversation's turn was interrupted: marking a turn interrupted
 // takes a server restart. It also gives pages window.countAt(), where the
 // one visible token count ends ([right, top], rounded, as JSON), or what is
-// wrong, and window.steadyCountAt(), the same once it has held still for
-// half a second ("settling" until then).
+// wrong, and window.settledCountAt(), a promise of the same once no CSS
+// transition is running.
 const statusRowInterruptJS = `(() => {
   const id = window.__interrupted;
   const interrupt = (value) => {
@@ -243,23 +243,25 @@ const statusRowInterruptJS = `(() => {
     const r = counts[0].getBoundingClientRect();
     return JSON.stringify([Math.round(r.x + r.width), Math.round(r.y)]);
   };
-  // The count moves a pixel or two while a page settles, so a position to
-  // compare against waits until it has held still for half a second.
-  let last = '', since = 0;
-  window.steadyCountAt = () => {
-    const at = window.countAt();
-    const now = performance.now();
-    if (at !== last) {
-      last = at;
-      since = now;
-    }
-    if (!at.startsWith('[')) return at;
-    return now - since >= 500 ? at : 'settling';
-  };
+  // The count arrives with the status slot that holds it, and the slot
+  // switches the phone composer to its grid, whose row gap is wider. The
+  // browser asks for reduced motion, and styles.css answers with a 0.01ms
+  // transition on every property, so the gap can still be the old one when
+  // the count first shows: measure once transitions have finished.
+  window.settledCountAt = () => new Promise((resolve) => {
+    const check = () => {
+      if (document.getAnimations().some((animation) => animation instanceof CSSTransition)) {
+        requestAnimationFrame(check);
+      } else {
+        resolve(window.countAt());
+      }
+    };
+    check();
+  });
 })();`
 
 func TestE2EStatusRowInterruptedKeepsCount(t *testing.T) {
-	e2e(t, `An interrupted conversation keeps the context count in place on phones. The page takes /c/interrupted's last turn for interrupted; /c/steady is an ordinary conversation. window.countAt() returns where the one visible token count (".context-usage-label-tokens") ends, as JSON [right, top], or what is wrong when there isn't exactly one; window.steadyCountAt() returns the same once the count has held still for half a second, and "settling" before. "The group" is [data-testid="conversation-interrupted"]; "its message" is ".status-message" inside the group. Perform the steps in order. 1. For each width W of 1280, 390, 360 and 320 in turn: a. resize the viewport to W x 800 (set_viewport width and height only); b. navigate to /c/steady; c. once the count has settled, save where it is across the navigation, in one eval that polls until it has: eval (sessionStorage.idle = window.steadyCountAt()).startsWith('[') with expect "true"; d. navigate to /c/interrupted; e. its message's innerText, trimmed, should be exactly "Conversation Interrupted" (eval with expect, failing if the message is missing); f. the resume button (data-testid "resume-interrupted-button") should be visible; g. the message must not overflow: eval its scrollWidth <= clientWidth with expect "true"; h. eval window.countAt().startsWith('[') with expect "true" (exactly one visible count); i. only when W is below 768 (phones keep the count in the composer row, where it is otherwise): eval window.countAt() === sessionStorage.idle with expect "true" (it polls while the page settles). 2. A failed Continue says so once, where errors otherwise show: the test server answers every resume request (POST /api/conversation/<id>/resume) with 503 "Resume failed", so there is nothing to set up. Click the resume button. 3. There should be exactly one ".status-error", with text exactly "Resume failed". 4. ".message-controls-status-slot .status-error" should be visible. 5. The group's count should be 0.`, func(s *shelley) {
+	e2e(t, `An interrupted conversation keeps the context count in place on phones. The page takes /c/interrupted's last turn for interrupted; /c/steady is an ordinary conversation. window.countAt() returns where the one visible token count (".context-usage-label-tokens") ends, as JSON [right, top], or what is wrong when there isn't exactly one; window.settledCountAt() is a promise of the same, read once no CSS transition is running (the phone composer's gap changes through a transition when the count arrives). "The group" is [data-testid="conversation-interrupted"]; "its message" is ".status-message" inside the group. Perform the steps in order. 1. For each width W of 1280, 390, 360 and 320 in turn: a. resize the viewport to W x 800 (set_viewport width and height only); b. navigate to /c/steady; c. there should be exactly one visible count: eval window.countAt().startsWith('[') with expect "true"; then save where it is across the navigation once transitions finish: eval, awaited, window.settledCountAt().then((at) => (sessionStorage.idle = at).startsWith('[')) with expect "true"; d. navigate to /c/interrupted; e. its message's innerText, trimmed, should be exactly "Conversation Interrupted" (eval with expect, failing if the message is missing); f. the resume button (data-testid "resume-interrupted-button") should be visible; g. the message must not overflow: eval its scrollWidth <= clientWidth with expect "true"; h. eval window.countAt().startsWith('[') with expect "true" (exactly one visible count); i. only when W is below 768 (phones keep the count in the composer row, where it is otherwise): once transitions finish, the count must be where it was in /c/steady, read once: eval, awaited, (window.__phoneAt ??= window.settledCountAt()).then((at) => at === sessionStorage.idle ? 'in place' : at + ' vs ' + sessionStorage.idle) with expect "in place" (the first reading is kept, so a retry of the eval cannot wait for the count to move back). 2. A failed Continue says so once, where errors otherwise show: the test server answers every resume request (POST /api/conversation/<id>/resume) with 503 "Resume failed", so there is nothing to set up. Click the resume button. 3. There should be exactly one ".status-error", with text exactly "Resume failed". 4. ".message-controls-status-slot .status-error" should be visible. 5. The group's count should be 0.`, func(s *shelley) {
 		c := s.conversation("echo usage", "interrupted")
 		s.initScript("window.__interrupted = " + mustJSON(c.ID) + ";\n" + statusRowInterruptJS)
 		// Where the count sits in a conversation that isn't interrupted.

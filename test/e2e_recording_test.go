@@ -1591,21 +1591,20 @@ Moving away closes it.
 }
 
 func TestE2ERecordingLongPressOpensMenuWithoutRecording(t *testing.T) {
-	// Playwright let the fake clock flow between its steps; this pauses it
-	// so that only runFor moves it past the 450ms long press, and resumes it
-	// for the final click.
-	e2e(t, `Long-pressing the record button opens the menu without starting a recording. `+recMocks+`The page runs on a fake clock that steps drive with window.__clock: pauseAt(ms), runFor(ms) and resume(). "The record menu" is [data-testid="record-menu"]. `+recIDs+`
-1. Navigate to /new. The voice button should be visible.
-2. Pause the clock a moment from now: eval "window.__clock.pauseAt(Date.now() + 100)" (the clock cannot go back, and time flows on while the step runs).
+	// install() leaves time flowing: pause it so only runFor moves the long
+	// press. Wall-clock time between the pointerdown and the first check
+	// could otherwise fire the 450ms timer early on a loaded host.
+	e2e(t, `Long-pressing the record button opens the menu without starting a recording. `+recMocks+`The page runs on a fake clock that steps drive with window.__clock: pauseAt(ms) and runFor(ms). "The record menu" is [data-testid="record-menu"]. `+recIDs+`
+1. Navigate to /new. The voice button should be enabled (assert_enabled): a press while it is disabled would never start the long-press timer.
+2. The clock leaves time flowing: pause it a second from now, so that only runFor moves the long press: eval "window.__clock.pauseAt(Date.now() + 1000)".
 3. Touch the voice button: eval "document.querySelector('[data-testid=\"voice-button\"]').dispatchEvent(new PointerEvent('pointerdown', {pointerType: 'touch', button: 0, isPrimary: true, bubbles: true, cancelable: true, composed: true}))".
 4. Run the clock 200ms (eval "window.__clock.runFor(200)"). No record menu may exist (count 0).
 5. Run the clock 400ms more (eval "window.__clock.runFor(400)"). The record menu should be visible.
 The click that ends a long press must not also start voice recording.
 6. Lift the touch and click, in one eval: "(b => { b.dispatchEvent(new PointerEvent('pointerup', {pointerType: 'touch', button: 0, isPrimary: true, bubbles: true, cancelable: true, composed: true})); b.dispatchEvent(new MouseEvent('click', {detail: 1, bubbles: true, cancelable: true, composed: true})); return 'released'; })(document.querySelector('[data-testid=\"voice-button\"]'))".
 7. No recording panel may exist (count 0), and the record menu should still be visible.
-8. Resume the clock: eval "window.__clock.resume()".
-9. Click the record menu's button "Voice" ('[data-testid="record-menu"] button[aria-label="Voice"]').
-10. The recording panel should get data-mode "microphone", and window.__recordingMock.displayRequests must be 0.`, func(s *shelley) {
+8. Click the button named exactly "Voice" inside the record menu (role button, name "Voice", exact).
+9. The recording panel should get data-mode "microphone", and window.__recordingMock.displayRequests must be 0.`, func(s *shelley) {
 		recording(s)
 		s.clock(time.Time{})
 	})
