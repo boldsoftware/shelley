@@ -124,7 +124,7 @@ func TestE2ETailFirstTOCJumpMountsTarget(t *testing.T) {
 2. Record the counts: window.__before = {pending, mounted}. window.__before.pending must be greater than 0.
 3. Click the table of contents button (".toc-button"), then click the first TOC entry (".toc-entry") whose text contains "Turn 1:" (the first user turn, whose chunk is a placeholder).
 4. Wait until mounted is greater than window.__before.mounted (allow 15s).
-5. Wait until the highlighted target (".message-highlight") intersects the viewport (allow 15s). The highlight lasts only about two seconds and the jump scrolls smoothly, which can take longer on a loaded machine, so each check remembers the element it last saw highlighted and tests that one: an eval of (() => { const h = document.querySelector(".message-highlight"); if (h) window.__highlighted = h; const r = window.__highlighted?.getBoundingClientRect(); return !!r && r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth; })() expecting true. The mount and jump landed on it.`, func(s *shelley) {
+5. The highlighted target (".message-highlight") is in the viewport, clipped by the scrolling messages container like Playwright's toBeInViewport (assert_in_viewport, allow 15s): the mount and jump landed on it.`, func(s *shelley) {
 		s.tailFirst(false)
 	})
 }
