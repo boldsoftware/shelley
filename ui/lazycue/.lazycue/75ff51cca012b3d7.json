@@ -1,0 +1,24 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. The page title should be \"Shelley Agent\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_title",
+      "text": "Shelley Agent"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T01:40:27.114625405Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 3965,
+    "output_tokens": 106,
+    "estimated_cost_usd": 0.0044133,
+    "mode": "generated"
+  }
+}

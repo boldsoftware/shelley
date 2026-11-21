@@ -1,0 +1,191 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The test seeds a 12-turn conversation at /c/{{SLUG}} whose first two user messages have data-message-id {{FIRST}} and {{SECOND}}; the URL fragments that link to them are {{FIRST_FRAGMENT}} and {{SECOND_FRAGMENT}}. window.fragmentScrolls lists the data-message-id of every element scrolled into view so far, in order; check it with an eval of JSON.stringify(window.fragmentScrolls). Call \"append\" sends another message and waits for its reply; after it, {{APPENDED}} is the reply's data-message-id. To \"set the fragment to X\", eval a promise that sets location.hash to X and resolves on the next hashchange event. \"At the bottom\" means the messages container (\".messages-container\") has scrollHeight - clientHeight - scrollTop below 5 and the scroll-to-bottom button (\".scroll-to-bottom-button\") is hidden. To \"delay\" a message, rename its data-message-id attribute to data-delayed-message-id, as if its element had not mounted yet; to \"mount\" it, set data-message-id back from data-delayed-message-id (leaving the other attribute). Perform the steps in order. Invalid anchors leave follow enabled, and removing a fragment cancels retries. The page runs on a fake clock that steps advance with eval \"window.__clock.runFor(ms)\". Navigate to /c/{{SLUG}} and wait for the table of contents button (\".toc-button\") to be visible. It should be at the bottom. For each of the fragments \"m-\", \"t-\", \"unrelated\", \"m-%21\" and \"m-deadbeef\" in turn: set the fragment to it, run the clock for 1100ms, check that window.fragmentScrolls is exactly [] and that it is still at the bottom. Call \"append\" and wait for an element with data-message-id {{APPENDED}} to exist; it should be at the bottom (follow mode stayed armed). Then delay message {{FIRST}}, set the fragment to {{FIRST_FRAGMENT}}, run the clock for 100ms, set the fragment to \"\" (empty), mount the delayed message and run the clock for 1100ms: window.fragmentScrolls must be exactly [].",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-button",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){const c=document.querySelector('.messages-container');return c.scrollHeight-c.clientHeight-c.scrollTop\u003c5;})()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(resolve=\u003e{window.addEventListener('hashchange',()=\u003eresolve('ok'),{once:true});location.hash='m-';})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(1100)"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[]"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){const c=document.querySelector('.messages-container');return c.scrollHeight-c.clientHeight-c.scrollTop\u003c5;})()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(resolve=\u003e{window.addEventListener('hashchange',()=\u003eresolve('ok'),{once:true});location.hash='t-';})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(1100)"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[]"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){const c=document.querySelector('.messages-container');return c.scrollHeight-c.clientHeight-c.scrollTop\u003c5;})()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(resolve=\u003e{window.addEventListener('hashchange',()=\u003eresolve('ok'),{once:true});location.hash='unrelated';})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(1100)"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[]"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){const c=document.querySelector('.messages-container');return c.scrollHeight-c.clientHeight-c.scrollTop\u003c5;})()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(resolve=\u003e{window.addEventListener('hashchange',()=\u003eresolve('ok'),{once:true});location.hash='m-%21';})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(1100)"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[]"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){const c=document.querySelector('.messages-container');return c.scrollHeight-c.clientHeight-c.scrollTop\u003c5;})()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(resolve=\u003e{window.addEventListener('hashchange',()=\u003eresolve('ok'),{once:true});location.hash='m-deadbeef';})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(1100)"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[]"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){const c=document.querySelector('.messages-container');return c.scrollHeight-c.clientHeight-c.scrollTop\u003c5;})()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "call",
+      "value": "append"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-message-id='{{APPENDED}}']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){const c=document.querySelector('.messages-container');return c.scrollHeight-c.clientHeight-c.scrollTop\u003c5;})()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-message-id=\"{{FIRST}}\"]').setAttribute('data-delayed-message-id','{{FIRST}}');document.querySelector('[data-message-id=\"{{FIRST}}\"]').removeAttribute('data-message-id');'done'"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(resolve=\u003e{window.addEventListener('hashchange',()=\u003eresolve('ok'),{once:true});location.hash='{{FIRST_FRAGMENT}}';})"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(100)"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(resolve=\u003e{window.addEventListener('hashchange',()=\u003eresolve('ok'),{once:true});location.hash='';})"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-delayed-message-id=\"{{FIRST}}\"]').setAttribute('data-message-id','{{FIRST}}');'done'"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(1100)"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T01:56:53.996500885Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 81518,
+    "output_tokens": 4923,
+    "estimated_cost_usd": 0.14109899999999997,
+    "mode": "generated"
+  }
+}

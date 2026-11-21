@@ -1,0 +1,78 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The test seeds a 12-turn conversation at /c/{{SLUG}} whose first two user messages have data-message-id {{FIRST}} and {{SECOND}}; the URL fragments that link to them are {{FIRST_FRAGMENT}} and {{SECOND_FRAGMENT}}. window.fragmentScrolls lists the data-message-id of every element scrolled into view so far, in order; check it with an eval of JSON.stringify(window.fragmentScrolls). Call \"append\" sends another message and waits for its reply; after it, {{APPENDED}} is the reply's data-message-id. To \"set the fragment to X\", eval a promise that sets location.hash to X and resolves on the next hashchange event. \"At the bottom\" means the messages container (\".messages-container\") has scrollHeight - clientHeight - scrollTop below 5 and the scroll-to-bottom button (\".scroll-to-bottom-button\") is hidden. To \"delay\" a message, rename its data-message-id attribute to data-delayed-message-id, as if its element had not mounted yet; to \"mount\" it, set data-message-id back from data-delayed-message-id (leaving the other attribute). Perform the steps in order. Conversation changes resolve after loading, even with the same fragment. The page runs on a fake clock that steps advance with eval \"window.__clock.runFor(ms)\". There is a second seeded conversation, /c/{{SLUG2}}. The server's answer to loading it is held back until call \"release\", and the message in it that comes second in its transcript is given the ID {{FIRST}} as well; call \"loading\" says whether that load has started (\"true\" or \"false\"). 1. The very first step navigates straight to /c/{{SLUG}}#{{FIRST_FRAGMENT}}: the page loads with the fragment already in its URL (do not load the conversation first). 2. window.fragmentScrolls should become [\"{{FIRST}}\"]. 3. Switch the app to /c/{{SLUG2}}#{{FIRST_FRAGMENT}} the way its router would: eval history.pushState(null, \"\", that URL) and then dispatch a PopStateEvent(\"popstate\") on window. 4. Call \"loading\" until it returns \"true\". 5. window.fragmentScrolls must still be exactly [\"{{FIRST}}\"]. 6. Call \"release\". 7. window.fragmentScrolls should become [\"{{FIRST}}\",\"{{FIRST}}\"]. 8. Switch back to /c/{{SLUG}} (no fragment) the same pushState-and-popstate way, and wait for an element [data-message-id=\"{{SECOND}}\"] to exist. 9. Call \"append\" and wait for an element with data-message-id {{APPENDED}} to exist. 10. Run the clock for 1100ms: window.fragmentScrolls must still be exactly [\"{{FIRST}}\",\"{{FIRST}}\"].",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}#{{FIRST_FRAGMENT}}"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[\"{{FIRST}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "history.pushState(null, '', '/c/{{SLUG2}}#{{FIRST_FRAGMENT}}'); window.dispatchEvent(new PopStateEvent('popstate')); 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "call",
+      "value": "loading",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[\"{{FIRST}}\"]"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[\"{{FIRST}}\",\"{{FIRST}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "history.pushState(null, '', '/c/{{SLUG}}'); window.dispatchEvent(new PopStateEvent('popstate')); 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-message-id=\"{{SECOND}}\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "append"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-message-id=\"{{APPENDED}}\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(1100); 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[\"{{FIRST}}\",\"{{FIRST}}\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T01:56:34.040236565Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28327,
+    "output_tokens": 1444,
+    "estimated_cost_usd": 0.0413661,
+    "mode": "generated"
+  }
+}

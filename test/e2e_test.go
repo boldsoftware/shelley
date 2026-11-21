@@ -1,0 +1,748 @@
+package test
+
+import (
+	"bytes"
+	"context"
+	_ "embed"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"testing"
+	"time"
+
+	lazycue "github.com/boldsoftware/shelley/lazycue"
+)
+
+// The e2e tests are browser tests against a real shelley binary. Every
+// attempt at one (lazycue's cached run, its retries, an agent's session and
+// the re-check of the agent's script) gets a server of its own: a fresh
+// database, home directory and git working directory, behind a proxy the
+// test can intercept requests on. A test's setup function prepares that
+// world afresh for each attempt.
+
+// e2eBin is the shelley binary the e2e tests run, e2eRoot the directory
+// their servers live in, and e2eLive the fake live-session provider.
+var (
+	e2eBin  string
+	e2eRoot string
+	e2eLive string
+
+	e2eMu        sync.Mutex
+	e2eHarnesses []*lazycue.Harness
+)
+
+// startE2E builds the shelley binary (or takes SHELLEY_BIN) and starts the
+// fake live-session provider, for TestMain.
+func startE2E(moduleDir string) (cleanup func(), err error) {
+	// Short: unix sockets live in here, and their paths are limited to ~100 bytes.
+	e2eRoot, err = os.MkdirTemp("", "se2e-")
+	if err != nil {
+		return nil, err
+	}
+	e2eBin = os.Getenv("SHELLEY_BIN")
+	if e2eBin == "" {
+		e2eBin = filepath.Join(e2eRoot, "shelley")
+		cmd := exec.Command("go", "build", "-o", e2eBin, "./cmd/shelley")
+		cmd.Dir = moduleDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			os.RemoveAll(e2eRoot)
+			return nil, fmt.Errorf("build shelley: %w\n%s", err, out)
+		}
+	}
+	var sessions atomic.Int64
+	live := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprintf(w, `{"session":{"id":"live_%d"},"transport":{"type":"webrtc","sdp":"v=0"}}`, sessions.Add(1))
+	})}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		os.RemoveAll(e2eRoot)
+		return nil, err
+	}
+	go live.Serve(ln)
+	e2eLive = "http://" + ln.Addr().String() + "/v1/live/sessions"
+	return func() {
+		live.Close()
+		killTerminalSessions(e2eRoot)
+		os.RemoveAll(e2eRoot)
+	}, nil
+}
+
+// e2eResults is every e2e test's lazycue result, for the report.
+func e2eResults() []*lazycue.TestResult {
+	e2eMu.Lock()
+	defer e2eMu.Unlock()
+	var results []*lazycue.TestResult
+	for _, h := range e2eHarnesses {
+		results = append(results, h.Results()...)
+	}
+	return results
+}
+
+// e2e runs a browser test of description against a fresh shelley that setup
+// (which may be nil) prepares for every attempt.
+func e2e(t *testing.T, description string, setup func(s *shelley)) {
+	t.Helper()
+	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
+		t.Skip("set LAZYCUE_INTEGRATION=1 to run the LazyCue browser integration tests")
+	}
+	t.Parallel()
+	opts := appOpts
+	opts.BaseURL = ""
+	opts.Setup = func(ctx context.Context) (env *lazycue.Env, err error) {
+		sh, err := newShelley(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if r := recover(); r != nil {
+				se, ok := r.(setupError)
+				if !ok {
+					panic(r)
+				}
+				sh.close()
+				env, err = nil, se.err
+			}
+		}()
+		if setup != nil {
+			setup(sh)
+		}
+		sh.start()
+		return sh.env(), nil
+	}
+	h := lazycue.New(opts)
+	e2eMu.Lock()
+	e2eHarnesses = append(e2eHarnesses, h)
+	e2eMu.Unlock()
+	h.Test(t, description)
+}
+
+// setupError carries a failure out of a setup function, which reports
+// failures by panicking so that it reads as a straight line.
+type setupError struct{ err error }
+
+// shelley is the server an attempt at an e2e test runs against, and what its
+// setup function prepares.
+type shelley struct {
+	ctx       context.Context
+	dir       string // holds everything below
+	cwd       string // the server's working directory: a git repository
+	home      string
+	serverEnv []string
+	launch    lazycue.Launch
+	vars      map[string]string
+	calls     map[string]func(ctx context.Context) (string, error)
+
+	mux     *http.ServeMux
+	pass    http.Handler // passes a request on to the server
+	proxy   *http.Server
+	url     string // the proxy, which the browser talks to
+	backend string // the server itself
+	cmd     *exec.Cmd
+	exited  chan struct{}
+
+	mu       sync.Mutex
+	headers  http.Header
+	requests []string
+}
+
+func newShelley(ctx context.Context) (*shelley, error) {
+	dir, err := os.MkdirTemp(e2eRoot, "")
+	if err != nil {
+		return nil, err
+	}
+	s := &shelley{
+		ctx:     ctx,
+		dir:     dir,
+		cwd:     filepath.Join(dir, "cwd"),
+		home:    filepath.Join(dir, "home"),
+		vars:    map[string]string{},
+		calls:   map[string]func(ctx context.Context) (string, error){},
+		mux:     http.NewServeMux(),
+		headers: http.Header{},
+	}
+	s.vars["CWD"] = s.cwd
+	s.vars["HOME"] = s.home
+	if err := s.try(func() {
+		s.mkdir(s.cwd)
+		s.mkdir(s.home)
+		s.git("init", "--quiet", "--initial-branch=main")
+		s.write("example.txt", "before\n")
+		s.git("add", "example.txt")
+		s.git("commit", "--quiet", "-m", "Initial test fixture")
+		s.write("example.txt", "after\n")
+		s.git("commit", "--quiet", "-am", "Update test fixture")
+	}); err != nil {
+		os.RemoveAll(dir)
+		return nil, err
+	}
+	// /new starts in the fixture directory. Otherwise it falls back to the
+	// most recent conversation's, which may be one the test deleted.
+	s.initScript(fmt.Sprintf(`if (!localStorage.getItem('shelley_selected_cwd')) localStorage.setItem('shelley_selected_cwd', %q);`, s.cwd))
+	return s, nil
+}
+
+// try runs f, returning the error a helper in it panicked with.
+func (s *shelley) try(f func()) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			se, ok := r.(setupError)
+			if !ok {
+				panic(r)
+			}
+			err = se.err
+		}
+	}()
+	f()
+	return nil
+}
+
+// fail aborts the setup function.
+func (s *shelley) fail(format string, args ...any) {
+	panic(setupError{fmt.Errorf(format, args...)})
+}
+
+func (s *shelley) check(err error) {
+	if err != nil {
+		panic(setupError{err})
+	}
+}
+
+// env is the lazycue environment for the started app.
+func (s *shelley) env() *lazycue.Env {
+	return &lazycue.Env{
+		BaseURL: s.url,
+		Launch:  s.launch,
+		Vars:    s.vars,
+		Calls:   s.calls,
+		Close:   s.close,
+	}
+}
+
+// path resolves name against the working directory.
+func (s *shelley) path(name string) string {
+	if filepath.IsAbs(name) {
+		return name
+	}
+	return filepath.Join(s.cwd, name)
+}
+
+func (s *shelley) mkdir(name string) string {
+	p := s.path(name)
+	s.check(os.MkdirAll(p, 0o755))
+	return p
+}
+
+// write writes a file, relative to the working directory unless absolute.
+func (s *shelley) write(name, content string) string {
+	p := s.path(name)
+	s.check(os.MkdirAll(filepath.Dir(p), 0o755))
+	s.check(os.WriteFile(p, []byte(content), 0o644))
+	return p
+}
+
+// read reads a file, relative to the working directory unless absolute.
+func (s *shelley) read(name string) string {
+	b, err := os.ReadFile(s.path(name))
+	s.check(err)
+	return string(b)
+}
+
+// git runs git in the working directory, hermetically.
+func (s *shelley) git(args ...string) string {
+	return s.gitIn(s.cwd, args...)
+}
+
+// gitIn runs git in dir, hermetically.
+func (s *shelley) gitIn(dir string, args ...string) string {
+	cmd := exec.CommandContext(s.ctx, "git", append([]string{
+		"-C", dir, "-c", "user.name=Shelley Test", "-c", "user.email=test@example.com",
+		"-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
+	}, args...)...)
+	cmd.Env = hermeticGitEnv(append(os.Environ(), "HOME="+s.home))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		s.fail("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// hermeticGitEnv strips from env what would make git read the runner's
+// configuration or another repository.
+func hermeticGitEnv(env []string) []string {
+	env = slices.DeleteFunc(env, func(kv string) bool {
+		name, _, _ := strings.Cut(kv, "=")
+		switch name {
+		case "EMAIL", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_AUTHOR_DATE", "GIT_AUTHOR_EMAIL",
+			"GIT_AUTHOR_NAME", "GIT_COMMITTER_DATE", "GIT_COMMITTER_EMAIL", "GIT_COMMITTER_NAME",
+			"GIT_COMMON_DIR", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_DIR", "GIT_INDEX_FILE",
+			"GIT_NAMESPACE", "GIT_OBJECT_DIRECTORY", "GIT_TEMPLATE_DIR", "GIT_WORK_TREE",
+			"GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM":
+			return true
+		}
+		return strings.HasPrefix(name, "GIT_CONFIG_KEY_") || strings.HasPrefix(name, "GIT_CONFIG_VALUE_")
+	})
+	return append(env, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+}
+
+// setenv sets server environment variables, "NAME=value", before it starts.
+func (s *shelley) setenv(kv ...string) {
+	if s.cmd != nil {
+		s.fail("setenv after the server started")
+	}
+	s.serverEnv = append(s.serverEnv, kv...)
+}
+
+// v makes {{name}} in the test's steps stand for value. A call may set one
+// for the steps after it.
+func (s *shelley) v(name, value string) {
+	s.vars[name] = value
+}
+
+// call lets a call step named name run f on the host. f may use the
+// helpers that fail setup; there they fail the step.
+func (s *shelley) call(name string, f func() string) {
+	s.calls[name] = func(context.Context) (got string, err error) {
+		err = s.try(func() { got = f() })
+		return got, err
+	}
+}
+
+// initScript runs js in every page before the page's own scripts. Scripts
+// that throw (localStorage, say, in a frame with an opaque origin) do not
+// stop the ones after them.
+func (s *shelley) initScript(js string) {
+	s.launch.InitScript += "try {\n" + js + "\n} catch (e) { console.error('init script:', e); }\n"
+}
+
+// pageFlag sets a feature flag in the page's localStorage, as the
+// browser-side flag overrides do.
+func (s *shelley) pageFlag(name string, value any) {
+	s.initScript(fmt.Sprintf(`localStorage.setItem(%q, %q);`, "ff:"+name, mustJSON(value)))
+}
+
+// patchInit merges patch into window.__SHELLEY_INIT__ as the page sets it.
+func (s *shelley) patchInit(patch map[string]any) {
+	s.initScript(fmt.Sprintf(`const patch = %s;
+const prior = Object.getOwnPropertyDescriptor(window, '__SHELLEY_INIT__');
+let init;
+Object.defineProperty(window, '__SHELLEY_INIT__', {
+  configurable: true,
+  get: () => init,
+  set: (value) => {
+    prior?.set?.(value);
+    init = { ...(prior?.get?.() ?? value), ...patch };
+  },
+});`, mustJSON(patch)))
+}
+
+//go:embed testdata/clock.js
+var clockJS string
+
+// clock installs a fake clock, as Playwright's page.clock.install does,
+// starting at start (now if zero). Steps drive it with window.__clock; see
+// testdata/clock.js.
+func (s *shelley) clock(start time.Time) {
+	at := "undefined"
+	if !start.IsZero() {
+		at = strconv.FormatInt(start.UnixMilli(), 10)
+	}
+	s.initScript("window.__CLOCK_START__ = " + at + ";\n" + clockJS)
+}
+
+// device sets the device the browser emulates; the default is a Pixel 5.
+func (s *shelley) device(d lazycue.Device) {
+	s.launch.Device = &d
+}
+
+// desktop is a desktop browser window, Playwright's default viewport.
+var desktop = lazycue.Device{Width: 1280, Height: 720, Scale: 1}
+
+// viewport resizes the default Pixel 5's viewport, keeping its touch screen
+// and scale, as Playwright's viewport option does.
+func (s *shelley) viewport(width, height int) {
+	d := lazycue.Pixel5
+	d.Width, d.Height = width, height
+	s.device(d)
+}
+
+// media sets a CSS media feature; an empty value drops a default.
+func (s *shelley) media(feature, value string) {
+	if s.launch.Media == nil {
+		s.launch.Media = map[string]string{}
+	}
+	s.launch.Media[feature] = value
+}
+
+// timezone sets the browser's time zone.
+func (s *shelley) timezone(tz string) {
+	s.launch.Timezone = tz
+}
+
+// header adds a header to every request the browser sends the server.
+func (s *shelley) header(name, value string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.headers.Set(name, value)
+}
+
+// route has handler answer the browser's requests matching pattern (an
+// http.ServeMux pattern) instead of the server. handler may pass a request
+// on with s.pass, or forward it with s.forward and answer itself.
+func (s *shelley) route(pattern string, handler http.HandlerFunc) {
+	s.mux.HandleFunc(pattern, handler)
+}
+
+// requestLog is the method and URI of every request the browser sent, in
+// order.
+func (s *shelley) requestLog() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.requests)
+}
+
+// forward sends r on to the server and returns its response, decompressed.
+func (s *shelley) forward(r *http.Request) (*http.Response, error) {
+	out := r.Clone(r.Context())
+	out.RequestURI = ""
+	out.URL.Scheme = "http"
+	out.URL.Host = strings.TrimPrefix(s.backend, "http://")
+	out.Header.Del("Accept-Encoding")
+	s.addHeaders(out.Header)
+	return http.DefaultTransport.RoundTrip(out)
+}
+
+// fetchJSON forwards r to the server and decodes its JSON response into out,
+// for a route that changes what the server says.
+func (s *shelley) fetchJSON(r *http.Request, out any) error {
+	resp, err := s.forward(r)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("%s %s: %s", r.Method, r.URL, resp.Status)
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// writeJSON answers a request with v.
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
+}
+
+func (s *shelley) addHeaders(h http.Header) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, v := range s.headers {
+		h[k] = v
+	}
+}
+
+// abort answers a request by dropping the connection, as a network failure
+// would.
+func abort(w http.ResponseWriter, r *http.Request) {
+	panic(http.ErrAbortHandler)
+}
+
+// start starts the server, if it has not yet started. Helpers that talk to
+// it start it, so setup can prepare files and environment first.
+func (s *shelley) start() {
+	if s.cmd != nil {
+		return
+	}
+	log, err := os.Create(filepath.Join(s.dir, "server.log"))
+	s.check(err)
+	defer log.Close()
+	portFile := filepath.Join(s.dir, "port")
+	cmd := exec.Command(e2eBin, "--predictable-only", "--db", filepath.Join(s.dir, "test.db"),
+		"serve", "--port", "0", "--port-file", portFile, "--socket", filepath.Join(s.dir, "client.sock"))
+	cmd.Dir = s.cwd
+	cmd.Stdout, cmd.Stderr = log, log
+	cmd.Env = append(hermeticGitEnv(os.Environ()),
+		"HOME="+s.home,
+		"PWD="+s.cwd,
+		"PREDICTABLE_DELAY_MS=20",
+		"SHELLEY_LIVE_SESSION_URL="+e2eLive,
+		"SHELLEY_SKIP_VERSION_CHECK=true",
+	)
+	cmd.Env = append(cmd.Env, s.serverEnv...)
+	cmd.SysProcAttr = serverProcAttr()
+	s.check(cmd.Start())
+	s.cmd = cmd
+	s.exited = make(chan struct{})
+	go func() {
+		cmd.Wait()
+		close(s.exited)
+	}()
+
+	var port string
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if b, err := os.ReadFile(portFile); err == nil && bytes.HasSuffix(b, []byte("\n")) {
+			port = strings.TrimSpace(string(b))
+			break
+		}
+		select {
+		case <-s.exited:
+			s.fail("shelley exited during startup:\n%s", s.logTail())
+		case <-time.After(20 * time.Millisecond):
+		}
+		if time.Now().After(deadline) {
+			s.fail("shelley did not write its port within 30s:\n%s", s.logTail())
+		}
+	}
+	s.backend = "http://127.0.0.1:" + port
+
+	target, err := url.Parse(s.backend)
+	s.check(err)
+	s.pass = &httputil.ReverseProxy{
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(target)
+			r.Out.Host = r.In.Host
+			s.addHeaders(r.Out.Header)
+		},
+		FlushInterval: -1,
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	s.check(err)
+	s.proxy = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		s.requests = append(s.requests, r.Method+" "+r.URL.RequestURI())
+		s.mu.Unlock()
+		if _, pattern := s.mux.Handler(r); pattern != "" {
+			s.mux.ServeHTTP(w, r)
+			return
+		}
+		s.pass.ServeHTTP(w, r)
+	})}
+	go s.proxy.Serve(ln)
+	s.url = "http://" + ln.Addr().String()
+
+	// Next-prompt suggestions would race the tests' own prompts.
+	s.flag("next-prompt-suggestions", false)
+}
+
+// logTail is the end of the server's log.
+func (s *shelley) logTail() string {
+	b, _ := os.ReadFile(filepath.Join(s.dir, "server.log"))
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	return strings.Join(lines[max(0, len(lines)-20):], "\n")
+}
+
+// close stops the server and removes everything the attempt made.
+func (s *shelley) close() {
+	if s.proxy != nil {
+		s.proxy.Close()
+	}
+	if s.cmd != nil {
+		syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
+		select {
+		case <-s.exited:
+		case <-time.After(10 * time.Second):
+			syscall.Kill(-s.cmd.Process.Pid, syscall.SIGKILL)
+			<-s.exited
+		}
+	}
+	killTerminalSessions(s.dir)
+	os.RemoveAll(s.dir)
+}
+
+// killTerminalSessions kills the terminal sessions servers under dir left
+// running: exe-scroll session servers detach from shelley, and the shells
+// they run are in sessions of their own.
+func killTerminalSessions(dir string) {
+	out, err := exec.Command("ps", "-axo", "pid=,ppid=,pgid=,sess=,command=").Output()
+	if err != nil {
+		return
+	}
+	type proc struct {
+		pid, ppid, pgid int
+		sess, command   string
+	}
+	var procs []proc
+	line := regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$`)
+	for _, l := range strings.Split(string(out), "\n") {
+		m := line.FindStringSubmatch(l)
+		if m == nil {
+			continue
+		}
+		pid, _ := strconv.Atoi(m[1])
+		ppid, _ := strconv.Atoi(m[2])
+		pgid, _ := strconv.Atoi(m[3])
+		procs = append(procs, proc{pid, ppid, pgid, m[4], m[5]})
+	}
+	servers := map[int]string{} // pid -> session
+	for _, p := range procs {
+		if strings.HasPrefix(p.command, "exe-scroll: session "+dir+"/") {
+			servers[p.pid] = p.sess
+		}
+	}
+	sessions := map[string]bool{}
+	for _, p := range procs {
+		if sess, ok := servers[p.ppid]; ok && p.pid == p.pgid && p.sess != sess {
+			sessions[p.sess] = true
+		}
+	}
+	groups := map[int]bool{}
+	for _, p := range procs {
+		if sessions[p.sess] {
+			groups[p.pgid] = true
+		}
+	}
+	for g := range groups {
+		syscall.Kill(-g, syscall.SIGKILL)
+	}
+	for pid := range servers {
+		syscall.Kill(pid, syscall.SIGKILL)
+	}
+}
+
+// do sends the server an API request with a JSON body (nil for none) and
+// returns the response body, failing on an error status.
+func (s *shelley) do(method, path string, body any) []byte {
+	var r io.Reader
+	if body != nil {
+		r = strings.NewReader(mustJSON(body))
+	}
+	return s.send(method, path, "application/json", r)
+}
+
+// postForm posts a form to the server and returns the response body,
+// failing on an error status.
+func (s *shelley) postForm(path string, form url.Values) []byte {
+	return s.send("POST", path, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+}
+
+func (s *shelley) send(method, path, contentType string, body io.Reader) []byte {
+	s.start()
+	req, err := http.NewRequestWithContext(s.ctx, method, s.backend+path, body)
+	s.check(err)
+	req.Header.Set("Content-Type", contentType)
+	s.addHeaders(req.Header)
+	resp, err := http.DefaultClient.Do(req)
+	s.check(err)
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	s.check(err)
+	if resp.StatusCode/100 != 2 {
+		s.fail("%s %s: %s: %s", method, path, resp.Status, b)
+	}
+	return b
+}
+
+// api is do, decoding the response into out (nil to discard it).
+func (s *shelley) api(method, path string, body, out any) {
+	b := s.do(method, path, body)
+	if out != nil {
+		if err := json.Unmarshal(b, out); err != nil {
+			s.fail("%s %s: decode %s: %v", method, path, b, err)
+		}
+	}
+}
+
+// flag sets a server feature flag.
+func (s *shelley) flag(name string, value any) {
+	s.api("POST", "/feature-flags", map[string]any{"name": name, "value": value}, nil)
+}
+
+// convo is a conversation a test created.
+type convo struct {
+	ID   string
+	Slug string
+}
+
+// conversation starts a conversation in the working directory with message
+// to the predictable model and waits for its reply. A non-empty slug renames
+// it; otherwise it keeps the slug the server gave it.
+func (s *shelley) conversation(message, slug string) convo {
+	return s.conversationWith(map[string]any{"message": message, "model": "predictable", "cwd": s.cwd}, slug)
+}
+
+// conversationWith is conversation with the request body spelled out, for
+// another directory or conversation options.
+func (s *shelley) conversationWith(body map[string]any, slug string) convo {
+	var created struct {
+		ID string `json:"conversation_id"`
+	}
+	s.api("POST", "/api/conversations/new", body, &created)
+	c := convo{ID: created.ID}
+	s.poll(30*time.Second, func() error {
+		var got struct {
+			Messages     []apiMessage `json:"messages"`
+			Conversation struct {
+				Slug string `json:"slug"`
+			} `json:"conversation"`
+		}
+		s.api("GET", "/api/conversation/"+c.ID, nil, &got)
+		if !slices.ContainsFunc(got.Messages, apiMessage.endsTurn) {
+			return errors.New("no reply yet")
+		}
+		if got.Conversation.Slug == "" {
+			return errors.New("no slug yet")
+		}
+		c.Slug = got.Conversation.Slug
+		return nil
+	})
+	if slug != "" {
+		s.api("POST", "/api/conversation/"+c.ID+"/rename", map[string]string{"slug": slug}, nil)
+		c.Slug = slug
+	}
+	return c
+}
+
+// apiMessage is what the tests read of a message the API returns.
+type apiMessage struct {
+	Type      string `json:"type"`
+	EndOfTurn bool   `json:"end_of_turn"`
+}
+
+func (m apiMessage) endsTurn() bool {
+	return m.Type == "agent" && m.EndOfTurn
+}
+
+// poll runs f until it returns nil, failing setup with its last error after
+// timeout.
+func (s *shelley) poll(timeout time.Duration, f func() error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		err := f()
+		if err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			s.fail("after %s: %v", timeout, err)
+		}
+		select {
+		case <-s.ctx.Done():
+			s.fail("%v: %v", s.ctx.Err(), err)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+func mustJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}

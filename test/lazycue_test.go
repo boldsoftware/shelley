@@ -104,6 +104,10 @@ func TestMain(m *testing.M) {
 
 	ts, cleanup := startPredictableServer()
 	defer cleanup()
+	stopE2E, err := startE2E(filepath.Join(pkgDir, ".."))
+	if err != nil {
+		panic(err)
+	}
 
 	// Prepare a deterministic git fixture for the diff-viewer test. The path
 	// must be stable so the LazyCue description (which embeds it) hashes to the
@@ -140,6 +144,7 @@ func TestMain(m *testing.M) {
 	for _, h := range isolatedApps {
 		results = append(results, h.Results()...)
 	}
+	results = append(results, e2eResults()...)
 	// Only runs worth debugging get a video. A clean run from cache has nothing
 	// to show, and rendering all ~70 videos added ~14s to every CI run, after
 	// which a green run's artifacts are thrown away.
@@ -165,6 +170,7 @@ func TestMain(m *testing.M) {
 		}
 	}
 
+	stopE2E()
 	os.RemoveAll(tmp)
 	os.Exit(code)
 }

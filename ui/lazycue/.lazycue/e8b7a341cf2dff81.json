@@ -1,0 +1,44 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new, fill the message input (data-testid \"message-input\") with \"echo: still here\" and click the send button (data-testid \"send-button\"). The first agent message (\".messages-container .message-agent\") should contain \"still here\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: still here"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container .message-agent",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".messages-container .message-agent",
+      "text": "still here"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T01:40:34.638066268Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 4008,
+    "output_tokens": 231,
+    "estimated_cost_usd": 0.00644955,
+    "mode": "generated"
+  }
+}

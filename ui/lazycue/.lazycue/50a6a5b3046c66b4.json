@@ -1,0 +1,47 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Navigate to /new. In the welcome text (\".chat-welcome-text\"), the link \"open-source\" should point to \"https://github.com/boldsoftware/shelley/\" and the link \"can be customized\" should point to \"https://shelley.dev/#customization\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-welcome-text",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".chat-welcome-text a[href='https://github.com/boldsoftware/shelley/']",
+      "attribute": "href",
+      "value": "https://github.com/boldsoftware/shelley/"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-welcome-text a[href='https://github.com/boldsoftware/shelley/']",
+      "text": "open-source"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".chat-welcome-text a[href='https://shelley.dev/#customization']",
+      "attribute": "href",
+      "value": "https://shelley.dev/#customization"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-welcome-text a[href='https://shelley.dev/#customization']",
+      "text": "can be customized"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T01:40:26.232819842Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 29812,
+    "output_tokens": 977,
+    "estimated_cost_usd": 0.04646685,
+    "mode": "generated"
+  }
+}

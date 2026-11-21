@@ -1,0 +1,58 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The message input auto-grows without synchronous layout reads. Navigate to /new and wait for the message input (data-testid \"message-input\") to be visible. Record its initial height (getBoundingClientRect().height) in a window variable. Then, in an eval, wrap Element.prototype's scrollHeight getter so that every read of scrollHeight on an element with the class \"message-textarea\" increments window.__textareaScrollHeightReads (starting from 0), still returning the real value. Fill the message input with six lines (\"one\" through \"six\", separated by newlines). The input's height must grow past its initial height, and window.__textareaScrollHeightReads must stay 0. Then fill it with twenty lines (\"line 0\" through \"line 19\"): its height must settle at no more than 202 pixels.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__initialHeight = document.querySelector('[data-testid=\"message-input\"]').getBoundingClientRect().height; window.__initialHeight"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { window.__textareaScrollHeightReads = 0; const originalDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollHeight'); const originalGet = originalDescriptor.get; Object.defineProperty(Element.prototype, 'scrollHeight', { get: function() { if (this.classList \u0026\u0026 this.classList.contains('message-textarea')) { window.__textareaScrollHeightReads++; } return originalGet.call(this); }, configurable: true }); return 'patched'; })()"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "one\ntwo\nthree\nfour\nfive\nsix"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').getBoundingClientRect().height \u003e window.__initialHeight",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__textareaScrollHeightReads",
+      "expect": "0"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').getBoundingClientRect().height \u003c= 202",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T01:40:41.51446226Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 44385,
+    "output_tokens": 1881,
+    "estimated_cost_usd": 0.06771615,
+    "mode": "generated"
+  }
+}

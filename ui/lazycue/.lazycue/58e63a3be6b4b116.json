@@ -1,0 +1,78 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The test seeds a 12-turn conversation at /c/{{SLUG}} whose first two user messages have data-message-id {{FIRST}} and {{SECOND}}; the URL fragments that link to them are {{FIRST_FRAGMENT}} and {{SECOND_FRAGMENT}}. window.fragmentScrolls lists the data-message-id of every element scrolled into view so far, in order; check it with an eval of JSON.stringify(window.fragmentScrolls). Call \"append\" sends another message and waits for its reply; after it, {{APPENDED}} is the reply's data-message-id. To \"set the fragment to X\", eval a promise that sets location.hash to X and resolves on the next hashchange event. \"At the bottom\" means the messages container (\".messages-container\") has scrollHeight - clientHeight - scrollTop below 5 and the scroll-to-bottom button (\".scroll-to-bottom-button\") is hidden. To \"delay\" a message, rename its data-message-id attribute to data-delayed-message-id, as if its element had not mounted yet; to \"mount\" it, set data-message-id back from data-delayed-message-id (leaving the other attribute). Perform the steps in order. Changed fragments resolve and cancel the preceding retry. The page runs on a fake clock that steps advance with eval \"window.__clock.runFor(ms)\". Navigate to /c/{{SLUG}} and wait for the table of contents button (\".toc-button\") to be visible. Delay message {{FIRST}}. Set the fragment to {{FIRST_FRAGMENT}}, then run the clock for 100ms, then set the fragment to {{SECOND_FRAGMENT}}. window.fragmentScrolls should become [\"{{SECOND}}\"]. Mount the delayed message, then run the clock for 1100ms: window.fragmentScrolls must still be exactly [\"{{SECOND}}\"]. Set the fragment to {{FIRST_FRAGMENT}}: window.fragmentScrolls should become [\"{{SECOND}}\",\"{{FIRST}}\"].",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-button",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[]"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-message-id=\"{{FIRST}}\"]'); if (el) { const id = el.getAttribute('data-message-id'); el.setAttribute('data-delayed-message-id', id); el.removeAttribute('data-message-id'); return 'delayed'; } return 'not found'; })()",
+      "expect": "delayed"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(resolve =\u003e { window.addEventListener('hashchange', () =\u003e resolve('changed'), {once:true}); location.hash = '{{FIRST_FRAGMENT}}'; })",
+      "expect": "changed"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(100)"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(resolve =\u003e { window.addEventListener('hashchange', () =\u003e resolve('changed'), {once:true}); location.hash = '{{SECOND_FRAGMENT}}'; })",
+      "expect": "changed"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[\"{{SECOND}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-delayed-message-id=\"{{FIRST}}\"]'); if (el) { const id = el.getAttribute('data-delayed-message-id'); el.setAttribute('data-message-id', id); return 'mounted'; } return 'not found'; })()",
+      "expect": "mounted"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(1100)"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[\"{{SECOND}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(resolve =\u003e { window.addEventListener('hashchange', () =\u003e resolve('changed'), {once:true}); location.hash = '{{FIRST_FRAGMENT}}'; })",
+      "expect": "changed"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.fragmentScrolls)",
+      "expect": "[\"{{SECOND}}\",\"{{FIRST}}\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T01:48:07.186075995Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 98150,
+    "output_tokens": 3895,
+    "estimated_cost_usd": 0.11571479999999999,
+    "mode": "generated"
+  }
+}

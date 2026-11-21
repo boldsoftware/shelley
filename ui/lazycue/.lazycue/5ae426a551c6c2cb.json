@@ -1,0 +1,75 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The test seeds a 12-turn conversation at /c/{{SLUG}} whose first two user messages have data-message-id {{FIRST}} and {{SECOND}}; the URL fragments that link to them are {{FIRST_FRAGMENT}} and {{SECOND_FRAGMENT}}. window.fragmentScrolls lists the data-message-id of every element scrolled into view so far, in order; check it with an eval of JSON.stringify(window.fragmentScrolls). Call \"append\" sends another message and waits for its reply; after it, {{APPENDED}} is the reply's data-message-id. To \"set the fragment to X\", eval a promise that sets location.hash to X and resolves on the next hashchange event. \"At the bottom\" means the messages container (\".messages-container\") has scrollHeight - clientHeight - scrollTop below 5 and the scroll-to-bottom button (\".scroll-to-bottom-button\") is hidden. To \"delay\" a message, rename its data-message-id attribute to data-delayed-message-id, as if its element had not mounted yet; to \"mount\" it, set data-message-id back from data-delayed-message-id (leaving the other attribute). Perform the steps in order. The scroll-to-bottom button clears the current fragment. 1. Navigate to /c/{{SLUG}} and wait for the table of contents button (\".toc-button\") to be visible. 2. It should be at the bottom. 3. Release the bottom pin as an upward wheel gesture would: dispatch a synthetic WheelEvent(\"wheel\", {deltaY: -10000, bubbles: true}) on the messages container, then set its scrollTop to 0. 4. Wait until its scrollTop is 0. 5. The scroll-to-bottom button (\".scroll-to-bottom-button\") should become visible. 6. Only now, with the scroll done, set the fragment without navigating: eval history.replaceState(null, \"\", location.pathname + \"#current\"), and check that location.hash is \"#current\". 7. Click the scroll-to-bottom button. 8. location.hash should become \"\" and the scroll-to-bottom button should be hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-button",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var mc = document.querySelector('.messages-container'); return (mc.scrollHeight - mc.clientHeight - mc.scrollTop) \u003c 5; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var mc = document.querySelector('.messages-container'); mc.dispatchEvent(new WheelEvent('wheel', {deltaY: -10000, bubbles: true})); mc.scrollTop = 0; return mc.scrollTop; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container').scrollTop",
+      "expect": "0"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "history.replaceState(null, '', location.pathname + '#current'); location.hash"
+    },
+    {
+      "action": "eval",
+      "expression": "location.hash",
+      "expect": "#current"
+    },
+    {
+      "action": "assert_url",
+      "text": "#current"
+    },
+    {
+      "action": "click",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "location.hash",
+      "expect": ""
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T01:57:03.950931477Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 81276,
+    "output_tokens": 2830,
+    "estimated_cost_usd": 0.0921882,
+    "mode": "generated"
+  }
+}
