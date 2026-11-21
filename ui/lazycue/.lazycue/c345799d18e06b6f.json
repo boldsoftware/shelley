@@ -78,7 +78,7 @@
     },
     {
       "action": "eval",
-      "expression": "document.querySelector('h1.header-title')?.textContent !== 'Assistant'",
+      "expression": "document.querySelector('h1.header-title').textContent.replace(/\\s+/g, ' ').trim() !== 'Assistant'",
       "expect": "true"
     },
     {
@@ -99,7 +99,7 @@
     },
     {
       "action": "eval",
-      "expression": "document.querySelector('h1.header-title')?.textContent !== 'Assistant'",
+      "expression": "document.querySelector('h1.header-title').textContent.replace(/\\s+/g, ' ').trim() !== 'Assistant'",
       "expect": "true"
     },
     {

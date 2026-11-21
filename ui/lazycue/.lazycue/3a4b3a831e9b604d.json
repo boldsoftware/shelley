@@ -30,7 +30,8 @@
     {
       "action": "assert_visible",
       "role": "heading",
-      "name": "What would you like to get done?"
+      "name": "What would you like to get done?",
+      "exact": true
     },
     {
       "action": "assert_count",

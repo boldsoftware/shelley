@@ -153,6 +153,10 @@
     },
     {
       "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='message']",
+        "has_text": "texted from a phone"
+      },
       "selector": "[data-testid='message-via-text']"
     },
     {

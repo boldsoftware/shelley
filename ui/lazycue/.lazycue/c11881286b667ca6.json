@@ -93,8 +93,12 @@
     },
     {
       "action": "click",
-      "selector": "[role='group'] button",
-      "has_text": "Full"
+      "within": {
+        "role": "group",
+        "name": "Row size"
+      },
+      "role": "button",
+      "name": "Full"
     },
     {
       "action": "assert_count",
