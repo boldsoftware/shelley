@@ -1,9 +1,10 @@
 <!-- An MCP Apps view (services/mcpAppHost.ts) in a sandboxed iframe. The
      iframe sits in a <dialog> that shows inline, closed; fullscreen opens it
      modally, in the top layer, so the iframe never moves and never reloads.
-     What the view asks to do as the user waits for the user's OK in a bar
-     below it, out of the view's reach. The page gets a channel to the host
-     ahead of its own scripts (channelScript). -->
+     Links and downloads the view asks for wait for the user's OK in a bar
+     below it, out of the view's reach; messages it asks to send wait in the
+     conversation's text box (services/viewDrafts.ts). The page gets a
+     channel to the host ahead of its own scripts (channelScript). -->
 <template>
   <dialog
     ref="dialogRef"
@@ -79,6 +80,7 @@ import {
   type HostContext,
   styleVariables,
 } from "../../services/mcpAppHost";
+import { offerViewDraft, withdrawViewDrafts } from "../../services/viewDrafts";
 import { useDarkMode } from "../composables/darkMode";
 import { useI18n } from "../composables/i18n";
 
@@ -88,7 +90,7 @@ const props = defineProps<{
   sandbox: string;
   allow?: string;
   prefersBorder?: boolean;
-  options: Omit<AppHostOptions, "context" | "onSize" | "onDisplayMode" | "confirm">;
+  options: Omit<AppHostOptions, "context" | "onSize" | "onDisplayMode" | "confirm" | "compose">;
 }>();
 /** load gives a way to send the view messages outside the protocol. */
 const emit = defineEmits<{ load: [send: (message: unknown) => void] }>();
@@ -114,8 +116,8 @@ let consentTimer: ReturnType<typeof setTimeout> | undefined;
 let deferredHeight: number | undefined;
 const CONSENT_DELAY_MS = 500;
 
-const PROMPTS = { send: "viewAsksToSend", open: "viewAsksToOpen", save: "viewAsksToSave" } as const;
-const ACTIONS = { send: "viewSend", open: "viewOpen", save: "save" } as const;
+const PROMPTS = { open: "viewAsksToOpen", save: "viewAsksToSave" } as const;
+const ACTIONS = { open: "viewOpen", save: "save" } as const;
 const consentPrompt = computed(() =>
   consent.value ? t(PROMPTS[consent.value.kind]).replace("{source}", props.options.source) : "",
 );
@@ -140,6 +142,21 @@ function answer(ok: boolean) {
   pending.resolve(ok);
 }
 
+// Identifies this view's messages in the text box.
+const owner = {};
+
+function compose(text: string): Promise<boolean> {
+  // The text box is under a fullscreen view.
+  setDisplayMode("inline");
+  return offerViewDraft(props.options.conversationId, owner, props.options.source, text);
+}
+
+/** Turns down what the view asked that still waits on the user. */
+function letGo() {
+  answer(false);
+  withdrawViewDrafts(owner);
+}
+
 const MIN_HEIGHT = 60;
 const maxHeight = () => Math.round(Math.max(400, window.innerHeight * 0.8));
 
@@ -156,7 +173,7 @@ function context(): HostContext {
 }
 
 function connect() {
-  answer(false);
+  letGo();
   host?.close();
   host = null;
   loaded = false;
@@ -176,6 +193,7 @@ function connect() {
       return displayMode.value;
     },
     confirm,
+    compose,
   });
 }
 
@@ -183,7 +201,7 @@ function connect() {
 // bridge: it isn't the server's view, and its CSP is gone.
 function onLoad() {
   if (loaded) {
-    answer(false);
+    letGo();
     host?.close();
     host = null;
     return;
@@ -230,7 +248,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  answer(false);
+  letGo();
   host?.teardown();
   host?.close();
   window.removeEventListener("message", receive);

@@ -727,10 +727,9 @@ export const vi: TranslationKeys = {
   chatgptGotIt: "Đã hiểu",
   chatgptSignOutUnconfirmed:
     "Đã đăng xuất ở đây nhưng ChatGPT chưa xác nhận. Hãy ngắt kết nối Shelley trong cài đặt ChatGPT cho chắc.",
-  viewAsksToSend: "{source} muốn gửi nội dung này dưới tên bạn:",
   viewAsksToOpen: "{source} muốn mở:",
   viewAsksToSave: "{source} muốn lưu:",
-  viewSend: "Gửi",
+  viewDraftFrom: "Từ {source}",
   viewOpen: "Mở",
   viewContextFrom: "Ngữ cảnh từ {source}",
 };

@@ -78,13 +78,14 @@ background and text.
 
 window.shelley lets the page work with the conversation (methods return Promises).
 Some clients show the page without it; check that it exists:
-- sendMessage(text): send text as the user's next message, for buttons such as
-  "Apply".
-- openLink(url); download(filename, text, mimeType)
-  The user confirms each of these first; the Promise rejects if they decline.
+- sendMessage(text): from a click in the page, for buttons such as "Apply",
+  put text (not a ! or / command) in the user's text box. The Promise
+  resolves when they send it and rejects if they clear it.
+- openLink(url); download(filename, text, mimeType): the user confirms each
+  first; the Promise rejects if they decline.
 - setContext(text): tell the model what the user picked or did in the page. It
   arrives with the user's next message; each call replaces the last.
-- requestDisplayMode("fullscreen" | "inline")
+- requestDisplayMode("fullscreen" | "inline"): fullscreen from a click
 - hostContext (theme, displayMode, ...), onHostContextChange(fn)
 
 To change a displayed view, patch the file that holds the content (the HTML

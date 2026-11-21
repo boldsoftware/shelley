@@ -692,10 +692,9 @@ export interface TranslationKeys {
   chatgptWelcomeBody: string;
   chatgptGotIt: string;
   chatgptSignOutUnconfirmed: string;
-  viewAsksToSend: string;
   viewAsksToOpen: string;
   viewAsksToSave: string;
-  viewSend: string;
+  viewDraftFrom: string;
   viewOpen: string;
   viewContextFrom: string;
 }

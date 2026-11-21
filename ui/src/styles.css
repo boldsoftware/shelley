@@ -4120,6 +4120,17 @@ diffs-container {
   color: var(--text-tertiary);
 }
 
+/* Above the text box while it holds a message a view asked to send. */
+.view-draft-label {
+  flex: 0 0 100%;
+  order: -1;
+  min-width: 0;
+  padding: 0 0.5rem;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-13);
+  color: var(--text-tertiary);
+}
+
 .next-prompt-suggestion kbd {
   margin-left: 0.25rem;
   padding: 0 0.25rem;
@@ -7700,14 +7711,21 @@ svg {
   }
 
   .message-input-form .message-attachments,
-  .message-input-form .next-prompt-suggestion {
+  .message-input-form .next-prompt-suggestion,
+  .message-input-form .view-draft-label {
     grid-column: 1 / -1;
     grid-row: 2;
     order: 0;
   }
 
-  .message-input-form:has(.message-attachments, .next-prompt-suggestion) .textarea-wrapper {
+  .message-input-form:has(.message-attachments, .next-prompt-suggestion, .view-draft-label)
+    .textarea-wrapper,
+  .message-input-form:has(.message-attachments) .view-draft-label {
     grid-row: 3;
+  }
+
+  .message-input-form:has(.message-attachments):has(.view-draft-label) .textarea-wrapper {
+    grid-row: 4;
   }
 
   /* Tapping it puts the rest in the text box. */

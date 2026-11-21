@@ -719,10 +719,9 @@ export const upgoer5: TranslationKeys = {
   chatgptGotIt: "Got it",
   chatgptSignOutUnconfirmed:
     "Signed out here, but ChatGPT did not say it heard. Disconnect Shelley in ChatGPT settings to be sure.",
-  viewAsksToSend: "{source} wants to send this as if you said it:",
   viewAsksToOpen: "{source} wants to open:",
   viewAsksToSave: "{source} wants to keep this:",
-  viewSend: "Send it",
+  viewDraftFrom: "From {source}",
   viewOpen: "Open",
   viewContextFrom: "What {source} told the helper",
 };

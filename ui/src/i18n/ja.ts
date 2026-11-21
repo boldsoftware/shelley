@@ -725,10 +725,9 @@ export const ja: TranslationKeys = {
   chatgptGotIt: "OK",
   chatgptSignOutUnconfirmed:
     "ここではサインアウトしましたが、ChatGPT で確認できませんでした。念のため ChatGPT の設定で Shelley の接続を解除してください。",
-  viewAsksToSend: "{source} がこれをあなたのメッセージとして送信しようとしています:",
   viewAsksToOpen: "{source} が次を開こうとしています:",
   viewAsksToSave: "{source} が次を保存しようとしています:",
-  viewSend: "送信",
+  viewDraftFrom: "{source} から",
   viewOpen: "開く",
   viewContextFrom: "{source} からのコンテキスト",
 };

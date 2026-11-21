@@ -2,8 +2,9 @@
 // runs in a sandboxed iframe and speaks JSON-RPC over postMessage. MCP tools'
 // views and output_html pages (appBridge/view.ts) share this host.
 
-import { apiFetch, api, sendJSON } from "./api";
+import { apiFetch, sendJSON } from "./api";
 import { setAppContext } from "./appContext";
+import { isCommand } from "./viewDrafts";
 
 export const APP_PROTOCOL_VERSION = "2026-01-26";
 
@@ -48,8 +49,8 @@ export interface HostContext {
 
 /** Something a view asks to do as the user, which the user must allow. */
 export interface Consent {
-  kind: "send" | "open" | "save";
-  /** What exactly: the message, the URL, the files. */
+  kind: "open" | "save";
+  /** What exactly: the URL, the files. */
   detail: string;
 }
 
@@ -77,6 +78,8 @@ export interface AppHostOptions {
   onDisplayMode(mode: DisplayMode): DisplayMode;
   /** Asks the user; whether they allowed it. */
   confirm(consent: Consent): Promise<boolean>;
+  /** Puts a message in the conversation's text box; whether the user sent it. */
+  compose(text: string): Promise<boolean>;
 }
 
 interface RPC {
@@ -119,15 +122,130 @@ const SHOWN_USES =
 const RIGHT_TO_LEFT = /(?=\p{L})[\p{sc=Hebrew}\p{sc=Arabic}\p{sc=Syriac}\p{sc=Thaana}\p{sc=Nko}]/u;
 const DIRECTION_MARK = /(?<![\u200e\u200f\u061c])[\u200e\u200f\u061c](?![\u200e\u200f\u061c])/gu;
 
+/** Refuses text that hides some of itself from the user. */
+function shown(text: string) {
+  if (hasHidden(text)) throw new RPCError(INVALID, "Views can't ask with text the user can't see.");
+}
+
 /** Whether text has characters that don't show (HIDDEN) for no visible use. */
 function hasHidden(text: string): boolean {
-  let shown = text.replace(SHOWN_USES, "");
-  if (RIGHT_TO_LEFT.test(shown)) shown = shown.replace(DIRECTION_MARK, "");
-  return HIDDEN.test(shown);
+  let visible = text.replace(SHOWN_USES, "");
+  if (RIGHT_TO_LEFT.test(visible)) visible = visible.replace(DIRECTION_MARK, "");
+  return HIDDEN.test(visible);
+}
+
+/** Refuses text the text box would take as a command (`!ls`, `/clear`)
+ *  rather than a message. */
+function notCommand(text: string) {
+  if (isCommand(text)) throw new RPCError(INVALID, "Views send messages, not commands.");
 }
 
 /** The answer to a request the user declined. */
 const DECLINED = { isError: true };
+/** How long after a press in a view it may act: as long as Chrome's user
+ *  activation lasts. */
+const PRESS_MS = 5000;
+
+/** The time, in ms since the epoch, as precise as the page's clock. Pages'
+ *  clocks share this base, and events' times (pressedAt) too. */
+const now = () => performance.timeOrigin + performance.now();
+const pressedAt = (event: Event) => performance.timeOrigin + event.timeStamp;
+
+/** When the user last pressed a key or pointer in Shelley's own page. Presses
+ *  in a view, a cross-origin frame, don't reach it. */
+let hostPressedAt = -Infinity;
+/** How soon after the user's click in a frame or Tab into it its focus
+ *  counts as theirs. */
+const FOCUS_MS = 200;
+/** The user's last Tab in Shelley's page. A Tab into a frame moves the focus
+ *  without a focusin in the page (landed) but takes it out of the window,
+ *  to that frame; its focus, if it follows closely enough, counts as given
+ *  (tabBefore) until it leaves (spent). */
+interface Tab {
+  event: KeyboardEvent;
+  at: number;
+  landed: boolean;
+  /** Where it took the focus, once known (decided); null for nowhere. */
+  frame?: Element | null;
+  spent?: boolean;
+  /** Frames whose focus ended before it was known (spent if frame's). */
+  left?: Set<Element>;
+  decided: Promise<void>;
+  decide(): void;
+}
+let lastTab: Tab | undefined;
+if (typeof window !== "undefined") {
+  const pressed = (event: Event) => {
+    if (event.isTrusted) hostPressedAt = Math.max(hostPressedAt, pressedAt(event));
+  };
+  window.addEventListener("pointerdown", pressed, true);
+  // A click with neither, from a screen reader say.
+  window.addEventListener("click", pressed, true);
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      pressed(event);
+      const { isTrusted, key, ctrlKey, altKey, metaKey } = event;
+      if (!isTrusted || key !== "Tab" || ctrlKey || altKey || metaKey) return;
+      let decide = () => {};
+      const decided = new Promise<void>((resolve) => (decide = resolve));
+      const tab = (lastTab = { event, at: pressedAt(event), landed: false, decided, decide });
+      setTimeout(() => tabbed(tab, false));
+      setTimeout(() => tabbed(tab, true, null), FOCUS_MS);
+    },
+    true,
+  );
+  window.addEventListener(
+    "focusin",
+    (event) => {
+      if (!event.isTrusted || !lastTab) return;
+      lastTab.landed = true;
+      lastTab.decide();
+    },
+    true,
+  );
+  window.addEventListener(
+    "blur",
+    (event) => {
+      if (event.isTrusted && event.target === window && lastTab) tabbed(lastTab, true);
+    },
+    true,
+  );
+}
+/** Notes where a Tab took the focus out of the page, once that's known
+ *  (final): the page's blur says (Chrome, with the frame in another process,
+ *  may still show <body> in the next task); Firefox doesn't blur the page,
+ *  but shows the frame in the next task. Nothing by FOCUS_MS: no frame. */
+function tabbed(tab: Tab, final: boolean, element = document.activeElement) {
+  if (tab.landed || tab.frame !== undefined) return;
+  if (!final && !(element instanceof HTMLIFrameElement)) return;
+  tab.frame = element;
+  tab.decide();
+}
+/** Waits, until at the latest, for the focus a press in a view gives it to
+ *  reach Shelley's page: a request made as the press begins (the focus may
+ *  move only at the click), or from a view in another process, can come
+ *  first. Firefox doesn't say when it does, so this looks. */
+function focusReaches(frame: HTMLIFrameElement, until: number): Promise<void> {
+  return new Promise((resolve) => {
+    const look = () => {
+      if (document.activeElement !== frame && now() < until) return;
+      clearInterval(timer);
+      resolve();
+    };
+    const timer = setInterval(look, 20);
+    look();
+  });
+}
+/** The user's last Tab, if a frame's focus at focus may have come from it:
+ *  whether it did, its frame says. */
+function tabBefore(focus: number) {
+  const tab = lastTab;
+  if (!tab || tab.landed || tab.spent || tab.event.defaultPrevented) return undefined;
+  if (tab.frame && tab.left?.has(tab.frame)) return undefined;
+  if (hostPressedAt !== tab.at || focus < tab.at || focus - tab.at >= FOCUS_MS) return undefined;
+  return tab;
+}
 
 const NOT_FOUND = -32601;
 const INVALID = -32602;
@@ -231,7 +349,10 @@ export function channelToken(): string {
  * queues the host's messages and passes them on when a private channel of
  * its own wakes it (unlike timers, that doesn't wait in hidden tabs). The
  * wake-ups carry nothing, so the page, which can get that channel's port as
- * the event that wakes it, gets nothing from handing it on.
+ * the event that wakes it, gets nothing from handing it on. The script also
+ * reports the user's real presses in the page, and when it gets the focus
+ * (AppHost.clicked), wrapping what the page posts so that the page can't
+ * pass for it.
  */
 export function channelScript(token: string): string {
   return `<script>(() => {
@@ -246,7 +367,83 @@ export function channelScript(token: string): string {
   const relay = new MessageChannel();
   const pass = MessagePort.prototype.postMessage.bind(relay.port1);
   const standIn = new MessageChannel().port1;
-  Object.defineProperty(standIn, "postMessage", { value: (data) => send(data) });
+  Object.defineProperty(standIn, "postMessage", { value: (data) => send({ view: data }) });
+  // Real presses and focus, which the page can't fake, go to the host in line
+  // with what the page posts, with when they happened (on the host's clock:
+  // see now()): a mouse button going down, a click that no key made (a tap,
+  // say, or a screen reader's), and keys other than Tab, Escape and
+  // modifiers, once each. A click on a page that kept the focus from the
+  // frame focuses it, as the click would have.
+  const listen = EventTarget.prototype.addEventListener.bind(window);
+  const timeOrigin = performance.timeOrigin;
+  const getter = (proto, name) =>
+    Function.prototype.call.bind(Object.getOwnPropertyDescriptor(proto, name).get);
+  const timeOf = getter(Event.prototype, "timeStamp");
+  const targetOf = getter(Event.prototype, "target");
+  const pointerTypeOf = getter(PointerEvent.prototype, "pointerType");
+  const buttonOf = getter(MouseEvent.prototype, "button");
+  const keyOf = getter(KeyboardEvent.prototype, "key");
+  const repeatOf = getter(KeyboardEvent.prototype, "repeat");
+  const hasFocus = Document.prototype.hasFocus.bind(document);
+  const focusWindow = window.focus.bind(window);
+  const at = (event) => timeOrigin + timeOf(event);
+  const report = (what, event) => send({ [what]: at(event) });
+  // A key makes a click (Enter, Space) in the task that dispatches its
+  // keydown, keypress (Enter, on some systems a separate input) or keyup.
+  const soon = setTimeout.bind(window);
+  let keying = false;
+  const keyed = () => {
+    keying = true;
+    soon(() => (keying = false));
+  };
+  // One press per gesture: the click that follows a mouse button going down
+  // (or the second click a label makes, in the same task) only says when
+  // the user pointed, for the focus that may follow it. A gesture ends with
+  // the task of its release, where its click is.
+  let down = 0;
+  let gestures = 0;
+  let clicking = false;
+  listen("pointerdown", (event) => {
+    if (!event.isTrusted) return;
+    // Only the main button presses; the others (a menu, say) just point.
+    const mouse = pointerTypeOf(event) === "mouse";
+    down = mouse ? ++gestures : 0;
+    if (mouse) report(buttonOf(event) === 0 ? "pointer" : "pointed", event);
+  }, true);
+  const released = (event) => {
+    const gesture = down;
+    if (event.isTrusted && gesture) soon(() => down === gesture && (down = 0));
+  };
+  listen("pointerup", released, true);
+  listen("pointercancel", released, true);
+  listen("click", (event) => {
+    if (!event.isTrusted || keying) return;
+    report(down || clicking ? "pointed" : "pointer", event);
+    down = 0;
+    clicking = true;
+    soon(() => (clicking = false));
+    if (!hasFocus()) focusWindow();
+  }, true);
+  listen("keypress", (event) => event.isTrusted && keyed(), true);
+  listen("keyup", (event) => event.isTrusted && keyed(), true);
+  // Lookups in this, unlike calls of built-ins, run none of the page's code.
+  const navigates = { __proto__: null };
+  for (const key of ["Tab", "Escape", "Shift", "Control", "Alt", "AltGraph", "Meta", "CapsLock", "Fn"]) {
+    navigates[key] = true;
+  }
+  listen("keydown", (event) => {
+    if (!event.isTrusted) return;
+    keyed();
+    if (!repeatOf(event) && !navigates[keyOf(event)]) report("key", event);
+  }, true);
+  // Some browsers send a frame's focus and blur to its window, some (when an
+  // element takes it) to its document.
+  const own = (event) => {
+    const target = targetOf(event);
+    return event.isTrusted && (target === window || target === document);
+  };
+  listen("focus", (event) => own(event) && report("focus", event), true);
+  listen("blur", (event) => own(event) && report("blur", event), true);
   // No prototype, so filling it runs none of the page's code.
   const inbox = { __proto__: null };
   let first = 0;
@@ -272,6 +469,19 @@ export class AppHost {
   private initialized = false;
   private displayModes?: DisplayMode[];
   private nextId = 1;
+  private pending = new Set<RPC["id"]>();
+  private pressedAt = -Infinity;
+  private pointedAt = -Infinity;
+  private keysCount = false;
+  /** Counts the view's focus and blur reports, so a late Tab claim (take)
+   *  doesn't outlive the focus it's for. */
+  private focusEpoch = 0;
+  /** A Tab claim under way (whether it succeeds), and the last key that
+   *  came while it was. */
+  private claiming?: Promise<boolean>;
+  private heldKey = -Infinity;
+  /** The press the last request took (clicked). */
+  private usedPress = -Infinity;
   private port?: MessagePort;
   private queued: unknown[] = [];
 
@@ -295,8 +505,64 @@ export class AppHost {
       return;
     }
     this.port = event.ports[0];
-    this.port.onmessage = (e) => this.handle(e.data);
+    this.port.onmessage = (e) => this.take(e.data);
     for (const message of this.queued.splice(0)) this.port.postMessage(message);
+  }
+
+  /** Takes what came on the channel: the page's messages, or channelScript's
+   *  word of a press. */
+  private take(data: unknown) {
+    const { view, pointer, pointed, key, focus, blur } = data as Record<
+      string,
+      number | undefined
+    > & { view?: unknown };
+    if (typeof pointer === "number") {
+      this.pointedAt = pointer;
+      this.pressedAt = Math.max(this.pressedAt, pointer);
+      this.keysCount = true;
+    } else if (typeof pointed === "number") {
+      this.pointedAt = Math.max(this.pointedAt, pointed);
+      this.keysCount = true;
+    } else if (typeof key === "number") {
+      if (this.keysCount) this.pressedAt = Math.max(this.pressedAt, key);
+      else if (this.claiming) this.heldKey = Math.max(this.heldKey, key);
+    } else if (typeof focus === "number") {
+      // Focus the user gave the view, by clicking in it or tabbing to it,
+      // makes their keys there count; focus it took makes none count, nor
+      // what came before.
+      const epoch = ++this.focusEpoch;
+      const pointed = this.pointedAt > hostPressedAt ? focus - this.pointedAt : Infinity;
+      this.keysCount = pointed >= 0 && pointed < FOCUS_MS;
+      if (!this.keysCount) this.pressedAt = -Infinity;
+      this.claiming = undefined;
+      this.heldKey = -Infinity;
+      const tab = this.keysCount ? undefined : tabBefore(focus);
+      if (tab) {
+        // Once Shelley's page knows where the Tab took the focus; keys that
+        // come first wait for it, as do requests (clicked).
+        this.claiming = tab.decided.then(() => {
+          if (epoch !== this.focusEpoch) return false;
+          this.claiming = undefined;
+          if (tabBefore(focus) !== tab || tab.frame !== this.frame) return false;
+          this.keysCount = true;
+          this.pressedAt = Math.max(this.pressedAt, this.heldKey);
+          return true;
+        });
+      }
+    } else if (typeof blur === "number") {
+      // What gave the view the focus it lost can't give it back.
+      this.focusEpoch++;
+      this.claiming = undefined;
+      this.keysCount = false;
+      this.pointedAt = -Infinity;
+      const tab = lastTab;
+      if (tab && blur >= tab.at) {
+        if (tab.frame === this.frame) tab.spent = true;
+        else if (tab.frame === undefined) (tab.left ??= new Set()).add(this.frame);
+      }
+    } else {
+      this.handle(view);
+    }
   }
 
   private handle(data: unknown) {
@@ -308,11 +574,14 @@ export class AppHost {
       this.notified(method, params);
       return;
     }
+    this.pending.add(id);
+    const reply = (out: Omit<RPC, "jsonrpc" | "id">) => {
+      if (this.pending.delete(id)) this.post({ id, ...out });
+    };
     this.answer(method, params).then(
-      (result) => this.post({ id, result }),
+      (result) => reply({ result }),
       (err: unknown) =>
-        this.post({
-          id,
+        reply({
           error: {
             code: err instanceof RPCError ? err.code : FAILED,
             message: err instanceof Error ? err.message : String(err),
@@ -323,10 +592,40 @@ export class AppHost {
 
   /** Asks the user, unless the view is gone by then. */
   private async allowed(consent: Consent): Promise<boolean> {
-    if (hasHidden(consent.detail)) {
-      throw new RPCError(INVALID, "Views can't ask with text the user can't see.");
-    }
+    shown(consent.detail);
     return (await this.opts.confirm(consent)) && !this.closed;
+  }
+
+  /** Whether the user has just clicked or typed in the view: the frame, which
+   *  has the focus (and the page, the system's), reported a real press
+   *  (channelScript) since the user's last press in Shelley's page, within as
+   *  long as a click lets a page act (navigator.userActivation), which hasn't
+   *  run out. Keys count only in focus the user gave the view (take). A press
+   *  is good for one request, made after it. */
+  private async clicked(): Promise<boolean> {
+    let pressed = this.pressedAt;
+    const claim = this.claiming;
+    if (claim) {
+      // A key held for the Tab claim counts if the claim succeeds.
+      const held = this.heldKey;
+      const epoch = this.focusEpoch;
+      const claimed = await claim;
+      if (epoch !== this.focusEpoch) return false;
+      if (claimed) pressed = Math.max(pressed, held);
+    }
+    const active = () => !!navigator.userActivation?.isActive;
+    if (!(pressed > this.usedPress && pressed > hostPressedAt)) return false;
+    if (!(now() - pressed < PRESS_MS && active())) return false;
+    this.usedPress = pressed;
+    await focusReaches(this.frame, pressed + PRESS_MS);
+    return (
+      pressed > hostPressedAt &&
+      now() - pressed < PRESS_MS &&
+      active() &&
+      document.hasFocus() &&
+      document.activeElement === this.frame &&
+      !this.closed
+    );
   }
 
   /** Tells an initialized view what changed. */
@@ -381,6 +680,11 @@ export class AppHost {
         return;
       case "notifications/message":
         console.info(`${this.opts.source}:`, params.data);
+        return;
+      // The view stopped waiting (the MCP Apps SDK gives up after a minute);
+      // what it asked for stands, but there's no one to answer.
+      case "notifications/cancelled":
+        this.pending.delete(params.requestId as RPC["id"]);
         return;
     }
   }
@@ -469,9 +773,14 @@ export class AppHost {
         if (params.role !== "user" || !text) {
           throw new RPCError(INVALID, "Views send text messages from the user.");
         }
-        if (!(await this.allowed({ kind: "send", detail: text }))) return DECLINED;
-        await api.sendMessage(conversationId, { message: text });
-        return {};
+        shown(text);
+        notCommand(text);
+        // The text box is the user's to send from; a view only writes in it
+        // when the user acts in the view, not in the middle of their typing.
+        if (!(await this.clicked())) {
+          throw new RPCError(INVALID, "Sending a message needs a click in the view.");
+        }
+        return (await this.opts.compose(text)) && !this.closed ? {} : DECLINED;
       }
       case "ui/update-model-context": {
         // Context is kept per view; views without what shows them would share a key.
@@ -484,7 +793,9 @@ export class AppHost {
         const mode = params.mode as DisplayMode;
         if (
           !DISPLAY_MODES.includes(mode) ||
-          (this.displayModes && !this.displayModes.includes(mode))
+          (this.displayModes && !this.displayModes.includes(mode)) ||
+          // Taking over the screen, which takes the focus, needs a click too.
+          (mode === "fullscreen" && !(await this.clicked()))
         ) {
           return { mode: this.opts.context().displayMode };
         }

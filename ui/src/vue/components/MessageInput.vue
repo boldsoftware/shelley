@@ -200,6 +200,9 @@
           </button>
         </div>
       </div>
+      <div v-if="viewDraft" :id="viewDraftLabelId" class="view-draft-label" role="status" data-testid="view-draft">
+        {{ t("viewDraftFrom").replace("{source}", viewDraft.source) }}
+      </div>
       <div class="textarea-wrapper">
         <div
           v-if="showSkillMenu"
@@ -472,7 +475,10 @@
           :value="message"
           :placeholder="placeholderText"
           :aria-keyshortcuts="suggestion ? 'Tab' : undefined"
-          :aria-describedby="suggestion ? 'next-prompt-suggestion' : undefined"
+          :aria-describedby="
+            [suggestion && 'next-prompt-suggestion', viewDraft && viewDraftLabelId].filter(Boolean).join(' ') ||
+            undefined
+          "
           class="message-textarea"
           :disabled="isDisabled"
           :rows="initialRows ?? 1"
@@ -623,7 +629,7 @@
 
 <script setup lang="ts">
 import PathText from "./PathText.vue";
-import { computed, nextTick, onMounted, onUnmounted, ref, shallowReactive, shallowRef, useId, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowReactive, shallowRef, useId, watch, watchEffect } from "vue";
 import { useFileCompletion } from "../composables/fileCompletion";
 import { useSkillCompletion } from "../composables/skillCompletion";
 import { apiFetch, type SkillDescriptor } from "../../services/api";
@@ -639,6 +645,7 @@ import RecordButton from "./RecordButton.vue";
 import RecordingPanel from "./RecordingPanel.vue";
 import type { RecordingDestination, RecordingMode, RecordingPreparation } from "./recordingDestination";
 import { focusMessageInputIfUnfocused } from "../../utils/focusMessageInput";
+import { isCommand, openComposer, viewDraftFor, type ViewDraft } from "../../services/viewDrafts";
 import { useFeatureFlag } from "../composables/featureFlags";
 import { useSecretSealing } from "../composables/secretSealing";
 import { prettyModelName } from "../../utils/modelNames";
@@ -806,7 +813,32 @@ function sealForSend(): string {
 function onCaretMove() {
   syncFileSelection();
   const textarea = textareaRef.value;
-  if (textarea) setMessageSealed(message.value, textarea.selectionStart, false);
+  if (textarea && !viewTextUntouched()) {
+    setMessageSealed(message.value, textarea.selectionStart, false);
+  }
+}
+
+/** Whether the text box holds a view's message as the view wrote it. Until
+ *  the user edits it or sends it, nothing changes it for them: sealing
+ *  would make it look edited, so theirs. */
+function viewTextUntouched(): boolean {
+  const filled = viewDraft.value?.filled;
+  return !!filled && message.value === filled.after;
+}
+/** Takes the view's text back out, if the user left it as the view wrote it
+ *  (once edited, it's their draft), and turns the view down. */
+function withdrawViewText() {
+  const draft = viewDraft.value;
+  if (!draft?.filled || draft.sending) return;
+  if (viewTextUntouched()) setMessage(draft.filled.before);
+  draft.settle(false);
+}
+/** Whether the text box would send the view's text, as the view wrote it,
+ *  as a command; it takes it back out then (withdrawViewText). */
+function viewTextInCommand(): boolean {
+  if (!viewTextUntouched() || !isCommand(message.value)) return false;
+  withdrawViewText();
+  return true;
 }
 
 function undoSecret(id: string) {
@@ -817,7 +849,11 @@ function undoSecret(id: string) {
 watch(
   () => props.draftSeed,
   (seed) => {
-    if (seed != null) message.value = seed.value;
+    if (seed == null) return;
+    message.value = seed.value;
+    // A seed for this conversation replaces the text box, view's text and all.
+    const draft = viewDraft.value;
+    if (draft?.filled && !draft.sending) draft.settle(false);
   },
 );
 
@@ -881,6 +917,68 @@ const suggestion = computed(() =>
     : "",
 );
 
+// A view's message waits here for the user's Send (services/viewDrafts.ts),
+// after what the user has written. Until the user edits it, it stays out of
+// the saved draft, and it leaves the text box with the view (or when a newer
+// one takes its place). Focus stays where it was, and Send waits a moment, so
+// the keys or taps meant for the view don't send it.
+const VIEW_DRAFT_HOLD_MS = 600;
+const viewDraft = computed(() => viewDraftFor(props.conversationId));
+const viewDraftFresh = ref(false);
+const viewDraftLabelId = useId();
+let viewDraftTimer: ReturnType<typeof setTimeout> | undefined;
+const submissions = ref(0);
+watchEffect((onCleanup) => {
+  if (!props.conversationId || props.composerHidden) return;
+  onCleanup(
+    openComposer(
+      props.conversationId,
+      // Views wait while a message goes or a recording runs, and don't add
+      // to a command the user is writing.
+      () =>
+        submissions.value > 0 || submitting.value || recordingActive.value || isCommand(message.value),
+    ),
+  );
+});
+watch([viewDraft, () => props.conversationId], ([draft, id], [old, oldId]) => {
+  const after = old?.filled?.after;
+  if (old && old !== draft && id === oldId && !old.sent && message.value === after) {
+    setMessage(old.filled!.before);
+  }
+  if (!draft || draft.filled) return;
+  const before = message.value;
+  const value = withViewText(before, draft.text);
+  draft.filled = { before, after: value };
+  message.value = value;
+  viewDraftFresh.value = true;
+  clearTimeout(viewDraftTimer);
+  viewDraftTimer = setTimeout(() => (viewDraftFresh.value = false), VIEW_DRAFT_HOLD_MS);
+  void nextTick(() => {
+    const textarea = textareaRef.value;
+    if (textarea) textarea.scrollTop = textarea.scrollHeight;
+  });
+});
+// Clearing the text box turns the view down.
+watch(message, (value) => {
+  const draft = viewDraft.value;
+  if (draft?.filled && !draft.sending && !value.trim()) draft.settle(false);
+});
+/** The user's text with a view's after it. */
+function withViewText(before: string, text: string): string {
+  return before.trim() ? `${before.trimEnd()}\n\n${text}` : text;
+}
+/** Marks the view's message, if any, as going out with the user's. */
+function holdViewDraft() {
+  const draft = viewDraft.value;
+  if (!draft?.filled) return undefined;
+  draft.sending = true;
+  return draft;
+}
+function releaseViewDraft(draft: ViewDraft | undefined) {
+  submissions.value--;
+  if (draft) draft.sending = false;
+}
+
 function acceptSuggestion() {
   if (!suggestion.value || isDisabled.value) return;
   setMessage(suggestion.value);
@@ -904,7 +1002,8 @@ function handleResize() {
 
 const canRecordAudio = computed(
   () => mediaRecordingAvailable && props.recordingInlineAvailable && !isDisabled.value &&
-    !submitting.value && uploadsInProgress.value === 0 && !recordingSubmission.value,
+    !submitting.value && submissions.value === 0 && uploadsInProgress.value === 0 &&
+    !recordingSubmission.value,
 );
 const canRecordScreen = computed(() => canRecordAudio.value && screenRecordingAvailable);
 
@@ -930,6 +1029,8 @@ function beginRecording(mode: RecordingMode) {
       : undefined;
   void microphone?.catch(() => {});
   void screen?.catch(() => {});
+  // A recording goes out without Send, so not with a view's message.
+  withdrawViewText();
   // The recorder starts while the destination is still being created.
   const preparation = props.onStartRecording(message.value);
   const submission = shallowReactive<RecordingSubmission>({
@@ -1207,10 +1308,27 @@ watch(
   () => props.injectedText,
   (injected) => {
     if (injected) {
-      setMessage((prev) => {
+      const add = (prev: string) => {
         const needsNewline = prev.length > 0 && !prev.endsWith("\n");
         return prev + (needsNewline ? "\n\n" : "") + injected;
-      });
+      };
+      const draft = viewDraft.value;
+      if (draft?.filled && viewTextUntouched()) {
+        const before = add(draft.filled.before);
+        if (isCommand(before)) {
+          // A command doesn't take the view's text along.
+          withdrawViewText();
+          setMessage(before);
+        } else {
+          // It joins the user's text, ahead of the view's, which stays as
+          // the view wrote it.
+          draft.filled = { before, after: withViewText(before, draft.text) };
+          if (!secrets.holdsUnsealed(before)) emit("draft-change", before);
+          message.value = draft.filled.after;
+        }
+      } else {
+        setMessage(add);
+      }
       emit("clear-injected-text");
       // Focusing shows the user where the text landed, but not at the cost of
       // yanking focus out of a modal that is still open: the image comment view
@@ -1229,7 +1347,12 @@ const hasContent = computed(
 
 const isDisabled = computed(() => props.disabled);
 const canSubmit = computed(
-  () => hasContent.value && !isDisabled.value && !submitting.value && uploadsInProgress.value === 0,
+  () =>
+    hasContent.value &&
+    !isDisabled.value &&
+    !submitting.value &&
+    !viewDraftFresh.value &&
+    uploadsInProgress.value === 0,
 );
 const isDraggingOver = computed(() => dragCounter.value > 0);
 const isShellMode = computed(() => message.value.trimStart().startsWith("!"));
@@ -1358,7 +1481,9 @@ function closeSkillPicker() {
   textareaRef.value?.focus({ preventScroll: true });
 }
 function onTextareaBlur(e: FocusEvent) {
-  setMessageSealed(message.value, (e.target as HTMLTextAreaElement).selectionStart, true);
+  if (!viewTextUntouched()) {
+    setMessageSealed(message.value, (e.target as HTMLTextAreaElement).selectionStart, true);
+  }
   fileFocused.value = false;
   if (!skillMenuRef.value?.contains(e.relatedTarget as Node)) skillFocused.value = false;
 }
@@ -1693,8 +1818,9 @@ watch(composerSession, () => {
 
 async function handleSubmit(e: Event) {
   e.preventDefault();
+  if (viewTextInCommand()) return;
   if (interceptSkillSubmission()) return;
-  if (hasContent.value && !props.disabled && !submitting.value && uploadsInProgress.value === 0) {
+  if (canSubmit.value) {
     if (openTerminalIfRequested(composerDispatch(message.value))) return;
 
     const messageToSend = composeMessageWithAttachments(sealForSend());
@@ -1705,9 +1831,12 @@ async function handleSubmit(e: Event) {
     const submission = ++submissionGeneration;
     const origin = composerOrigin();
     submitting.value = true;
+    const draft = holdViewDraft();
+    submissions.value++;
     try {
       await secrets.ready();
       await props.onSend(messageToSend, selectedSkillNames());
+      draft?.settle(true);
       void secrets.sent(messageToSend);
       clearAttachments(attachmentSession);
       guardComposerClear(origin, composerOrigin, () => {
@@ -1719,6 +1848,7 @@ async function handleSubmit(e: Event) {
     } catch {
       // Keep the message on error so user can retry.
     } finally {
+      releaseViewDraft(draft);
       if (submission === submissionGeneration) submitting.value = false;
     }
   }
@@ -1726,6 +1856,7 @@ async function handleSubmit(e: Event) {
 
 async function handleQueueMessage() {
   if (!canSubmit.value) return;
+  if (viewTextInCommand()) return;
   if (interceptSkillSubmission()) return;
   const dispatch = composerDispatch(message.value, { intent: "queue" });
   if (openTerminalIfRequested(dispatch)) return;
@@ -1735,9 +1866,12 @@ async function handleQueueMessage() {
   }
   if (hasContent.value && props.onQueue) {
     const messageToQueue = composeMessageWithAttachments(sealForSend()).trim();
+    const draft = holdViewDraft();
+    submissions.value++;
     try {
       await secrets.ready();
     } catch {
+      releaseViewDraft(draft);
       return; // The secret bar shows the failed upload.
     }
     const skillsToQueue = selectedSkills.value;
@@ -1753,26 +1887,33 @@ async function handleQueueMessage() {
         messageToQueue,
         skillsToQueue.map((s) => s.name),
       );
+      draft?.settle(true);
       void secrets.sent(messageToQueue);
     } catch {
       guardComposerClear(origin, composerOrigin, () => {
         selectedSkills.value = skillsToQueue;
         setMessage(messageToQueue);
       });
+    } finally {
+      releaseViewDraft(draft);
     }
   }
 }
 
 /** Send immediately — used when a /btw is picked from the queue option. */
 async function handleSendNow() {
+  if (viewTextInCommand()) return;
   if (interceptSkillSubmission()) return;
-  if (hasContent.value && !props.disabled && !submitting.value && uploadsInProgress.value === 0) {
+  if (canSubmit.value) {
     const dispatch = composerDispatch(message.value, { intent: "send-now" });
     if (openTerminalIfRequested(dispatch)) return;
     const composed = composeMessageWithAttachments(sealForSend());
+    const draft = holdViewDraft();
+    submissions.value++;
     try {
       await secrets.ready();
     } catch {
+      releaseViewDraft(draft);
       return; // The secret bar shows the failed upload.
     }
     const messageToSend = dispatch.route === "btw" ? composed : composed.trim();
@@ -1791,6 +1932,7 @@ async function handleSendNow() {
         messageToSend,
         skillsToSend.map((s) => s.name),
       );
+      draft?.settle(true);
       void secrets.sent(messageToSend);
     } catch {
       guardComposerClear(origin, composerOrigin, () => {
@@ -1798,6 +1940,7 @@ async function handleSendNow() {
         setMessage(messageToSend);
       });
     } finally {
+      releaseViewDraft(draft);
       if (submission === submissionGeneration) submitting.value = false;
     }
   }
@@ -1987,6 +2130,8 @@ function handleKeyDown(e: KeyboardEvent) {
   }
   if (e.key === "Enter" && isAltEvent(e)) {
     e.preventDefault();
+    // A held Enter, maybe pressed in a view, sends nothing.
+    if (e.repeat) return;
     if (canQueueNow.value) void handleQueueMessage();
     else void handleSubmit(e);
     return;
@@ -1996,7 +2141,7 @@ function handleKeyDown(e: KeyboardEvent) {
     const isMobile = "ontouchstart" in window;
     if (isMobile && !isModEvent(e)) return;
     e.preventDefault();
-    void handleSubmit(e);
+    if (!e.repeat) void handleSubmit(e);
   }
 }
 
