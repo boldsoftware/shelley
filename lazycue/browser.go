@@ -899,7 +899,7 @@ func frameWorld(ctx context.Context, frame string) (cdpruntime.ExecutionContextI
 	}
 	const group = "lazycue-frame"
 	defer cdpruntime.ReleaseObjectGroup(group).Do(ctx) //nolint:errcheck // the page may be gone
-	el, exc, err := cdpruntime.Evaluate(fmt.Sprintf("document.querySelector(%q)", frame)).WithObjectGroup(group).Do(ctx)
+	el, exc, err := cdpruntime.Evaluate(frameJS(frame)).WithObjectGroup(group).Do(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -1304,7 +1304,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
 			// As in Playwright, el is focused when it is its root's active
 			// element: a custom element counts while focus is inside its
-			// shadow root, since selectors cannot reach in there.
+			// shadow root.
 			got, err := elementString(runCtx, step, `(function() {
 				if (el.getRootNode().activeElement === el) return 'focused';
 				let a = document.activeElement;
@@ -1377,9 +1377,9 @@ const (
 	withinSlot = "__lazycueWithinRole"
 )
 
-// findAllJS is an expression for the elements a step picks out, in document
-// order: those its selector matches or, with a role, those locate found
-// inside what its selector matches; then those inside what its within picks
+// findAllJS is an expression for the elements a step picks out: those its
+// selector matches, in deepAll's order, or, with a role, those locate found
+// (in document order) inside what its selector matches; then those inside what its within picks
 // out; then those whose text has has_text (with a selector alone, an element
 // that holds another match does not count, as with Playwright's getByText);
 // then, with visible, the visible ones. Evaluate it with evalFind.
@@ -1397,6 +1397,7 @@ func findAllJS(step Step) string {
 func pickJS(step Step, slot, scopes string) string {
 	return fmt.Sprintf(`(function(sel, role, hasText, exact, visible, slot, scopes) {
 		`+isVisibleJS+`
+		`+deepAllJS+`
 		const norm = s => s.replace(/\s+/g, ' ').trim();
 		const has = el => exact ? norm(el.textContent) === norm(hasText) : norm(el.textContent).includes(norm(hasText));
 		// Whether an element is inside one of els, shadow roots included.
@@ -1414,22 +1415,29 @@ func pickJS(step Step, slot, scopes string) string {
 			all = window[slot];
 			// Hold the matches no longer than this expression does.
 			delete window[slot];
-			if (sel) all = all.filter(inside(document.querySelectorAll(sel)));
+			if (sel) all = all.filter(inside(deepAll(sel)));
 		} else {
-			all = Array.from(document.querySelectorAll(sel));
+			all = deepAll(sel);
 		}
 		if (scopes) all = all.filter(inside(scopes));
 		if (hasText !== '' && role) {
 			all = all.filter(has);
 		} else if (hasText !== '') {
 			// Text a user can see: in the body, not in scripts or styles.
-			const matches = all.filter(el => document.body.contains(el) && !el.closest('script, style, noscript, template') && has(el));
+			const inBody = el => {
+				for (let p = el; p; p = p.parentNode || p.host) {
+					if (p === document.body) return true;
+				}
+				return false;
+			};
+			const matches = all.filter(el => inBody(el) && !el.closest('script, style, noscript, template') && has(el));
 			// Keep the innermost: an element holding a match holds its
-			// text too, and "*" would otherwise pick <html>.
+			// text too, and "*" would otherwise pick <html>. Shadow hosts
+			// hold what their shadow roots do.
 			const outer = new Set();
 			const set = new Set(matches);
 			for (const el of matches) {
-				for (let p = el.parentElement; p && !outer.has(p); p = p.parentElement) {
+				for (let p = el.parentNode; p && !outer.has(p); p = p.parentNode || p.host) {
 					if (set.has(p)) outer.add(p);
 				}
 			}
@@ -1437,6 +1445,37 @@ func pickJS(step Step, slot, scopes string) string {
 		}
 		return visible ? all.filter(isVisible) : all;
 	})(%q, %t, %q, %t, %t, %q, %s)`, step.Selector, step.Role != "", step.HasText, step.Exact, step.Visible, slot, scopes)
+}
+
+// deepAllJS defines deepAll(sel): the elements a CSS selector matches in the
+// document and its open shadow roots, in the order of Playwright's CSS
+// engine: a root's own matches, then those of the shadow roots of its
+// elements in document order, each followed by its nested ones. Each match
+// is within one root: "x-picker input" does not reach into x-picker's
+// shadow root.
+const deepAllJS = `function deepAll(sel) {
+	const all = [];
+	const query = root => {
+		const els = root.querySelectorAll(sel);
+		for (let i = 0; i < els.length; i++) all.push(els[i]);
+		// A walker does not go into shadow roots, and it is the fastest
+		// way through the elements of a large page.
+		const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+		for (let el = w.nextNode(); el; el = w.nextNode()) {
+			if (el.shadowRoot) query(el.shadowRoot);
+		}
+	};
+	query(document);
+	return all;
+}`
+
+// frameJS is an expression for the first element the CSS selector frame
+// matches, as deepAll has them, or undefined.
+func frameJS(frame string) string {
+	return fmt.Sprintf(`(() => {
+		`+deepAllJS+`
+		return deepAll(%q)[0];
+	})()`, frame)
 }
 
 // evalFind evaluates expr, which uses findAllJS or findJS, in step's frame
@@ -1480,7 +1519,7 @@ func locate(ctx context.Context, step Step, world cdpruntime.ExecutionContextID)
 		// Chrome stops rendering a cross-origin frame out of view, and its
 		// accessibility tree waits for the next rendering.
 		var outOfView bool
-		if err := evaluate(0, fmt.Sprintf(`(f => !f.contentDocument && (r => r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth)(f.getBoundingClientRect()))(document.querySelector(%q))`, step.Frame), &outOfView).Do(ctx); err != nil {
+		if err := evaluate(0, fmt.Sprintf(`(f => !f.contentDocument && (r => r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth)(f.getBoundingClientRect()))(%s)`, frameJS(step.Frame)), &outOfView).Do(ctx); err != nil {
 			return err
 		}
 		if outOfView {
@@ -1692,7 +1731,7 @@ const framePointJS = `(function(f, sel, x, y) {
 	if (!f) return {err: 'no iframe matches ' + sel};
 	const r = f.getBoundingClientRect(), s = getComputedStyle(f);
 	return hitTest(f, 'frame ' + sel, r.left + f.clientLeft + parseFloat(s.paddingLeft) + x, r.top + f.clientTop + parseFloat(s.paddingTop) + y);
-})(document.querySelector(%q), %[1]q, %g, %g)`
+})(%s, %q, %g, %g)`
 
 // atPoint runs f at the point a pointer step aims at: x,y CSS pixels from the
 // top-left corner of the element step.Selector matches when both are set,
@@ -1741,7 +1780,7 @@ func (b *Browser) atPoint(ctx, tabCtx context.Context, timeout time.Duration, st
 			return err
 		}
 		if target.Err == "" && step.Frame != "" {
-			if err := chromedp.Run(runCtx, evaluate(0, fmt.Sprintf(framePointJS, step.Frame, target.X, target.Y), &target)); err != nil {
+			if err := chromedp.Run(runCtx, evaluate(0, fmt.Sprintf(framePointJS, frameJS(step.Frame), step.Frame, target.X, target.Y), &target)); err != nil {
 				return err
 			}
 		}

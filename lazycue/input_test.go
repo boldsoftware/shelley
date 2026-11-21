@@ -330,6 +330,51 @@ document.addEventListener('click', e => document.title = e.target.closest('.msg,
 	}
 }
 
+// Selectors reach into open shadow roots, as Playwright's do: the
+// document's matches first, then each shadow root's, hosts in document
+// order, nested ones under theirs. A closed shadow root stays shut.
+func TestShadowSelectors(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<x-picker></x-picker>
+<span class="deep">Light</span>
+<x-closed></x-closed>
+<x-embed></x-embed>
+<script>
+customElements.define('x-inner', class extends HTMLElement {
+  connectedCallback() { this.attachShadow({mode: 'open'}).innerHTML = '<span class="deep">Nested</span>'; }
+});
+customElements.define('x-picker', class extends HTMLElement {
+  connectedCallback() {
+    this.attachShadow({mode: 'open'}).innerHTML = '<input type="search"><div class="status">Linked up</div><div class="status">Linked</div><span class="deep">Deep</span><x-inner></x-inner>';
+    this.shadowRoot.querySelector('input').focus();
+    this.shadowRoot.querySelector('.status').onclick = () => document.title = 'clicked';
+  }
+});
+customElements.define('x-closed', class extends HTMLElement {
+  connectedCallback() { this.attachShadow({mode: 'closed'}).innerHTML = '<span class="deep">Closed</span>'; }
+});
+customElements.define('x-embed', class extends HTMLElement {
+  connectedCallback() { this.attachShadow({mode: 'open'}).innerHTML = '<iframe srcdoc="<p>Framed</p>"></iframe>'; }
+});
+</script>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionAssertFocused, Selector: "input[type=search]"},
+		Step{Action: ActionAssertText, Selector: ".status", HasText: "Linked", Exact: true, Text: "Linked"},
+		Step{Action: ActionAssertText, Selector: "*", HasText: "Nested", Text: "Nested"},
+		Step{Action: ActionAssertTexts, Selector: ".deep", Texts: []string{"Light", "Deep", "Nested"}},
+		Step{Action: ActionClick, Selector: ".status", HasText: "up"},
+		Step{Action: ActionAssertTitle, Text: "clicked"},
+		Step{Action: ActionAssertCount, Role: "searchbox", Selector: "x-picker", Count: 1},
+		// One selector does not cross into a shadow root; within does.
+		Step{Action: ActionAssertCount, Selector: "x-picker input", Count: 0},
+		Step{Action: ActionAssertCount, Within: &Within{Selector: "x-picker"}, Selector: "input", Count: 1},
+		Step{Action: ActionWaitVisible, Frame: "iframe", Selector: "p", HasText: "Framed"},
+	)
+}
+
 // Element steps, evals and text waits with a frame act in that iframe's
 // document: same-origin, sandboxed without scripts, or cross-origin, and at
 // an offset in the page.
