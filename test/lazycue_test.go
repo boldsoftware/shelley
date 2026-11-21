@@ -117,7 +117,7 @@ func TestMain(m *testing.M) {
 		// fixture repository the tests run in, and not the tests: it
 		// would copy them instead of following its description.
 		RepoRoot:    filepath.Join(pkgDir, "..", "ui", "src"),
-		GitHidden:   []string{"e2e", ".spec.ts", "_test.go"},
+		GitHidden:   []string{"/e2e", ".spec.ts", "_test.go", "..", ":/", ":(top)"},
 		Verbose:     true,
 		ArtifactDir: os.Getenv("LAZYCUE_ARTIFACT_DIR"),
 		VideoDir:    os.Getenv("LAZYCUE_VIDEO_DIR"),

@@ -220,8 +220,8 @@ func setUp(ctx context.Context, setup func(s *shelley)) (*lazycue.Env, error) {
 		}
 		sh.start()
 	}); err != nil {
-		if sh.cmd != nil {
-			err = fmt.Errorf("%w\nserver log:\n%s", err, sh.logTail())
+		if tail := sh.logTail(); tail != "" {
+			err = fmt.Errorf("%w\nserver log:\n%s", err, tail)
 		}
 		sh.close()
 		return nil, err
@@ -574,8 +574,14 @@ func abort(w http.ResponseWriter, r *http.Request) {
 // start starts the server, if it has not yet started. Helpers that talk to
 // it start it, so setup can prepare files and environment first.
 func (s *shelley) start() {
-	if s.running() {
+	s.mu.Lock()
+	running, stopped := s.cmd != nil, s.stopped
+	s.mu.Unlock()
+	if running {
 		return
+	}
+	if stopped {
+		s.fail("the server has stopped")
 	}
 	log, err := os.Create(filepath.Join(s.dir, "server.log"))
 	s.check(err)
@@ -608,7 +614,7 @@ func (s *shelley) start() {
 		close(exited)
 	}()
 	s.mu.Lock()
-	stopped := s.stopped
+	stopped = s.stopped
 	if !stopped {
 		s.cmd, s.exited = cmd, exited
 	}
@@ -661,8 +667,15 @@ func (s *shelley) start() {
 		s.pass.ServeHTTP(w, r)
 	})}
 	s.mu.Lock()
-	s.proxy = proxy
+	stopped = s.stopped
+	if !stopped {
+		s.proxy = proxy
+	}
 	s.mu.Unlock()
+	if stopped {
+		ln.Close()
+		s.fail("stopped while starting")
+	}
 	go proxy.Serve(ln)
 	s.url = "http://" + ln.Addr().String()
 
