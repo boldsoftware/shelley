@@ -186,7 +186,7 @@ func (cm *ConversationManager) indexChapters(ctx context.Context, endSeq int64, 
 	ctx = llmhttp.WithConversationID(llm.WithPurpose(ctx, "chapter_index"), cm.conversationID)
 	response, err := service.Do(ctx, &llm.Request{
 		Messages:      []llm.Message{llm.UserStringMessage(chapterIndexPrompt + "\n" + string(payload))},
-		ThinkingLevel: llm.ThinkingLevelMedium,
+		ThinkingLevel: llm.ThinkingLevelLow,
 	})
 	if err != nil {
 		return err
