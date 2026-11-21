@@ -592,6 +592,70 @@ func TestClick(t *testing.T) {
 	)
 }
 
+// A click, hover or touch whose element moves away between the checks and
+// the events does not land on what took its place: as with Playwright's
+// hit-target interceptor, the events are blocked and the step tries again.
+func TestHitTarget(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0">
+<button id="near" style="position: absolute; left: 20px; top: 20px; width: 100px; height: 40px">Near</button>
+<button id="go" style="position: absolute; left: 20px; top: 20px; width: 100px; height: 40px">Go</button>
+<button id="badge" style="position: absolute; left: 20px; top: 100px; width: 100px; height: 40px"><span id="label">Inbox</span><b id="count" style="position: absolute; inset: 0">3</b></button>
+<iframe style="position: absolute; left: 20px; top: 200px; width: 400px; height: 100px" srcdoc="
+<button id='near' style='position: absolute; left: 20px; top: 20px; width: 100px; height: 40px'>Near</button>
+<button id='go' style='position: absolute; left: 20px; top: 20px; width: 100px; height: 40px'>Go</button>
+<script>
+// The step's checks run apart from the frame's scripts, so #go moves as the
+// mouse arrives, just before the click's events.
+window.shift = false;
+window.log = [];
+addEventListener('mousemove', () => {
+  if (!shift) return;
+  shift = false;
+  go.style.left = '200px';
+}, {capture: true});
+document.addEventListener('click', e => log.push(e.target.id));
+</script>"></iframe>
+<script>
+// With shift set, #go moves away just after the step checks what is at
+// its point, before the events come: a layout shift at the worst time.
+window.shift = false;
+window.log = [];
+const elementFromPoint = document.elementFromPoint;
+document.elementFromPoint = function(...args) {
+  if (shift) {
+    shift = false;
+    queueMicrotask(() => go.style.left = '200px');
+  }
+  return elementFromPoint.apply(this, args);
+};
+for (const type of ['click', 'touchstart']) {
+  document.addEventListener(type, e => log.push(type + ':' + e.target.id));
+}
+</script></body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: `shift = true`},
+		Step{Action: ActionClick, Selector: "#go"},
+		Step{Action: ActionEval, Expression: `log.join(' ')`, Expect: ptr("click:go")},
+		Step{Action: ActionEval, Expression: `go.style.left = '20px'; shift = true; log = []`},
+		Step{Action: ActionHover, Selector: "#go"},
+		Step{Action: ActionEval, Expression: `go.matches(':hover')`, Expect: ptr("true")},
+		Step{Action: ActionEval, Expression: `go.style.left = '20px'; shift = true`},
+		Step{Action: ActionTouch, Value: "start", Selector: "#go"},
+		Step{Action: ActionTouch, Value: "end"},
+		Step{Action: ActionEval, Expression: `log.join(' ') + ' ' + go.style.left`, Expect: ptr("touchstart:go click:go 200px")},
+		// Anything in the button or link an element is in counts as it.
+		Step{Action: ActionEval, Expression: `log = []`},
+		Step{Action: ActionClick, Selector: "#label", Timeout: "1s"},
+		Step{Action: ActionEval, Expression: `log.join(' ')`, Expect: ptr("click:count")},
+		// So does a click in a frame.
+		Step{Action: ActionEval, Expression: `frames[0].shift = true`},
+		Step{Action: ActionClick, Frame: "iframe", Selector: "#go"},
+		Step{Action: ActionEval, Expression: `frames[0].log.join(' ')`, Expect: ptr("go")},
+	)
+}
+
 // A page that fakes its clock, freezing requestAnimationFrame, can still be
 // clicked: the check that an element holds still uses the browser's frames.
 func TestClickWithFrozenFrames(t *testing.T) {

@@ -990,7 +990,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		if err != nil {
 			return err
 		}
-		return b.atPoint(ctx, tabCtx, timeout, step, step.Action == ActionClick, func(ctx context.Context, x, y float64) error {
+		return b.atPoint(ctx, tabCtx, st, timeout, step, step.Action == ActionClick, func(ctx context.Context, x, y float64) error {
 			if step.Action == ActionHover {
 				return moveMouse(ctx, st, x, y, max(step.Count, 1), mods)
 			}
@@ -1022,7 +1022,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 			typ = input.MouseReleased
 		}
 		if step.Point != "" {
-			return b.atPoint(ctx, tabCtx, timeout, step, false, func(ctx context.Context, x, y float64) error {
+			return b.atPoint(ctx, tabCtx, st, timeout, step, false, func(ctx context.Context, x, y float64) error {
 				if err := moveMouse(ctx, st, x, y, 1, mods); err != nil {
 					return err
 				}
@@ -1686,11 +1686,14 @@ const fillJS = `(function(el, sel, value) {
 // center of their bounding box may be on neither). Like Playwright, it
 // first scrolls the element into view and insists that it is visible,
 // holding still, enabled (when the step needs that) and not covered by
-// another element at that point; the step polls until it is. Format with
-// findJS, describe, dx, dy and whether to check enabled.
-const targetJS = `(async function(el, sel, dx, dy, checkEnabled) {
+// another element at that point (a hit anywhere in the button or link el is
+// in counts); the step polls until it is. Then it intercepts the step's
+// events. Format with findJS, describe, dx, dy, whether to check enabled and
+// the events to intercept, a JSON array.
+const targetJS = `(async function(el, sel, dx, dy, checkEnabled, events) {
 	` + isVisibleJS + `
 	` + hitTestJS + `
+	` + interceptJS + `
 	if (!el) return {err: 'no element matches ' + sel};
 	el.scrollIntoViewIfNeeded(true);
 	if (!isVisible(el)) return {err: sel + ' is not visible'};
@@ -1703,8 +1706,55 @@ const targetJS = `(async function(el, sel, dx, dy, checkEnabled) {
 	const box = dx === null ? [...el.getClientRects()].find(b => b.width > 0 && b.height > 0) || r : null;
 	const x = box ? box.left + box.width / 2 : r.left + dx;
 	const y = box ? box.top + box.height / 2 : r.top + dy;
-	return hitTest(el, sel, x, y);
-})(%s, %q, %s, %s, %t)`
+	const target = el.matches('input, textarea, select') || el.isContentEditable ? el : el.closest('button, [role=button], a, [role=link]') || el;
+	const hit = hitTest(target, sel, x, y);
+	if (!hit.err && events.length) intercept(target, sel, x, y, events);
+	return hit;
+})(%s, %q, %s, %s, %t, %s)`
+
+// interceptJS defines intercept(el, sel, x, y, types), Playwright's
+// hit-target interceptor, which guards against the page changing between
+// the checks and the events: the first trusted event of types aimed at x,y
+// (a hover's moves on the way are not) must find el there, else it and all
+// later events of types are blocked. window.__lazycueHit(stop) says what
+// was there instead, or nothing, and with stop removes the interceptor.
+const interceptJS = `function intercept(el, sel, x, y, types) {
+	if (window.__lazycueHit) window.__lazycueHit(true);
+	let miss;
+	const check = e => {
+		if (!e.isTrusted) return;
+		const p = window.TouchEvent && e instanceof TouchEvent ? e.touches[0] : e;
+		// A mouse event's coordinates are whole pixels.
+		if (miss === undefined && p && Math.abs(p.clientX - x) < 1 && Math.abs(p.clientY - y) < 1) miss = hitTest(el, sel, x, y).err || '';
+		if (miss) {
+			e.preventDefault();
+			e.stopImmediatePropagation();
+		}
+	};
+	for (const t of types) addEventListener(t, check, {capture: true, passive: false});
+	window.__lazycueHit = stop => {
+		if (stop) {
+			for (const t of types) removeEventListener(t, check, {capture: true});
+			delete window.__lazycueHit;
+		}
+		return miss || '';
+	};
+}`
+
+// hitEvents are the events whose target a pointer step checks as they come,
+// as Playwright does: a click's presses, releases and clicks, a hover's
+// moves, and the touches of a touch start (a tap's); a touch move has none.
+func hitEvents(step Step) []string {
+	switch {
+	case step.Action == ActionClick:
+		return []string{"mousedown", "mouseup", "pointerdown", "pointerup", "click", "auxclick", "dblclick", "contextmenu"}
+	case step.Action == ActionHover:
+		return []string{"mousemove"}
+	case step.Action == ActionTouch && step.Value == "start":
+		return []string{"pointerdown", "pointerup", "touchstart", "touchend", "touchcancel"}
+	}
+	return []string{}
+}
 
 // hitTestJS defines hitTest(el, sel, x, y): {x, y} when the element at that
 // point in the viewport, shadow DOM included, is el or inside it, else {err}
@@ -1736,18 +1786,23 @@ const framePointJS = `(function(f, sel, x, y) {
 // atPoint runs f at the point a pointer step aims at: x,y CSS pixels from the
 // top-left corner of the element step.Selector matches when both are set,
 // else its center, once targetJS finds the element ready there; in a frame,
-// that point maps to the page, where the iframe must be what is there.
-// Without a selector, x,y is a point in the viewport, taken as is.
-func (b *Browser) atPoint(ctx, tabCtx context.Context, timeout time.Duration, step Step, checkEnabled bool, f func(ctx context.Context, x, y float64) error) error {
+// that point maps to the page, where the iframe must be what is there. When
+// the element is no longer what the step's hitEvents find there, they are
+// blocked and the step tries again. Without a selector, x,y is a point in
+// the viewport, taken as is.
+func (b *Browser) atPoint(ctx, tabCtx context.Context, st *tabState, timeout time.Duration, step Step, checkEnabled bool, f func(ctx context.Context, x, y float64) error) error {
 	if (step.X == nil) != (step.Y == nil) {
 		return fmt.Errorf("%s: set both x and y, or neither", step.Action)
 	}
-	// dispatch runs f with time of its own: the element may have become
-	// ready just as the step's timeout ran out.
-	dispatch := func(x, y float64) error {
+	// run runs f with time of its own: the element may have become ready
+	// just as the step's timeout ran out.
+	run := func(f func(ctx context.Context) error) error {
 		runCtx, cancel := context.WithTimeout(tabCtx, timeout)
 		defer cancel()
-		return chromedp.Run(runCtx, chromedp.ActionFunc(func(ctx context.Context) error { return f(ctx, x, y) }))
+		return chromedp.Run(runCtx, chromedp.ActionFunc(f))
+	}
+	dispatch := func(x, y float64) error {
+		return run(func(ctx context.Context) error { return f(ctx, x, y) })
 	}
 	if step.Point != "" {
 		if step.Selector != "" || step.Role != "" || step.X != nil {
@@ -1769,30 +1824,64 @@ func (b *Browser) atPoint(ctx, tabCtx context.Context, timeout time.Duration, st
 	if step.X != nil {
 		dx, dy = strconv.FormatFloat(*step.X, 'g', -1, 64), strconv.FormatFloat(*step.Y, 'g', -1, 64)
 	}
-	expr := fmt.Sprintf(targetJS, findJS(step), describe(step), dx, dy, checkEnabled)
+	events := hitEvents(step)
+	eventsJSON, err := json.Marshal(events)
+	if err != nil {
+		return err
+	}
+	expr := fmt.Sprintf(targetJS, findJS(step), describe(step), dx, dy, checkEnabled, eventsJSON)
+	// landed says what was at the point instead of the element when the
+	// events came, if anything, and with stop removes the interceptor
+	// targetJS set up. An error (a click may have navigated) means they
+	// went through, as with Playwright.
+	landed := func(stop bool) string {
+		var miss string
+		_ = run(evalIn(step.Frame, fmt.Sprintf(`window.__lazycueHit ? window.__lazycueHit(%t) : ''`, stop), &miss).Do)
+		return miss
+	}
 	var target struct {
 		X, Y float64
 		Err  string
 	}
-	err := b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
+	var sendErr error
+	err = b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
 		target.Err = ""
 		if err := evalFind(runCtx, step, expr, &target); err != nil {
 			return err
 		}
 		if target.Err == "" && step.Frame != "" {
-			if err := chromedp.Run(runCtx, evaluate(0, fmt.Sprintf(framePointJS, frameJS(step.Frame), step.Frame, target.X, target.Y), &target)); err != nil {
+			err := chromedp.Run(runCtx, evaluate(0, fmt.Sprintf(framePointJS, frameJS(step.Frame), step.Frame, target.X, target.Y), &target))
+			if err != nil || target.Err != "" {
+				landed(true)
+			}
+			if err != nil {
 				return err
 			}
 		}
 		if target.Err != "" {
 			return fmt.Errorf("%s: %s", step.Action, target.Err)
 		}
+		sendErr = dispatch(target.X, target.Y)
+		miss := landed(step.Action != ActionTouch)
+		if step.Action == ActionTouch {
+			if miss != "" && sendErr == nil {
+				// Lift the finger, unseen too, before trying again.
+				sendErr = run(func(ctx context.Context) error {
+					st.touches = nil
+					return input.DispatchTouchEvent(input.TouchCancel, []*input.TouchPoint{}).Do(ctx)
+				})
+			}
+			landed(true)
+		}
+		if miss != "" && sendErr == nil {
+			return fmt.Errorf("%s: %s when the events came", step.Action, miss)
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	return dispatch(target.X, target.Y)
+	return sendErr
 }
 
 // point evaluates a step's point until it gives a finite {x, y} inside the
@@ -2140,7 +2229,7 @@ func (b *Browser) touch(ctx, tabCtx context.Context, st *tabState, timeout time.
 		return nil
 	}
 	if step.Points == "" {
-		return b.atPoint(ctx, tabCtx, timeout, step, false, func(ctx context.Context, x, y float64) error {
+		return b.atPoint(ctx, tabCtx, st, timeout, step, false, func(ctx context.Context, x, y float64) error {
 			return send(ctx, []*input.TouchPoint{{X: x, Y: y, ID: 1}})
 		})
 	}
@@ -2163,7 +2252,7 @@ func (b *Browser) touch(ctx, tabCtx context.Context, st *tabState, timeout time.
 		first.X, first.Y = &offsets[0][0], &offsets[0][1]
 		ox, oy = offsets[0][0], offsets[0][1]
 	}
-	return b.atPoint(ctx, tabCtx, timeout, first, false, func(ctx context.Context, x, y float64) error {
+	return b.atPoint(ctx, tabCtx, st, timeout, first, false, func(ctx context.Context, x, y float64) error {
 		var points []*input.TouchPoint
 		for i, o := range offsets {
 			points = append(points, &input.TouchPoint{X: x + o[0] - ox, Y: y + o[1] - oy, ID: float64(i + 1)})
