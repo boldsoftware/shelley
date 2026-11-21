@@ -1,0 +1,52 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation at /c/{{SLUG}} serves mocked usage and pricing. To \"open the spend popup\": navigate to /c/{{SLUG}}, then click the VISIBLE \".context-usage-label\" element (a hidden one may exist too; pick the visible one). \"The popup\" is the \".chat-context-popup\" element; \"the table\" is the element inside the popup with role \"table\" and accessible name \"Spend by model\". When a step says an element's text \"matches\" a regular expression, test the regular expression against the element's raw textContent in an eval that has \"expect\". Perform the steps in order. The spend popup keeps a tall breakdown above its toggle on a short (1280x720) desktop window.\n1. Open the spend popup.\n2. The popup's [data-testid=\"token-cost-total\"] text contains \"$11.98\".\n3. Wait (with an eval that has expect \"true\") until the popup's bottom edge (getBoundingClientRect().y + height) is at or above the top (y) of the visible \".context-usage-label\": popup.y + popup.height - label.y <= 0.\n4. Click the visible \".context-usage-label\" again. The popup becomes hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".chat-context-popup"
+      },
+      "selector": "[data-testid=\"token-cost-total\"]",
+      "text": "$11.98"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const popup = document.querySelector('.chat-context-popup'); const label = [...document.querySelectorAll('.context-usage-label')].find(el => el.checkVisibility()); if (!popup || !label) return 'missing'; const pr = popup.getBoundingClientRect(); const lr = label.getBoundingClientRect(); return String(pr.y + pr.height - lr.y <= 0); })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label",
+      "visible": true
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:10:43.615774073Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 68883,
+    "output_tokens": 1329,
+    "estimated_cost_usd": 0.0580674,
+    "mode": "generated"
+  }
+}

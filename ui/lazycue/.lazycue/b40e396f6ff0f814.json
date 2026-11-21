@@ -1,0 +1,49 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation at /c/{{SLUG}} serves mocked usage and pricing. To \"open the spend popup\": navigate to /c/{{SLUG}}, then click the VISIBLE \".context-usage-label\" element (a hidden one may exist too; pick the visible one). \"The popup\" is the \".chat-context-popup\" element; \"the table\" is the element inside the popup with role \"table\" and accessible name \"Spend by model\". When a step says an element's text \"matches\" a regular expression, test the regular expression against the element's raw textContent in an eval that has \"expect\". Perform the steps in order. Failed pricing lookups (the model costs request fails with HTTP 503) are not counted as confirmed unpriced calls.\n1. Open the spend popup.\n2. The popup's text contains \"Pricing lookup failed\" and contains \"1 call has no model pricing\", and does not contain \"3 calls have no model pricing\".\n3. \"The indirect row\" is the element with role \"row\" in the popup that contains an element with role \"rowheader\" whose accessible name is exactly \"compaction\". Inside the indirect row's \".token-cost-cell\" elements, find the element whose whole text is exactly \"1 call\" and the element whose whole text is exactly \"no pricing\" (the innermost such elements). In one eval with expect \"true\", their getBoundingClientRect() boxes do not overlap: one ends left of (or exactly where) the other starts, horizontally or vertically.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-context-popup",
+      "text": "Pricing lookup failed"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-context-popup",
+      "text": "1 call has no model pricing"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".chat-context-popup",
+      "text": "3 calls have no model pricing"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const row = [...document.querySelectorAll('.chat-context-popup tr')].find(r => [...r.querySelectorAll('th')].some(th => th.textContent.trim() === 'compaction')); if (!row) return 'no compaction row'; const els = [...row.querySelectorAll('.token-cost-cell *')]; const pick = t => els.find(e => e.textContent.trim() === t && ![...e.children].some(c => c.textContent.trim() === t)); const a = pick('1 call'), b = pick('no pricing'); if (!a || !b) return 'missing ' + (a ? 'no pricing' : '1 call'); const c = a.getBoundingClientRect(), u = b.getBoundingClientRect(); return c.x + c.width <= u.x || u.x + u.width <= c.x || c.y + c.height <= u.y || u.y + u.height <= c.y; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:26:44Z",
+    "hostname": "phil-dev",
+    "model": "hand-written",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_cost_usd": 0,
+    "mode": "hand-written"
+  }
+}

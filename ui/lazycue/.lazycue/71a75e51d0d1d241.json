@@ -1,0 +1,154 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation at /c/{{SLUG}} serves mocked usage and pricing. To \"open the spend popup\": navigate to /c/{{SLUG}}, then click the VISIBLE \".context-usage-label\" element (a hidden one may exist too; pick the visible one). \"The popup\" is the \".chat-context-popup\" element; \"the table\" is the element inside the popup with role \"table\" and accessible name \"Spend by model\". When a step says an element's text \"matches\" a regular expression, test the regular expression against the element's raw textContent in an eval that has \"expect\". Perform the steps in order. The spend popup shows per-model main and sub-agent spend with subtotals at a 1280px-wide window.\n1. Open the spend popup. The table is visible.\n2. The table's column headers (role \"columnheader\" inside the table) have exactly these texts, in order: \"Model / tokens\", \"Main conversation\", \"Sub-agents\".\n3. The table's [data-testid=\"conversation-cost-subtotal\"] text contains \"$3.73\"; its [data-testid=\"subagent-cost-row\"] text contains \"$8.25\"; its [data-testid=\"token-cost-total\"] text contains \"≈$11.98\".\n4. \"The breakdowns\" are the table's \".token-cost-model-breakdown\" elements: there are exactly 3.\n5. The first breakdown's \".token-cost-model-row\" text matches /main-model.*\\$3.45.*—/, and the second breakdown's \".token-cost-model-row\" text matches /review-model.*—.*\\$7.50/.\n6. The second breakdown's '.token-cost-legend-row [data-scope=\"subagents\"]' elements are exactly 4, and their texts match, in order: /250k\\s*@ \\$8\\/M\\s*\\$2.00/, /2.0M\\s*@ \\$2\\/M\\s*\\$4.00/, /200k\\s*@ \\$2.50\\/M\\s*\\$0.500/ and /5.0M\\s*@ \\$0.20\\/M\\s*\\$1.00/.\n7. The third breakdown's text contains \"unpriced-model\" and contains \"$0.750 reported\"; it has no \".token-cost-legend-row .token-cost-legend-unit\" element (count 0).\n8. The popup's text contains \"1 call has no model pricing\" and contains \"Sub-agent model totals include nested sub-agents and indirect usage.\".\n9. The table's text contains \"Other (indirect)\" and contains \"in model totals\".\n10. In one eval with expect \"true\", using getBoundingClientRect(): the table's second column header (\"Main conversation\") and third column header (\"Sub-agents\") have exactly the same y; the third's x is >= the second's x + width; the popup's x is >= 0 and its x + width is <= 1280; and the popup's scrollWidth <= its clientWidth.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".chat-context-popup"
+      },
+      "role": "table",
+      "name": "Spend by model"
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "role": "table",
+        "name": "Spend by model"
+      },
+      "role": "columnheader",
+      "texts": [
+        "Model / tokens",
+        "Main conversation",
+        "Sub-agents"
+      ]
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "role": "table",
+        "name": "Spend by model"
+      },
+      "selector": "[data-testid=\"conversation-cost-subtotal\"]",
+      "text": "$3.73"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "role": "table",
+        "name": "Spend by model"
+      },
+      "selector": "[data-testid=\"subagent-cost-row\"]",
+      "text": "$8.25"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "role": "table",
+        "name": "Spend by model"
+      },
+      "selector": "[data-testid=\"token-cost-total\"]",
+      "text": "≈$11.98"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "role": "table",
+        "name": "Spend by model"
+      },
+      "selector": ".token-cost-model-breakdown",
+      "count": 3
+    },
+    {
+      "action": "eval",
+      "expression": "/main-model.*\\$3\\.45.*—/.test(document.querySelectorAll('table[aria-label=\"Spend by model\"] .token-cost-model-breakdown')[0].querySelector('.token-cost-model-row').textContent)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "/review-model.*—.*\\$7\\.50/.test(document.querySelectorAll('table[aria-label=\"Spend by model\"] .token-cost-model-breakdown')[1].querySelector('.token-cost-model-row').textContent)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('table[aria-label=\"Spend by model\"] .token-cost-model-breakdown')[1].querySelectorAll('.token-cost-legend-row [data-scope=\"subagents\"]').length",
+      "expect": "4"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const els = document.querySelectorAll('table[aria-label=\"Spend by model\"] .token-cost-model-breakdown')[1].querySelectorAll('.token-cost-legend-row [data-scope=\"subagents\"]'); return [/250k\\s*@ \\$8\\/M\\s*\\$2\\.00/.test(els[0].textContent), /2\\.0M\\s*@ \\$2\\/M\\s*\\$4\\.00/.test(els[1].textContent), /200k\\s*@ \\$2\\.50\\/M\\s*\\$0\\.500/.test(els[2].textContent), /5\\.0M\\s*@ \\$0\\.20\\/M\\s*\\$1\\.00/.test(els[3].textContent)].every(Boolean); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('table[aria-label=\"Spend by model\"] .token-cost-model-breakdown')[2].textContent.includes('unpriced-model')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "/\\$0\\.750 reported/.test(document.querySelectorAll('table[aria-label=\"Spend by model\"] .token-cost-model-breakdown')[2].textContent)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('table[aria-label=\"Spend by model\"] .token-cost-model-breakdown')[2].querySelectorAll('.token-cost-legend-row .token-cost-legend-unit').length",
+      "expect": "0"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-context-popup",
+      "text": "1 call has no model pricing"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-context-popup",
+      "text": "Sub-agent model totals include nested sub-agents and indirect usage."
+    },
+    {
+      "action": "assert_text_contains",
+      "role": "table",
+      "name": "Spend by model",
+      "within": {
+        "selector": ".chat-context-popup"
+      },
+      "text": "Other (indirect)"
+    },
+    {
+      "action": "assert_text_contains",
+      "role": "table",
+      "name": "Spend by model",
+      "within": {
+        "selector": ".chat-context-popup"
+      },
+      "text": "in model totals"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const table = document.querySelector('table[aria-label=\"Spend by model\"]'); const headers = table.querySelectorAll('th[scope=\"col\"]'); const h2 = headers[1].getBoundingClientRect(); const h3 = headers[2].getBoundingClientRect(); const popup = document.querySelector('.chat-context-popup'); const popupRect = popup.getBoundingClientRect(); return ( h2.y === h3.y && h3.x >= h2.x + h2.width && popupRect.x >= 0 && popupRect.x + popupRect.width <= 1280 && popup.scrollWidth <= popup.clientWidth ); })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:04:55.271802985Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 419793,
+    "output_tokens": 12402,
+    "estimated_cost_usd": 0.3970407,
+    "mode": "generated"
+  }
+}

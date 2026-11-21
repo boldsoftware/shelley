@@ -1,0 +1,75 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation at /c/{{SLUG}} serves mocked usage and pricing. To \"open the spend popup\": navigate to /c/{{SLUG}}, then click the VISIBLE \".context-usage-label\" element (a hidden one may exist too; pick the visible one). \"The popup\" is the \".chat-context-popup\" element; \"the table\" is the element inside the popup with role \"table\" and accessible name \"Spend by model\". When a step says an element's text \"matches\" a regular expression, test the regular expression against the element's raw textContent in an eval that has \"expect\". Perform the steps in order. The spend popup aligns a model's main and sub-agent usage in one table at a 1280px-wide window.\n1. Open the spend popup. The table is visible.\n2. The table's column headers (role \"columnheader\" inside the table) have exactly these texts, in order: \"Model / tokens\", \"Main conversation\", \"Sub-agents\".\n3. \"The model\" is the table's \".token-cost-model-breakdown\" element containing a \".token-cost-model-name\" element whose text contains \"main-model\": there is exactly 1 such element.\n4. \"The input row\" is the element with role \"row\" inside the model that contains an element with role \"rowheader\" whose accessible name is exactly \"Input\". Its cells are its elements with role \"cell\" (the row header is not one). The first cell's text contains \"1.0M\" and \"$2.00\"; the second cell's text contains \"2.0M\" and \"$4.00\".\n5. In one eval with expect \"true\", using getBoundingClientRect(): the first and second cells have exactly the same y, the second's x is >= the first's x + width, and the table's scrollWidth <= its clientWidth.\n6. The popup has no element with role \"region\" and accessible name exactly \"Sub-agents\" (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".chat-context-popup"
+      },
+      "role": "table",
+      "name": "Spend by model"
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "role": "table",
+        "name": "Spend by model"
+      },
+      "role": "columnheader",
+      "texts": [
+        "Model / tokens",
+        "Main conversation",
+        "Sub-agents"
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const table = document.querySelector('.chat-context-popup table[aria-label=\"Spend by model\"]'); const breakdowns = table.querySelectorAll('.token-cost-model-breakdown'); let count = 0; for (const bd of breakdowns) { const name = bd.querySelector('.token-cost-model-name'); if (name && name.textContent.includes('main-model')) count++; } return count; })()",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const table = document.querySelector('.chat-context-popup table[aria-label=\"Spend by model\"]'); const breakdowns = table.querySelectorAll('.token-cost-model-breakdown'); let mainModel = null; for (const bd of breakdowns) { const name = bd.querySelector('.token-cost-model-name'); if (name && name.textContent.includes('main-model')) { mainModel = bd; break; } } const rows = mainModel.querySelectorAll('tr'); let inputRow = null; for (const row of rows) { const th = row.querySelector('th'); if (th && th.textContent.trim() === 'Input') { inputRow = row; break; } } const cells = inputRow.querySelectorAll('td'); const c1text = cells[0].textContent; const c2text = cells[1].textContent; return (c1text.includes('1.0M') && c1text.includes('$2.00') && c2text.includes('2.0M') && c2text.includes('$4.00')).toString(); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const table = document.querySelector('.chat-context-popup table[aria-label=\"Spend by model\"]'); const breakdowns = table.querySelectorAll('.token-cost-model-breakdown'); let mainModel = null; for (const bd of breakdowns) { const name = bd.querySelector('.token-cost-model-name'); if (name && name.textContent.includes('main-model')) { mainModel = bd; break; } } const rows = mainModel.querySelectorAll('tr'); let inputRow = null; for (const row of rows) { const th = row.querySelector('th'); if (th && th.textContent.trim() === 'Input') { inputRow = row; break; } } const cells = inputRow.querySelectorAll('td'); const r1 = cells[0].getBoundingClientRect(); const r2 = cells[1].getBoundingClientRect(); return (r1.y === r2.y && r2.x >= r1.x + r1.width && table.scrollWidth <= table.clientWidth).toString(); })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".chat-context-popup"
+      },
+      "role": "region",
+      "name": "Sub-agents",
+      "exact": true,
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:12:11.047689652Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 231225,
+    "output_tokens": 8397,
+    "estimated_cost_usd": 0.24959820000000002,
+    "mode": "generated"
+  }
+}
