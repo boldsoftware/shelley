@@ -1,0 +1,72 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The performance-hud flag shows the HUD with live counters. The flag is on. The conversation /c/{{SLUG}} was started with \"echo perf-hud-on\". \"The HUD\" is the \".perf-hud\" element. 1. Navigate to /c/{{SLUG}}. 2. The element with data-testid \"message-input\" should be visible (allow 30s). 3. The HUD should be visible (allow 10s). 4. The HUD's first \"tbody tr\" should be visible (allow 5s): loading a conversation mounts messages, which count. 5. The HUD must hold exactly 0 \".perf-hud-empty\" elements (its \"no counters yet\" row). 6. Click the HUD's \".perf-hud-title\" (not the header's right side: its reset/copy/pause buttons stop the click). 7. Eval document.querySelector('.perf-hud').classList.contains('collapsed') until it returns true. 8. The HUD's \".perf-hud-mini\" should be visible. 9. Click the HUD's \".perf-hud-title\" again. 10. Long tasks (main-thread blocks over 50ms) get their own section. Reset the counters, register a sentinel counter, then block the main thread in a real event-loop task (work run directly in a DevTools evaluate is not reported as a long task), with exactly this eval: new Promise((resolve) =\u003e { const perf = window.__shelleyPerf; perf.reset(); perf.count('test.suspect'); setTimeout(() =\u003e { const t0 = performance.now(); while (performance.now() - t0 \u003c 80) {} resolve('blocked'); }, 0); }), expecting \"blocked\". 11. The HUD's first \".perf-hud-longtask\" should be visible (allow 5s). 12. The HUD's \".perf-hud-longtask-suspects\" element containing \"test.suspect\" (has_text) should be visible: the sentinel is a suspect for that long task.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".perf-hud",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".perf-hud tbody tr",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".perf-hud .perf-hud-empty",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".perf-hud .perf-hud-title"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.perf-hud').classList.contains('collapsed')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".perf-hud .perf-hud-mini"
+    },
+    {
+      "action": "click",
+      "selector": ".perf-hud .perf-hud-title"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve) =\u003e { const perf = window.__shelleyPerf; perf.reset(); perf.count('test.suspect'); setTimeout(() =\u003e { const t0 = performance.now(); while (performance.now() - t0 \u003c 80) {} resolve('blocked'); }, 0); })",
+      "expect": "blocked"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".perf-hud .perf-hud-longtask",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".perf-hud .perf-hud-longtask-suspects",
+      "has_text": "test.suspect"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:39:35.495977633Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14576,
+    "output_tokens": 1001,
+    "estimated_cost_usd": 0.04588155,
+    "mode": "generated"
+  }
+}

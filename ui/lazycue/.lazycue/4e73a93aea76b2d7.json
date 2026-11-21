@@ -1,0 +1,161 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Loads from IndexedDB show a status, loads from memory render at once, and the HUD reports both. The performance-hud flag is on. The conversation {{ID}} (slug {{CSLUG}}) is a medium /debug/loremipsum conversation of exactly {{COUNT}} messages. window.__shelleyLoadingStatuses lists, for the current page, each text the loading status (\".conversation-loading\") showed, as {text, messageElements} with the number of [data-testid=\"message\"] elements at that moment. Call \"mark\" notes where the browser's requests are; call \"full loads\" returns how many full loads of the conversation (GET /api/conversation/{{ID}} without last_sequence_id) the browser has made since. \"The HUD\" is the \".perf-hud\" element; \"the latest load\" is window.__shelleyPerf.loads().at(-1). 1. Navigate to /c/{{ID}}. 2. The element with data-testid \"message-input\" should be visible (allow 30s), and the first element with data-testid \"message\" too (allow 30s). 3. Wait until IndexedDB has the whole history: eval this until it returns true (allow 30s): (async () =\u003e { const db = await new Promise((resolve, reject) =\u003e { const req = indexedDB.open('shelley-messages'); req.onsuccess = () =\u003e resolve(req.result); req.onerror = () =\u003e reject(req.error); }); try { if (!db.objectStoreNames.contains('conversation_meta')) return false; const row = await new Promise((resolve) =\u003e { const get = db.transaction('conversation_meta', 'readonly').objectStore('conversation_meta').get('{{ID}}'); get.onsuccess = () =\u003e resolve(get.result); get.onerror = () =\u003e resolve(undefined); }); return !!(row \u0026\u0026 row.has_full_history); } finally { db.close(); } })(). 4. Call \"mark\"; it returns \"marked\". 5. Reload. 6. The first element with data-testid \"message\" should be visible (allow 30s). 7. Eval window.__shelleyLoadingStatuses.some((s) =\u003e s.text.includes('{{STATUS}}') \u0026\u0026 s.messageElements === 0): it must return true (the status named the message count while no message was mounted yet). 8. There should be exactly 0 \".conversation-loading\" elements (allow 30s). 9. Call \"full loads\": it must return exactly \"0\" (the history came from IndexedDB). 10. Eval (() =\u003e { const l = window.__shelleyPerf.loads().at(-1); return !!l \u0026\u0026 l.conversationId === '{{ID}}' \u0026\u0026 l.source === 'indexeddb' \u0026\u0026 l.messages === {{COUNT}} \u0026\u0026 l.totalMs \u003e 0 \u0026\u0026 l.renderMs \u003e 0; })(): true. 11. The HUD's first \".perf-hud-load\" should contain \"IndexedDB\" (allow 5s). 12. The expanded HUD overlays the drawer, so collapse it: click the HUD's \".perf-hud-title\". 13. Eval document.querySelector('.perf-hud').classList.contains('collapsed') until it returns true. 14. In one eval without \"expect\", empty the list: window.__shelleyLoadingStatuses.length = 0. 15. Start a new conversation from the header: click the \".header\" button named exactly \"New Conversation\" (role \"button\"; if the header does not show it, click the button named exactly \"More options\", then the button named exactly \"New Conversation\" in \".chat-overflow-popover\"). 16. The URL should end in /new (assert_url, exact path \"/new\"). 17. Open the conversation list: on a phone, click the button with aria-label \"Open conversations\" and \".drawer.open\" should be visible (on a wide screen, click the button with aria-label \"Expand sidebar\" if it shows instead). 18. \"The row\" is the element inside a \".conversation-title\" whose text is exactly \"{{CSLUG}}\" (within \".conversation-title\", selector \"*\", has_text \"{{CSLUG}}\", exact). Scroll it into view if needed, and it should then be in the viewport (assert_in_viewport). 19. Click the row. 20. The first element with data-testid \"message\" should be visible (allow 30s). 21. Eval JSON.stringify(window.__shelleyLoadingStatuses): exactly \"[]\" (a memory hit renders in the switch's own flush: no loading status). 22. Eval (() =\u003e { const l = window.__shelleyPerf.loads().at(-1); return !!l \u0026\u0026 l.conversationId === '{{ID}}' \u0026\u0026 l.source === 'memory' \u0026\u0026 l.messages === {{COUNT}}; })() until it returns true (the load is recorded once rendered, which can trail the first message showing). 23. Click the HUD's \".perf-hud-title\" to expand it. 24. The HUD's first \".perf-hud-load\" should contain \"Memory\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const db = await new Promise((resolve, reject) =\u003e { const req = indexedDB.open('shelley-messages'); req.onsuccess = () =\u003e resolve(req.result); req.onerror = () =\u003e reject(req.error); }); try { if (!db.objectStoreNames.contains('conversation_meta')) return false; const row = await new Promise((resolve) =\u003e { const get = db.transaction('conversation_meta', 'readonly').objectStore('conversation_meta').get('{{ID}}'); get.onsuccess = () =\u003e resolve(get.result); get.onerror = () =\u003e resolve(undefined); }); return !!(row \u0026\u0026 row.has_full_history); } finally { db.close(); } })()",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "mark",
+      "expect": "marked"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__shelleyLoadingStatuses.some((s) =\u003e s.text.includes('{{STATUS}}') \u0026\u0026 s.messageElements === 0)",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-loading",
+      "count": 0,
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "full loads",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const l = window.__shelleyPerf.loads().at(-1); return !!l \u0026\u0026 l.conversationId === '{{ID}}' \u0026\u0026 l.source === 'indexeddb' \u0026\u0026 l.messages === {{COUNT}} \u0026\u0026 l.totalMs \u003e 0 \u0026\u0026 l.renderMs \u003e 0; })()",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".perf-hud .perf-hud-load",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".perf-hud .perf-hud-load",
+      "text": "IndexedDB"
+    },
+    {
+      "action": "click",
+      "selector": ".perf-hud .perf-hud-title"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.perf-hud').classList.contains('collapsed')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__shelleyLoadingStatuses.length = 0"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "click",
+          "selector": ".header",
+          "role": "button",
+          "name": "New Conversation",
+          "exact": true
+        }
+      ],
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_url",
+      "value": "/new"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": ".conversation-title",
+      "has_text": "{{CSLUG}}",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-title",
+      "has_text": "{{CSLUG}}",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__shelleyLoadingStatuses)",
+      "expect": "[]"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const l = window.__shelleyPerf.loads().at(-1); return !!l \u0026\u0026 l.conversationId === '{{ID}}' \u0026\u0026 l.source === 'memory' \u0026\u0026 l.messages === {{COUNT}}; })()",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".perf-hud .perf-hud-title"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".perf-hud .perf-hud-load",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".perf-hud .perf-hud-load",
+      "text": "Memory"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:51:10.462561158Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 143743,
+    "output_tokens": 6135,
+    "estimated_cost_usd": 0.18342854999999997,
+    "mode": "generated"
+  }
+}

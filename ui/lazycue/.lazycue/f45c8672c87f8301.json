@@ -1,0 +1,35 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The performance HUD is hidden by default, while window.__shelleyPerf is still there. The conversation /c/{{SLUG}} was started with \"echo perf-hud-off\". 1. Navigate to /c/{{SLUG}}. 2. The element with data-testid \"message-input\" should be visible (allow 30s). 3. There must be exactly 0 \".perf-hud\" elements. 4. Eval (() =\u003e { const perf = window.__shelleyPerf; return perf ? Object.keys(perf.snapshot()).length : -1; })() \u003e 0: it must return true (the counters exist and have names).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".perf-hud",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const perf = window.__shelleyPerf; return perf ? Object.keys(perf.snapshot()).length : -1; })() \u003e 0",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:48:09.898476408Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6567,
+    "output_tokens": 205,
+    "estimated_cost_usd": 0.0075138,
+    "mode": "generated"
+  }
+}
