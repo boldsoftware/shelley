@@ -167,6 +167,9 @@ func TestInlinedVar(t *testing.T) {
 	if got := inlinedVar([]Step{{Action: ActionEval, Expression: "x('/tmp/fixture-123/a')"}}, vars); got != "DIR" {
 		t.Errorf("inlined value: got %q, want DIR", got)
 	}
+	if got := inlinedVar([]Step{{Action: ActionRetry, Steps: []Step{{Action: ActionFill, Value: "/tmp/fixture-123"}}}}, vars); got != "DIR" {
+		t.Errorf("value inlined in a retry: got %q, want DIR", got)
+	}
 }
 
 func TestCacheConversationMarksOnlyTheLastBlock(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // runSteps runs steps in br against env, failing the test on any failed step.
@@ -523,6 +524,7 @@ func TestPlaceholdersAndCalls(t *testing.T) {
 		Step{Action: ActionEval, Expression: `document.getElementById('{{ID}}').textContent`, Expect: ptr("{{WORD}}")},
 		// A call with an expectation polls until it holds.
 		Step{Action: ActionCall, Value: "count", Expect: ptr("3")},
+		Step{Action: ActionRetry, Steps: []Step{{Action: ActionAssertText, Selector: "#{{ID}}", Text: "{{WORD}}"}}},
 	)
 	if err := failSteps(t, br, env, Step{Action: ActionAssertText, Selector: "#{{NOPE}}", Text: "x"}); !strings.Contains(err.Error(), "no value for {{NOPE}}") {
 		t.Errorf("missing placeholder error = %v", err)
@@ -532,5 +534,39 @@ func TestPlaceholdersAndCalls(t *testing.T) {
 	}
 	if err := failSteps(t, br, env, Step{Action: ActionCall, Value: "nope"}); !strings.Contains(err.Error(), "have: boom, count") {
 		t.Errorf("unknown call error = %v", err)
+	}
+}
+
+// A retry block starts its steps over until a whole pass succeeds, as
+// Playwright's expect.poll and toPass do.
+func TestRetry(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<button id="copy">Copy</button><textarea id="t"></textarea>
+<script>window.n = 0; document.getElementById('copy').onclick = () => document.getElementById('t').value = ++n >= 3 ? 'output' : '';</script>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionRetry, Steps: []Step{
+			{Action: ActionClick, Selector: "#copy"},
+			{Action: ActionAssertValue, Selector: "#t", Value: "output", Timeout: "100ms"},
+		}},
+		Step{Action: ActionEval, Expression: "n", Expect: ptr("3")},
+	)
+	// It fails at its timeout with the error of the step that failed last;
+	// steps inside without a timeout of their own wait 1s.
+	start := time.Now()
+	err := failSteps(t, br, env, Step{Action: ActionRetry, Timeout: "2s", Steps: []Step{
+		{Action: ActionClick, Selector: "#copy"},
+		{Action: ActionAssertValue, Selector: "#t", Value: "never"},
+	}})
+	if want := `step 0 (retry): after 2s, its step 1 (assert_value) still fails: assert_value: expected "never", got "output"`; err.Error() != want {
+		t.Errorf("failed retry = %v, want %s", err, want)
+	}
+	if d := time.Since(start); d < 2*time.Second || d > 4*time.Second {
+		t.Errorf("failed retry took %s", d)
+	}
+	if err := failSteps(t, br, env, Step{Action: ActionRetry, Steps: []Step{{Action: ActionRetry, Steps: []Step{{Action: ActionClick, Selector: "#copy"}}}}}); !strings.Contains(err.Error(), "retry: a retry block cannot hold another") {
+		t.Errorf("nested retry = %v", err)
 	}
 }

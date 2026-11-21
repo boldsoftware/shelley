@@ -258,10 +258,20 @@ func applyMedia(ctx context.Context, st *tabState) error {
 // placeholder matches a {{NAME}} placeholder.
 var placeholder = regexp.MustCompile(`\{\{([A-Za-z0-9_]+)\}\}`)
 
-// substitute replaces a step's {{NAME}} placeholders with their values in
-// vars. A placeholder vars has no value for is an error rather than text to
-// type or look for.
+// substitute replaces a step's {{NAME}} placeholders, and those of the steps
+// it holds, with their values in vars. A placeholder vars has no value for is
+// an error rather than text to type or look for.
 func substitute(step Step, vars map[string]string) (Step, error) {
+	if step.Steps != nil {
+		steps := make([]Step, len(step.Steps))
+		for i, s := range step.Steps {
+			var err error
+			if steps[i], err = substitute(s, vars); err != nil {
+				return step, err
+			}
+		}
+		step.Steps = steps
+	}
 	var missing []string
 	fields := []*string{
 		&step.URL, &step.Selector, &step.HasText, &step.Value, &step.Text,
@@ -501,6 +511,14 @@ func (b *Browser) executeStep(ctx context.Context, env *Env, step Step) (string,
 	if err != nil {
 		return "", err
 	}
+	return b.run(ctx, env, step)
+}
+
+// run runs a step whose placeholders have been substituted.
+func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) {
+	if step.Action == ActionRetry {
+		return "", b.retry(ctx, env, step)
+	}
 	if step.Action == ActionCall {
 		return env.call(ctx, step)
 	}
@@ -527,6 +545,56 @@ func (b *Browser) executeStep(ctx context.Context, env *Env, step Step) (string,
 		})
 	}
 	return "", b.executeStepErr(ctx, tabCtx, st, env.BaseURL, step)
+}
+
+// retryBackoff is how long a retry step waits before each pass after the
+// first, as Playwright's toPass: the last wait repeats.
+var retryBackoff = []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, time.Second}
+
+// retry runs a retry step: its steps in order, starting over from the first
+// when one fails, until a whole pass succeeds or the step's timeout passes.
+// Its steps wait 1s unless they say otherwise, so that the block does the
+// waiting.
+func (b *Browser) retry(ctx context.Context, env *Env, step Step) error {
+	if len(step.Steps) == 0 {
+		return errors.New("retry: no steps")
+	}
+	if step.Tab != "" {
+		return errors.New("retry: set tab on the steps inside, not on the block")
+	}
+	steps := slices.Clone(step.Steps)
+	for i := range steps {
+		if steps[i].Action == ActionRetry {
+			return errors.New("retry: a retry block cannot hold another")
+		}
+		if steps[i].Timeout == "" {
+			steps[i].Timeout = "1s"
+		}
+	}
+	timeout := parseTimeout(step.Timeout, defaultStepTimeout)
+	deadline := time.Now().Add(timeout)
+	for pass := 0; ; pass++ {
+		err := func() error {
+			for i, s := range steps {
+				if _, err := b.run(ctx, env, s); err != nil {
+					return fmt.Errorf("its step %d (%s) still fails: %w", i, s.Action, err)
+				}
+			}
+			return nil
+		}()
+		if err == nil {
+			return nil
+		}
+		left := time.Until(deadline)
+		if left <= 0 {
+			return fmt.Errorf("after %s, %w", timeout, err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(min(retryBackoff[min(pass, len(retryBackoff)-1)], left)):
+		}
+	}
 }
 
 // expectResult runs an eval or call step's probe. Without an expectation the

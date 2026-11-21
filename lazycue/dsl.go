@@ -3,6 +3,7 @@ package lazycue
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Step represents a single action in a DSL test script.
@@ -44,6 +45,8 @@ type Step struct {
 	Scale  float64 `json:"scale,omitempty"`
 	Mobile *bool   `json:"mobile,omitempty"`
 	Touch  *bool   `json:"touch,omitempty"`
+	// Steps are a retry step's steps.
+	Steps []Step `json:"steps,omitempty"`
 }
 
 // Supported action names.
@@ -89,6 +92,7 @@ const (
 	ActionWheel              = "wheel"
 	ActionTouch              = "touch"
 	ActionCollectGarbage     = "collect_garbage"
+	ActionRetry              = "retry"
 )
 
 // ParseSteps parses a JSON array of steps.
@@ -208,6 +212,12 @@ func stepSummary(s Step) string {
 		return fmt.Sprintf("assert_count %s %d", picked(s), s.Count)
 	case ActionSleep:
 		return "sleep " + s.Timeout
+	case ActionRetry:
+		var inner []string
+		for _, n := range s.Steps {
+			inner = append(inner, StepSummary(n))
+		}
+		return "retry {" + strings.Join(inner, "; ") + "}"
 	default:
 		return s.Action
 	}

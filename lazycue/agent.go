@@ -222,6 +222,7 @@ Available DSL actions:
 - assert_title: {"action": "assert_title", "text": "..."}
 - assert_count: {"action": "assert_count", "selector": "...", "count": 3}
 - sleep: {"action": "sleep", "timeout": "1s"}
+- retry: {"action": "retry", "steps": [...], "timeout": "15s"} - Run the steps in order and, when one fails, start over from the first (after 100ms, 250ms, 500ms, then every 1s) until a whole pass succeeds or the timeout (default 15s) passes, like Playwright's expect.poll or toPass. Steps inside without a timeout of their own get 1s, so the block does the waiting. Use it when an action must be repeated until an assertion after it holds, e.g. choose a menu item that copies a terminal's output into an input, then assert the input's value. Retries do not nest.
 - close_tab: {"action": "close_tab", "tab": "B"} - Close a tab opened by an earlier step, as a user would.
 - collect_garbage: {"action": "collect_garbage"} - Force a full garbage collection in the page, e.g. before checking that what only a WeakRef holds was freed.
 
@@ -414,7 +415,7 @@ func inlinedVar(steps []Step, runs ...map[string]string) string {
 			if len(v) < 4 {
 				continue
 			}
-			for _, s := range steps {
+			for _, s := range withNested(steps) {
 				for _, f := range []string{s.URL, s.Selector, s.HasText, s.Value, s.Text, s.Expression, deref(s.Expect), s.Attribute, s.Key, s.Points} {
 					if strings.Contains(f, v) {
 						return name
@@ -424,6 +425,15 @@ func inlinedVar(steps []Step, runs ...map[string]string) string {
 		}
 	}
 	return ""
+}
+
+// withNested lists steps and the steps they hold.
+func withNested(steps []Step) []Step {
+	var all []Step
+	for _, s := range steps {
+		all = append(append(all, s), withNested(s.Steps)...)
+	}
+	return all
 }
 
 // cacheConversation returns messages with the last block marked for prompt
