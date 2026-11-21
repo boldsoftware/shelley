@@ -23,6 +23,10 @@ type Step struct {
 	Exact bool `json:"exact,omitempty"`
 	// Visible keeps only the visible matches.
 	Visible bool `json:"visible,omitempty"`
+	// Nth, when set, keeps only the match at that index once every other
+	// field has narrowed them, as Playwright's nth: 0 is the first, -1 the
+	// last.
+	Nth *int `json:"nth,omitempty"`
 	// Within keeps only the matches inside an element it picks out, as
 	// Playwright's chained locators do.
 	Within *Within `json:"within,omitempty"`
@@ -81,11 +85,12 @@ type Within struct {
 	HasText  string `json:"has_text,omitempty"`
 	Exact    bool   `json:"exact,omitempty"`
 	Visible  bool   `json:"visible,omitempty"`
+	Nth      *int   `json:"nth,omitempty"`
 }
 
 // step is a step that picks out what w does.
 func (w Within) step() Step {
-	return Step{Selector: w.Selector, Role: w.Role, Name: w.Name, HasText: w.HasText, Exact: w.Exact, Visible: w.Visible}
+	return Step{Selector: w.Selector, Role: w.Role, Name: w.Name, HasText: w.HasText, Exact: w.Exact, Visible: w.Visible, Nth: w.Nth}
 }
 
 // Supported action names.
@@ -281,7 +286,7 @@ func stepSummary(s Step) string {
 	}
 }
 
-// describe names what a step's selector, role, name, has_text, visible,
+// describe names what a step's selector, role, name, has_text, visible, nth,
 // within and frame pick out, e.g. `button "Archive" in nav`, or its point.
 func describe(s Step) string {
 	if s.Point != "" {
@@ -302,6 +307,9 @@ func describe(s Step) string {
 	}
 	if s.Visible {
 		d = "visible " + d
+	}
+	if s.Nth != nil {
+		d += fmt.Sprintf(" nth %d", *s.Nth)
 	}
 	if s.Within != nil {
 		d += " within " + describe(s.Within.step())

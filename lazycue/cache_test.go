@@ -143,6 +143,7 @@ func TestStepSummary(t *testing.T) {
 		{Step{Action: "assert_in_viewport", Selector: "#top"}, `assert_in_viewport #top`},
 		{Step{Action: "assert_not_in_viewport", Selector: "#top", Ratio: 0.5}, `assert_not_in_viewport #top ratio 0.5`},
 		{Step{Action: "click", Within: &Within{Role: "listitem", HasText: "Hello"}, Role: "button", Name: "Copy", Visible: true}, `click visible button "Copy" within listitem with text "Hello"`},
+		{Step{Action: "click", Within: &Within{Selector: "li", Nth: ptr(-1)}, Role: "button", Nth: ptr(0)}, `click button nth 0 within li nth -1`},
 		{Step{Action: "click", Point: "cell(1, 2)"}, `click point cell(1, 2)`},
 		{Step{Action: "mouse_down", Point: "handle()", Button: "right"}, `mouse_down point handle() right`},
 		{Step{Action: "wheel", Point: "p", X: ptr(0.0), Y: ptr(10.0)}, `wheel 0,10 at point p`},

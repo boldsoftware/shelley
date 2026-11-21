@@ -330,6 +330,52 @@ document.addEventListener('click', e => document.title = e.target.closest('.msg,
 	}
 }
 
+// nth picks one of a step's matches, counting from 0, or back from the last
+// at -1, after every other field has narrowed them, as Playwright's nth.
+func TestNth(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<ul>
+<li>One <button>Copy</button></li>
+<li style="display: none">Hidden <button>Copy</button></li>
+<li>Two <button>Copy</button></li>
+<li>Three <button>Copy</button></li>
+</ul>
+<script>
+document.addEventListener('click', e => document.title = e.target.closest('li').firstChild.textContent.trim());
+</script>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionAssertText, Selector: "li", Nth: ptr(1), Text: "Hidden Copy"},
+		Step{Action: ActionAssertText, Selector: "li", Nth: ptr(-1), Text: "Three Copy"},
+		Step{Action: ActionAssertText, Selector: "li", Nth: ptr(-2), Text: "Two Copy"},
+		// After visible, has_text and the role's own matches.
+		Step{Action: ActionAssertText, Selector: "li", Visible: true, Nth: ptr(1), Text: "Two Copy"},
+		Step{Action: ActionAssertText, Selector: "li", HasText: "T", Nth: ptr(1), Text: "Three Copy"},
+		Step{Action: ActionClick, Role: "button", Name: "Copy", Nth: ptr(1)},
+		Step{Action: ActionAssertTitle, Text: "Two"},
+		// In within, it picks the one element to look inside.
+		Step{Action: ActionClick, Within: &Within{Selector: "li", Visible: true, Nth: ptr(0)}, Selector: "button"},
+		Step{Action: ActionAssertTitle, Text: "One"},
+		Step{Action: ActionAssertCount, Within: &Within{Selector: "li", Nth: ptr(-1)}, Selector: "button", Count: 1},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		{Step{Action: ActionClick, Selector: "li", Nth: ptr(4)}, "no element matches li nth 4"},
+		{Step{Action: ActionClick, Selector: "li", Nth: ptr(-5)}, "no element matches li nth -5"},
+		{Step{Action: ActionAssertCount, Selector: "li", Nth: ptr(0), Count: 1}, "nth picks one element"},
+		{Step{Action: ActionAssertTexts, Selector: "li", Nth: ptr(0), Texts: []string{"One Copy"}}, "nth picks one element"},
+	} {
+		c.step.Timeout = "300ms"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+}
+
 // Selectors reach into open shadow roots, as Playwright's do: the
 // document's matches first, then each shadow root's, hosts in document
 // order, nested ones under theirs. A closed shadow root stays shut.

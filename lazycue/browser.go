@@ -718,6 +718,9 @@ func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) 
 			return "", mistake{errors.New("a name needs a role")}
 		}
 	}
+	if step.Nth != nil && (step.Action == ActionAssertCount || step.Action == ActionAssertTexts) {
+		return "", mistake{fmt.Errorf("nth picks one element; %s looks at all the matches", step.Action)}
+	}
 	if step.Frame != "" && step.Selector == "" && step.Role == "" && step.Action != ActionEval && step.Action != ActionWaitText && step.Action != ActionWaitTextGone {
 		return "", mistake{errors.New("a frame scopes a step's selector or role, or an eval, wait_text or wait_text_gone")}
 	}
@@ -1379,10 +1382,11 @@ const (
 
 // findAllJS is an expression for the elements a step picks out: those its
 // selector matches, in deepAll's order, or, with a role, those locate found
-// (in document order) inside what its selector matches; then those inside what its within picks
-// out; then those whose text has has_text (with a selector alone, an element
-// that holds another match does not count, as with Playwright's getByText);
-// then, with visible, the visible ones. Evaluate it with evalFind.
+// (in document order) inside what its selector matches; then those inside
+// what its within picks out; then those whose text has has_text (with a
+// selector alone, an element that holds another match does not count, as
+// with Playwright's getByText); then, with visible, the visible ones; then,
+// with nth, the one at that index. Evaluate it with evalFind.
 func findAllJS(step Step) string {
 	scopes := "null"
 	if step.Within != nil {
@@ -1395,7 +1399,11 @@ func findAllJS(step Step) string {
 // global slot and scopes an expression for the elements to look inside, or
 // null.
 func pickJS(step Step, slot, scopes string) string {
-	return fmt.Sprintf(`(function(sel, role, hasText, exact, visible, slot, scopes) {
+	nth := "null"
+	if step.Nth != nil {
+		nth = strconv.Itoa(*step.Nth)
+	}
+	return fmt.Sprintf(`(function(sel, role, hasText, exact, visible, nth, slot, scopes) {
 		`+isVisibleJS+`
 		`+deepAllJS+`
 		const norm = s => s.replace(/\s+/g, ' ').trim();
@@ -1443,8 +1451,11 @@ func pickJS(step Step, slot, scopes string) string {
 			}
 			all = matches.filter(el => !outer.has(el));
 		}
-		return visible ? all.filter(isVisible) : all;
-	})(%q, %t, %q, %t, %t, %q, %s)`, step.Selector, step.Role != "", step.HasText, step.Exact, step.Visible, slot, scopes)
+		if (visible) all = all.filter(isVisible);
+		if (nth === null) return all;
+		const el = all.at(nth);
+		return el ? [el] : [];
+	})(%q, %t, %q, %t, %t, %s, %q, %s)`, step.Selector, step.Role != "", step.HasText, step.Exact, step.Visible, nth, slot, scopes)
 }
 
 // deepAllJS defines deepAll(sel): the elements a CSS selector matches in the
