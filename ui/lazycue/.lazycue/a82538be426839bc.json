@@ -1,0 +1,353 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "ntfy credentials stay on the server through create, edit, replace and clear. The screen is the default 393x727 phone. A local webhook receiver runs at {{URL}}. Every POST or PUT the page sends to /api/notification-channels... is a \"save\", numbered from 1 in order (the Test button's request is not a save). For save N: call \"save N\" returns \"ok\" when the server answered it with a 2xx status and none of the secrets \"fake-webhook\", \"fake-token\", \"fake-password\", \"replacement-token\" in its answer (otherwise what was wrong, or \"none\" before that save); call \"save N sent\" returns the webhook_url, token and password fields of the config the page sent, as a JSON object holding only those present; \"save N config\" returns the config of the server's answer as JSON; \"save N secrets\" returns the answer's configured_secrets as JSON. Call \"test success\" returns the success field of the server's answer to the Test button as JSON (\"none\" before one); call \"received\" returns the path of the last request the webhook receiver got (\"none\" before one). Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"the X button\" is the button named exactly X, unless it belongs to a card. \"The name input\" is the input inside the \".form-group\" that has a label whose text is exactly \"Display Name\". \"The webhook input\" is \"#config-webhook_url\". \"Open the notifications\": press Control+k, fill \".command-palette-input\" with \"notification\", click the first \".command-palette-item\", and then the button whose name contains \"+ Add Channel\" should be visible. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and open the notifications. 2. Click the button whose name contains \"+ Add Channel\", then the \".provider-btn\" whose text is exactly \"ntfy\". Fill the name input with \"Secret ntfy\", \"#config-server\" with \"{{URL}}\", \"#config-topic\" with \"local-topic\", \"#config-token\" with \"fake-token\", \"#config-username\" with \"reader\" and \"#config-password\" with \"fake-password\". Click the \"Add Channel\" button. Call \"save 1\" until it returns \"ok\"; \"save 1 secrets\" must return [\"token\",\"password\"]. 3. \"The ntfy card\" is the \".model-card\" containing \"Secret ntfy\"; click its button named exactly \"Edit\". \"#config-token\" should have the value \"\", the attribute type=\"password\" and the placeholder exactly \"Leave blank to keep the saved token on the server\"; \"#config-password\" should have the value \"\", type=\"password\" and the placeholder exactly \"Leave blank to keep the saved password on the server\". 4. \"The token's clear box\" is the checkbox named exactly \"Clear saved credential\" inside the \".form-group\" that contains \"#config-token\"; \"the password's clear box\" is the same inside the \".form-group\" that contains \"#config-password\". Click the token's clear box to check it: \"#config-token\" should be disabled and its placeholder attribute should be \"\" (empty). Click it again to uncheck it: \"#config-token\" should be enabled with the placeholder exactly \"Leave blank to keep the saved token on the server\". 5. Click the \"Save\" button. Call \"save 2\" until it returns \"ok\"; \"save 2 sent\" must return {} (neither token nor password sent). 6. Click the ntfy card's \"Edit\" button, fill \"#config-token\" with \"replacement-token\", and click the \"Save\" button. Call \"save 3\" until it returns \"ok\"; \"save 3 secrets\" must return [\"token\",\"password\"]. 7. Click the ntfy card's \"Edit\" button: \"#config-token\" should have the value \"\". Fill \"#config-password\" with \"unsaved-password\", then click the button named exactly \"Close modal\". Open the notifications again, and click the ntfy card's \"Edit\" button: \"#config-password\" should have the value \"\". 8. Click the token's clear box and then the password's clear box to check both: \"#config-token\" and \"#config-password\" should both be disabled, each with the placeholder attribute \"\". 9. Click the \"Save\" button. Call \"save 4\" until it returns \"ok\"; \"save 4 sent\" must return {\"password\":\"\",\"token\":\"\"} and \"save 4 secrets\" must return []. 10. Call \"stored\": it must return \"clean\" (the server's channel list, and each channel's config, hold no secret).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "notification"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "role": "button",
+      "name": "+ Add Channel"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "+ Add Channel"
+    },
+    {
+      "action": "click",
+      "selector": ".provider-btn",
+      "has_text": "ntfy",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": ".form-group",
+        "has_text": "Display Name"
+      },
+      "selector": "input",
+      "value": "Secret ntfy"
+    },
+    {
+      "action": "fill",
+      "selector": "#config-server",
+      "value": "{{URL}}"
+    },
+    {
+      "action": "fill",
+      "selector": "#config-topic",
+      "value": "local-topic"
+    },
+    {
+      "action": "fill",
+      "selector": "#config-token",
+      "value": "fake-token"
+    },
+    {
+      "action": "fill",
+      "selector": "#config-username",
+      "value": "reader"
+    },
+    {
+      "action": "fill",
+      "selector": "#config-password",
+      "value": "fake-password"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add Channel",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "save 1",
+      "expect": "ok"
+    },
+    {
+      "action": "call",
+      "value": "save 1 secrets",
+      "expect": "[\"token\",\"password\"]"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".model-card",
+        "has_text": "Secret ntfy"
+      },
+      "role": "button",
+      "name": "Edit",
+      "exact": true
+    },
+    {
+      "action": "assert_value",
+      "selector": "#config-token",
+      "value": ""
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-token",
+      "attribute": "type",
+      "value": "password"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-token",
+      "attribute": "placeholder",
+      "value": "Leave blank to keep the saved token on the server"
+    },
+    {
+      "action": "assert_value",
+      "selector": "#config-password",
+      "value": ""
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-password",
+      "attribute": "type",
+      "value": "password"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-password",
+      "attribute": "placeholder",
+      "value": "Leave blank to keep the saved password on the server"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".form-group:has(#config-token)"
+      },
+      "role": "checkbox",
+      "name": "Clear saved credential",
+      "exact": true
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "#config-token"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-token",
+      "attribute": "placeholder",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".form-group:has(#config-token)"
+      },
+      "role": "checkbox",
+      "name": "Clear saved credential",
+      "exact": true
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "#config-token"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-token",
+      "attribute": "placeholder",
+      "value": "Leave blank to keep the saved token on the server"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "save 2",
+      "expect": "ok"
+    },
+    {
+      "action": "call",
+      "value": "save 2 sent",
+      "expect": "{}"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".model-card",
+        "has_text": "Secret ntfy"
+      },
+      "role": "button",
+      "name": "Edit",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "selector": "#config-token",
+      "value": "replacement-token"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "save 3",
+      "expect": "ok"
+    },
+    {
+      "action": "call",
+      "value": "save 3 secrets",
+      "expect": "[\"token\",\"password\"]"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".model-card",
+        "has_text": "Secret ntfy"
+      },
+      "role": "button",
+      "name": "Edit",
+      "exact": true
+    },
+    {
+      "action": "assert_value",
+      "selector": "#config-token",
+      "value": ""
+    },
+    {
+      "action": "fill",
+      "selector": "#config-password",
+      "value": "unsaved-password"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close modal",
+      "exact": true
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "notification"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "role": "button",
+      "name": "+ Add Channel"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".model-card",
+        "has_text": "Secret ntfy"
+      },
+      "role": "button",
+      "name": "Edit",
+      "exact": true
+    },
+    {
+      "action": "assert_value",
+      "selector": "#config-password",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".form-group:has(#config-token)"
+      },
+      "role": "checkbox",
+      "name": "Clear saved credential",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".form-group:has(#config-password)"
+      },
+      "role": "checkbox",
+      "name": "Clear saved credential",
+      "exact": true
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "#config-token"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "#config-password"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-token",
+      "attribute": "placeholder",
+      "value": ""
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-password",
+      "attribute": "placeholder",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "save 4",
+      "expect": "ok"
+    },
+    {
+      "action": "call",
+      "value": "save 4 sent",
+      "expect": "{\"password\":\"\",\"token\":\"\"}"
+    },
+    {
+      "action": "call",
+      "value": "save 4 secrets",
+      "expect": "[]"
+    },
+    {
+      "action": "call",
+      "value": "stored",
+      "expect": "clean"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:09:14.982236594Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 88454,
+    "output_tokens": 5181,
+    "estimated_cost_usd": 0.1454685,
+    "mode": "generated"
+  }
+}

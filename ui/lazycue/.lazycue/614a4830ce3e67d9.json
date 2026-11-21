@@ -1,0 +1,275 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Discord webhook credentials stay on the server through create, edit, toggle and test. The screen is the default 393x727 phone. A local webhook receiver runs at {{URL}}. Every POST or PUT the page sends to /api/notification-channels... is a \"save\", numbered from 1 in order (the Test button's request is not a save). For save N: call \"save N\" returns \"ok\" when the server answered it with a 2xx status and none of the secrets \"fake-webhook\", \"fake-token\", \"fake-password\", \"replacement-token\" in its answer (otherwise what was wrong, or \"none\" before that save); call \"save N sent\" returns the webhook_url, token and password fields of the config the page sent, as a JSON object holding only those present; \"save N config\" returns the config of the server's answer as JSON; \"save N secrets\" returns the answer's configured_secrets as JSON. Call \"test success\" returns the success field of the server's answer to the Test button as JSON (\"none\" before one); call \"received\" returns the path of the last request the webhook receiver got (\"none\" before one). Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"the X button\" is the button named exactly X, unless it belongs to a card. \"The name input\" is the input inside the \".form-group\" that has a label whose text is exactly \"Display Name\". \"The webhook input\" is \"#config-webhook_url\". \"Open the notifications\": press Control+k, fill \".command-palette-input\" with \"notification\", click the first \".command-palette-item\", and then the button whose name contains \"+ Add Channel\" should be visible. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and open the notifications. 2. Click the button whose name contains \"+ Add Channel\", then the \".provider-btn\" whose text is exactly \"Discord Webhook\". 3. Fill the name input with \"Secret Discord\". 4. The webhook input should have the attribute type=\"password\" and the placeholder exactly \"https://discord.com/api/webhooks/...\". The \"Add Channel\" button should be disabled. 5. Fill the webhook input with \"{{URL}}/fake-webhook\" and click the \"Add Channel\" button. Call \"save 1\" until it returns \"ok\"; \"save 1 config\" must return {} and \"save 1 secrets\" must return [\"webhook_url\"]. 6. \"The Discord card\" is the \".model-card\" containing the text \"Secret Discord\"; it should be visible. Click its button named exactly \"Edit\". 7. The webhook input should have the value \"\" (empty) and the placeholder exactly \"Leave blank to keep the saved webhook on the server\". There must be no checkbox named exactly \"Clear saved credential\" (count 0). The \"Save\" button should be enabled. 8. Fill the name input with \"Edited Discord\" and click the \"Save\" button. Call \"save 2\" until it returns \"ok\"; \"save 2 sent\" must return {} (the page did not send the webhook). 9. \"The edited card\" is the \".model-card\" containing \"Edited Discord\". Click its button named exactly \"On\"; call \"save 3\" until it returns \"ok\". The edited card's button named exactly \"Off\" should be visible; click it and call \"save 4\" until it returns \"ok\". 10. Click the edited card's button named exactly \"Edit\" and fill the webhook input with \"{{URL}}/unsaved-webhook\". Click the \"Test\" button. Call \"test success\" until it returns \"true\"; then call \"received\": it must return \"/fake-webhook\" (the server tested the saved webhook, not the unsaved one). 11. Click the \"Cancel\" button. Click the edited card's \"Edit\" button: the webhook input should have the value \"\". Click the \"Cancel\" button. 12. Call \"stored\": it must return \"clean\" (the server's channel list, and each channel's config, hold no secret).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "notification"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "role": "button",
+      "name": "+ Add Channel"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "+ Add Channel"
+    },
+    {
+      "action": "click",
+      "selector": ".provider-btn",
+      "has_text": "Discord Webhook",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": ".form-group",
+        "has_text": "Display Name"
+      },
+      "selector": "input",
+      "value": "Secret Discord"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-webhook_url",
+      "attribute": "type",
+      "value": "password"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-webhook_url",
+      "attribute": "placeholder",
+      "value": "https://discord.com/api/webhooks/..."
+    },
+    {
+      "action": "assert_disabled",
+      "role": "button",
+      "name": "Add Channel",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "selector": "#config-webhook_url",
+      "value": "{{URL}}/fake-webhook"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add Channel",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "save 1",
+      "expect": "ok"
+    },
+    {
+      "action": "call",
+      "value": "save 1 config",
+      "expect": "{}"
+    },
+    {
+      "action": "call",
+      "value": "save 1 secrets",
+      "expect": "[\"webhook_url\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-card",
+      "has_text": "Secret Discord"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".model-card",
+        "has_text": "Secret Discord"
+      },
+      "role": "button",
+      "name": "Edit",
+      "exact": true
+    },
+    {
+      "action": "assert_value",
+      "selector": "#config-webhook_url",
+      "value": ""
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "#config-webhook_url",
+      "attribute": "placeholder",
+      "value": "Leave blank to keep the saved webhook on the server"
+    },
+    {
+      "action": "assert_count",
+      "role": "checkbox",
+      "name": "Clear saved credential",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_enabled",
+      "role": "button",
+      "name": "Save",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": ".form-group",
+        "has_text": "Display Name"
+      },
+      "selector": "input",
+      "value": "Edited Discord"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "save 2",
+      "expect": "ok"
+    },
+    {
+      "action": "call",
+      "value": "save 2 sent",
+      "expect": "{}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-card",
+      "has_text": "Edited Discord"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".model-card",
+        "has_text": "Edited Discord"
+      },
+      "role": "button",
+      "name": "On",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "save 3",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".model-card",
+        "has_text": "Edited Discord"
+      },
+      "role": "button",
+      "name": "Off",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".model-card",
+        "has_text": "Edited Discord"
+      },
+      "role": "button",
+      "name": "Off",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "save 4",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".model-card",
+        "has_text": "Edited Discord"
+      },
+      "role": "button",
+      "name": "Edit",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "selector": "#config-webhook_url",
+      "value": "{{URL}}/unsaved-webhook"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Test",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "test success",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "received",
+      "expect": "/fake-webhook"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Cancel",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".model-card",
+        "has_text": "Edited Discord"
+      },
+      "role": "button",
+      "name": "Edit",
+      "exact": true
+    },
+    {
+      "action": "assert_value",
+      "selector": "#config-webhook_url",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Cancel",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "stored",
+      "expect": "clean"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:02:38.66618813Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 180160,
+    "output_tokens": 5455,
+    "estimated_cost_usd": 0.18933824999999999,
+    "mode": "generated"
+  }
+}
