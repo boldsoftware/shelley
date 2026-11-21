@@ -1,0 +1,39 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Tool results show with a collapsible header. \"The reply R\" is the first element matching '.messages-container [data-testid=\"message\"]:not(.message-user)' whose text contains R (has_text): a message of this conversation that is not the user's. \"The user message U\" is the first '.messages-container .message-user' element whose text contains U (has_text). \"The input\" is the element with data-testid \"message-input\" and \"the send button\" the one with data-testid \"send-button\". \"Send M\" means: fill the input with M, then click the send button. 1. Navigate to /new. 2. Send 'bash: echo \"testing tool results\"'. 3. The first element with data-testid \"tool-call-completed\" should be visible (allow 30s). 4. The first \".bash-tool-header\" element should be visible (allow 10s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "bash: echo \"testing tool results\""
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='tool-call-completed']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool-header",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:25:17.783846855Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13261,
+    "output_tokens": 396,
+    "estimated_cost_usd": 0.01366965,
+    "mode": "generated"
+  }
+}

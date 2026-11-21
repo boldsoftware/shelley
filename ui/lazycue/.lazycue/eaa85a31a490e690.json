@@ -1,0 +1,60 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The thinking indicator also shows for a follow-up message. \"The reply R\" is the first element matching '.messages-container [data-testid=\"message\"]:not(.message-user)' whose text contains R (has_text): a message of this conversation that is not the user's. \"The user message U\" is the first '.messages-container .message-user' element whose text contains U (has_text). \"The input\" is the element with data-testid \"message-input\" and \"the send button\" the one with data-testid \"send-button\". \"Send M\" means: fill the input with M, then click the send button. \"The indicator\" is the element with data-testid \"agent-thinking\". 1. Navigate to /new. 2. Send \"hello\". 3. The reply \"Well, hi there!\" should be visible (allow 30s). 4. Send \"delay: 2\". 5. The indicator should be visible (allow 5s). 6. The reply \"Delayed for 2 seconds\" should be visible (allow 30s). 7. The indicator should then be hidden (allow 10s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "hello"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container [data-testid='message']:not(.message-user)",
+      "has_text": "Well, hi there!",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 2"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container [data-testid='message']:not(.message-user)",
+      "has_text": "Delayed for 2 seconds",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:24:57.023026846Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13556,
+    "output_tokens": 690,
+    "estimated_cost_usd": 0.019034099999999998,
+    "mode": "generated"
+  }
+}
