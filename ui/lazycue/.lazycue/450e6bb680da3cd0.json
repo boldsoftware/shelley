@@ -1,0 +1,254 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Path labels keep the home prefix, highlights, tail and full-path hover. The test itself answers the page's requests for the git repository list (GET /api/git/repos), already in place before the first step (steps must not patch fetch or stub anything): the list has two repositories, {{PATH}} (on branch main) and the Unicode path {{UNICODE}}, with home root /home/adam. \"The picker\" is the dialog whose accessible name is exactly \"Pick git repository\". \"The label\" is the \".grp-path\" element inside the picker whose text contains \"MessageInput.vue\" (pick it with \"within\" the picker and has_text), and \"the Unicode label\" the picker's \".grp-path\" whose text contains \"דוח-final.v2.json\". For evals, window.__label() returns the label and window.__unicodeLabel() the Unicode label. \"Raw text\" means the element's textContent exactly, read with an eval with \"expect\" (no whitespace collapsing). Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Click the button in \".chat-workspace-actions\" whose accessible name is exactly \"Git Graph\". 3. Click the button whose accessible name is exactly \"Pick repository\". 4. The label should be visible. 5. The label's title attribute must be exactly {{PATH}}. 6. The label's raw text must be exactly \"~/projects/shelley/ui/src/vue/components/MessageInput.vue\". 7. The label's \".path-text-prefix\" must have exactly the text \"~/\". 8. The label's \".path-text-tail\" must have computed CSS direction exactly \"rtl\" and computed text-align exactly \"left\". 9. The tail's ::before content must be a quoted left-to-right mark: eval getComputedStyle(window.__label().querySelector(\".path-text-tail\"), \"::before\").content === '\"\\u200e\"' expecting true. 10. Fill the picker's textbox whose accessible name is exactly \"Filter\" with \"messageinput\". 11. The label's \"mark\" elements must be exactly one, with exactly the text \"MessageInput\" (assert_texts). 12. There must be exactly 0 \"mark[title]\" elements in the label. 13. The label's raw text must still be exactly \"~/projects/shelley/ui/src/vue/components/MessageInput.vue\". 14. For each width in turn, 1280, then 390, then 320: set the viewport to that width and height 800 (set_viewport with only width and height, keeping the rest of the device); the label's \".path-text-prefix\" should be visible; the label's title must still be exactly {{PATH}}; and this eval of the label's geometry must give exactly {\"extensionVisible\":true,\"iconBeforePath\":true,\"pageOverflow\":false,\"prefixBeforeTail\":true,\"prefixWidthPositive\":true}: (() =\u003e { const el = window.__label(); const prefix = el.querySelector(\".path-text-prefix\").getBoundingClientRect(); const tail = el.querySelector(\".path-text-tail\"); const clip = tail.getBoundingClientRect(); const walker = document.createTreeWalker(tail, NodeFilter.SHOW_TEXT); let last = null; for (let node = walker.nextNode(); node; node = walker.nextNode()) { if (node.length) last = node; } const range = document.createRange(); range.setStart(last, last.length - 4); range.setEnd(last, last.length); const extension = range.getBoundingClientRect(); const row = el.closest(\".grp-row\"); return { prefixWidthPositive: prefix.width \u003e 0, prefixBeforeTail: prefix.right \u003c= clip.left + 1, extensionVisible: extension.left \u003e= clip.left - 1 \u0026\u0026 extension.right \u003c= clip.right + 1, iconBeforePath: row.querySelector(\".grp-icon\").getBoundingClientRect().right \u003c= prefix.left, pageOverflow: document.documentElement.scrollWidth \u003e innerWidth }; })(). At 320 px only, the tail must also overflow: this eval must give true: (() =\u003e { const tail = window.__label().querySelector(\".path-text-tail\"); return tail.scrollWidth \u003e tail.clientWidth; })(). 15. Fill the Filter textbox with \"\" (empty). 16. The Unicode label's title attribute must be exactly {{UNICODE}}. 17. Its raw text must be exactly {{UNICODE}}. 18. There must be exactly 0 \".path-text-prefix\" elements inside the Unicode label (assert_count with \"within\" {\".grp-path\" with has_text \"דוח-final.v2.json\"} and selector \".path-text-prefix\"; has_text belongs on the within, not on the counted element).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions",
+      "role": "button",
+      "name": "Git Graph",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Pick repository",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "role": "dialog",
+        "name": "Pick git repository",
+        "exact": true
+      },
+      "selector": ".grp-path",
+      "has_text": "MessageInput.vue"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "role": "dialog",
+        "name": "Pick git repository",
+        "exact": true
+      },
+      "selector": ".grp-path",
+      "has_text": "MessageInput.vue",
+      "attribute": "title",
+      "value": "{{PATH}}"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__label().textContent",
+      "expect": "~/projects/shelley/ui/src/vue/components/MessageInput.vue"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".grp-path",
+        "has_text": "MessageInput.vue"
+      },
+      "selector": ".path-text-prefix",
+      "text": "~/"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.__label().querySelector('.path-text-tail')).direction",
+      "expect": "rtl"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.__label().querySelector('.path-text-tail')).textAlign",
+      "expect": "left"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.__label().querySelector('.path-text-tail'), '::before').content === '\"\\u200e\"'",
+      "expect": "true"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "dialog",
+        "name": "Pick git repository",
+        "exact": true
+      },
+      "role": "textbox",
+      "name": "Filter",
+      "exact": true,
+      "value": "messageinput"
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "selector": ".grp-path",
+        "has_text": "MessageInput.vue"
+      },
+      "selector": "mark",
+      "texts": [
+        "MessageInput"
+      ]
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".grp-path",
+        "has_text": "MessageInput.vue"
+      },
+      "selector": "mark[title]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.__label().textContent",
+      "expect": "~/projects/shelley/ui/src/vue/components/MessageInput.vue"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".grp-path",
+        "has_text": "MessageInput.vue"
+      },
+      "selector": ".path-text-prefix"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "role": "dialog",
+        "name": "Pick git repository",
+        "exact": true
+      },
+      "selector": ".grp-path",
+      "has_text": "MessageInput.vue",
+      "attribute": "title",
+      "value": "{{PATH}}"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = window.__label(); const prefix = el.querySelector('.path-text-prefix').getBoundingClientRect(); const tail = el.querySelector('.path-text-tail'); const clip = tail.getBoundingClientRect(); const walker = document.createTreeWalker(tail, NodeFilter.SHOW_TEXT); let last = null; for (let node = walker.nextNode(); node; node = walker.nextNode()) { if (node.length) last = node; } const range = document.createRange(); range.setStart(last, last.length - 4); range.setEnd(last, last.length); const extension = range.getBoundingClientRect(); const row = el.closest('.grp-row'); return { prefixWidthPositive: prefix.width \u003e 0, prefixBeforeTail: prefix.right \u003c= clip.left + 1, extensionVisible: extension.left \u003e= clip.left - 1 \u0026\u0026 extension.right \u003c= clip.right + 1, iconBeforePath: row.querySelector('.grp-icon').getBoundingClientRect().right \u003c= prefix.left, pageOverflow: document.documentElement.scrollWidth \u003e innerWidth }; })()",
+      "expect": "{\"extensionVisible\":true,\"iconBeforePath\":true,\"pageOverflow\":false,\"prefixBeforeTail\":true,\"prefixWidthPositive\":true}"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 800
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".grp-path",
+        "has_text": "MessageInput.vue"
+      },
+      "selector": ".path-text-prefix"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "role": "dialog",
+        "name": "Pick git repository",
+        "exact": true
+      },
+      "selector": ".grp-path",
+      "has_text": "MessageInput.vue",
+      "attribute": "title",
+      "value": "{{PATH}}"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = window.__label(); const prefix = el.querySelector('.path-text-prefix').getBoundingClientRect(); const tail = el.querySelector('.path-text-tail'); const clip = tail.getBoundingClientRect(); const walker = document.createTreeWalker(tail, NodeFilter.SHOW_TEXT); let last = null; for (let node = walker.nextNode(); node; node = walker.nextNode()) { if (node.length) last = node; } const range = document.createRange(); range.setStart(last, last.length - 4); range.setEnd(last, last.length); const extension = range.getBoundingClientRect(); const row = el.closest('.grp-row'); return { prefixWidthPositive: prefix.width \u003e 0, prefixBeforeTail: prefix.right \u003c= clip.left + 1, extensionVisible: extension.left \u003e= clip.left - 1 \u0026\u0026 extension.right \u003c= clip.right + 1, iconBeforePath: row.querySelector('.grp-icon').getBoundingClientRect().right \u003c= prefix.left, pageOverflow: document.documentElement.scrollWidth \u003e innerWidth }; })()",
+      "expect": "{\"extensionVisible\":true,\"iconBeforePath\":true,\"pageOverflow\":false,\"prefixBeforeTail\":true,\"prefixWidthPositive\":true}"
+    },
+    {
+      "action": "set_viewport",
+      "width": 320,
+      "height": 800
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".grp-path",
+        "has_text": "MessageInput.vue"
+      },
+      "selector": ".path-text-prefix"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "role": "dialog",
+        "name": "Pick git repository",
+        "exact": true
+      },
+      "selector": ".grp-path",
+      "has_text": "MessageInput.vue",
+      "attribute": "title",
+      "value": "{{PATH}}"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = window.__label(); const prefix = el.querySelector('.path-text-prefix').getBoundingClientRect(); const tail = el.querySelector('.path-text-tail'); const clip = tail.getBoundingClientRect(); const walker = document.createTreeWalker(tail, NodeFilter.SHOW_TEXT); let last = null; for (let node = walker.nextNode(); node; node = walker.nextNode()) { if (node.length) last = node; } const range = document.createRange(); range.setStart(last, last.length - 4); range.setEnd(last, last.length); const extension = range.getBoundingClientRect(); const row = el.closest('.grp-row'); return { prefixWidthPositive: prefix.width \u003e 0, prefixBeforeTail: prefix.right \u003c= clip.left + 1, extensionVisible: extension.left \u003e= clip.left - 1 \u0026\u0026 extension.right \u003c= clip.right + 1, iconBeforePath: row.querySelector('.grp-icon').getBoundingClientRect().right \u003c= prefix.left, pageOverflow: document.documentElement.scrollWidth \u003e innerWidth }; })()",
+      "expect": "{\"extensionVisible\":true,\"iconBeforePath\":true,\"pageOverflow\":false,\"prefixBeforeTail\":true,\"prefixWidthPositive\":true}"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const tail = window.__label().querySelector('.path-text-tail'); return tail.scrollWidth \u003e tail.clientWidth; })()",
+      "expect": "true"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "dialog",
+        "name": "Pick git repository",
+        "exact": true
+      },
+      "role": "textbox",
+      "name": "Filter",
+      "exact": true,
+      "value": ""
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "role": "dialog",
+        "name": "Pick git repository",
+        "exact": true
+      },
+      "selector": ".grp-path",
+      "has_text": "דוח-final.v2.json",
+      "attribute": "title",
+      "value": "{{UNICODE}}"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__unicodeLabel().textContent",
+      "expect": "{{UNICODE}}"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".grp-path",
+        "has_text": "דוח-final.v2.json"
+      },
+      "selector": ".path-text-prefix",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:04:40.143811314Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 276997,
+    "output_tokens": 14390,
+    "estimated_cost_usd": 0.4039826999999999,
+    "mode": "generated"
+  }
+}
