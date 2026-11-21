@@ -155,20 +155,21 @@ func popoversTOCStyling(s *shelley) {
 	})
 }
 
+// popoversTOCStylingTest is the TOC styling test's description, which each
+// test prefixes with its screen size, so that each size has a cached script of
+// its own: a heal at one size can't then rewrite another's.
 const popoversTOCStylingTest = `The conversation table of contents marks message sources with quiet icons on one text edge. The conversation /c/{{SLUG}} is served with extra messages after its first turn: a user message "**Keep** the current ` + "`TOC`" + `", an agent reply "See [the preview](https://example.com) **now**", messages from a parent and from a subagent conversation ("parent follow-up", "subagent follow-up"), a background job report for "make build" that exited 2, a "Working directory changed" notice, and, in a new generation {{NEXT_GENERATION}}, "Continue with the approved design". Within the TOC popover (".toc-popover"): "row X" is the ".toc-entry" containing X; "human" is row "Keep the current TOC", "reply" is row "See the preview now", "reports" are the ".toc-category-subagent" elements, "job" is the ".toc-category-background", "notice" is the ".toc-entry-user.toc-category-notice". "The color of E" is getComputedStyle(E).color. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and click ".toc-button". 2. human's ".toc-entry-icon" should have exactly the text "•", and human's ".toc-entry-label" computed font-weight should be exactly "500". 3. For each of reply, the first report, job and notice: it holds exactly one ".toc-entry-icon svg", and its ".toc-entry-label" font-weight is exactly "400". 4. There should be exactly 2 reports and exactly 1 ".toc-entry-gen" in the TOC. 5. The textContent of the TOC's last 9 ".toc-entry-label" elements, in order, must be exactly ["Keep the current TOC","See the preview now","parent follow-up","subagent follow-up","make build · exit 2","Working directory changed","New generation ({{NEXT_GENERATION}})","Continue with the approved design","End of conversation"]. 6. The labels of ".toc-entry:not(.toc-entry-gen) .toc-entry-label" in the TOC must all share one text edge: the set of their getBoundingClientRect().left values has exactly 1 member. 7. Then for dark = false and then dark = true: a. eval document.documentElement.classList.toggle("dark", dark); b. poll until the color of human equals the color of reply; c. then check, at once: the color of the first report differs from the color of reply; the color of job differs from the color of the first report; the color of human's ".toc-entry-icon" differs from the color of reply's ".toc-entry-icon svg"; human's getBoundingClientRect().height is exactly 30; and document.documentElement.scrollWidth <= window.innerWidth. 8. The TOC's one ".toc-entry-active" must have computed background-color exactly "rgba(0, 0, 0, 0)".`
 
 func TestE2EPopoversTOCSourceStyling390(t *testing.T) {
-	e2e(t, `The screen is {{W}}x844. `+popoversTOCStylingTest, func(s *shelley) {
+	e2e(t, `The screen is 390x844. `+popoversTOCStylingTest, func(s *shelley) {
 		s.viewport(390, 844)
-		s.v("W", "390")
 		popoversTOCStyling(s)
 	})
 }
 
 func TestE2EPopoversTOCSourceStyling1280(t *testing.T) {
-	e2e(t, `The screen is {{W}}x844. `+popoversTOCStylingTest, func(s *shelley) {
+	e2e(t, `The screen is 1280x844. `+popoversTOCStylingTest, func(s *shelley) {
 		s.viewport(1280, 844)
-		s.v("W", "1280")
 		popoversTOCStyling(s)
 	})
 }

@@ -1,0 +1,168 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a phone, the new-conversation composer labels the model and directory fields a row each. The screen is 320x915. To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". Accessible names: an element's name is its aria-label if it has one; otherwise a button's name is its text with whitespace collapsed and trimmed, leaving out aria-hidden parts, and a dialog's name is the text of the element its aria-labelledby refers to; \"named X\" means the name is exactly X. Only elements that are not display: none count. Names used below: \"the composer\" is \".status-bar-new\"; \"the labels\" are its \".status-field-label\" elements; \"the model field\" is \".status-field-model .model-picker.p-select\"; \"the directory field\" is \".status-field-cwd .status-chip\". Perform the steps in order. 1. Navigate to /new. 2. The labels' texts should be exactly [\"Model:\", \"Dir:\"]. 3. Eval window.__fieldRows() (the page already defines it; do not define it yourself): it checks at once that the rows (first label with the model field, last label with the directory field) are stacked, inside the viewport, with the labels right-aligned in a column of their own and the fields boxed in one after it, and returns the list of what fails; it must return exactly []. 4. The model field's \".model-picker-value-name\" text must not be empty, and its \".p-select-dropdown\" should be visible. The composer must have no button whose accessible name starts with \"Profile\" (count 0). 5. Keyboard focus shows on the model's box: focus the directory field (eval .focus()), remember the model field's computed border-top-color in a window variable, then press Shift+Tab; the model field's element with role=\"combobox\" must then be document.activeElement, and the model field's border-top-color must differ from the remembered one. 6. Click the model field: the panel should be visible and contain an element with data-testid \"model-picker-profiles\" (attached, visible or not). Click the panel's button with aria-label \"Close\": the panel should be hidden. 7. Click the directory field: \".modal.directory-picker-modal\" should be visible; click its button named exactly \"Cancel\": it should be hidden. 8. Open the model picker (through the overflow menu, since the window is narrower than 768px): the picker should have the class \"model-picker-menu\", and the panel should be visible. Click the panel's button with aria-label \"Close\". 9. In \".chat-overflow-popover\", a button whose accessible name starts with \"Directory\" should be visible, and there must be no button whose accessible name starts with \"Profile\" (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".status-bar-new",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.status-bar-new .status-field-label')).map(el => el.textContent.trim())",
+      "expect": "[\"Model:\",\"Dir:\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__fieldRows())",
+      "expect": "[]"
+    },
+    {
+      "action": "eval",
+      "expression": "(document.querySelector('.status-field-model .model-picker.p-select .model-picker-value-name')?.textContent?.trim() || '') !== ''",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".status-field-model .model-picker.p-select .p-select-dropdown"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".status-bar-new",
+      "role": "button",
+      "name": "Profile",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.status-field-cwd .status-chip').focus(); 'ok'"
+    },
+    {
+      "action": "eval",
+      "expression": "window._modelBorderBefore = window.getComputedStyle(document.querySelector('.status-field-model .model-picker.p-select')).borderTopColor; window._modelBorderBefore"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab",
+      "modifiers": "Shift"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.status-field-model .model-picker.p-select [role=\"combobox\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.status-field-model .model-picker.p-select')).borderTopColor === window._modelBorderBefore",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": ".status-field-model .model-picker.p-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".model-picker-panel [data-testid=\\\"model-picker-profiles\\\"]\") !== null",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-panel button[aria-label=\"Close\"]"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "click",
+      "selector": ".status-field-cwd .status-chip"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal.directory-picker-modal"
+    },
+    {
+      "action": "click",
+      "selector": ".modal.directory-picker-modal button",
+      "has_text": "Cancel"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".modal.directory-picker-modal"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-overflow-popover') ? document.querySelector('.chat-overflow-popover').checkVisibility() : false",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"More options\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .model-picker.p-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-overflow-popover .model-picker.p-select')?.classList.contains('model-picker-menu')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-panel button[aria-label=\"Close\"]"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-overflow-popover",
+      "role": "button",
+      "name": "Directory {{CWD}}",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-overflow-popover",
+      "role": "button",
+      "name": "Profile",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:11:26.18449673Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 245236,
+    "output_tokens": 8664,
+    "estimated_cost_usd": 0.25679189999999996,
+    "mode": "generated"
+  }
+}
