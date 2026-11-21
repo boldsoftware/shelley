@@ -1,0 +1,98 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The empty-model warning links directly to the add form. The page starts with no models at all and a hint to add one. The screen is the default phone. Name elements by ARIA role and accessible name, as Playwright's getByRole does. \"The hint\" is \".no-models-message\"; \"the action\" is the hint's button named exactly \"Click here to add models\"; \"the title\" is the hint's \".no-models-title\". Perform the steps in order. 1. Navigate to /new. 2. The hint must contain neither \"Ctrl\" nor \"⌘\". 3. The action's computed text-decoration-line should be \"underline\" and its computed overflow \"visible\". 4. Set the viewport to 1280x800 (width and height only). Using the bounding boxes of the title and the action: the action's x must be greater than the title's x + width (the link follows the title on its line), and |action y - title y| must be less than 10. 5. Set the viewport to 412x800 (width and height only). The title's computed text-align should be \"center\"; the action's y must be at least the title's y + height (the link goes below it), and the horizontal centers of the action and the title (x + width / 2) must differ by less than 1. 6. Click the action. The element with data-testid \"model-provider-form\" should be visible, and data-testid \"model-mode-provider\" should have aria-pressed=\"true\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".no-models-message"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".no-models-message",
+      "text": "Ctrl"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".no-models-message",
+      "text": "⌘"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.no-models-message button')).textDecorationLine",
+      "expect": "underline"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.no-models-message button')).overflow",
+      "expect": "visible"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const title = document.querySelector('.no-models-title').getBoundingClientRect(); const action = document.querySelector('.no-models-message button').getBoundingClientRect(); return action.x > title.x + title.width; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const title = document.querySelector('.no-models-title').getBoundingClientRect(); const action = document.querySelector('.no-models-message button').getBoundingClientRect(); return Math.abs(action.y - title.y) < 10; })()",
+      "expect": "true"
+    },
+    {
+      "action": "set_viewport",
+      "width": 412,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('.no-models-title')).textAlign",
+      "expect": "center"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const title = document.querySelector('.no-models-title').getBoundingClientRect(); const action = document.querySelector('.no-models-message button').getBoundingClientRect(); return action.y >= title.y + title.height; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const title = document.querySelector('.no-models-title').getBoundingClientRect(); const action = document.querySelector('.no-models-message button').getBoundingClientRect(); return Math.abs((action.x + action.width / 2) - (title.x + title.width / 2)) < 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Click here to add models",
+      "exact": true,
+      "within": {
+        "selector": ".no-models-message"
+      }
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='model-provider-form']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='model-mode-provider']",
+      "attribute": "aria-pressed",
+      "value": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:12:23.145393703Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 88187,
+    "output_tokens": 3202,
+    "estimated_cost_usd": 0.0995007,
+    "mode": "generated"
+  }
+}

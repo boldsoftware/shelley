@@ -1,0 +1,56 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The model catalog is fetched once on connect, and not again on conversation switches. The screen is the default 393x727 phone. There is a draft conversation, /c/{{DRAFT}}, whose draft is \"Provider catalog navigation fixture\". Call \"counts\" returns how many times the page has asked for the models (/api/models) and for the providers (/api/model-providers), as JSON. \"The input\" is data-testid \"message-input\". Perform the steps in order. 1. Navigate to /new. Call \"counts\" until it returns {\"models\":1,\"providers\":1}. 2. Switch the app to /c/{{DRAFT}} the way its router would: eval window.history.pushState({}, \"\", \"/c/{{DRAFT}}\") and then window.dispatchEvent(new PopStateEvent(\"popstate\")). The input should have the value exactly \"Provider catalog navigation fixture\". 3. Switch back to /new the same way: the input should have the value \"\" (empty). 4. Call \"counts\": it must return {\"models\":1,\"providers\":1}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "call",
+      "value": "counts",
+      "expect": "{\"models\":1,\"providers\":1}"
+    },
+    {
+      "action": "eval",
+      "expression": "window.history.pushState({}, '', '/c/{{DRAFT}}')"
+    },
+    {
+      "action": "eval",
+      "expression": "window.dispatchEvent(new PopStateEvent('popstate'))"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Provider catalog navigation fixture"
+    },
+    {
+      "action": "eval",
+      "expression": "window.history.pushState({}, '', '/new')"
+    },
+    {
+      "action": "eval",
+      "expression": "window.dispatchEvent(new PopStateEvent('popstate'))"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "call",
+      "value": "counts",
+      "expect": "{\"models\":1,\"providers\":1}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:04:33.839068166Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 20213,
+    "output_tokens": 778,
+    "estimated_cost_usd": 0.02349585,
+    "mode": "generated"
+  }
+}

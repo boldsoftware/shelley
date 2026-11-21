@@ -1,0 +1,413 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The shared add-models dialog, its endpoint presets, and recovery from provider failures. The screen is the default 393x727 phone. To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". The server is faked: it has two provider accounts, \"custom\" (id account-1, https://api.example.test/v1, one model) and \"Other\" (id account-2, no models); its one model is \"Work model\" from account-1, and that model is selected (localStorage \"shelley_selected_model\" is \"{{ROUTE}}\"). Checking a provider finds the chat model gpt-6.1-sol. Adding a provider and refreshing account-1 fail with 502 \"discovery failed\". Editing account-1 renames it \"Work edited\" with 2 models; removing it removes it and its model. Adding a single model succeeds. Call \"single input\" returns the provider_type, endpoint and model_name fields of the last single model the page added, as JSON (\"none\" before one); call \"provider input\" returns the provider_type and endpoint fields of the last provider the page tried to add (\"none\" before one). Name elements by ARIA role and accessible name, as Playwright's getByRole does. Elements named by a test id are those with that data-testid. \"The first connection\" is the first \"provider-connection\". Perform the steps in order. 1. Navigate to /new and open the model picker; click the panel's button whose name contains \"Manage Models\". 2. The first connection should contain the text \"custom\", and \".models-cell-name\" (exactly one) should have exactly the text \"Work model\". 3. Click the button named exactly \"+ Add Models\". \"model-mode-provider\" should have exactly the text \"Connect a provider\" and \"model-mode-single\" exactly \"Add a single model\". \"model-mode-provider\" should have aria-pressed=\"true\" and computed font-weight \"700\"; \"model-mode-single\" font-weight \"500\". \"provider-endpoint\" should have the value exactly \"https://api.anthropic.com/v1\". 4. Click \"model-mode-single\": it should have aria-pressed=\"true\" and font-weight \"700\", and \"model-mode-provider\" font-weight \"500\". 5. \"The single form\" is the visible \".model-form\" inside the last element with role \"dialog\". Its \"model-endpoint\" should have the value exactly \"https://api.anthropic.com/v1/messages\". Click the single form's button named exactly \"OpenAI (Chat API)\", then its button named exactly \"Endpoint\", then the menu item (role \"menuitem\") whose name starts with \"OpenRouter\". The single form's \"model-endpoint\" should have the value exactly \"https://openrouter.ai/api/v1\". 6. In the single form, fill \"model-endpoint\" with \"https://single.example.test/v1\", the input whose placeholder starts with \"Model name\" with \"single-model\", the input in the \".form-group\" containing \"Display Name\" with \"Single model\", and the input in the \".form-group\" containing \"API Key\" with \"single-secret\". Click the single form's button named exactly \"Add Model\". Call \"single input\" until it returns {\"endpoint\":\"https://single.example.test/v1\",\"model_name\":\"single-model\",\"provider_type\":\"openai\"}. 7. Click the button named exactly \"+ Add Models\": \"model-mode-provider\" should have aria-pressed=\"true\". \"The add form\" is \"model-provider-form\". Its \"provider-display-name\" should have the placeholder exactly \"Optional, e.g. Work\". Click the add form's button named exactly \"OpenAI (Chat API)\", then its button named exactly \"Endpoint\", then the menu item whose name starts with \"Groq\". The add form's \"provider-endpoint\" should have the value exactly \"https://api.groq.com/openai/v1\". 8. In the add form, fill \"provider-endpoint\" with \"https://custom.example.test/v1\", \"provider-display-name\" with \"Failed add\" and \"provider-api-key\" with \"secret\". Click its button named exactly \"Check models\". The add form's element with role \"status\" should contain \"1 chat models: gpt-6.1-sol\". Call \"provider input\": it must return \"none\". 9. Fill \"provider-api-key\" with \"changed\": the add form's status element should be hidden. Fill it with \"secret\" again. 10. Click the add form's button named exactly \"Connect\". Its element with role \"alert\" should have exactly the text \"Failed to add provider: discovery failed\". Call \"provider input\": it must return {\"endpoint\":\"https://custom.example.test/v1\",\"provider_type\":\"openai\"}. The first connection should still contain \"custom\". Click the add form's button whose name contains \"Cancel\". 11. Click \"refresh-provider-account-1\". \".models-error\" should contain \"discovery failed\", and the first connection should still contain \"custom\". 12. Click \"edit-provider-account-1\". In \"model-provider-form\", fill \"provider-display-name\" with \"Work edited\" and click its button whose name contains \"Save\". The first connection should contain \"Work edited\" and \"(2)\". 13. Click \"remove-provider-account-1\", then \"confirm-remove-provider\". There should be exactly 1 \"provider-connection\". The text \"This provider account was removed. Choose another model.\" should be visible. localStorage \"shelley_selected_model\" must still be exactly \"{{ROUTE}}\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker.p-select",
+      "visible": true,
+      "within": {
+        "selector": ".chat-overflow-popover"
+      }
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-panel",
+      "role": "button",
+      "name": "Manage Models"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='provider-connection']",
+      "text": "custom",
+      "nth": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".models-cell-name",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": ".models-cell-name",
+      "text": "Work model"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "+ Add Models",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='model-mode-provider']",
+      "text": "Connect a provider"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='model-mode-single']",
+      "text": "Add a single model"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='model-mode-provider']",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=model-mode-provider]')).fontWeight",
+      "expect": "700"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=model-mode-single]')).fontWeight",
+      "expect": "500"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='provider-endpoint']",
+      "value": "https://api.anthropic.com/v1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='model-mode-single']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='model-mode-single']",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=model-mode-single]')).fontWeight",
+      "expect": "700"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=model-mode-provider]')).fontWeight",
+      "expect": "500"
+    },
+    {
+      "action": "assert_value",
+      "selector": ".model-form [data-testid='model-endpoint']",
+      "value": "https://api.anthropic.com/v1/messages",
+      "within": {
+        "role": "dialog",
+        "nth": -1
+      },
+      "visible": true
+    },
+    {
+      "action": "click",
+      "selector": ".model-form",
+      "role": "button",
+      "name": "OpenAI (Chat API)",
+      "exact": true,
+      "visible": true,
+      "within": {
+        "role": "dialog",
+        "nth": -1
+      }
+    },
+    {
+      "action": "click",
+      "selector": ".model-form",
+      "role": "button",
+      "name": "Endpoint",
+      "exact": true,
+      "visible": true,
+      "within": {
+        "role": "dialog",
+        "nth": -1
+      }
+    },
+    {
+      "action": "click",
+      "role": "menuitem",
+      "name": "OpenRouter"
+    },
+    {
+      "action": "assert_value",
+      "selector": ".model-form [data-testid='model-endpoint']",
+      "value": "https://openrouter.ai/api/v1",
+      "within": {
+        "role": "dialog",
+        "nth": -1
+      },
+      "visible": true
+    },
+    {
+      "action": "fill",
+      "selector": ".model-form [data-testid='model-endpoint']",
+      "value": "https://single.example.test/v1",
+      "within": {
+        "role": "dialog",
+        "nth": -1
+      },
+      "visible": true
+    },
+    {
+      "action": "fill",
+      "selector": "input[placeholder^='Model name']",
+      "value": "single-model"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": ".form-group",
+        "has_text": "Display Name",
+        "visible": true
+      },
+      "selector": "input",
+      "value": "Single model"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": ".form-group",
+        "has_text": "API Key",
+        "visible": true
+      },
+      "selector": "input",
+      "value": "single-secret"
+    },
+    {
+      "action": "click",
+      "selector": ".model-form",
+      "role": "button",
+      "name": "Add Model",
+      "exact": true,
+      "visible": true,
+      "within": {
+        "role": "dialog",
+        "nth": -1
+      }
+    },
+    {
+      "action": "call",
+      "value": "single input",
+      "expect": "{\"endpoint\":\"https://single.example.test/v1\",\"model_name\":\"single-model\",\"provider_type\":\"openai\"}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "+ Add Models",
+      "exact": true
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='model-mode-provider']",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='model-provider-form'] [data-testid='provider-display-name']",
+      "attribute": "placeholder",
+      "value": "Optional, e.g. Work"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='model-provider-form']",
+      "role": "button",
+      "name": "OpenAI (Chat API)",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='model-provider-form']",
+      "role": "button",
+      "name": "Endpoint",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "menuitem",
+      "name": "Groq"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='provider-endpoint']",
+      "value": "https://api.groq.com/openai/v1"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='provider-endpoint']",
+      "value": "https://custom.example.test/v1"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='provider-display-name']",
+      "value": "Failed add"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='provider-api-key']",
+      "value": "secret"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='model-provider-form']",
+      "role": "button",
+      "name": "Check models",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": "[data-testid='model-provider-form']"
+      },
+      "role": "status",
+      "text": "1 chat models: gpt-6.1-sol"
+    },
+    {
+      "action": "call",
+      "value": "provider input",
+      "expect": "none"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='provider-api-key']",
+      "value": "changed"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='model-provider-form'] [role='status']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='provider-api-key']",
+      "value": "secret"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='model-provider-form']",
+      "role": "button",
+      "name": "Connect",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": "[data-testid='model-provider-form']"
+      },
+      "role": "alert",
+      "text": "Failed to add provider: discovery failed"
+    },
+    {
+      "action": "call",
+      "value": "provider input",
+      "expect": "{\"endpoint\":\"https://custom.example.test/v1\",\"provider_type\":\"openai\"}"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='provider-connection']",
+      "text": "custom",
+      "nth": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='model-provider-form']",
+      "role": "button",
+      "name": "Cancel"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='refresh-provider-account-1']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".models-error",
+      "text": "discovery failed"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='provider-connection']",
+      "text": "custom",
+      "nth": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='edit-provider-account-1']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='model-provider-form'] [data-testid='provider-display-name']",
+      "value": "Work edited"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='model-provider-form']",
+      "role": "button",
+      "name": "Save"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='provider-connection']",
+      "text": "Work edited",
+      "nth": 0
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='provider-connection']",
+      "text": "(2)",
+      "nth": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='remove-provider-account-1']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='confirm-remove-provider']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='provider-connection']",
+      "count": 1
+    },
+    {
+      "action": "wait_text",
+      "text": "This provider account was removed. Choose another model."
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley_selected_model')",
+      "expect": "{{ROUTE}}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:06:46.705529684Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 314573,
+    "output_tokens": 13361,
+    "estimated_cost_usd": 0.39563565,
+    "mode": "generated"
+  }
+}
