@@ -1450,10 +1450,10 @@ const (
 // findAllJS is an expression for the elements a step picks out: those its
 // selector matches, in deepAll's order, or, with a role, those locate found
 // (in document order) inside what its selector matches; then those inside
-// what its within picks out; then those whose text has has_text (with a
+// what its within picks out; then those holding what its has picks out (its
+// nth counting in each); then those whose text has has_text (with a
 // selector alone, an element that holds another match does not count, as
-// with Playwright's getByText); then those holding what its has picks out
-// (its nth counting in each); then, with visible, the visible ones; then,
+// with Playwright's getByText); then, with visible, the visible ones; then,
 // with nth, the one at that index. Evaluate it with evalFind.
 func findAllJS(step Step) string {
 	scopes := "null"
@@ -1525,6 +1525,20 @@ func pickJS(step Step, slot, scopes string) string {
 			all = deepAll(sel);
 		}
 		if (scopes) all = all.filter(inside(scopes));
+		if (hasEls) {
+			// How many of has's matches each element holds, as Playwright
+			// queries it inside each one.
+			const held = new Map();
+			for (const h of hasEls) {
+				for (let p = h.parentNode || h.host; p; p = p.parentNode || p.host) {
+					held.set(p, (held.get(p) || 0) + 1);
+				}
+			}
+			all = all.filter(el => {
+				const n = held.get(el) || 0;
+				return hasNth === null ? n > 0 : hasNth >= 0 ? n > hasNth : n >= -hasNth;
+			});
+		}
 		if (hasText !== '' && role) {
 			all = all.filter(has);
 		} else if (hasText !== '') {
@@ -1540,20 +1554,6 @@ func pickJS(step Step, slot, scopes string) string {
 				}
 			}
 			all = matches.filter(el => !outer.has(el));
-		}
-		if (hasEls) {
-			// How many of has's matches each element holds, as Playwright
-			// queries it inside each one.
-			const held = new Map();
-			for (const h of hasEls) {
-				for (let p = h.parentNode || h.host; p; p = p.parentNode || p.host) {
-					held.set(p, (held.get(p) || 0) + 1);
-				}
-			}
-			all = all.filter(el => {
-				const n = held.get(el) || 0;
-				return hasNth === null ? n > 0 : hasNth >= 0 ? n > hasNth : n >= -hasNth;
-			});
 		}
 		if (visible) all = all.filter(isVisible);
 		if (nth === null) return all;
@@ -1752,7 +1752,7 @@ func locateRole(ctx context.Context, step Step, slot string, world cdpruntime.Ex
 		}
 		kept := matches[:0]
 		for i, m := range matches {
-			if m.from == nil || writtenCase(m.name, collapse(texts[i])) == want {
+			if m.from == nil || writtenAs(m.name, want, texts[i]) {
 				kept = append(kept, m)
 			}
 		}
@@ -1827,16 +1827,17 @@ func nameNodes(n *accessibility.Node) []cdp.BackendNodeID {
 	return nil
 }
 
-// writtenCase is name in the case text has it in, where text holds it in
-// some case; otherwise, as when hidden parts split it in text, it is name.
-func writtenCase(name, text string) string {
-	n, t := len([]rune(name)), []rune(text)
-	for i := 0; i+n <= len(t); i++ {
-		if s := string(t[i : i+n]); strings.EqualFold(s, name) {
-			return s
-		}
+// writtenAs reports whether name, which is want but for case, is want in
+// text, the DOM text it comes from. Whitespace does not count, since Chrome
+// spaces out blocks that text runs together. Where text does not hold the
+// name in any case, as when hidden parts split it, name stands as it is.
+func writtenAs(name, want, text string) bool {
+	strip := func(s string) string { return strings.Join(strings.Fields(s), "") }
+	name, want, text = strip(name), strip(want), strip(text)
+	if !strings.Contains(strings.ToLower(text), strings.ToLower(name)) {
+		return name == want
 	}
-	return name
+	return strings.Contains(text, want)
 }
 
 // lookupErr is err from finding step's role, which says so when the step's
@@ -1961,6 +1962,7 @@ const targetJS = `(async function(el, sel, dx, dy, checkEnabled, events) {
 	if (!el) return {err: 'no element matches ' + sel};
 	el.scrollIntoViewIfNeeded(true);
 	if (!isVisible(el)) return {err: sel + ' is not visible'};
+	if (getComputedStyle(el).display === 'contents') return {err: sel + ' is display: contents and has no box to aim at; pick an element in it'};
 	const r = el.getBoundingClientRect();
 	const raf = window.__lazycueRAF || requestAnimationFrame;
 	await new Promise(done => raf(() => raf(done)));

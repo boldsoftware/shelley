@@ -165,6 +165,15 @@ func TestVisibility(t *testing.T) {
 		Step{Action: ActionWaitHidden, Selector: "#missing"},
 	)
 	failSteps(t, br, env, Step{Action: ActionWaitHidden, Selector: "#fixed", Timeout: "300ms"})
+	// A display: contents element is visible but has no box to aim at.
+	for _, step := range []Step{
+		{Action: ActionClick, Selector: "#contents", Timeout: "300ms"},
+		{Action: ActionHover, Selector: "#text", Timeout: "300ms"},
+	} {
+		if err := failSteps(t, br, env, step); !strings.Contains(err.Error(), step.Selector+" is display: contents and has no box to aim at; pick an element in it") {
+			t.Errorf("%s: %v", StepSummary(step), err)
+		}
+	}
 }
 
 func TestHasText(t *testing.T) {
@@ -379,6 +388,7 @@ func TestHas(t *testing.T) {
 <li class="item"><x-badge></x-badge><button>Use</button></li>
 </ul></section>
 <section><h2>Other</h2><ul><li class="item"><span class="name">Default</span><button>Use</button></li></ul></section>
+<div class="card"><div class="title">Hello</div><button>Go</button></div>
 <script>
 customElements.define('x-badge', class extends HTMLElement {
   connectedCallback() { this.attachShadow({mode: 'open'}).innerHTML = '<span class="name">Shadowed</span>'; }
@@ -400,6 +410,10 @@ document.addEventListener('click', e => document.title = e.target.closest('li').
 		Step{Action: ActionAssertCount, Selector: "section", Has: &Pick{Selector: ".item", Nth: ptr(-3)}, Count: 1},
 		Step{Action: ActionAssertCount, Selector: "section", Has: &Pick{Selector: ".item", Nth: ptr(3)}, Count: 0},
 		Step{Action: ActionAssertCount, Selector: "section", Has: &Pick{Selector: ".item", Nth: ptr(0)}, Count: 2},
+		// has goes before has_text keeps the innermost: the card holds the
+		// title, but the title has no button.
+		Step{Action: ActionAssertCount, Selector: "div", HasText: "Hello", Has: &Pick{Selector: "button"}, Count: 1},
+		Step{Action: ActionAssertCount, Selector: ".card", HasText: "Hello", Has: &Pick{Selector: "button"}, Count: 1},
 		// An element does not have itself.
 		Step{Action: ActionAssertCount, Selector: ".name", Has: &Pick{Selector: ".name"}, Count: 0},
 		// Within's has picks the section; the step's has, the row in it.
@@ -411,6 +425,7 @@ document.addEventListener('click', e => document.title = e.target.closest('li').
 	}{
 		{Step{Action: ActionClick, Selector: "li", Has: &Pick{HasText: "Default"}}, "has needs a selector or a role"},
 		{Step{Action: ActionClick, Selector: "li", Has: &Pick{Selector: "span", Name: "x"}}, "a name needs a role"},
+		{Step{Action: ActionClick, Has: &Pick{Selector: "span"}}, "has narrows a step's selector or role; set one"},
 		{Step{Action: ActionClick, Selector: "li", Has: &Pick{Selector: ".nope"}}, "no element matches li has .nope"},
 	} {
 		c.step.Timeout = "300ms"
@@ -650,6 +665,8 @@ func TestExactNamesIgnoreTextTransform(t *testing.T) {
 <button style="text-transform: uppercase">Save it</button>
 <label style="text-transform: capitalize">the <input> box</label>
 <button aria-label="SHOUT" style="text-transform: lowercase">Shout</button>
+<button style="text-transform: uppercase"><div>Two</div><div>blocks</div></button>
+<button><span style="display: none">look</span> Ok</button>
 </body></html>`)}
 	runSteps(t, br, env,
 		Step{Action: ActionNavigate, URL: "/"},
@@ -660,6 +677,12 @@ func TestExactNamesIgnoreTextTransform(t *testing.T) {
 		// An aria-label is the name as written.
 		Step{Action: ActionAssertCount, Role: "button", Name: "SHOUT", Exact: true, Count: 1},
 		Step{Action: ActionAssertCount, Role: "button", Name: "Shout", Exact: true, Count: 0},
+		// Chrome spaces out blocks that the DOM text runs together.
+		Step{Action: ActionAssertCount, Role: "button", Name: "Two blocks", Exact: true, Count: 1},
+		Step{Action: ActionAssertCount, Role: "button", Name: "TWO BLOCKS", Exact: true, Count: 0},
+		// Hidden text the name leaves out holds the name in another case.
+		Step{Action: ActionAssertCount, Role: "button", Name: "Ok", Exact: true, Count: 1},
+		Step{Action: ActionAssertCount, Role: "button", Name: "OK", Exact: true, Count: 0},
 	)
 }
 
