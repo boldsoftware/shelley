@@ -15,11 +15,19 @@
     },
     {
       "action": "assert_visible",
-      "selector": "[data-testid=\"message-gitinfo\"] .msg-subject"
+      "within": {
+        "selector": "[data-testid='message-gitinfo']",
+        "has_text": "{{HASH}}"
+      },
+      "selector": ".msg-subject"
     },
     {
       "action": "assert_count",
-      "selector": "[data-testid=\"message-gitinfo\"] .msg-branch",
+      "within": {
+        "selector": "[data-testid='message-gitinfo']",
+        "has_text": "{{HASH}}"
+      },
+      "selector": ".msg-branch",
       "count": 0
     },
     {

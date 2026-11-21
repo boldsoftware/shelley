@@ -15,30 +15,49 @@
     },
     {
       "action": "assert_visible",
-      "selector": "[data-testid='message-gitinfo']",
+      "within": {
+        "selector": "[data-testid='message-gitinfo']",
+        "has_text": "{{HASH}}"
+      },
       "role": "link",
       "name": "Open Diff",
       "exact": true
     },
     {
       "action": "assert_text",
-      "selector": "[data-testid='message-gitinfo'] .msg-subject",
+      "within": {
+        "selector": "[data-testid='message-gitinfo']",
+        "has_text": "{{HASH}}"
+      },
+      "selector": ".msg-subject",
       "text": "Keep full commit subjects and branch names readable in the compact conversation git strip"
     },
     {
       "action": "assert_attribute",
-      "selector": "[data-testid='message-gitinfo'] .msg-subject",
+      "within": {
+        "selector": "[data-testid='message-gitinfo']",
+        "has_text": "{{HASH}}"
+      },
+      "selector": ".msg-subject",
       "attribute": "title",
       "value": "Keep full commit subjects and branch names readable in the compact conversation git strip"
     },
     {
       "action": "assert_text",
-      "selector": "[data-testid='message-gitinfo'] .msg-branch",
+      "within": {
+        "selector": "[data-testid='message-gitinfo']",
+        "has_text": "{{HASH}}"
+      },
+      "selector": ".msg-branch",
       "text": "feature/keep-long-conversation-metadata-readable"
     },
     {
       "action": "assert_attribute",
-      "selector": "[data-testid='message-gitinfo'] .msg-worktree",
+      "within": {
+        "selector": "[data-testid='message-gitinfo']",
+        "has_text": "{{HASH}}"
+      },
+      "selector": ".msg-worktree",
       "attribute": "title",
       "value": "{{REPO}}"
     },
@@ -127,7 +146,10 @@
     },
     {
       "action": "click",
-      "selector": "[data-testid='message-gitinfo']",
+      "within": {
+        "selector": "[data-testid='message-gitinfo']",
+        "has_text": "{{HASH}}"
+      },
       "role": "link",
       "name": "Open Diff",
       "exact": true
