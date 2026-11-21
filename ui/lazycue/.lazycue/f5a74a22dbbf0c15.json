@@ -1,0 +1,98 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A recording that finished before its delayed draft is submitted to that draft. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". The server's answer to the browser's draft creation is held back until call \"releaseDraft\"; call \"draftCreated\" says (\"true\" or \"false\") whether the server has created it and, once it has, sets {{DRAFT}} to its conversation ID. Recording uploads (POST /api/upload/raw) succeed with the path /tmp/shelley-uploads/early-stop.webm, and call \"uploads\" counts them. Message submissions (POST /api/conversation/\u003cid\u003e/chat) are accepted without being sent on; call \"chatPaths\" lists their URL paths as JSON. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. Fill the message input with \"Context for the early stop.\". Click the voice button.\n2. The recording state should become \"recording\".\n3. Call \"draftCreated\" until it returns \"true\".\n4. Click the stop button. The recording state should become \"stopping\", and [data-testid=\"recording-preserved-text\"] should have the text exactly \"Context for the early stop.\".\n5. Call \"uploads\" should return \"1\", window.__recordingMock.stoppedTracks should become 1, and call \"chatPaths\" must return exactly [].\n6. Call \"releaseDraft\".\n7. Call \"chatPaths\" should return exactly [\"/api/conversation/{{DRAFT}}/chat\"].\n8. The URL should have exactly the path \"/c/{{DRAFT}}\" (an exact \"value\", not \"text\"), and the message input should have the value \"\" (empty).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "15s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Context for the early stop."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "recording"
+    },
+    {
+      "action": "call",
+      "value": "draftCreated",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-stop-button']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "stopping"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='recording-preserved-text']",
+      "text": "Context for the early stop."
+    },
+    {
+      "action": "call",
+      "value": "uploads",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.stoppedTracks",
+      "expect": "1"
+    },
+    {
+      "action": "call",
+      "value": "chatPaths",
+      "expect": "[]"
+    },
+    {
+      "action": "call",
+      "value": "releaseDraft"
+    },
+    {
+      "action": "call",
+      "value": "draftCreated"
+    },
+    {
+      "action": "call",
+      "value": "chatPaths",
+      "expect": "[\"/api/conversation/{{DRAFT}}/chat\"]"
+    },
+    {
+      "action": "wait_url",
+      "timeout": "10s",
+      "value": "/c/{{DRAFT}}"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:12:13.134630647Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28229,
+    "output_tokens": 1422,
+    "estimated_cost_usd": 0.03905745,
+    "mode": "generated"
+  }
+}

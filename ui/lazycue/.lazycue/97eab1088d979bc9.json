@@ -1,6 +1,6 @@
 {
   "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
-  "description": "Normal send waits for its delayed new-conversation draft without following later navigation. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. To \"select conversation X from the drawer\": if the button with aria-label \"Open conversations\" is visible, click it; then wait for \".conversation-item[data-conversation-id=\\\"X\\\"]\" to be visible, click it, and wait until it has the class \"active\". The server's answer to the browser's draft creation (POST /api/conversations/draft) is held back until call \"releaseDraft\"; call \"draftCreated\" says (\"true\" or \"false\") whether the server has created the draft and, once it has, sets {{DRAFT}} to its conversation ID; call \"draftAnswered\" says whether the browser has received the answer. Message submissions (POST /api/conversation/\u003cid\u003e/chat) reach the server; call \"chats\" counts them, and call \"submissions\" lists them as JSON, each with its URL path and message. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. Fill the message input with \"Send this message to the draft that created it.\".\n2. Call \"draftCreated\" until it returns \"true\".\n3. Click [data-testid=\"send-button\"].\n4. Select conversation {{VIEWED}} from the drawer. The URL should end with \"/c/{{VIEWED_SLUG}}\".\n5. Call \"releaseDraft\". Call \"chats\" should return \"1\".\n6. Call \"submissions\" must return exactly [{\"path\":\"/api/conversation/{{DRAFT}}/chat\",\"message\":\"Send this message to the draft that created it.\"}].\n7. The URL should still end with \"/c/{{VIEWED_SLUG}}\".\n8. Eval \"localStorage.getItem('shelley-draft:{{DRAFT}}') === null\" should become true.\n9. Select conversation {{DRAFT}} from the drawer. The message input should have the value \"\" (empty).",
+  "description": "Normal send waits for its delayed new-conversation draft without following later navigation. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. To \"select conversation X from the drawer\": if the button with aria-label \"Open conversations\" is visible, click it; then wait for \".conversation-item[data-conversation-id=\\\"X\\\"]\" to be visible, click it, and wait until it has the class \"active\". The server's answer to the browser's draft creation (POST /api/conversations/draft) is held back until call \"releaseDraft\"; call \"draftCreated\" says (\"true\" or \"false\") whether the server has created the draft and, once it has, sets {{DRAFT}} to its conversation ID; call \"draftAnswered\" says whether the browser has received the answer. Message submissions (POST /api/conversation/\u003cid\u003e/chat) reach the server; call \"chats\" counts them, and call \"submissions\" lists them as JSON, each with its URL path and message. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. Fill the message input with \"Send this message to the draft that created it.\".\n2. Call \"draftCreated\" until it returns \"true\".\n3. Click [data-testid=\"send-button\"].\n4. Select conversation {{VIEWED}} from the drawer. The URL should have exactly the path \"/c/{{VIEWED_SLUG}}\" (an exact \"value\", not \"text\").\n5. Call \"releaseDraft\". Call \"chats\" should return \"1\".\n6. Call \"submissions\" must return exactly [{\"path\":\"/api/conversation/{{DRAFT}}/chat\",\"message\":\"Send this message to the draft that created it.\"}].\n7. The URL should still have exactly the path \"/c/{{VIEWED_SLUG}}\" (an exact \"value\", not \"text\").\n8. Eval \"localStorage.getItem('shelley-draft:{{DRAFT}}') === null\" should become true.\n9. Select conversation {{DRAFT}} from the drawer. The message input should have the value \"\" (empty).",
   "version": 1,
   "steps": [
     {
@@ -51,8 +51,8 @@
     },
     {
       "action": "wait_url",
-      "text": "/c/{{VIEWED_SLUG}}",
-      "timeout": "10s"
+      "timeout": "10s",
+      "value": "/c/{{VIEWED_SLUG}}"
     },
     {
       "action": "call",
@@ -70,7 +70,7 @@
     },
     {
       "action": "assert_url",
-      "text": "/c/{{VIEWED_SLUG}}"
+      "value": "/c/{{VIEWED_SLUG}}"
     },
     {
       "action": "eval",

@@ -1,6 +1,6 @@
 {
   "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
-  "description": "Durable transcription queue states render in exact order, also after a reload. The test seeded a conversation at /c/{{SLUG}} whose server data reports four queued messages, in this order: a plain message \"echo: first queued message\"; a transcription still working on /tmp/shelley-uploads/working.webm with the context \"Keep this image [/tmp/shelley-uploads/context.png]\"; a ready transcription of /tmp/shelley-uploads/ready.webm with the text \"Finished spoken words.\"; and a failed transcription of /tmp/shelley-uploads/failed.webm with the error \"transcription unavailable\". The live event stream is cut off. Requests to send a queued message now (POST /api/conversation/\u003cid\u003e/send-queued?queued_id=\u003cid\u003e) are accepted without effect; call \"sendQueued\" reports the first one as \"\u003cmethod\u003e /send-queued?\u003cquery\u003e\" (\"none\" before there is one). \"The items\" are the elements matching '[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]', in document order. Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input ([data-testid=\"message-input\"]) to be visible.\n2. There should be exactly 4 items. Item 1 should contain \"first queued message\"; item 2 \"Transcribing…\", \"working.webm\" and \"Keep this image\"; item 3 \"Finished spoken words.\" and \"Queued\"; item 4 \"Recording failed\" and \"transcription unavailable\".\n3. There should be exactly 2 [data-testid=\"queued-ghost\"], exactly 2 [data-testid=\"transcription-task\"] and exactly 1 [data-testid=\"send-queued-now\"].\n4. Click [data-testid=\"send-queued-now\"]. Call \"sendQueued\" should return \"POST /send-queued?queued_id=q-first\".\n5. Reload: navigate to /c/{{SLUG}} again. The URL should end with /c/{{SLUG}}.\n6. There should again be exactly 4 items: item 1 containing \"first queued message\", item 2 \"working.webm\", item 3 \"Finished spoken words.\" and item 4 \"failed.webm\".",
+  "description": "Durable transcription queue states render in exact order, also after a reload. The test seeded a conversation at /c/{{SLUG}} whose server data reports four queued messages, in this order: a plain message \"echo: first queued message\"; a transcription still working on /tmp/shelley-uploads/working.webm with the context \"Keep this image [/tmp/shelley-uploads/context.png]\"; a ready transcription of /tmp/shelley-uploads/ready.webm with the text \"Finished spoken words.\"; and a failed transcription of /tmp/shelley-uploads/failed.webm with the error \"transcription unavailable\". The live event stream is cut off. Requests to send a queued message now (POST /api/conversation/\u003cid\u003e/send-queued?queued_id=\u003cid\u003e) are accepted without effect; call \"sendQueued\" reports the first one as \"\u003cmethod\u003e /send-queued?\u003cquery\u003e\" (\"none\" before there is one). \"The items\" are the elements matching '[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]', in document order. Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input ([data-testid=\"message-input\"]) to be visible.\n2. There should be exactly 4 items. Item 1 should contain \"first queued message\"; item 2 \"Transcribing…\", \"working.webm\" and \"Keep this image\"; item 3 \"Finished spoken words.\" and \"Queued\"; item 4 \"Recording failed\" and \"transcription unavailable\".\n3. There should be exactly 2 [data-testid=\"queued-ghost\"], exactly 2 [data-testid=\"transcription-task\"] and exactly 1 [data-testid=\"send-queued-now\"].\n4. Click [data-testid=\"send-queued-now\"]. Call \"sendQueued\" should return \"POST /send-queued?queued_id=q-first\".\n5. Reload: navigate to /c/{{SLUG}} again. The URL should have exactly the path \"/c/{{SLUG}}\" (an exact \"value\", not \"text\").\n6. There should again be exactly 4 items: item 1 containing \"first queued message\", item 2 \"working.webm\", item 3 \"Finished spoken words.\" and item 4 \"failed.webm\".",
   "version": 1,
   "steps": [
     {
@@ -29,7 +29,7 @@
     },
     {
       "action": "eval",
-      "expression": "document.querySelectorAll('[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]')[1].textContent.includes('Transcribing')",
+      "expression": "document.querySelectorAll('[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]')[1].textContent.includes('Transcribing…')",
       "expect": "true"
     },
     {
@@ -97,8 +97,8 @@
     },
     {
       "action": "wait_url",
-      "text": "/c/{{SLUG}}",
-      "timeout": "10s"
+      "timeout": "10s",
+      "value": "/c/{{SLUG}}"
     },
     {
       "action": "wait_visible",

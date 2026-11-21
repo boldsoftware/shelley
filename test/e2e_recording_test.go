@@ -591,7 +591,7 @@ func TestE2ERecordingQueueStatesInOrderAfterReload(t *testing.T) {
 2. There should be exactly 4 items. Item 1 should contain "first queued message"; item 2 "Transcribing…", "working.webm" and "Keep this image"; item 3 "Finished spoken words." and "Queued"; item 4 "Recording failed" and "transcription unavailable".
 3. There should be exactly 2 [data-testid="queued-ghost"], exactly 2 [data-testid="transcription-task"] and exactly 1 [data-testid="send-queued-now"].
 4. Click [data-testid="send-queued-now"]. Call "sendQueued" should return "POST /send-queued?queued_id=q-first".
-5. Reload: navigate to /c/{{SLUG}} again. The URL should end with /c/{{SLUG}}.
+5. Reload: navigate to /c/{{SLUG}} again. The URL should have exactly the path "/c/{{SLUG}}" (an exact "value", not "text").
 6. There should again be exactly 4 items: item 1 containing "first queued message", item 2 "working.webm", item 3 "Finished spoken words." and item 4 "failed.webm".`, func(s *shelley) {
 		recording(s)
 		c := s.queuedConversation([]map[string]any{
@@ -682,7 +682,7 @@ func TestE2ERecordingMicrophoneBeforeDelayedDraftCancelStopsTracks(t *testing.T)
 2. Press the record-audio shortcut.
 3. Exactly one [data-testid="recording-inline"] should exist, and the recording state should become "recording".
 4. Call "draftCreated" until it returns "true".
-5. window.__recordingMock.recorderStarts must be 1, and the URL must still end with "/new".
+5. window.__recordingMock.recorderStarts must be 1, and the URL must still have exactly the path "/new" (an exact "value", not "text").
 6. Click the cancel button. No recording panel should remain (count 0), and the message input should have the value "Pending draft text.".
 7. window.__recordingMock.stoppedTracks should become 1, and call "uploads" must return "0".
 8. Call "releaseDraft". The URL should come to contain "/c/".
@@ -700,8 +700,8 @@ func TestE2ERecordingReturnBeforeDelayedDraftNoNavigateAfterCancel(t *testing.T)
 3. Select conversation {{VIEWED}} from the drawer. The recorder should float.
 4. Click [data-testid="recording-return-button"], then click the cancel button. No recording panel should remain (count 0).
 5. Call "releaseDraft", then call "draftAnswered" until it returns "true".
-6. The URL should end with "/c/{{VIEWED_SLUG}}".
-7. The voice button should be enabled, and the URL must still end with "/c/{{VIEWED_SLUG}}".`, func(s *shelley) {
+6. The URL should have exactly the path "/c/{{VIEWED_SLUG}}" (an exact "value", not "text").
+7. The voice button should be enabled, and the URL must still have exactly the path "/c/{{VIEWED_SLUG}}" (an exact "value", not "text").`, func(s *shelley) {
 		recording(s)
 		viewed := s.conversation("echo: stay here", "")
 		s.v("VIEWED", viewed.ID)
@@ -721,7 +721,7 @@ func TestE2ERecordingReturnLookupAfterCancelNoNavigate(t *testing.T) {
 7. Call "releaseLookup".
 Wait for JSON consumption, not merely the response headers. The lookup's awaiting continuation runs before the next browser assertion.
 8. The body should get data-recording-return-read "true".
-9. The voice button should be enabled, and the URL should end with "/c/{{VIEWED_SLUG}}".`, func(s *shelley) {
+9. The voice button should be enabled, and the URL should have exactly the path "/c/{{VIEWED_SLUG}}" (an exact "value", not "text").`, func(s *shelley) {
 		recording(s)
 		s.initScript(`window.__watchReturnRead = () => {
   const fetch0 = window.fetch;
@@ -764,7 +764,7 @@ func TestE2ERecordingFinishedBeforeDelayedDraftSubmitsToIt(t *testing.T) {
 5. Call "uploads" should return "1", window.__recordingMock.stoppedTracks should become 1, and call "chatPaths" must return exactly [].
 6. Call "releaseDraft".
 7. Call "chatPaths" should return exactly ["/api/conversation/{{DRAFT}}/chat"].
-8. The URL should end with "/c/{{DRAFT}}", and the message input should have the value "" (empty).`, func(s *shelley) {
+8. The URL should have exactly the path "/c/{{DRAFT}}" (an exact "value", not "text"), and the message input should have the value "" (empty).`, func(s *shelley) {
 		recording(s)
 		s.heldDraft()
 		s.fakeUploads("/tmp/shelley-uploads/early-stop.webm")
@@ -923,7 +923,7 @@ func TestE2ERecordingRetriesFailedDestinationAfterNavigation(t *testing.T) {
 15. Call "drafts" must return "3 same". Call "source" must return "true".
 16. Call "submissions" must return exactly [{"path":"/api/conversation/{{SOURCE}}/chat","message":"/transcription /tmp/shelley-uploads/retained.webm\nOriginal recording context. [/tmp/shelley-uploads/original-context.txt]","model":"predictable"}].
 17. Call "uploads" must return "1", window.__recordingMock.recorderStarts must be 1, and window.__recordingMock.microphoneRequests must be 1.
-18. The URL should end with "/new", and the message input should have the value "A newer new-conversation composer.".`, func(s *shelley) {
+18. The URL should have exactly the path "/new" (an exact "value", not "text"), and the message input should have the value "A newer new-conversation composer.".`, func(s *shelley) {
 		recording(s)
 		s.v("VIEWED", s.draft("A separate draft."))
 		releaseFirst := s.gate("releaseFirstDraft")
@@ -1017,7 +1017,7 @@ func TestE2ERecordingDiscardsRetainedWhileDestinationPending(t *testing.T) {
 4. Call "uploads" should return "1".
 5. The cancel button's accessible name (its aria-label) should be exactly "Discard recording", and it should be enabled. Click it.
 6. No recording panel should remain (count 0), and the message input should have the value "Keep the composer after discarding audio.".
-7. Call "releaseDraft". The URL should come to end with "/c/{{DRAFT}}".
+7. Call "releaseDraft". The URL should come to have exactly the path "/c/{{DRAFT}}" (an exact "value", not "text").
 8. The message input should still have the value "Keep the composer after discarding audio.".
 9. Call "chats" must return "0", and window.__recordingMock.stoppedTracks must be 1.`, func(s *shelley) {
 		recording(s)
@@ -1196,10 +1196,10 @@ func switchingRecorder(t *testing.T, draft bool) {
 1. Navigate to /c/{{ORIGINAL}} and wait up to 30s for the message input to be visible. `+prepare+`
 2. Click the voice button. The recording panel should be visible. Mark it: eval "document.querySelector('[data-testid=\"recording-panel\"]').setAttribute('data-instance-marker', 'original')".
 3. window.__recordingMock.recorderStarts should become 1.
-4. Select conversation {{OTHER}} from the drawer. The URL should end with "/c/{{OTHER_SLUG}}".
+4. Select conversation {{OTHER}} from the drawer. The URL should have exactly the path "/c/{{OTHER_SLUG}}" (an exact "value", not "text").
 5. Exactly one recording panel should exist (count 1), and it should still have data-instance-marker "original", the recorder should float, [data-testid="recording-return-button"] should be visible, and the voice button should be disabled.
 6. The recorder counts must be exactly {"starts":1,"stops":0}.
-7. Click [data-testid="recording-return-button"]. The URL should end with "/c/{{ORIGINAL}}".
+7. Click [data-testid="recording-return-button"]. The URL should have exactly the path "/c/{{ORIGINAL}}" (an exact "value", not "text").
 8. Exactly one recording panel should exist (count 1), and it should still have data-instance-marker "original", the recorder should not float, and no [data-testid="recording-return-button"] may exist (count 0).
 9. The recorder counts must be exactly {"starts":1,"stops":0}.
 10. [data-testid="recording-preserved-text"] should have the text exactly "Preserve the `+kind+` recording context.".
@@ -1237,7 +1237,7 @@ func TestE2ERecordingScreenCaptureAndPreviewSurviveNavigation(t *testing.T) {
 7. Select conversation {{VIEWED}} from the drawer.
 8. Exactly one recording panel and one preview should exist (count 1 each); the panel should still have data-instance-marker "screen" and the preview data-instance-marker "screen-preview". The preview must keep its stream, and the recorder should float.
 9. The capture counts must be exactly {"sameStarts":true,"displayRequests":1}.
-10. Click [data-testid="recording-return-button"]. The URL should end with "/c/{{ORIGINAL_SLUG}}".
+10. Click [data-testid="recording-return-button"]. The URL should have exactly the path "/c/{{ORIGINAL_SLUG}}" (an exact "value", not "text").
 11. Exactly one recording panel and one preview should exist (count 1 each); the panel should still have data-instance-marker "screen" and the preview data-instance-marker "screen-preview". The preview must keep its stream, and the recorder should not float.
 12. The capture counts must be exactly {"sameStarts":true,"displayRequests":1}.
 13. Click the cancel button. Call "uploads" must return "0".`, func(s *shelley) {
@@ -1253,9 +1253,9 @@ func TestE2ERecordingFloatsWhileArchivedConversationViewed(t *testing.T) {
 1. Navigate to /c/{{ORIGINAL_SLUG}} and wait up to 30s for the message input to be visible.
 2. Click the voice button. The recording panel should be visible. Mark it: eval "document.querySelector('[data-testid=\"recording-panel\"]').setAttribute('data-instance-marker', 'archived')".
 3. If the button with aria-label "Open conversations" is visible, click it. Click the button "View Archived", then click ".conversation-item[data-conversation-id=\"{{ARCHIVED}}\"]".
-4. The URL should end with "/c/{{ARCHIVED_SLUG}}", and the message input should be hidden.
+4. The URL should have exactly the path "/c/{{ARCHIVED_SLUG}}" (an exact "value", not "text"), and the message input should be hidden.
 5. Exactly one recording panel should exist (count 1); it should be visible and still have data-instance-marker "archived", the recorder should float, and [data-testid="recording-return-button"] should be visible.
-6. Click [data-testid="recording-return-button"]. The URL should end with "/c/{{ORIGINAL_SLUG}}", and the recorder should not float.
+6. Click [data-testid="recording-return-button"]. The URL should have exactly the path "/c/{{ORIGINAL_SLUG}}" (an exact "value", not "text"), and the recorder should not float.
 7. Click the cancel button. Call "uploads" must return "0".`, func(s *shelley) {
 		recording(s)
 		s.v("ORIGINAL_SLUG", s.conversation("echo: recorder beside archived view origin", "").Slug)
@@ -1273,7 +1273,7 @@ func TestE2ERecordingRestoresSourceDraftKeepsViewedDraftSeparate(t *testing.T) {
 2. Click the voice button. The recording panel should be visible.
 3. Select conversation {{VIEWED}} from the drawer. The message input should have the value "Seeded text in the viewed draft.".
 4. Fill it with "Edited and read text in the viewed draft.". It should have that value.
-5. Click [data-testid="recording-return-button"]. The URL should end with "/c/{{ORIGINAL_SLUG}}".
+5. Click [data-testid="recording-return-button"]. The URL should have exactly the path "/c/{{ORIGINAL_SLUG}}" (an exact "value", not "text").
 6. Click the cancel button. The message input should have the value "Restore this source text after cancellation.".
 7. Select conversation {{VIEWED}} from the drawer. The message input should have the value "Edited and read text in the viewed draft.".
 8. Call "uploads" must return "0".`, func(s *shelley) {
@@ -1293,7 +1293,7 @@ func TestE2ERecordingStopsFloatingIntoOriginalConversation(t *testing.T) {
 5. Click the stop button. Call "chats" should return "1". No recording panel should remain (count 0).
 6. Call "submissions" must return exactly [{"path":"/api/conversation/{{ORIGINAL}}/chat","message":"/transcription /tmp/shelley-uploads/floating.webm\nOriginal spoken context.","model":"predictable","transcription_context":false}].
 7. Call "uploads" must return "1".
-8. The URL should end with "/c/{{VIEWED_SLUG}}", and the message input should have the value "Do not disturb this viewed draft.".
+8. The URL should have exactly the path "/c/{{VIEWED_SLUG}}" (an exact "value", not "text"), and the message input should have the value "Do not disturb this viewed draft.".
 9. The ".message-attachment-name" should have the text exactly "viewed-draft.txt", and exactly one ".message-attachment-ready" should exist.`, func(s *shelley) {
 		recording(s)
 		original := s.conversation("echo: floating stop origin", "")
@@ -1346,10 +1346,10 @@ func TestE2ERecordingBlankNewConversationSavedReturnTarget(t *testing.T) {
 1. Navigate to /new and click the voice button.
 2. Call "draftCreated" should return "true" within 10s.
 3. Call "draftResponse" must return exactly {"status":201,"draft":""}.
-4. The URL should end with "/c/{{DRAFT}}".
+4. The URL should have exactly the path "/c/{{DRAFT}}" (an exact "value", not "text").
 5. The recording panel should be visible. Mark it: eval "document.querySelector('[data-testid=\"recording-panel\"]').setAttribute('data-instance-marker', 'blank-new')".
 6. Select conversation {{VIEWED}} from the drawer. The recorder should float, and the voice button should be disabled.
-7. Click [data-testid="recording-return-button"]. The URL should end with "/c/{{DRAFT}}".
+7. Click [data-testid="recording-return-button"]. The URL should have exactly the path "/c/{{DRAFT}}" (an exact "value", not "text").
 8. Exactly one recording panel should exist (count 1), and it should still have data-instance-marker "blank-new", and the recorder should not float.
 9. Click the cancel button. Call "uploads" must return "0".`, func(s *shelley) {
 		recording(s)
@@ -1389,10 +1389,10 @@ func TestE2ERecordingDelayedBlankDraftNoHijack(t *testing.T) {
 1. Navigate to /new and click the voice button.
 2. Call "draftCreated" until it returns "true".
 3. Exactly one [data-testid="recording-inline"] should exist, and window.__recordingMock.recorderStarts should become 1.
-4. Select conversation {{VIEWED}} from the drawer. The URL should end with "/c/{{VIEWED_SLUG}}", and the voice button should be disabled.
+4. Select conversation {{VIEWED}} from the drawer. The URL should have exactly the path "/c/{{VIEWED_SLUG}}" (an exact "value", not "text"), and the voice button should be disabled.
 5. Call "releaseDraft", then call "draftAnswered" until it returns "true".
-6. The recording panel should be visible, the recorder should float, and the URL should still end with "/c/{{VIEWED_SLUG}}". window.__recordingMock.recorderStarts should be 1.
-7. Click [data-testid="recording-return-button"]. The URL should end with "/c/{{DRAFT}}", and the recorder should not float.
+6. The recording panel should be visible, the recorder should float, and the URL should still have exactly the path "/c/{{VIEWED_SLUG}}" (an exact "value", not "text"). window.__recordingMock.recorderStarts should be 1.
+7. Click [data-testid="recording-return-button"]. The URL should have exactly the path "/c/{{DRAFT}}" (an exact "value", not "text"), and the recorder should not float.
 8. Click the cancel button.`, func(s *shelley) {
 		recording(s)
 		viewed := s.conversation("echo: delayed blank recording destination", "")
@@ -1418,10 +1418,10 @@ func delayedSend(t *testing.T, transcription bool) {
 1. Navigate to /new. Fill the message input with `+fill+`.
 2. Call "draftCreated" until it returns "true".
 3. Click [data-testid="send-button"].
-4. Select conversation {{VIEWED}} from the drawer. The URL should end with "/c/{{VIEWED_SLUG}}".
+4. Select conversation {{VIEWED}} from the drawer. The URL should have exactly the path "/c/{{VIEWED_SLUG}}" (an exact "value", not "text").
 5. Call "releaseDraft". Call "chats" should return "1".
 6. Call "submissions" must return exactly [`+jsonText(ordered{{"path", "/api/conversation/{{DRAFT}}/chat"}, {"message", message}})+`].
-7. The URL should still end with "/c/{{VIEWED_SLUG}}".
+7. The URL should still have exactly the path "/c/{{VIEWED_SLUG}}" (an exact "value", not "text").
 8. Eval "localStorage.getItem('shelley-draft:{{DRAFT}}') === null" should become true.`+last, func(s *shelley) {
 		recording(s)
 		viewed := s.conversation("echo: delayed "+strings.ToLower(label)+" destination", "")
@@ -1456,13 +1456,13 @@ func TestE2ERecordingDelayedDraftMovesAfterNavigation(t *testing.T) {
 2. Call "draftCreated" until it returns "true". Call "draftText" must return "Initial text while the draft request starts.".
 3. Fill the message input with "Latest text owned by the delayed recording draft.". Click the voice button.
 4. Exactly one [data-testid="recording-inline"] should exist, and window.__recordingMock.recorderStarts should become 1.
-5. Select conversation {{VIEWED}} from the drawer. The URL should end with "/c/{{VIEWED_SLUG}}".
+5. Select conversation {{VIEWED}} from the drawer. The URL should have exactly the path "/c/{{VIEWED_SLUG}}" (an exact "value", not "text").
 6. Call "releaseDraft", then call "draftAnswered" until it returns "true".
-7. The recording panel should be visible, the recorder should float, and the URL should still end with "/c/{{VIEWED_SLUG}}".
+7. The recording panel should be visible, the recorder should float, and the URL should still have exactly the path "/c/{{VIEWED_SLUG}}" (an exact "value", not "text").
 8. Click the stop button. Call "chats" should return "1". No recording panel should remain (count 0).
 9. Call "submissions" must return exactly [{"path":"/api/conversation/{{DRAFT}}/chat","message":"/transcription /tmp/shelley-uploads/delayed-new.webm\nLatest text owned by the delayed recording draft.","model":"predictable"}].
-10. The URL should still end with "/c/{{VIEWED_SLUG}}".
-11. Start a new conversation from the header. The URL should end with "/new", and the message input should have the value "" (empty).`, func(s *shelley) {
+10. The URL should still have exactly the path "/c/{{VIEWED_SLUG}}" (an exact "value", not "text").
+11. Start a new conversation from the header. The URL should have exactly the path "/new" (an exact "value", not "text"), and the message input should have the value "" (empty).`, func(s *shelley) {
 		recording(s)
 		viewed := s.conversation("echo: delayed nonempty recording destination", "")
 		s.v("VIEWED", viewed.ID)
@@ -1478,13 +1478,13 @@ func TestE2ERecordingDelayedDraftSparesNewerComposer(t *testing.T) {
 1. Navigate to /new. Fill the message input with "Text owned by the older delayed draft.".
 2. Call "oldDraftCreated" until it returns "true". Click the voice button.
 3. Exactly one [data-testid="recording-inline"] should exist, and window.__recordingMock.recorderStarts should become 1.
-4. Select conversation {{VIEWED}} from the drawer. Start a new conversation from the header. The URL should end with "/new".
+4. Select conversation {{VIEWED}} from the drawer. Start a new conversation from the header. The URL should have exactly the path "/new" (an exact "value", not "text").
 5. Fill the message input with "Text entered in the newer new-conversation session.".
 6. Call "releaseOldDraft", then call "oldDraftAnswered" until it returns "true".
-7. The recording panel should be visible, the recorder should float, the URL should still end with "/new", and the message input should have the value "Text entered in the newer new-conversation session.".
-8. Click [data-testid="recording-return-button"]. The URL should end with "/c/{{OLD}}".
+7. The recording panel should be visible, the recorder should float, the URL should still have exactly the path "/new" (an exact "value", not "text"), and the message input should have the value "Text entered in the newer new-conversation session.".
+8. Click [data-testid="recording-return-button"]. The URL should have exactly the path "/c/{{OLD}}" (an exact "value", not "text").
 9. Click the cancel button. The message input should have the value "Text owned by the older delayed draft.".
-10. Start a new conversation from the header. The URL should end with "/new", and the message input should have the value "Text entered in the newer new-conversation session.".`, func(s *shelley) {
+10. Start a new conversation from the header. The URL should have exactly the path "/new" (an exact "value", not "text"), and the message input should have the value "Text entered in the newer new-conversation session.".`, func(s *shelley) {
 		recording(s)
 		s.v("VIEWED", s.conversation("echo: delayed recording before newer new conversation", "").ID)
 		release := s.gate("releaseOldDraft")
@@ -1673,10 +1673,10 @@ func TestE2ERecordingLegacyCompactionRowDoesNotBlockQueue(t *testing.T) {
 func TestE2ERecordingTranscriptionCardsUseQueuedMessageRPCs(t *testing.T) {
 	e2e(t, `Transcription cards use the queued-message cancel and retry RPCs. The test seeded a conversation at /c/{{SLUG}} whose server data reports two queued transcriptions: one still working on /tmp/shelley-uploads/working.webm with the context "Keep working draft", and one of /tmp/shelley-uploads/failed.webm that failed with "transcription unavailable", with the context "Keep failed draft". The live event stream is cut off. Requests to cancel or retry a queued message (POST /api/conversation/<id>/cancel-queued?queued_id=<id> and .../retry-queued?queued_id=<id>) succeed without effect. Calls "stopRequest", "retryRequest" and "cancelRequest" return the method of the first request whose URL contains "/cancel-queued?queued_id=q-working", "/retry-queued?queued_id=q-failed" and "/cancel-queued?queued_id=q-failed" respectively ("none" before there is one). The message input is [data-testid="message-input"]. Perform the steps in order.
 1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input to be visible.
-2. Click [data-testid="transcription-stop-button"]. Call "stopRequest" should return "POST". The message input should have the value "Keep working draft".
+2. Call "stopRequest" should return "none" (nothing sent yet). Click [data-testid="transcription-stop-button"]. Call "stopRequest" should return "POST". The message input should have the value "Keep working draft".
 3. Fill the message input with "" (empty it).
-4. Click [data-testid="transcription-retry-button"]. Call "retryRequest" should return "POST". The message input should have the value "" (empty).
-5. Click [data-testid="transcription-cancel-button"]. Call "cancelRequest" should return "POST". The message input should have the value "Keep failed draft".`, func(s *shelley) {
+4. Call "retryRequest" should return "none". Click [data-testid="transcription-retry-button"]. Call "retryRequest" should return "POST". The message input should have the value "" (empty).
+5. Call "cancelRequest" should return "none". Click [data-testid="transcription-cancel-button"]. Call "cancelRequest" should return "POST". The message input should have the value "Keep failed draft".`, func(s *shelley) {
 		recording(s)
 		c := s.queuedConversation([]map[string]any{
 			queuedMessage("q-working", "", map[string]any{
