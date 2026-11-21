@@ -1,0 +1,159 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Reopening the favicon emoji picker mid-save shows the saved emoji. The server's favicon emoji is 🐙, and it holds every save until call \"release\". \"The picker\" is the dialog whose accessible name is \"Favicon emoji\"; \"the favicon\" is the element link[rel=\"icon\"]. Call \"puts\" lists, as a JSON array, the emojis the page has asked the server to save. To \"open the picker\": press_key \"k\" with modifiers \"Control\" (on whatever has focus); fill \".command-palette-input\" with \"favicon emoji\"; click the first \".command-palette-item\"; then the picker should be visible. \"The search box\" is the picker's input[type=search]; it sits inside the emoji-picker element's shadow root, which CSS selectors cannot reach, so pick it as the element with role \"combobox\" and accessible name exactly \"Search\" (exact), with \"within\" the picker. An \"option\" is an element with role \"option\" inside the picker. To \"type\" text means a type step, with no click first: the keys go to whatever has focus. Perform the steps in order. 1. Navigate to /new. 2. [data-testid=\"message-input\"] should be visible. 3. Open the picker. 4. The search box must have focus. 5. Type \"cactus\". 6. Click the option whose accessible name contains \"cactus\". 7. An element inside the picker with the text \"Saving…\" should be visible. 8. Press Escape. 9. The picker should become hidden. 10. The save is still running, and the picker waits for it: open the picker again (no focus check). 11. An element inside the picker with the text \"Saving…\" should be visible. 12. There must be exactly 0 \"emoji-picker\" elements inside the picker. 13. Keys typed meanwhile stay out of the message input behind the picker: type \"x\". 14. [data-testid=\"message-input\"] must have the value exactly \"\" (empty). 15. Call \"release\". 16. The search box must then have focus. 17. The favicon's href attribute must be exactly {{CACTUS}}. 18. Call \"puts\": it must return exactly [\"🌵\"].",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "favicon emoji"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Favicon emoji"
+    },
+    {
+      "action": "assert_focused",
+      "role": "combobox",
+      "name": "Search",
+      "exact": true,
+      "within": {
+        "role": "dialog",
+        "name": "Favicon emoji"
+      }
+    },
+    {
+      "action": "type",
+      "value": "cactus"
+    },
+    {
+      "action": "click",
+      "role": "option",
+      "name": "cactus",
+      "within": {
+        "role": "dialog",
+        "name": "Favicon emoji"
+      }
+    },
+    {
+      "action": "wait_visible",
+      "selector": "*",
+      "has_text": "Saving…",
+      "within": {
+        "role": "dialog",
+        "name": "Favicon emoji"
+      }
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "role": "dialog",
+      "name": "Favicon emoji"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "favicon emoji"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Favicon emoji"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "*",
+      "has_text": "Saving…",
+      "within": {
+        "role": "dialog",
+        "name": "Favicon emoji"
+      }
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role=\"dialog\"][aria-label=\"Favicon emoji\"] emoji-picker",
+      "count": 0
+    },
+    {
+      "action": "type",
+      "value": "x"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "assert_focused",
+      "role": "combobox",
+      "name": "Search",
+      "exact": true,
+      "within": {
+        "role": "dialog",
+        "name": "Favicon emoji"
+      }
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "link[rel=\"icon\"]",
+      "attribute": "href",
+      "value": "{{CACTUS}}"
+    },
+    {
+      "action": "call",
+      "value": "puts",
+      "expect": "[\"🌵\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:32:47.300554745Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 24087,
+    "output_tokens": 1710,
+    "estimated_cost_usd": 0.0450516,
+    "mode": "generated"
+  }
+}
