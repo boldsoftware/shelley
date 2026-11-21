@@ -514,6 +514,22 @@ func TestNavigateWithoutURL(t *testing.T) {
 	}
 }
 
+// A URL with a scheme is absolute; any other is relative to the base URL.
+func TestNavigateURLs(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	base := serveHTML(t, blankPage)
+	runSteps(t, br, &Env{BaseURL: base},
+		Step{Action: ActionNavigate, URL: "/a"},
+		Step{Action: ActionAssertURL, Value: base + "/a"},
+		Step{Action: ActionNavigate, URL: "about:blank"},
+		Step{Action: ActionEval, Expression: "location.href", Expect: ptr("about:blank")},
+		Step{Action: ActionNavigate, URL: "b?x=1"},
+		Step{Action: ActionAssertURL, Value: base + "/b?x=1"},
+		Step{Action: ActionNavigate, URL: "data:text/html,<p>hi"},
+		Step{Action: ActionAssertURL, Value: "data:text/html,<p>hi"},
+	)
+}
+
 // TestScreenshotsFollowTheStepsTab: the per-step screenshot shows the tab the
 // step acted on, so a trace of a two-tab test shows what each step saw.
 func TestScreenshotsFollowTheStepsTab(t *testing.T) {
@@ -636,6 +652,12 @@ func TestHistory(t *testing.T) {
 		Step{Action: ActionWaitURL, Value: "/c"},
 		Step{Action: ActionReload},
 		is("complete /c fresh"),
+		// Even to an entry of the same URL.
+		Step{Action: ActionEval, Expression: `window.mark = 'old'; history.pushState(null, '', location.href)`},
+		Step{Action: ActionGoBack, Timeout: "2s"},
+		is("complete /c old"),
+		Step{Action: ActionGoForward, Timeout: "2s"},
+		is("complete /c old"),
 	)
 	if err := failSteps(t, br, env, Step{Action: ActionGoForward}); !strings.Contains(err.Error(), "go_forward: no later page in the tab's history") {
 		t.Errorf("go_forward at the end = %v", err)
@@ -663,6 +685,15 @@ func TestCollectGarbage(t *testing.T) {
 		Step{Action: ActionNavigate, URL: "/"},
 		Step{Action: ActionEval, Expression: `window.ref = new WeakRef({big: new Array(1000).fill(1)}); 'made'`},
 		Step{Action: ActionEval, Expression: `if (!ref.deref()) throw new Error('freed already')`},
+		Step{Action: ActionCollectGarbage},
+		Step{Action: ActionEval, Expression: `if (ref.deref()) throw new Error('not freed')`},
+	)
+	// Nor do steps by role hold what they matched.
+	runSteps(t, br, &Env{BaseURL: serveHTML(t, `<!doctype html><html><body><div id="panel"><button onclick="this.parentNode.remove()">Remove</button></div></body></html>`)},
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: `window.ref = new WeakRef(document.getElementById('panel')); 'made'`},
+		Step{Action: ActionClick, Role: "button", Name: "Remove"},
+		Step{Action: ActionAssertCount, Selector: "#panel", Count: 0},
 		Step{Action: ActionCollectGarbage},
 		Step{Action: ActionEval, Expression: `if (ref.deref()) throw new Error('not freed')`},
 	)

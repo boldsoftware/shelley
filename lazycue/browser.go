@@ -173,9 +173,6 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 		// without touch emulation matches neither (hover: hover) nor
 		// (pointer: fine). Touch emulation still makes it a phone's.
 		chromedp.Flag("blink-settings", "primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4"),
-		// As Playwright: going back or forward loads the page again
-		// rather than restoring it as it was left.
-		chromedp.Flag("disable-back-forward-cache", true),
 		chromedp.WindowSize(d.Width, d.Height),
 		chromedp.CombinedOutput(devtoolsURL(devtools)),
 	)
@@ -349,6 +346,9 @@ func stringFields(s *Step) []*string {
 	return fields
 }
 
+// hasScheme matches a URL that starts with a scheme, which makes it absolute.
+var hasScheme = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*:`)
+
 // popupName matches the names of popups' tabs: popup, popup2, ...
 var popupName = regexp.MustCompile(`^popup\d*$`)
 
@@ -379,7 +379,7 @@ func (b *Browser) tab(step Step) (context.Context, *tabState, error) {
 			if step.Action == ActionNavigate {
 				return b.openTab(step.Tab, timeout)
 			}
-			return nil, nil, fmt.Errorf("tab %q is not open; open it with a navigate step", step.Tab)
+			return nil, nil, mistake{fmt.Errorf("tab %q is not open; open it with a navigate step", step.Tab)}
 		}
 		select {
 		case <-changed:
@@ -683,10 +683,10 @@ func (b *Browser) executeStep(ctx context.Context, env *Env, step Step) (string,
 // run runs a step whose placeholders have been substituted.
 func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) {
 	if _, ok := axRoles[step.Role]; step.Role != "" && !ok {
-		return "", fmt.Errorf("unknown role %q; use an ARIA role such as button, link, textbox, checkbox, img or dialog", step.Role)
+		return "", mistake{fmt.Errorf("unknown role %q; use an ARIA role such as button, link, textbox, checkbox, img or dialog", step.Role)}
 	}
 	if step.Name != "" && step.Role == "" {
-		return "", errors.New("a name needs a role")
+		return "", mistake{errors.New("a name needs a role")}
 	}
 	if step.Action == ActionRetry {
 		return "", b.retry(ctx, env, step)
@@ -723,10 +723,21 @@ func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) 
 // first, as Playwright's toPass: the last wait repeats.
 var retryBackoff = []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, time.Second}
 
+// mistake is an error in a script, which no retry can fix.
+type mistake struct{ error }
+
+func (m mistake) Unwrap() error { return m.error }
+
+// waits reports whether a step waits for the page to be some way.
+func waits(s Step) bool {
+	return strings.HasPrefix(s.Action, "wait_") || strings.HasPrefix(s.Action, "assert_") ||
+		(s.Action == ActionEval || s.Action == ActionCall) && s.Expect != nil
+}
+
 // retry runs a retry step: its steps in order, starting over from the first
 // when one fails, until a whole pass succeeds or the step's timeout passes.
-// Its steps wait 1s unless they say otherwise, so that the block does the
-// waiting.
+// Its waits wait 1s unless they say otherwise, so that the block does the
+// waiting; a mistake in a step fails it at once.
 func (b *Browser) retry(ctx context.Context, env *Env, step Step) error {
 	if len(step.Steps) == 0 {
 		return errors.New("retry: no steps")
@@ -739,7 +750,7 @@ func (b *Browser) retry(ctx context.Context, env *Env, step Step) error {
 		if steps[i].Action == ActionRetry {
 			return errors.New("retry: a retry block cannot hold another")
 		}
-		if steps[i].Timeout == "" {
+		if steps[i].Timeout == "" && waits(steps[i]) {
 			steps[i].Timeout = "1s"
 		}
 	}
@@ -754,8 +765,8 @@ func (b *Browser) retry(ctx context.Context, env *Env, step Step) error {
 			}
 			return nil
 		}()
-		if err == nil {
-			return nil
+		if err == nil || errors.As(err, new(mistake)) {
+			return err
 		}
 		left := time.Until(deadline)
 		if left <= 0 {
@@ -799,7 +810,7 @@ func expectResult(ctx context.Context, step Step, timeout time.Duration, probe f
 			last = "<error: " + err.Error() + ">"
 		}
 		if time.Now().After(deadline) {
-			return last, fmt.Errorf("%s: expected %q, got %q (after %s)", step.Action, want, last, timeout)
+			return last, fmt.Errorf("timeout after %s: %s: expected %q, got %q", timeout, step.Action, want, last)
 		}
 		select {
 		case <-ctx.Done():
@@ -868,7 +879,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 			if url == "about:blank" {
 				return errors.New("navigate: the first tab has not been navigated yet, so there is no page to open this tab on")
 			}
-		} else if !strings.HasPrefix(url, "http") {
+		} else if !hasScheme.MatchString(url) {
 			url = strings.TrimRight(baseURL, "/") + "/" + strings.TrimLeft(url, "/")
 		}
 		return runBounded(chromedp.Navigate(url))
@@ -879,14 +890,13 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 	case ActionGoBack, ActionGoForward:
 		return b.goHistory(ctx, tabCtx, timeout, step)
 
-	case ActionWaitText:
+	case ActionWaitText, ActionWaitTextGone:
+		not := ""
+		if step.Action == ActionWaitTextGone {
+			not = "!"
+		}
 		return b.pollJS(ctx, tabCtx, timeout, fmt.Sprintf(
-			`(document.body.textContent || '').includes(%q)`, step.Text,
-		))
-
-	case ActionWaitTextGone:
-		return b.pollJS(ctx, tabCtx, timeout, fmt.Sprintf(
-			`!(document.body.textContent || '').includes(%q)`, step.Text,
+			`%s(n => n(document.body.textContent || '').includes(n(%q)))(s => s.replace(/\s+/g, ' ').trim())`, not, step.Text,
 		))
 
 	case ActionFill:
@@ -1102,8 +1112,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 			if err != nil {
 				return fmt.Errorf("assert_text: %w", err)
 			}
-			got = strings.TrimSpace(got)
-			if got != step.Text {
+			if collapse(got) != collapse(step.Text) {
 				return fmt.Errorf("assert_text: expected %q, got %q", step.Text, got)
 			}
 			return nil
@@ -1281,7 +1290,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		return nil
 
 	default:
-		return fmt.Errorf("unknown action: %q", step.Action)
+		return mistake{fmt.Errorf("unknown action: %q", step.Action)}
 	}
 }
 
@@ -1299,6 +1308,8 @@ func findAllJS(step Step) string {
 		let all;
 		if (role) {
 			all = window.__lazycueRole;
+			// Hold the matches no longer than this expression does.
+			delete window.__lazycueRole;
 			if (sel) {
 				const scopes = new Set(document.querySelectorAll(sel));
 				all = all.filter(el => {
@@ -1354,9 +1365,10 @@ var axRoles = func() map[string]string {
 
 // locate finds the elements of a step's role and name, as Chrome computes
 // them for its accessibility tree, and puts them into window.__lazycueRole
-// for findAllJS, in document order. Elements hidden from the tree
-// (display: none, visibility: hidden, aria-hidden) have none. Steps without a
-// role need nothing.
+// for findAllJS, in the tree's order: document order, shadow DOM included.
+// Elements hidden from the tree (display: none, visibility: hidden,
+// aria-hidden, inert, behind a modal dialog) have none. Steps without a role
+// need nothing.
 func locate(step Step) chromedp.Action {
 	return chromedp.ActionFunc(func(ctx context.Context) error {
 		if step.Role == "" {
@@ -1366,17 +1378,17 @@ func locate(step Step) chromedp.Action {
 		defer cdpruntime.ReleaseObjectGroup(group).Do(ctx) //nolint:errcheck // the page may be gone
 		doc, exc, err := cdpruntime.Evaluate("document").WithObjectGroup(group).Do(ctx)
 		if err != nil {
-			return err
+			return lookupErr(ctx, step, err)
 		}
 		if exc != nil {
 			return exc
 		}
 		nodes, err := accessibility.QueryAXTree().WithObjectID(doc.ObjectID).WithRole(axRoles[step.Role]).Do(ctx)
 		if err != nil {
-			return fmt.Errorf("query the accessibility tree: %w", err)
+			return lookupErr(ctx, step, err)
 		}
 		want := collapse(step.Name)
-		var args []*cdpruntime.CallArgument
+		var ids []cdp.BackendNodeID
 		for _, n := range nodes {
 			if n.Ignored || n.BackendDOMNodeID == 0 {
 				continue
@@ -1391,14 +1403,29 @@ func locate(step Step) chromedp.Action {
 					continue
 				}
 			}
-			el, err := dom.ResolveNode().WithBackendNodeID(n.BackendDOMNodeID).WithObjectGroup(group).Do(ctx)
+			ids = append(ids, n.BackendDOMNodeID)
+		}
+		// One round trip each, so all at once: a page may have thousands.
+		args := make([]*cdpruntime.CallArgument, len(ids))
+		errs := make([]error, len(ids))
+		var wg sync.WaitGroup
+		for i, id := range ids {
+			wg.Go(func() {
+				el, err := dom.ResolveNode().WithBackendNodeID(id).WithObjectGroup(group).Do(ctx)
+				if err == nil {
+					args[i] = &cdpruntime.CallArgument{ObjectID: el.ObjectID}
+				}
+				errs[i] = err
+			})
+		}
+		wg.Wait()
+		for _, err := range errs {
 			if err != nil {
-				return err
+				return lookupErr(ctx, step, err)
 			}
-			args = append(args, &cdpruntime.CallArgument{ObjectID: el.ObjectID})
 		}
 		_, exc, err = cdpruntime.CallFunctionOn(`function(...els) {
-			window.__lazycueRole = els.sort((a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+			window.__lazycueRole = els;
 		}`).WithObjectID(doc.ObjectID).WithArguments(args).Do(ctx)
 		if err != nil {
 			return err
@@ -1408,6 +1435,15 @@ func locate(step Step) chromedp.Action {
 		}
 		return nil
 	})
+}
+
+// lookupErr is err from finding step's role, which says so when the step's
+// time ran out first.
+func lookupErr(ctx context.Context, step Step, err error) error {
+	if ctx.Err() != nil {
+		return fmt.Errorf("the %s role lookup did not finish in time", step.Role)
+	}
+	return fmt.Errorf("find role %s: %w", step.Role, err)
 }
 
 // findJS is an expression for the first element findAllJS has, or undefined.
@@ -1599,7 +1635,8 @@ func (b *Browser) point(ctx, tabCtx context.Context, timeout time.Duration, step
 }
 
 // pollCheck repeatedly runs check until it returns nil or the timeout expires,
-// returning check's last error on timeout. It is the Go-assertion analogue of
+// returning check's last error on timeout, after "timeout after <d>: " as
+// every wait that runs out says. It is the Go-assertion analogue of
 // pollJS: point-in-time assert_* steps use it so UI state that is merely SLOW
 // to settle under CI load doesn't spuriously fail (which would trigger a costly
 // LLM heal) — the same rationale as the polling eval-with-expect path. The
@@ -1629,7 +1666,7 @@ func (b *Browser) pollCheck(ctx, tabCtx context.Context, timeout time.Duration, 
 			last = err
 		}
 		if time.Now().After(deadline) {
-			return last
+			return fmt.Errorf("timeout after %s: %w", timeout, last)
 		}
 		select {
 		case <-ctx.Done():
@@ -1677,7 +1714,6 @@ func (b *Browser) goHistory(ctx, tabCtx context.Context, timeout time.Duration, 
 		by, which = 1, "later"
 	}
 	mark := strconv.FormatInt(time.Now().UnixNano(), 36)
-	var from string
 	runCtx, cancel := context.WithTimeout(tabCtx, timeout)
 	defer cancel()
 	if err := chromedp.Run(runCtx, chromedp.ActionFunc(func(ctx context.Context) error {
@@ -1689,7 +1725,10 @@ func (b *Browser) goHistory(ctx, tabCtx context.Context, timeout time.Duration, 
 		if to < 0 || to >= int64(len(entries)) {
 			return fmt.Errorf("%s: no %s page in the tab's history", step.Action, which)
 		}
-		if err := chromedp.Evaluate(fmt.Sprintf(`window.__lazycueMark = %q; location.href`, mark), &from).Do(ctx); err != nil {
+		// A new document drops the mark; a move within the document, even to
+		// an entry with the same URL, pops state.
+		if err := chromedp.Evaluate(fmt.Sprintf(`window.__lazycueMark = %[1]q;
+			addEventListener('popstate', () => { window.__lazycuePopped = %[1]q }, {once: true})`, mark), nil).Do(ctx); err != nil {
 			return err
 		}
 		return page.NavigateToHistoryEntry(entries[to].ID).Do(ctx)
@@ -1699,12 +1738,12 @@ func (b *Browser) goHistory(ctx, tabCtx context.Context, timeout time.Duration, 
 	return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
 		var loaded bool
 		if err := chromedp.Run(runCtx, chromedp.Evaluate(fmt.Sprintf(
-			`(window.__lazycueMark !== %q || location.href !== %q) && document.readyState === 'complete'`, mark, from,
+			`(window.__lazycueMark !== %[1]q || window.__lazycuePopped === %[1]q) && document.readyState === 'complete'`, mark,
 		), &loaded)); err != nil {
 			return err
 		}
 		if !loaded {
-			return fmt.Errorf("timeout after %s: %s: the page did not load", timeout, step.Action)
+			return fmt.Errorf("%s: the page did not load", step.Action)
 		}
 		return nil
 	})

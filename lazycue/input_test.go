@@ -184,6 +184,8 @@ func TestRoles(t *testing.T) {
   this </button>
 <button style="display: none">Archive hidden</button>
 <div role="button" aria-hidden="true">Archive unseen</div>
+<button aria-hidden="true">Archive unheard</button>
+<div aria-hidden="true"><button>Archive under</button></div>
 <button style="width: 0; height: 0; padding: 0; border: 0; overflow: hidden">Archive zero</button>
 <input type="checkbox" id="c"><label for="c">Dark mode</label>
 <input type="checkbox" role="switch" aria-label="Notify">
@@ -195,6 +197,7 @@ func TestRoles(t *testing.T) {
 <div role="menu"><div role="menuitemcheckbox" aria-checked="true">Wrap lines</div></div>
 <x-card></x-card>
 </main>
+<div id="order"><x-card></x-card><button>Light</button></div>
 <script>
 customElements.define('x-card', class extends HTMLElement {
   connectedCallback() { this.attachShadow({mode: 'open'}).innerHTML = '<button>Shadow</button>'; }
@@ -225,9 +228,12 @@ setTimeout(() => document.querySelector('main').insertAdjacentHTML('beforeend', 
 		Step{Action: ActionAssertCount, Role: "button", HasText: "Archive this", Exact: true, Count: 1},
 		Step{Action: ActionAssertCount, Role: "button", HasText: "archive this", Exact: true, Count: 0},
 		Step{Action: ActionAssertCount, Selector: "button", HasText: "Archive", Exact: true, Count: 1},
-		Step{Action: ActionAssertCount, Selector: "button", HasText: "Archive", Count: 4},
-		Step{Action: ActionAssertCount, Selector: "button", HasText: "Archive", Visible: true, Count: 2},
-		Step{Action: ActionAssertCount, Role: "button", Name: "shadow", Count: 1},
+		Step{Action: ActionAssertCount, Selector: "button", HasText: "Archive", Count: 6},
+		Step{Action: ActionAssertCount, Selector: "button", HasText: "Archive", Visible: true, Count: 4},
+		// Shadow DOM counts, in document order, inside a selector's match too.
+		Step{Action: ActionAssertCount, Role: "button", Name: "shadow", Count: 2},
+		Step{Action: ActionAssertCount, Selector: "main x-card", Role: "button", Count: 1},
+		Step{Action: ActionAssertTexts, Selector: "#order", Role: "button", Texts: []string{"Shadow", "Light"}},
 		Step{Action: ActionClick, Role: "button", Name: "close"},
 		Step{Action: ActionAssertTitle, Text: "Close dialog"},
 		Step{Action: ActionClick, Role: "checkbox", Name: "Dark mode"},
@@ -253,12 +259,28 @@ setTimeout(() => document.querySelector('main').insertAdjacentHTML('beforeend', 
 		{Step{Action: ActionAssertVisible, Role: "button", Name: "zero"}, `button "zero" is not visible`},
 		{Step{Action: ActionClick, Role: "image"}, `unknown role "image"`},
 		{Step{Action: ActionClick, Selector: "button", Name: "Archive"}, "a name needs a role"},
+		{Step{Action: ActionClick, Role: "button", Timeout: "1ms"}, "timeout after 1ms: the button role lookup did not finish in time"},
 	} {
-		c.step.Timeout = "300ms"
+		if c.step.Timeout == "" {
+			c.step.Timeout = "300ms"
+		}
 		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
 			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
 		}
 	}
+}
+
+// Thousands of matches take under a second (one by one, they took 7s).
+func TestManyRoles(t *testing.T) {
+	if raceEnabled {
+		t.Skip("too slow to time with -race")
+	}
+	br := newBrowserOrSkip(t)
+	runSteps(t, br, &Env{BaseURL: serveHTML(t, blankPage)},
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: `document.body.innerHTML = '<button>Go</button>'.repeat(2000); 'made'`},
+		Step{Action: ActionAssertCount, Role: "button", Name: "Go", Count: 2000, Timeout: "5s"},
+	)
 }
 
 func TestFormStateAssertions(t *testing.T) {
@@ -658,13 +680,13 @@ func TestRetry(t *testing.T) {
 		Step{Action: ActionEval, Expression: "n", Expect: ptr("3")},
 	)
 	// It fails at its timeout with the error of the step that failed last;
-	// steps inside without a timeout of their own wait 1s.
+	// waits inside without a timeout of their own wait 1s.
 	start := time.Now()
 	err := failSteps(t, br, env, Step{Action: ActionRetry, Timeout: "2s", Steps: []Step{
 		{Action: ActionClick, Selector: "#copy"},
 		{Action: ActionAssertValue, Selector: "#t", Value: "never"},
 	}})
-	if want := `step 0 (retry): after 2s, its step 1 (assert_value) still fails: assert_value: expected "never", got "output"`; err.Error() != want {
+	if want := `step 0 (retry): after 2s, its step 1 (assert_value) still fails: timeout after 1s: assert_value: expected "never", got "output"`; err.Error() != want {
 		t.Errorf("failed retry = %v, want %s", err, want)
 	}
 	if d := time.Since(start); d < 2*time.Second || d > 4*time.Second {
@@ -672,6 +694,20 @@ func TestRetry(t *testing.T) {
 	}
 	if err := failSteps(t, br, env, Step{Action: ActionRetry, Steps: []Step{{Action: ActionRetry, Steps: []Step{{Action: ActionClick, Selector: "#copy"}}}}}); !strings.Contains(err.Error(), "retry: a retry block cannot hold another") {
 		t.Errorf("nested retry = %v", err)
+	}
+	// Other steps keep their own default: this click waits past the
+	// block's timeout for its button.
+	runSteps(t, br, env,
+		Step{Action: ActionEval, Expression: `setTimeout(() => document.body.insertAdjacentHTML('beforeend', '<button id="late">Late</button>'), 1500); 'later'`},
+		Step{Action: ActionRetry, Timeout: "500ms", Steps: []Step{{Action: ActionClick, Selector: "#late"}}},
+	)
+	// A mistake fails it at once.
+	for _, s := range []Step{{Action: "clik", Selector: "#copy"}, {Action: ActionClick, Role: "buton"}, {Action: ActionClick, Tab: "B"}} {
+		start := time.Now()
+		err := failSteps(t, br, env, Step{Action: ActionRetry, Steps: []Step{s}})
+		if d := time.Since(start); d > time.Second {
+			t.Errorf("retry of a mistake took %s: %v", d, err)
+		}
 	}
 }
 
@@ -682,6 +718,8 @@ func TestListAndTextAssertions(t *testing.T) {
   words</li><li style="display: none">Three</li></ul>
 <button>Save</button><button>Cancel</button>
 <p id="p">hello world</p>
+<pre id="mono">  let&nbsp;&nbsp;x =
+ 1 </pre>
 <script>setTimeout(() => { document.querySelector('ul').insertAdjacentHTML('beforeend', '<li>Four</li>'); document.getElementById('p').textContent = 'hello there'; }, 300);</script>
 </body></html>`)}
 	runSteps(t, br, env,
@@ -692,6 +730,14 @@ func TestListAndTextAssertions(t *testing.T) {
 		Step{Action: ActionAssertTexts, Selector: "table"},
 		Step{Action: ActionAssertTextNotContains, Selector: "#p", Text: "world"},
 		Step{Action: ActionAssertTextNotContains, Selector: "#p", Text: "bye"},
+		// Every text check collapses whitespace, non-breaking spaces too, on
+		// both sides, as Playwright does.
+		Step{Action: ActionAssertText, Selector: "#mono", Text: "let x = 1"},
+		Step{Action: ActionAssertText, Selector: "#mono", Text: "let x  =  1 "},
+		Step{Action: ActionWaitText, Text: "let x = 1"},
+		Step{Action: ActionWaitText, Text: " x = "},
+		Step{Action: ActionEval, Expression: `document.getElementById('mono').remove()`},
+		Step{Action: ActionWaitTextGone, Text: "let x"},
 	)
 	for _, c := range []struct {
 		step Step
@@ -701,6 +747,7 @@ func TestListAndTextAssertions(t *testing.T) {
 		{Step{Action: ActionAssertTexts, Selector: "li", Texts: []string{"Four", "One", "Two words", "Three"}}, `got ["One","Two words","Three","Four"]`},
 		{Step{Action: ActionAssertTextNotContains, Selector: "#p", Text: "there"}, `assert_text_not_contains: "there" found in "hello there"`},
 		{Step{Action: ActionAssertTextNotContains, Selector: "#q", Text: "there"}, `no element matches #q`},
+		{Step{Action: ActionAssertText, Selector: "li", Text: "On e"}, `assert_text: expected "On e", got " One "`},
 	} {
 		c.step.Timeout = "300ms"
 		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {

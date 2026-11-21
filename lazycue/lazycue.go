@@ -569,7 +569,7 @@ func stepsAllPassed(results []StepResult, execErr error) bool {
 }
 
 // isTimeoutFailure reports whether the first failing step failed with a wait
-// timeout (the signature pollJS emits: "timeout after <d> waiting for ...").
+// timeout (the signature every wait emits: "timeout after <d>: ...").
 // These are the transient CI-load flakes we prefer to retry rather than heal.
 func isTimeoutFailure(results []StepResult) bool {
 	for _, r := range results {
