@@ -90,16 +90,7 @@ type reviewChat struct {
 // microphone; transcription says whether the server can transcribe.
 // {{QUERY}} is the query that opens the diff viewer on HEAD in it.
 func newReview(s *shelley, transcription bool) *review {
-	repo := s.mkdir(filepath.Join(s.dir, "repo"))
-	s.gitIn(repo, "init")
-	for _, kv := range [][2]string{
-		{"user.name", "Shelley Test"},
-		{"user.email", "test@example.com"},
-		{"commit.gpgsign", "false"},
-		{"core.hooksPath", "/dev/null"},
-	} {
-		s.gitIn(repo, "config", kv[0], kv[1])
-	}
+	repo := s.gitRepo(filepath.Join(s.dir, "repo"))
 	lines := make([]string, 80)
 	for i := range lines {
 		lines[i] = fmt.Sprintf("const value%d = %d;", i+1, i+1)

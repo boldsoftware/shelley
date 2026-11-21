@@ -54,6 +54,7 @@ func TestKillStrays(t *testing.T) {
 	}
 	other := exec.Command("sleep", "600")
 	other.Dir = t.TempDir()
+	other.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := other.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +68,34 @@ func TestKillStrays(t *testing.T) {
 		cmd.Process.Kill()
 		t.Fatal("a job working under the directory survived")
 	}
-	if err := other.Process.Signal(syscall.Signal(0)); err != nil {
-		t.Errorf("a process elsewhere was killed: %v", err)
+	if dying(t, other.Process.Pid) {
+		t.Error("a process elsewhere was killed")
 	}
+}
+
+// dying says whether process pid has exited or has a SIGKILL pending: a
+// killed process answers signals until it is reaped.
+func dying(t *testing.T, pid int) bool {
+	status, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for line := range strings.Lines(string(status)) {
+		name, value, _ := strings.Cut(strings.TrimSpace(line), ":\t")
+		switch name {
+		case "State":
+			if value[0] == 'Z' || value[0] == 'X' {
+				return true
+			}
+		case "SigPnd", "ShdPnd":
+			mask, err := strconv.ParseUint(value, 16, 64)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mask&(1<<(syscall.SIGKILL-1)) != 0 {
+				return true
+			}
+		}
+	}
+	return false
 }

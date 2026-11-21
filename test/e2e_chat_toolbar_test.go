@@ -3,7 +3,6 @@ package test
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -213,9 +212,7 @@ func chatToolbarCompact(t *testing.T, i int) {
 		s.viewport(W, H)
 		s.initScript(chatToolbarJS)
 		chatToolbarLinks(s, true)
-		dir := filepath.Join(s.dir, "toolbar")
-		s.check(os.MkdirAll(dir, 0o755))
-		s.gitIn(dir, "init", "-q")
+		dir := s.gitRepo(filepath.Join(s.dir, "toolbar"))
 		file := s.write(filepath.Join(dir, "toolbar-fixture.txt"), "before toolbar edit\n")
 		s.gitIn(dir, "add", ".")
 		s.gitIn(dir, "commit", "-q", "-m", "Toolbar fixture commit")

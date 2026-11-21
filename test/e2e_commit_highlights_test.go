@@ -16,9 +16,8 @@ import (
 // conversation in it at {{SLUG}}, and has the diff viewer open in layout
 // ("sidebar" or "header").
 func (s *shelley) commitHighlightsRepo(layout string, extra ...map[string]any) {
-	repo := s.mkdir("repo")
+	repo := s.gitRepo(s.path("repo"))
 	s.mkdir("repo/src")
-	s.gitIn(repo, "init")
 	lines := make([]string, 200)
 	for i := range lines {
 		lines[i] = "line " + strconv.Itoa(i+1)

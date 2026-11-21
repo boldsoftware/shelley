@@ -18,12 +18,7 @@ import (
 // which has a subdirectory {{SUBDIR}}.
 func (s *shelley) newCwdRepo() (dir, repo, worktree, subdir string) {
 	dir = s.mkdir(filepath.Join(s.dir, "newcwd"))
-	repo = s.mkdir(filepath.Join(dir, "repo"))
-	s.gitIn(repo, "init", "--quiet")
-	s.gitIn(repo, "config", "user.name", "Shelley Test")
-	s.gitIn(repo, "config", "user.email", "test@example.com")
-	s.gitIn(repo, "config", "commit.gpgsign", "false")
-	s.gitIn(repo, "config", "core.hooksPath", "/dev/null")
+	repo = s.gitRepo(filepath.Join(dir, "repo"))
 	s.gitIn(repo, "commit", "--quiet", "--allow-empty", "-m", "Initial commit")
 	worktree = filepath.Join(dir, "worktree")
 	s.gitIn(repo, "worktree", "add", "--quiet", "-b", "feature", worktree)
