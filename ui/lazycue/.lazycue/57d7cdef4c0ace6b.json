@@ -1,0 +1,82 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A recording whose draft was deleted starts another. In the diff viewer (\".diff-viewer-overlay\"), \"the start button\" is data-testid \"review-record-start\", \"the stop button\" data-testid \"review-record-stop\", \"the cancel button\" data-testid \"review-record-cancel\", \"the status\" data-testid \"review-recording-status\", \"where\" data-testid \"review-recording-where\" (its textContent joins its crumbs with no separator) and \"said\" data-testid \"review-recording-said\"; \"the tooltip\" is \".p-tooltip\". \"Wait for the commit message\" means: wait (up to 30s) until a \".diff-viewer-overlay .editor.modified .view-line\" containing \"Rename value20\" is visible; the viewer opens on the repository's HEAD commit {{SHORT}}, which renames line 20 of src/app.ts to \"const renamedValue = 20;\". {{QUERY}} is the query string that opens the diff viewer on that commit in the repository. \"It is sent\" means data-testid \"review-recording-sent\" becomes visible (wait up to 30s: sending takes several requests). \"Wait for the clock to start\" means: wait until the time element of the stop button no longer reads \"00:00\" (eval document.querySelector(\"[data-testid=review-record-stop] time\")?.textContent !== \"00:00\", expect true). The server answers the recording's chat requests with 503 \"unavailable\" until call \"accept chats\". Perform the steps in order.\n1. Navigate to /new?{{QUERY}} and wait for the commit message.\n2. Click the start button, wait for the clock to start, then click the stop button. data-testid \"review-recording-error\" should contain \"unavailable\".\n3. Call \"delete draft\" should return exactly \"deleted\": it checks the recording made exactly one draft and deletes it on the server (POST /api/conversation/\u003cid\u003e/delete).\n4. One click: the gone draft is noticed and replaced. Call \"accept chats\", then click data-testid \"review-recording-send\" once. It is sent.\n5. Call \"check send\" should return exactly \"ok\": it checks that exactly two drafts were made, that the chat requests went exactly to the deleted draft (the refused attempt) and then the new one, so nothing more went to the deleted draft, and that the server has the new one as a conversation that is not a draft, in the repository. It makes {{NEW_ID}} the new draft's id.\n6. \".conversation-item[data-conversation-id='{{NEW_ID}}']\" should have class \"active\" (eval classList.contains(\"active\"), expect true).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new?{{QUERY}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=review-record-stop] time')?.textContent !== '00:00'",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-stop']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-recording-error']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='review-recording-error']",
+      "text": "unavailable"
+    },
+    {
+      "action": "call",
+      "value": "delete draft",
+      "expect": "deleted"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-record-start']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "accept chats"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-recording-send']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-recording-sent']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "check send",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-item[data-conversation-id='{{NEW_ID}}']\")?.classList.contains('active')",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:35:13.46200944Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 22019,
+    "output_tokens": 1327,
+    "estimated_cost_usd": 0.035866800000000004,
+    "mode": "generated"
+  }
+}

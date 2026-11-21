@@ -1,0 +1,68 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A recording on an archived conversation starts a new one. In the diff viewer (\".diff-viewer-overlay\"), \"the start button\" is data-testid \"review-record-start\", \"the stop button\" data-testid \"review-record-stop\", \"the cancel button\" data-testid \"review-record-cancel\", \"the status\" data-testid \"review-recording-status\", \"where\" data-testid \"review-recording-where\" (its textContent joins its crumbs with no separator) and \"said\" data-testid \"review-recording-said\"; \"the tooltip\" is \".p-tooltip\". \"Wait for the commit message\" means: wait (up to 30s) until a \".diff-viewer-overlay .editor.modified .view-line\" containing \"Rename value20\" is visible; the viewer opens on the repository's HEAD commit {{SHORT}}, which renames line 20 of src/app.ts to \"const renamedValue = 20;\". {{QUERY}} is the query string that opens the diff viewer on that commit in the repository. \"It is sent\" means data-testid \"review-recording-sent\" becomes visible (wait up to 30s: sending takes several requests). \"Wait for the clock to start\" means: wait until the time element of the stop button no longer reads \"00:00\" (eval document.querySelector(\"[data-testid=review-record-stop] time\")?.textContent !== \"00:00\", expect true). There is an archived conversation /c/archived in the repository. Perform the steps in order.\n1. Navigate to /c/archived?{{QUERY}} and wait for the commit message.\n2. Hover the start button; the tooltip's text should be exactly \"Record a narrated review for a new conversation\".\n3. Click the start button, wait for the clock to start, then click the stop button. It is sent.\n4. Call \"check send\" should return exactly \"ok\": it checks that exactly one chat request was made, to a conversation other than the archived one, which the server has as not a draft, in the repository, and not archived. It makes {{NEW_ID}} that conversation's id.\n5. \".conversation-item[data-conversation-id='{{NEW_ID}}']\" should have class \"active\" (eval classList.contains(\"active\"), expect true).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/archived?{{QUERY}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".p-tooltip",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".p-tooltip",
+      "text": "Record a narrated review for a new conversation"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid=review-record-stop] time\")?.textContent !== \"00:00\"",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-stop']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-recording-sent']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "check send",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-item[data-conversation-id='{{NEW_ID}}']\")?.classList.contains(\"active\")",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:35:52.8580855Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28516,
+    "output_tokens": 1295,
+    "estimated_cost_usd": 0.0393672,
+    "mode": "generated"
+  }
+}

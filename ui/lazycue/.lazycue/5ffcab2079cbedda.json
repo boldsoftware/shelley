@@ -1,0 +1,197 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Narrated review recording captures what was pointed at and selected, then hands it to the conversation. In the diff viewer (\".diff-viewer-overlay\"), \"the start button\" is data-testid \"review-record-start\", \"the stop button\" data-testid \"review-record-stop\", \"the cancel button\" data-testid \"review-record-cancel\", \"the status\" data-testid \"review-recording-status\", \"where\" data-testid \"review-recording-where\" (its textContent joins its crumbs with no separator) and \"said\" data-testid \"review-recording-said\"; \"the tooltip\" is \".p-tooltip\". \"Open the diffs\" means: wait (up to 30s) for the message input (data-testid \"message-input\") to be visible, click the \"Diffs\" button in \".chat-workspace-actions\" (if it is not visible, as on a phone, click the button \"More options\" instead and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"), and wait for the commit message. \"Wait for the commit message\" means: wait (up to 30s) until a \".diff-viewer-overlay .editor.modified .view-line\" containing \"Rename value20\" is visible; the viewer opens on the repository's HEAD commit {{SHORT}}, which renames line 20 of src/app.ts to \"const renamedValue = 20;\". \"It is sent\" means data-testid \"review-recording-sent\" becomes visible (wait up to 30s: sending takes several requests). \"Remember where the content starts\" means an eval with no expectation that sets window.__contentTop = document.querySelector(\".diff-viewer-overlay .diff-viewer-content\").getBoundingClientRect().y; \"the content has not moved\" means eval document.querySelector(\".diff-viewer-overlay .diff-viewer-content\").getBoundingClientRect().y === window.__contentTop is true. \"Select across the line\" means: hover the line at offset x 2, y 8 from its top-left, mouse down, hover it at x 160, y 8, mouse up. The renamed line is \".diff-viewer-overlay .editor.modified .view-line\" containing \"renamedValue\". To match where's text against a regular expression, eval the regex's test() on its textContent, expecting true. Perform the steps in order.\n1. Navigate to /c/review and open the diffs. Remember where the content starts.\n2. Click the start button. The stop button should become visible, and where's text should be exactly \"commit message {{SHORT}} (new 1)\".\n3. The live status takes over the header instead of adding a strip: the status should be visible inside \".diff-viewer-overlay .diff-viewer-header\", and the content has not moved. There should be no data-testid \"review-recording-bar\" (count 0).\n4. The viewer cannot be closed mid-recording: \".diff-viewer-overlay .diff-viewer-close\" should have aria-disabled \"true\". Press Escape; \".diff-viewer-overlay\" should still be visible.\n5. Controls outside the editor are named by their region and label: hover the toolbar button \".diff-viewer-overlay .diff-viewer-nav-btn[aria-label='Next file (>)']\"; where's textContent should match /^Toolbar.*Next file \\(>\\)\"$/.\n6. Hover the file tree item ([role=\"treeitem\"] in the overlay) containing \"app.ts\"; where's textContent should match /^Changed files.*\"app\\.ts\"$/. Click that tree item; the renamed line should become visible.\n7. In the editor, the line under the pointer is what counts: hover the renamed line; where's textContent should match /^Files.*src\\/app\\.ts new 20$/ and said's text should be exactly \"const renamedValue = 20;\".\n8. Select across the renamed line. The status should contain \"Selected\", where's textContent should match /^Files.*src\\/app\\.ts new 20$/, and there should be no said element (count 0).\n9. Click the stop button. It is sent. The close button's aria-disabled should no longer be \"true\". Once sent, the header is back: the status should be gone (count 0), and \".diff-viewer-overlay .diff-viewer-header-title\" should have no inert attribute.\n10. Call \"check review\": it should return exactly \"ok\". It checks on disk, as the spec did, that exactly one chat message handed over the recording (\"/transcription <audio path>\"), that the audio holds the recorder's bytes, and that the review JSON beside it records the view, the pointer on the toolbar button, the file tree item and line 20, the selection, what was on screen, and the file pick as the only click.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/review"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-workspace-actions button[aria-label=\"Diffs\"]') ? 'visible' : (document.querySelector('.chat-workspace-actions button[aria-label=\"More options\"]') ? 'overflow' : 'missing')"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions button[aria-label='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__contentTop = document.querySelector('.diff-viewer-overlay .diff-viewer-content').getBoundingClientRect().y"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-record-stop']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='review-recording-where']",
+      "text": "commit message {{SHORT}} (new 1)"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-viewer-overlay .diff-viewer-header [data-testid='review-recording-status']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-viewer-overlay .diff-viewer-content').getBoundingClientRect().y === window.__contentTop",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='review-recording-bar']",
+      "count": 0
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-viewer-overlay .diff-viewer-close",
+      "attribute": "aria-disabled",
+      "value": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "hover",
+      "selector": ".diff-viewer-overlay .diff-viewer-nav-btn[aria-label='Next file (>)']"
+    },
+    {
+      "action": "eval",
+      "expression": "/^Toolbar.*Next file \\(>\\)\"$/.test(document.querySelector('[data-testid=\"review-recording-where\"]')?.textContent || '')",
+      "expect": "true"
+    },
+    {
+      "action": "hover",
+      "selector": ".diff-viewer-overlay [role='treeitem']",
+      "has_text": "app.ts"
+    },
+    {
+      "action": "eval",
+      "expression": "/^Changed files.*\"app\\.ts\"$/.test(document.querySelector('[data-testid=\"review-recording-where\"]')?.textContent || '')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay [role='treeitem']",
+      "has_text": "app.ts"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "renamedValue",
+      "timeout": "15s"
+    },
+    {
+      "action": "hover",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "renamedValue"
+    },
+    {
+      "action": "eval",
+      "expression": "/^Files.*src\\/app\\.ts new 20$/.test(document.querySelector('[data-testid=\"review-recording-where\"]')?.textContent || '')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='review-recording-said']",
+      "text": "const renamedValue = 20;"
+    },
+    {
+      "action": "hover",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "renamedValue",
+      "x": 2,
+      "y": 8
+    },
+    {
+      "action": "mouse_down",
+      "button": "left"
+    },
+    {
+      "action": "hover",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "renamedValue",
+      "x": 160,
+      "y": 8,
+      "count": 10
+    },
+    {
+      "action": "mouse_up",
+      "button": "left"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='review-recording-status']",
+      "text": "Selected"
+    },
+    {
+      "action": "eval",
+      "expression": "/^Files.*src\\/app\\.ts new 20$/.test(document.querySelector('[data-testid=\"review-recording-where\"]')?.textContent || '')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='review-recording-said']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-stop']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-recording-sent']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-viewer-overlay .diff-viewer-close')?.getAttribute('aria-disabled') !== 'true'",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='review-recording-status']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const t = document.querySelector('.diff-viewer-overlay .diff-viewer-header-title'); return !!t && !t.hasAttribute('inert'); })()",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "check review",
+      "expect": "ok"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:05:22.821412932Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 355386,
+    "output_tokens": 8128,
+    "estimated_cost_usd": 0.31852094999999997,
+    "mode": "generated"
+  }
+}

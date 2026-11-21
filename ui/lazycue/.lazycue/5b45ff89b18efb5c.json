@@ -1,0 +1,207 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Cancelling throws the recording away. In the diff viewer (\".diff-viewer-overlay\"), \"the start button\" is data-testid \"review-record-start\", \"the stop button\" data-testid \"review-record-stop\", \"the cancel button\" data-testid \"review-record-cancel\", \"the status\" data-testid \"review-recording-status\", \"where\" data-testid \"review-recording-where\" (its textContent joins its crumbs with no separator) and \"said\" data-testid \"review-recording-said\"; \"the tooltip\" is \".p-tooltip\". \"Open the diffs\" means: wait (up to 30s) for the message input (data-testid \"message-input\") to be visible, click the \"Diffs\" button in \".chat-workspace-actions\" (if it is not visible, as on a phone, click the button \"More options\" instead and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"), and wait for the commit message. \"Wait for the commit message\" means: wait (up to 30s) until a \".diff-viewer-overlay .editor.modified .view-line\" containing \"Rename value20\" is visible; the viewer opens on the repository's HEAD commit {{SHORT}}, which renames line 20 of src/app.ts to \"const renamedValue = 20;\". \"The close button\" is \".diff-viewer-overlay .diff-viewer-close\". \"Wait for the clock to tick\" means: in an eval with no expectation set window.__tick = document.querySelector(\"[data-testid=review-record-stop] time\").textContent, then wait until that text differs (eval document.querySelector(\"[data-testid=review-record-stop] time\").textContent !== window.__tick, expect true). Perform the steps in order.\n1. Navigate to /c/review and open the diffs.\n2. Click the start button; the stop button should become visible.\n3. Locked controls look it: the close button should have aria-disabled \"true\", computed opacity exactly \"0.35\" and computed cursor exactly \"not-allowed\".\n4. Locked controls say why in a tooltip that outlasts the running clock's re-renders: hover the close button; the tooltip's text should be exactly \"Stop recording to close\". Wait for the clock to tick; the tooltip's text should still be exactly \"Stop recording to close\".\n5. Hover the cancel button; the tooltip's text should be exactly \"Stop and discard the recording\". Wait for the clock to tick; it should still be exactly \"Stop and discard the recording\".\n6. The first click only asks, and a double-click is not an answer: double-click the cancel button (one click step with count 2). The cancel button's text should be exactly \"Discard?\", and the stop button should still be visible.\n7. A second, separate click throws it away: sleep 500ms (a confirming click within 400ms of the first counts as part of the double-click), then click the cancel button once. The start button should become visible.\n8. The start button should be enabled and focused (document.activeElement is it). The status and data-testid \"review-recording-bar\" should be gone (count 0 each). The close button's aria-disabled should no longer be \"true\", and its computed opacity should be exactly \"1\".\n9. Call \"requests\" should return exactly {\"uploads\":0,\"chats\":0}: nothing was uploaded or handed to the conversation.\n10. Nothing was left behind to offer as unsent: navigate to /c/review again (a reload) and open the diffs. The start button should be visible, and there should be no review-recording-bar (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/review"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions button[aria-label='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "timeout": "30s",
+      "has_text": "Rename value20"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-record-stop']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-viewer-overlay .diff-viewer-close",
+      "attribute": "aria-disabled",
+      "value": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.diff-viewer-overlay .diff-viewer-close')).opacity",
+      "expect": "0.35"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.diff-viewer-overlay .diff-viewer-close')).cursor",
+      "expect": "not-allowed"
+    },
+    {
+      "action": "hover",
+      "selector": ".diff-viewer-overlay .diff-viewer-close"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".p-tooltip",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".p-tooltip",
+      "text": "Stop recording to close"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__tick = document.querySelector('[data-testid=review-record-stop] time').textContent; 'ok'",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=review-record-stop] time').textContent !== window.__tick",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".p-tooltip",
+      "text": "Stop recording to close"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='review-record-cancel']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".p-tooltip",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".p-tooltip",
+      "text": "Stop and discard the recording"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__tick = document.querySelector('[data-testid=review-record-stop] time').textContent; 'ok'",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=review-record-stop] time').textContent !== window.__tick",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".p-tooltip",
+      "text": "Stop and discard the recording"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-cancel']",
+      "count": 2
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='review-record-cancel']",
+      "text": "Discard?"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='review-record-stop']"
+    },
+    {
+      "action": "sleep",
+      "timeout": "500ms"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-cancel']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-record-start']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=review-record-start]')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='review-recording-status']",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='review-recording-bar']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.diff-viewer-overlay .diff-viewer-close')).opacity",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-viewer-overlay .diff-viewer-close').getAttribute('aria-disabled') !== 'true'",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "requests",
+      "expect": "{\"uploads\":0,\"chats\":0}"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/review"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions button[aria-label='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "timeout": "30s",
+      "has_text": "Rename value20"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='review-recording-bar']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:40:36.49357209Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 176145,
+    "output_tokens": 8206,
+    "estimated_cost_usd": 0.22730700000000004,
+    "mode": "generated"
+  }
+}

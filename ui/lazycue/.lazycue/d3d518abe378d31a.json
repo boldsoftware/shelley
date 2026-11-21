@@ -1,0 +1,86 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A recording on a draft goes to it after a reload and keeps its text. In the diff viewer (\".diff-viewer-overlay\"), \"the start button\" is data-testid \"review-record-start\", \"the stop button\" data-testid \"review-record-stop\", \"the cancel button\" data-testid \"review-record-cancel\", \"the status\" data-testid \"review-recording-status\", \"where\" data-testid \"review-recording-where\" (its textContent joins its crumbs with no separator) and \"said\" data-testid \"review-recording-said\"; \"the tooltip\" is \".p-tooltip\". \"Wait for the commit message\" means: wait (up to 30s) until a \".diff-viewer-overlay .editor.modified .view-line\" containing \"Rename value20\" is visible; the viewer opens on the repository's HEAD commit {{SHORT}}, which renames line 20 of src/app.ts to \"const renamedValue = 20;\". {{QUERY}} is the query string that opens the diff viewer on that commit in the repository. \"It is sent\" means data-testid \"review-recording-sent\" becomes visible (wait up to 30s: sending takes several requests). \"Wait for the clock to start\" means: wait until the time element of the stop button no longer reads \"00:00\" (eval document.querySelector(\"[data-testid=review-record-stop] time\")?.textContent !== \"00:00\", expect true). There is a draft conversation {{DRAFT_ID}} in the repository, with the unsent text \"Written elsewhere.\" and model predictable. The server refuses audio uploads (/api/upload/raw answers 503 \"unavailable\") until call \"accept uploads\". Perform the steps in order.\n1. Navigate to /c/{{DRAFT_ID}}?{{QUERY}} and wait for the commit message.\n2. Click the start button, wait for the clock to start, then click the stop button. data-testid \"review-recording-error\" should be visible.\n3. The draft it began on still takes it after a reload: call \"accept uploads\", navigate to /c/{{DRAFT_ID}}?{{QUERY}} again, and click data-testid \"review-recording-send\". It is sent.\n4. Call \"check send\" should return exactly \"ok\": it checks that exactly one chat request was made, to the draft, with model \"predictable\" and the repository as cwd, and that the server no longer has the draft as a draft.\n5. Its unsent text stays in the composer: click the viewer's close button (\".diff-viewer-overlay .diff-viewer-close\"). The message input's (data-testid \"message-input\") value should be exactly \"Written elsewhere.\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{DRAFT_ID}}?{{QUERY}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=review-record-stop] time')?.textContent !== '00:00'",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-stop']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-recording-error']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "accept uploads"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{DRAFT_ID}}?{{QUERY}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-recording-send']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-recording-sent']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "check send",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .diff-viewer-close"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Written elsewhere."
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:29:33.129626434Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 33682,
+    "output_tokens": 1061,
+    "estimated_cost_usd": 0.03529485,
+    "mode": "generated"
+  }
+}

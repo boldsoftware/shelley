@@ -1,0 +1,45 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Offers no narrated review without transcription: the server says it cannot transcribe. \"Open the diffs\" means: wait (up to 30s) for the message input (data-testid \"message-input\") to be visible, click the \"Diffs\" button in \".chat-workspace-actions\" (if it is not visible, as on a phone, click the button \"More options\" instead and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"), and wait for the commit message. \"Wait for the commit message\" means: wait (up to 30s) until a \".diff-viewer-overlay .editor.modified .view-line\" containing \"Rename value20\" is visible; the viewer opens on the repository's HEAD commit {{SHORT}}, which renames line 20 of src/app.ts to \"const renamedValue = 20;\". Navigate to /c/review and open the diffs. Then there should be no start button: data-testid \"review-record-start\" count exactly 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/review"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-workspace-actions button[aria-label=\"Diffs\"]') ? 'visible' : 'hidden'",
+      "expect": "visible"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions button[aria-label='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='review-record-start']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:21:58.716077488Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 64730,
+    "output_tokens": 1670,
+    "estimated_cost_usd": 0.06247665,
+    "mode": "generated"
+  }
+}

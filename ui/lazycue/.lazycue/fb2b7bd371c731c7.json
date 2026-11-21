@@ -1,0 +1,76 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Discarding a recording deletes the empty draft it made. In the diff viewer (\".diff-viewer-overlay\"), \"the start button\" is data-testid \"review-record-start\", \"the stop button\" data-testid \"review-record-stop\", \"the cancel button\" data-testid \"review-record-cancel\", \"the status\" data-testid \"review-recording-status\", \"where\" data-testid \"review-recording-where\" (its textContent joins its crumbs with no separator) and \"said\" data-testid \"review-recording-said\"; \"the tooltip\" is \".p-tooltip\". \"Wait for the commit message\" means: wait (up to 30s) until a \".diff-viewer-overlay .editor.modified .view-line\" containing \"Rename value20\" is visible; the viewer opens on the repository's HEAD commit {{SHORT}}, which renames line 20 of src/app.ts to \"const renamedValue = 20;\". {{QUERY}} is the query string that opens the diff viewer on that commit in the repository. \"Wait for the clock to start\" means: wait until the time element of the stop button no longer reads \"00:00\" (eval document.querySelector(\"[data-testid=review-record-stop] time\")?.textContent !== \"00:00\", expect true). There is an archived conversation /c/archived in the repository. The server answers the recording's chat requests with 503 \"unavailable\". Perform the steps in order.\n1. Navigate to /c/archived?{{QUERY}} and wait for the commit message.\n2. Click the start button, wait for the clock to start, then click the stop button. data-testid \"review-recording-error\" should be visible.\n3. Call \"chats\" should return exactly \"ok\": it checks that exactly one chat request was made, to a conversation other than the archived one, which the server has. It makes {{NEW_ID}} that conversation's id.\n4. Discard the recording: click data-testid \"review-recording-discard\"; the first click only arms it, and its text becomes exactly \"Discard for good?\". Sleep 500ms (a confirming click within 400ms of the first is ignored), then click it again. data-testid \"review-recording-bar\" should be gone (count 0).\n5. Call \"status\" should come to return exactly \"404\": the server no longer has conversation {{NEW_ID}}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/archived?{{QUERY}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=review-record-start]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=review-record-stop] time')?.textContent !== '00:00'",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=review-record-stop]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=review-recording-error]",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "chats",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=review-recording-discard]"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=review-recording-discard]",
+      "text": "Discard for good?"
+    },
+    {
+      "action": "sleep",
+      "timeout": "500ms"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=review-recording-discard]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=review-recording-bar]",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "status",
+      "expect": "404"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:30:27.005177146Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 27248,
+    "output_tokens": 1291,
+    "estimated_cost_usd": 0.036912,
+    "mode": "generated"
+  }
+}

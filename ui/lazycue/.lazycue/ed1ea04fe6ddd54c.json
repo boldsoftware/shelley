@@ -1,0 +1,133 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Outside a conversation, a recording starts one of its own. In the diff viewer (\".diff-viewer-overlay\"), \"the start button\" is data-testid \"review-record-start\", \"the stop button\" data-testid \"review-record-stop\", \"the cancel button\" data-testid \"review-record-cancel\", \"the status\" data-testid \"review-recording-status\", \"where\" data-testid \"review-recording-where\" (its textContent joins its crumbs with no separator) and \"said\" data-testid \"review-recording-said\"; \"the tooltip\" is \".p-tooltip\". \"Wait for the commit message\" means: wait (up to 30s) until a \".diff-viewer-overlay .editor.modified .view-line\" containing \"Rename value20\" is visible; the viewer opens on the repository's HEAD commit {{SHORT}}, which renames line 20 of src/app.ts to \"const renamedValue = 20;\". {{QUERY}} is the query string that opens the diff viewer on that commit in the repository. \"It is sent\" means data-testid \"review-recording-sent\" becomes visible (wait up to 30s: sending takes several requests). \"Wait for the clock to start\" means: wait until the time element of the stop button no longer reads \"00:00\" (eval document.querySelector(\"[data-testid=review-record-stop] time\")?.textContent !== \"00:00\", expect true). The server refuses audio uploads (/api/upload/raw answers 503 \"unavailable\") until call \"accept uploads\". Perform the steps in order.\n1. Navigate to /new?{{QUERY}} and wait for the commit message.\n2. Hover the start button; the tooltip's text should be exactly \"Record a narrated review for a new conversation\".\n3. Click the start button. Hover the stop button; the tooltip's text should be exactly \"Stop and send to a new conversation\".\n4. Wait for the clock to start, then click the stop button.\n5. data-testid \"review-recording-error\" should be visible, and data-testid \"review-recording-pending\" should contain \"for a new conversation\".\n6. Nothing is made for a recording that hasn't been accepted: call \"drafts\" should return exactly \"0\", and the page's URL should end with \"/new\" (eval location.href.endsWith(\"/new\"), expect true).\n7. After a reload the page's draft is out of the picture, and the recording gets a conversation of its own, set up as the page was at start: call \"accept uploads\", navigate to /new?{{QUERY}} again, and click data-testid \"review-recording-send\". It is sent.\n8. Call \"check send\" should return exactly \"ok\": it checks that exactly one draft was made, with an empty draft text, the repository as cwd and a model; that exactly one chat request went to it, handing over \"/transcription \u003caudio path\u003e\" with the repository as cwd and the draft's model; and that the server now has it as a conversation that is not a draft, in the repository. It makes {{NEW_ID}} that conversation's id.\n9. Sent, the page moves to the new conversation behind the viewer (its URL waits for its title, so check the drawer): \".conversation-item[data-conversation-id='{{NEW_ID}}']\" should have class \"active\" (eval classList.contains(\"active\"), expect true).\n10. Hover the start button; the tooltip's text should be exactly \"Record a narrated review\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new?{{QUERY}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".p-tooltip",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".p-tooltip",
+      "text": "Record a narrated review for a new conversation"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='review-record-stop']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".p-tooltip",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".p-tooltip",
+      "text": "Stop and send to a new conversation"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid=review-record-stop] time\")?.textContent !== \"00:00\"",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-stop']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='review-recording-error']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='review-recording-pending']",
+      "text": "for a new conversation"
+    },
+    {
+      "action": "call",
+      "value": "drafts",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "location.href.endsWith(\"/new\")",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "accept uploads"
+    },
+    {
+      "action": "navigate",
+      "url": "/new?{{QUERY}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-recording-send']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-recording-sent']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "check send",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-item[data-conversation-id='{{NEW_ID}}']\")?.classList.contains(\"active\")",
+      "expect": "true"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".p-tooltip",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".p-tooltip",
+      "text": "Record a narrated review"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:55:37.895140923Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 41251,
+    "output_tokens": 2091,
+    "estimated_cost_usd": 0.0565131,
+    "mode": "generated"
+  }
+}

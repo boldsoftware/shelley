@@ -1,0 +1,115 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Binary views do not reuse the previous text selection or visible lines. In the diff viewer (\".diff-viewer-overlay\"), \"the start button\" is data-testid \"review-record-start\", \"the stop button\" data-testid \"review-record-stop\", \"the cancel button\" data-testid \"review-record-cancel\", \"the status\" data-testid \"review-recording-status\", \"where\" data-testid \"review-recording-where\" (its textContent joins its crumbs with no separator) and \"said\" data-testid \"review-recording-said\"; \"the tooltip\" is \".p-tooltip\". \"Open the diffs\" means: wait (up to 30s) for the message input (data-testid \"message-input\") to be visible, click the \"Diffs\" button in \".chat-workspace-actions\" (if it is not visible, as on a phone, click the button \"More options\" instead and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"), and wait for the commit message. \"Wait for the commit message\" means: wait (up to 30s) until a \".diff-viewer-overlay .editor.modified .view-line\" containing \"Rename value20\" is visible; the viewer opens on the repository's HEAD commit {{SHORT}}, which renames line 20 of src/app.ts to \"const renamedValue = 20;\". \"It is sent\" means data-testid \"review-recording-sent\" becomes visible (wait up to 30s: sending takes several requests). \"Select across the line\" means: hover the line at offset x 2, y 8 from its top-left, mouse down, hover it at x 160, y 8, mouse up. The commit also adds a binary file, opaque.bin. The renamed line is \".diff-viewer-overlay .editor.modified .view-line\" containing \"renamedValue\". Perform the steps in order.\n1. Navigate to /c/review and open the diffs.\n2. Click the start button, then click the file tree item ([role=\"treeitem\"] in the overlay) containing \"app.ts\"; the renamed line should become visible.\n3. Select across the renamed line. The status should contain \"Selected\".\n4. Click the file tree item containing \"opaque.bin\"; data-testid \"binary-file-panel\" should become visible.\n5. Hover the status. It should no longer contain \"Selected\" (eval that its textContent does not include \"Selected\", expect true), and where's text should be exactly \"opaque.bin\".\n6. Click the stop button. It is sent.\n7. Call \"check review\": it should return exactly \"ok\". It checks on disk that exactly one chat message handed over the recording, and that its review JSON has no selection event for opaque.bin but does have an on_screen event whose items are exactly [\"opaque.bin\"].",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/review"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions button[aria-label='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay [role='treeitem']",
+      "has_text": "app.ts"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "renamedValue",
+      "timeout": "30s"
+    },
+    {
+      "action": "hover",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "renamedValue",
+      "x": 2,
+      "y": 8
+    },
+    {
+      "action": "mouse_down",
+      "button": "left"
+    },
+    {
+      "action": "hover",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "renamedValue",
+      "x": 160,
+      "y": 8
+    },
+    {
+      "action": "mouse_up",
+      "button": "left"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='review-recording-status']",
+      "text": "Selected"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay [role='treeitem']",
+      "has_text": "opaque.bin"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='binary-file-panel']",
+      "timeout": "30s"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='review-recording-status']"
+    },
+    {
+      "action": "eval",
+      "expression": "!document.querySelector('[data-testid=\"review-recording-status\"]').textContent.includes('Selected')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='review-recording-where']",
+      "text": "opaque.bin"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-stop']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-recording-sent']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "check review",
+      "expect": "ok"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:43:39.971580571Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 263993,
+    "output_tokens": 5701,
+    "estimated_cost_usd": 0.23214659999999998,
+    "mode": "generated"
+  }
+}
