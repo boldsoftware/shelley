@@ -62,6 +62,9 @@ type ToolSetConfig struct {
 	LLMProvider LLMServiceProvider
 	// EnableJITInstall enables just-in-time tool installation.
 	EnableJITInstall bool
+	// BashResourceNotes appends notes to the output of local bash commands
+	// on OOM kills, resource pressure, and nearly full disks.
+	BashResourceNotes bool
 	// EnableBrowser enables browser tools.
 	EnableBrowser bool
 	// ModelID is the model being used for this conversation.
@@ -269,6 +272,9 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		HostDir:                    hostWD,
 		UserWaiting:                cfg.UserWaiting,
 		UserWaitingBackgroundAfter: cfg.BashUserWaitingBackgroundAfter,
+	}
+	if cfg.BashResourceNotes {
+		bashTool.resourceNotes = newResourceNotes()
 	}
 
 	patchProvider, patchProfile := "", "nested"

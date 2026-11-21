@@ -66,6 +66,10 @@ type BashTool struct {
 	// HostDir, with a VM, is the working directory here, for commands on
 	// this host; WorkingDir is then on the VM.
 	HostDir *MutableWorkingDir
+	// resourceNotes, if set, appends a note on OOM kills, resource
+	// pressure, and a nearly full disk to the output of commands on this
+	// host.
+	resourceNotes *resourceNotes
 
 	// cdHinted records that the chained-cd hint has been shown. The hint
 	// is shown at most once per BashTool, that is, once per conversation:
@@ -392,7 +396,7 @@ func (b *BashTool) executeBashInDir(ctx context.Context, req bashInput, wd strin
 	}
 	job.LogPath = filepath.Join(dir, job.ID+".log")
 	job.ExitPath = filepath.Join(dir, job.ID+".exit")
-	log, err := os.OpenFile(job.LogPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	log, err := os.OpenFile(job.LogPath, os.O_WRONLY|os.O_APPEND|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return bashResult{}, fmt.Errorf("create job log: %w", err)
 	}
@@ -421,8 +425,12 @@ func (b *BashTool) executeBashInDir(ctx context.Context, req bashInput, wd strin
 		releaseGitDirs()
 		return bashResult{}, fmt.Errorf("job %s (PGID %d): %w", job.ID, job.PID, err)
 	}
+	var watch *resourceWatch
+	if req.vm == nil {
+		watch = b.resourceNotes.watch(job.PID)
+	}
 	exited := make(chan struct{})
-	go waitBashJob(cmd, job.ExitPath, releaseGitDirs, exited)
+	go waitBashJob(cmd, job, watch, releaseGitDirs, exited)
 	if req.Background {
 		return b.background(ctx, job, exited, "Started as")
 	}

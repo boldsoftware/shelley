@@ -80,14 +80,21 @@ func writeJobExitFile(path string, state *os.ProcessState) error {
 	return os.Rename(tmp, path)
 }
 
-// waitBashJob waits for cmd, a started job wrapper, ensures its exit file
-// exists, calls release, and closes exited.
-func waitBashJob(cmd *exec.Cmd, exitPath string, release func(), exited chan<- struct{}) {
+// waitBashJob waits for cmd, job's started wrapper, ensures its exit file
+// exists, appends watch's note, if any, to its log, calls release, and
+// closes exited. watch may be nil.
+func waitBashJob(cmd *exec.Cmd, job BackgroundJob, watch *resourceWatch, release func(), exited chan<- struct{}) {
 	defer close(exited)
 	defer release()
 	cmd.Wait()
-	if _, err := os.Stat(exitPath); errors.Is(err, os.ErrNotExist) {
-		writeJobExitFile(exitPath, cmd.ProcessState)
+	if _, err := os.Stat(job.ExitPath); errors.Is(err, os.ErrNotExist) {
+		writeJobExitFile(job.ExitPath, cmd.ProcessState)
+	}
+	if note := watch.finish(); note != "" {
+		if log, err := os.OpenFile(job.LogPath, os.O_WRONLY|os.O_APPEND, 0); err == nil {
+			fmt.Fprintf(log, "\n%s\n", note)
+			log.Close()
+		}
 	}
 }
 
