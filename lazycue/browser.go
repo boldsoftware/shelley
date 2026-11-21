@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"net/http"
+	"net/url"
 	"regexp"
 	"runtime"
 	"slices"
@@ -21,6 +23,7 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/heapprofiler"
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/cdproto/page"
@@ -106,6 +109,10 @@ type Launch struct {
 	Media map[string]string
 	// Timezone is an IANA time zone ID; empty is the host's.
 	Timezone string
+	// Hosts answers the requests of every tab to other origins, such as
+	// "https://docs.example", in place of the network: by origin, the
+	// handler to run on each.
+	Hosts map[string]http.Handler
 }
 
 func (l Launch) device() Device {
@@ -150,8 +157,13 @@ type tabState struct {
 // NewBrowser launches a headless Chrome instance whose tabs start out as
 // launch says and may use the clipboard.
 func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
+	for origin := range launch.Hosts {
+		if u, err := url.Parse(origin); err != nil || u.Scheme+"://"+u.Host != origin {
+			return nil, fmt.Errorf("Launch.Hosts: %q is not an origin like https://docs.example", origin)
+		}
+	}
 	d := launch.device()
-	url := make(chan string, 1)
+	devtools := make(chan string, 1)
 	opts := append(
 		chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("no-sandbox", true),
@@ -165,7 +177,7 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 		// rather than restoring it as it was left.
 		chromedp.Flag("disable-back-forward-cache", true),
 		chromedp.WindowSize(d.Width, d.Height),
-		chromedp.CombinedOutput(devtoolsURL(url)),
+		chromedp.CombinedOutput(devtoolsURL(devtools)),
 	)
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(parentCtx, opts...)
@@ -180,7 +192,7 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 	}
 	err := chromedp.Run(ctx, grantClipboard())
 	if err == nil {
-		b.control, err = dialControl(ctx, <-url, launch, b.popup, b.closed)
+		b.control, err = dialControl(ctx, <-devtools, launch, b.popup, b.closed)
 	}
 	if err == nil {
 		setupCtx, cancel := context.WithTimeout(parentCtx, defaultStepTimeout)
@@ -220,6 +232,17 @@ func setUpTab(ctx context.Context, launch Launch, st *tabState) error {
 	// For the dialogs control answers.
 	if err := page.Enable().Do(ctx); err != nil {
 		return fmt.Errorf("enable page events: %w", err)
+	}
+	if len(launch.Hosts) > 0 {
+		// For the requests control answers. chromedp turns site isolation
+		// off, so this covers cross-site iframes too: they are the page's.
+		var patterns []*fetch.RequestPattern
+		for origin := range launch.Hosts {
+			patterns = append(patterns, &fetch.RequestPattern{URLPattern: origin + "/*"})
+		}
+		if err := fetch.Enable().WithPatterns(patterns).Do(ctx); err != nil {
+			return fmt.Errorf("intercept other hosts: %w", err)
+		}
 	}
 	if launch.Timezone != "" {
 		if err := emulation.SetTimezoneOverride(launch.Timezone).Do(ctx); err != nil {

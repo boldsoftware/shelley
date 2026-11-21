@@ -1,14 +1,20 @@
 package lazycue
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/chromedp/cdproto"
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/cdproto/target"
@@ -82,14 +88,17 @@ func dialControl(ctx context.Context, url string, launch Launch, popup, closed f
 	go c.read()
 	attach := target.SetAutoAttach(true, true).WithFlatten(true).WithFilter(target.Filter{{Type: "page"}, {Exclude: true}})
 	if err := attach.Do(cdp.WithExecutor(ctx, session{c, ""})); err != nil {
-		conn.Close()
+		c.close()
 		return nil, err
 	}
 	return c, nil
 }
 
+// close closes the connection and waits for read to stop, which unblocks
+// whatever waits on an answer.
 func (c *control) close() {
 	c.conn.Close()
+	<-c.lost
 }
 
 // page waits for page id to be set up and returns its state.
@@ -155,6 +164,8 @@ func (c *control) read() {
 			delete(c.pages, id)
 			c.mu.Unlock()
 			c.closed(id)
+		case *fetch.EventRequestPaused:
+			go s.Execute(context.Background(), fetch.CommandFulfillRequest, c.answer(ev), nil) //nolint:errcheck // the page may be gone
 		case *page.EventJavascriptDialogOpening:
 			// Close dialogs as Playwright does when no test listens for
 			// them: leave the page on beforeunload, cancel alerts, confirms
@@ -162,6 +173,34 @@ func (c *control) read() {
 			go s.Execute(context.Background(), page.CommandHandleJavaScriptDialog, page.HandleJavaScriptDialog(ev.Type == page.DialogTypeBeforeunload), nil) //nolint:errcheck // the page may be gone
 		}
 	}
+}
+
+// answer runs the Launch.Hosts handler of a request's origin on it.
+func (c *control) answer(ev *fetch.EventRequestPaused) *fetch.FulfillRequestParams {
+	var body []byte
+	for _, e := range ev.Request.PostDataEntries {
+		b, err := base64.StdEncoding.DecodeString(e.Bytes)
+		if err != nil {
+			return fetch.FulfillRequest(ev.RequestID, http.StatusBadRequest).WithBody(base64.StdEncoding.EncodeToString([]byte(err.Error())))
+		}
+		body = append(body, b...)
+	}
+	r := httptest.NewRequest(ev.Request.Method, ev.Request.URL, bytes.NewReader(body))
+	for k, v := range ev.Request.Headers {
+		r.Header.Set(k, fmt.Sprint(v))
+	}
+	w := httptest.NewRecorder()
+	c.launch.Hosts[r.URL.Scheme+"://"+r.URL.Host].ServeHTTP(w, r)
+	res := w.Result()
+	var headers []*fetch.HeaderEntry
+	for k, vs := range res.Header {
+		for _, v := range vs {
+			headers = append(headers, &fetch.HeaderEntry{Name: k, Value: v})
+		}
+	}
+	return fetch.FulfillRequest(ev.RequestID, int64(res.StatusCode)).
+		WithResponseHeaders(headers).
+		WithBody(base64.StdEncoding.EncodeToString(w.Body.Bytes()))
 }
 
 // setUp sets a page up as launch says and lets it run.
@@ -173,6 +212,7 @@ func (c *control) setUp(s session, id target.ID, paused bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultStepTimeout)
 	defer cancel()
 	err := setUpTab(cdp.WithExecutor(ctx, b), c.launch, st)
+	// Even when set-up failed: no page may stay paused.
 	if paused {
 		b.Execute(ctx, runtime.CommandRunIfWaitingForDebugger, nil, nil) //nolint:errcheck // send errors come back from wait
 	}

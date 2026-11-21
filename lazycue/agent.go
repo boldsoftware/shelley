@@ -410,6 +410,9 @@ func envPrompt(env *Env) string {
 			fmt.Fprintf(&sb, "- {{%s}} = %s\n", name, env.Vars[name])
 		}
 	}
+	if len(env.Launch.Hosts) > 0 {
+		sb.WriteString("\n\nOTHER HOSTS the test answers for in every tab: " + strings.Join(slices.Sorted(maps.Keys(env.Launch.Hosts)), ", ") + "\n")
+	}
 	if len(env.Calls) > 0 {
 		sb.WriteString("\n\nCALLS available to call steps: " + strings.Join(slices.Sorted(maps.Keys(env.Calls)), ", ") + "\n")
 	}

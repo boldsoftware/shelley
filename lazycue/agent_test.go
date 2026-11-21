@@ -271,3 +271,15 @@ func TestEnvPromptNamesTheDevice(t *testing.T) {
 		t.Errorf("launched device prompt = %q", got)
 	}
 }
+
+// The agent hears which other origins the test answers for.
+func TestEnvPromptNamesTheHosts(t *testing.T) {
+	h := http.NotFoundHandler()
+	got := envPrompt(&Env{Launch: Launch{Hosts: map[string]http.Handler{"https://vm.example": h, "https://docs.example": h}}})
+	if !strings.Contains(got, "OTHER HOSTS the test answers for in every tab: https://docs.example, https://vm.example\n") {
+		t.Errorf("hosts prompt = %q", got)
+	}
+	if got := envPrompt(&Env{}); strings.Contains(got, "OTHER HOSTS") {
+		t.Errorf("prompt without hosts = %q", got)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	_ "image/png"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -726,5 +727,76 @@ document.title = 'init=' + window.__init + ' w=' + innerWidth + ' opener=' + (wi
 		case <-deadline:
 			t.Fatal("popup2 is still open after closing itself")
 		}
+	}
+}
+
+// Launch.Hosts answers requests to other origins, in every tab including
+// popups and cross-site iframes, as Playwright's context routes do.
+func TestHosts(t *testing.T) {
+	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
+		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
+	}
+	other := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/frame":
+			_, _ = w.Write([]byte(`<!doctype html><script src="/frame.js"></script>`))
+		case "/frame.js":
+			w.Header().Set("Content-Type", "text/javascript")
+			_, _ = w.Write([]byte(`parent.postMessage('frame ' + location.host, '*')`))
+		case "/echo":
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			if r.Method == http.MethodOptions {
+				w.Header().Set("Access-Control-Allow-Headers", "X-Ask")
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			body, _ := io.ReadAll(r.Body)
+			w.Header().Set("Access-Control-Expose-Headers", "X-Seen")
+			w.Header().Set("X-Seen", r.Header.Get("X-Ask"))
+			w.WriteHeader(http.StatusTeapot)
+			_, _ = w.Write([]byte(r.Method + " " + r.URL.RequestURI() + " " + string(body)))
+		default:
+			_, _ = w.Write([]byte(`<!doctype html><title>other ` + r.Host + r.URL.Path + `</title>`))
+		}
+	})
+	br, err := NewBrowser(context.Background(), Launch{Hosts: map[string]http.Handler{"https://other.test": other}})
+	if err != nil {
+		t.Skipf("no browser available: %v", err)
+	}
+	t.Cleanup(br.Close)
+	base := serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<a id="blank" href="https://other.test/docs" target="_blank">docs</a>
+<script>addEventListener('message', (e) => { document.body.dataset.msg = e.data })</script>
+</body></html>`)
+	runSteps(t, br, &Env{BaseURL: base},
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: `fetch('https://other.test/echo?q=1', {method: 'POST', body: 'hi', headers: {'X-Ask': 'yes'}}).then(async (r) => r.status + ' ' + r.headers.get('X-Seen') + ' ' + await r.text())`, Expect: ptr("418 yes POST /echo?q=1 hi")},
+		Step{Action: ActionEval, Expression: `document.body.append(Object.assign(document.createElement('iframe'), {src: 'https://other.test/frame'}))`},
+		Step{Action: ActionEval, Expression: `document.body.dataset.msg`, Expect: ptr("frame other.test")},
+		Step{Action: ActionClick, Selector: "#blank"},
+		Step{Action: ActionAssertTitle, Tab: "popup", Text: "other other.test/docs"},
+		Step{Action: ActionNavigate, Tab: "b", URL: "https://other.test/b"},
+		Step{Action: ActionAssertTitle, Tab: "b", Text: "other other.test/b"},
+	)
+}
+
+func TestHostsAreOrigins(t *testing.T) {
+	for _, origin := range []string{"https://docs.example/", "docs.example", "https://docs.example/x"} {
+		_, err := NewBrowser(context.Background(), Launch{Hosts: map[string]http.Handler{origin: http.NotFoundHandler()}})
+		if err == nil || !strings.Contains(err.Error(), "is not an origin") {
+			t.Errorf("%q: %v", origin, err)
+		}
+	}
+}
+
+// Closing a browser ends its control connection's reading, which is what
+// every wait on it ends with, so a run's many browsers leave nothing behind.
+func TestCloseEndsControl(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	br.Close()
+	select {
+	case <-br.control.lost:
+	default:
+		t.Error("control is still reading after Close")
 	}
 }

@@ -520,6 +520,15 @@ func (s *shelley) route(pattern string, handler http.HandlerFunc) {
 	s.mux.HandleFunc(pattern, handler)
 }
 
+// host has handler answer the browser's requests to another origin, such
+// as "https://docs.example", in every tab including popups.
+func (s *shelley) host(origin string, handler http.Handler) {
+	if s.launch.Hosts == nil {
+		s.launch.Hosts = map[string]http.Handler{}
+	}
+	s.launch.Hosts[origin] = handler
+}
+
 // requestLog is the method and URI of every request the browser sent, in
 // order.
 func (s *shelley) requestLog() []string {
