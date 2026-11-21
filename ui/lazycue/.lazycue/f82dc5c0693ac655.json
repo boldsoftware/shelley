@@ -1,0 +1,44 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A ?diff=working link opens the diff viewer on the working changes. The conversation at /c/diff-fixture works in a repository whose working tree has exactly four changed files: \"tracked_mod.txt\" (modified), \"tracked_del.txt\" (deleted), \"untracked_added.txt\" (new, untracked) and \"spaced name.txt\" (modified). \"The overlay\" is \".diff-viewer-overlay\"; \"the file picker\" is \"select.diff-viewer-select\", whose options read like \"~ tracked_mod.txt\" (\"~\" modified, \"-\" deleted, \"+\" added). Perform the steps in order. 1. Navigate to /c/diff-fixture?diff=working. 2. The overlay should become visible (allow 30s), and so should the file picker (allow 30s). 3. The file picker's file options (all but its first option, the \"Choose file...\" placeholder), trimmed and with any trailing line counts such as \" (+1)\" or \" (-1)\" removed, must be exactly the four working changes: check with an eval with expect that returns them sorted and joined with \"|\", which must be \"+ untracked_added.txt|- tracked_del.txt|~ spaced name.txt|~ tracked_mod.txt\". 4. The overlay must show no error: there is no \".diff-viewer-error\" element in it (count 0, checked once now that the files show). 5. The link's query is spent: the URL must be exactly /c/diff-fixture, with no query.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/diff-fixture?diff=working"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "select.diff-viewer-select",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('select.diff-viewer-select option')).slice(1).map(o =\u003e o.textContent.trim().replace(/\\s+\\([+\\-]\\d+\\)$/, '').trim()).sort().join('|')",
+      "expect": "+ untracked_added.txt|- tracked_del.txt|~ spaced name.txt|~ tracked_mod.txt"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay .diff-viewer-error",
+      "count": 0
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/diff-fixture"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T16:01:26.95878034Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 42117,
+    "output_tokens": 1256,
+    "estimated_cost_usd": 0.041037449999999996,
+    "mode": "generated"
+  }
+}

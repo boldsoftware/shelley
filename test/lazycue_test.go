@@ -752,6 +752,16 @@ func TestE2EDiffViewerListsAddedModifiedDeleted(t *testing.T) {
 	})
 }
 
+// ?diff=working opens the diff viewer on the working changes, as ?diff=<hash>
+// opens it on a commit.
+func TestE2EDiffViewerOpensWorkingChangesFromURL(t *testing.T) {
+	e2e(t, `A ?diff=working link opens the diff viewer on the working changes. The conversation at /c/diff-fixture works in a repository whose working tree has exactly four changed files: "tracked_mod.txt" (modified), "tracked_del.txt" (deleted), "untracked_added.txt" (new, untracked) and "spaced name.txt" (modified). "The overlay" is ".diff-viewer-overlay"; "the file picker" is "select.diff-viewer-select", whose options read like "~ tracked_mod.txt" ("~" modified, "-" deleted, "+" added). Perform the steps in order. 1. Navigate to /c/diff-fixture?diff=working. 2. The overlay should become visible (allow 30s), and so should the file picker (allow 30s). 3. The file picker's file options (all but its first option, the "Choose file..." placeholder), trimmed and with any trailing line counts such as " (+1)" or " (-1)" removed, must be exactly the four working changes: check with an eval with expect that returns them sorted and joined with "|", which must be "+ untracked_added.txt|- tracked_del.txt|~ spaced name.txt|~ tracked_mod.txt". 4. The overlay must show no error: there is no ".diff-viewer-error" element in it (count 0, checked once now that the files show). 5. The link's query is spent: the URL must be exactly /c/diff-fixture, with no query.`, func(s *shelley) {
+		repo := s.path("diff")
+		s.check(setupDiffFixtureRepo(repo))
+		s.conversationWith(map[string]any{"message": "Hello", "model": "predictable", "cwd": repo}, "diff-fixture")
+	})
+}
+
 // setupDiffFixtureRepo (re)creates a git repo at dir with three kinds of
 // working-tree change: a modified tracked file, a deleted tracked file, and a
 // brand-new untracked file. The untracked file is the regression target — it

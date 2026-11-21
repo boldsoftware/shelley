@@ -1398,6 +1398,14 @@ function revealHighlight(line: number) {
 }
 
 // --- Data loaders ---
+
+// The commit to ask the server to list even when it is off the walk from
+// HEAD. "working" (as in ?diff=working) names the working changes, which
+// every listing has.
+function listedCommit(initialCommit: string | undefined): string | undefined {
+  return initialCommit === "working" ? undefined : initialCommit;
+}
+
 async function loadDiffs() {
   const requestId = ++loadDiffsRequestId;
   const cwd = props.cwd;
@@ -1405,7 +1413,12 @@ async function loadDiffs() {
   try {
     loading.value = true;
     error.value = null;
-    const response = await api.getGitDiffs(cwd, props.conversationId, initialCommit, false);
+    const response = await api.getGitDiffs(
+      cwd,
+      props.conversationId,
+      listedCommit(initialCommit),
+      false,
+    );
     if (requestId !== loadDiffsRequestId) return;
     diffs.value = response.diffs;
     gitRoot.value = response.gitRoot;
@@ -1435,7 +1448,11 @@ async function loadCommitStats() {
     return;
   commitStatsRequestId = requestId;
   try {
-    const response = await api.getGitDiffs(props.cwd, props.conversationId, props.initialCommit);
+    const response = await api.getGitDiffs(
+      props.cwd,
+      props.conversationId,
+      listedCommit(props.initialCommit),
+    );
     if (requestId !== loadDiffsRequestId) return;
     const byId = new Map(response.diffs.map((diff) => [diff.id, diff]));
     diffs.value = diffs.value.map((diff) => {
