@@ -775,17 +775,16 @@ func TestHosts(t *testing.T) {
 			w.Header().Set("Content-Type", "text/javascript")
 			_, _ = w.Write([]byte(`parent.postMessage('frame ' + location.host, '*')`))
 		case "/echo":
-			w.Header().Set("Access-Control-Allow-Origin", "*")
 			if r.Method == http.MethodOptions {
-				w.Header().Set("Access-Control-Allow-Headers", "X-Ask")
-				w.WriteHeader(http.StatusNoContent)
-				return
+				t.Error("the handler got a CORS preflight")
 			}
 			body, _ := io.ReadAll(r.Body)
 			w.Header().Set("Access-Control-Expose-Headers", "X-Seen")
 			w.Header().Set("X-Seen", r.Header.Get("X-Ask"))
 			w.WriteHeader(http.StatusTeapot)
-			_, _ = w.Write([]byte(r.Method + " " + r.URL.RequestURI() + " " + string(body)))
+			_, _ = w.Write([]byte(r.Method + " " + r.RequestURI + " " + string(body)))
+		case "/theirs":
+			w.Header().Set("Access-Control-Allow-Origin", "https://nobody.test")
 		default:
 			_, _ = w.Write([]byte(`<!doctype html><title>other ` + r.Host + r.URL.Path + `</title>`))
 		}
@@ -801,14 +800,31 @@ func TestHosts(t *testing.T) {
 </body></html>`)
 	runSteps(t, br, &Env{BaseURL: base},
 		Step{Action: ActionNavigate, URL: "/"},
-		Step{Action: ActionEval, Expression: `fetch('https://other.test/echo?q=1', {method: 'POST', body: 'hi', headers: {'X-Ask': 'yes'}}).then(async (r) => r.status + ' ' + r.headers.get('X-Seen') + ' ' + await r.text())`, Expect: ptr("418 yes POST /echo?q=1 hi")},
+		// Preflights are answered for it, and other origins may read what
+		// it says unless it says who may, as with Playwright's routes.
+		Step{Action: ActionEval, Expression: `fetch('https://other.test/echo?q=1', {method: 'POST', body: 'hi', headers: {'X-Ask': 'yes'}, credentials: 'include'}).then(async (r) => r.status + ' ' + r.headers.get('X-Seen') + ' ' + await r.text())`, Expect: ptr("418 yes POST /echo?q=1 hi")},
+		Step{Action: ActionEval, Expression: `fetch('https://other.test/theirs').then(() => 'read', () => 'blocked')`, Expect: ptr("blocked")},
 		Step{Action: ActionEval, Expression: `document.body.append(Object.assign(document.createElement('iframe'), {src: 'https://other.test/frame'}))`},
 		Step{Action: ActionEval, Expression: `document.body.dataset.msg`, Expect: ptr("frame other.test")},
 		Step{Action: ActionClick, Selector: "#blank"},
 		Step{Action: ActionAssertTitle, Tab: "popup", Text: "other other.test/docs"},
 		Step{Action: ActionNavigate, Tab: "b", URL: "https://other.test/b"},
 		Step{Action: ActionAssertTitle, Tab: "b", Text: "other other.test/b"},
+		// A URL no handler could take is a bad request.
+		Step{Action: ActionNavigate, Tab: "b", URL: "https://other.test/100%"},
+		Step{Action: ActionAssertText, Tab: "b", Selector: "body", Text: `parse "https://other.test/100%": invalid URL escape "%"`},
 	)
+}
+
+// A launch Chrome rejects says which part.
+func TestBadLaunch(t *testing.T) {
+	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
+		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
+	}
+	_, err := NewBrowser(context.Background(), Launch{Timezone: "Mars/Olympus"})
+	if want := "set up the first tab: Emulation.setTimezoneOverride: Invalid timezone id"; err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("bad time zone: %v, want %q", err, want)
+	}
 }
 
 func TestHostsAreOrigins(t *testing.T) {
@@ -820,14 +836,53 @@ func TestHostsAreOrigins(t *testing.T) {
 	}
 }
 
-// Closing a browser ends its control connection's reading, which is what
-// every wait on it ends with, so a run's many browsers leave nothing behind.
-func TestCloseEndsControl(t *testing.T) {
-	br := newBrowserOrSkip(t)
-	br.Close()
+// A Hosts handler that takes its time holds up neither the other requests,
+// nor dialogs, nor closing the browser.
+func TestSlowHostHandler(t *testing.T) {
+	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
+		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
+	}
+	release, held := make(chan struct{}), make(chan struct{})
+	other := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/slow" {
+			close(held)
+			<-release
+		}
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		_, _ = w.Write([]byte("ok " + r.URL.Path))
+	})
+	br, err := NewBrowser(context.Background(), Launch{Hosts: map[string]http.Handler{"https://other.test": other}})
+	if err != nil {
+		t.Skipf("no browser available: %v", err)
+	}
+	t.Cleanup(br.Close)
+	// Before br.Close, should it be held up.
+	t.Cleanup(func() { close(release) })
+	env := &Env{BaseURL: serveHTML(t, blankPage), Calls: map[string]func(context.Context) (string, error){
+		"held": func(ctx context.Context) (string, error) {
+			select {
+			case <-held:
+				return "", nil
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
+		},
+	}}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: `fetch('https://other.test/slow'); 'sent'`},
+		Step{Action: ActionCall, Value: "held"},
+		Step{Action: ActionEval, Expression: `fetch('https://other.test/fast').then(r => r.text())`, Expect: ptr("ok /fast"), Timeout: "3s"},
+		Step{Action: ActionEval, Expression: `alert('hi'); 'answered'`, Timeout: "3s"},
+	)
+	closed := make(chan struct{})
+	go func() {
+		br.Close()
+		close(closed)
+	}()
 	select {
-	case <-br.control.lost:
-	default:
-		t.Error("control is still reading after Close")
+	case <-closed:
+	case <-time.After(15 * time.Second):
+		t.Error("Close is held up by a host handler")
 	}
 }

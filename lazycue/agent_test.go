@@ -276,7 +276,7 @@ func TestEnvPromptNamesTheDevice(t *testing.T) {
 func TestEnvPromptNamesTheHosts(t *testing.T) {
 	h := http.NotFoundHandler()
 	got := envPrompt(&Env{Launch: Launch{Hosts: map[string]http.Handler{"https://vm.example": h, "https://docs.example": h}}})
-	if !strings.Contains(got, "OTHER HOSTS the test answers for in every tab: https://docs.example, https://vm.example\n") {
+	if !strings.Contains(got, "OTHER HOSTS the test answers for in every tab: https://docs.example, https://vm.example\nAny origin may fetch from them. Their pages cannot load anything from the app") {
 		t.Errorf("hosts prompt = %q", got)
 	}
 	if got := envPrompt(&Env{}); strings.Contains(got, "OTHER HOSTS") {

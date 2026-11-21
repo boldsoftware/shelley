@@ -96,9 +96,9 @@ var Pixel5 = Device{Width: 393, Height: 727, Scale: 2.75, Mobile: true, Touch: t
 // Reduced motion keeps animations from slowing down or racing the steps.
 var DefaultMedia = map[string]string{"prefers-reduced-motion": "reduce"}
 
-// Launch is how a browser's tabs start out, and what ExecuteSteps puts back
-// before each script. Tests set it in Go rather than in steps so that
-// fixtures (a mock script, say) never pass through the model.
+// Launch is how a browser's tabs start out. Tests set it in Go rather than
+// in steps so that fixtures (a mock script, say) never pass through the
+// model.
 type Launch struct {
 	// InitScript runs before every page's own scripts when non-empty.
 	InitScript string
@@ -111,7 +111,12 @@ type Launch struct {
 	Timezone string
 	// Hosts answers the requests of every tab to other origins, such as
 	// "https://docs.example", in place of the network: by origin, the
-	// handler to run on each.
+	// handler to run on each. As with Playwright's routes, CORS preflights
+	// are answered without the handler, and other origins may read a
+	// response unless it names one in Access-Control-Allow-Origin. A page gets
+	// a response once its handler returns. Chrome's local network access
+	// checks stay on, as with Playwright, so these pages cannot load
+	// anything from an app on 127.0.0.1.
 	Hosts map[string]http.Handler
 }
 
@@ -134,7 +139,8 @@ func (l Launch) media() map[string]string {
 	return m
 }
 
-// tabState is what steps change about a tab, which ExecuteSteps puts back.
+// tabState is what lazycue keeps of a tab: what steps changed about it and
+// what Chrome does not report.
 type tabState struct {
 	// session is the tab's session on the control connection, which holds
 	// its emulation.
@@ -195,6 +201,9 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 		setupCtx, cancel := context.WithTimeout(parentCtx, defaultStepTimeout)
 		b.first, err = b.control.page(setupCtx, chromedp.FromContext(ctx).Target.TargetID)
 		cancel()
+		if err != nil {
+			err = fmt.Errorf("set up the first tab: %w", err)
+		}
 	}
 	if err != nil {
 		b.Close()
@@ -225,10 +234,12 @@ func grantClipboard() chromedp.Action {
 
 // setUpTab makes a new tab start out as launch says. All of it is per tab in
 // Chrome, so a tab opened later needs it as much as the first.
+//
+// ctx's executor is a batch, which names a failed command itself.
 func setUpTab(ctx context.Context, launch Launch, st *tabState) error {
 	// For the dialogs control answers.
 	if err := page.Enable().Do(ctx); err != nil {
-		return fmt.Errorf("enable page events: %w", err)
+		return err
 	}
 	if len(launch.Hosts) > 0 {
 		// For the requests control answers. chromedp turns site isolation
@@ -238,23 +249,23 @@ func setUpTab(ctx context.Context, launch Launch, st *tabState) error {
 			patterns = append(patterns, &fetch.RequestPattern{URLPattern: origin + "/*"})
 		}
 		if err := fetch.Enable().WithPatterns(patterns).Do(ctx); err != nil {
-			return fmt.Errorf("intercept other hosts: %w", err)
+			return err
 		}
 	}
 	if launch.Timezone != "" {
 		if err := emulation.SetTimezoneOverride(launch.Timezone).Do(ctx); err != nil {
-			return fmt.Errorf("set time zone: %w", err)
+			return err
 		}
 	}
 	// Before any of the app's: keep the browser's own
 	// requestAnimationFrame, so steps can wait on frames even when the
 	// page fakes its clock.
 	if _, err := page.AddScriptToEvaluateOnNewDocument(`Object.defineProperty(window, '__lazycueRAF', {value: requestAnimationFrame.bind(window)})`).Do(ctx); err != nil {
-		return fmt.Errorf("install init script: %w", err)
+		return err
 	}
 	if launch.InitScript != "" {
 		if _, err := page.AddScriptToEvaluateOnNewDocument(launch.InitScript).Do(ctx); err != nil {
-			return fmt.Errorf("install init script: %w", err)
+			return err
 		}
 	}
 	st.media = launch.media()

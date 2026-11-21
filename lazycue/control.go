@@ -2,6 +2,7 @@ package lazycue
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -165,7 +166,10 @@ func (c *control) read() {
 			c.mu.Unlock()
 			c.closed(id)
 		case *fetch.EventRequestPaused:
-			go s.Execute(context.Background(), fetch.CommandFulfillRequest, c.answer(ev), nil) //nolint:errcheck // the page may be gone
+			// Off this loop: a handler may take its time.
+			go func() {
+				_ = s.Execute(context.Background(), fetch.CommandFulfillRequest, c.answer(ev), nil) // the page may be gone
+			}()
 		case *page.EventJavascriptDialogOpening:
 			// Close dialogs as Playwright does when no test listens for
 			// them: leave the page on beforeunload, cancel alerts, confirms
@@ -175,23 +179,53 @@ func (c *control) read() {
 	}
 }
 
-// answer runs the Launch.Hosts handler of a request's origin on it.
+// answer runs the Launch.Hosts handler of a request's origin on it. As
+// Playwright does for routed requests, it answers CORS preflights itself,
+// allowing what they ask, and lets a page of another origin read a response
+// that does not say who may.
 func (c *control) answer(ev *fetch.EventRequestPaused) *fetch.FulfillRequestParams {
+	bad := func(err error) *fetch.FulfillRequestParams {
+		return fetch.FulfillRequest(ev.RequestID, http.StatusBadRequest).WithBody(base64.StdEncoding.EncodeToString([]byte(err.Error())))
+	}
 	var body []byte
 	for _, e := range ev.Request.PostDataEntries {
 		b, err := base64.StdEncoding.DecodeString(e.Bytes)
 		if err != nil {
-			return fetch.FulfillRequest(ev.RequestID, http.StatusBadRequest).WithBody(base64.StdEncoding.EncodeToString([]byte(err.Error())))
+			return bad(err)
 		}
 		body = append(body, b...)
 	}
-	r := httptest.NewRequest(ev.Request.Method, ev.Request.URL, bytes.NewReader(body))
+	r, err := http.NewRequest(ev.Request.Method, ev.Request.URL, bytes.NewReader(body))
+	if err != nil {
+		return bad(err)
+	}
+	// As a server's request has it.
+	r.RequestURI = r.URL.RequestURI()
 	for k, v := range ev.Request.Headers {
 		r.Header.Set(k, fmt.Sprint(v))
 	}
 	w := httptest.NewRecorder()
-	c.launch.Hosts[r.URL.Scheme+"://"+r.URL.Host].ServeHTTP(w, r)
+	origin, host := r.Header.Get("Origin"), r.URL.Scheme+"://"+r.URL.Host
+	// Only a preflight has this header: pages may not set it.
+	method := r.Header.Get("Access-Control-Request-Method")
+	preflight := r.Method == http.MethodOptions && method != ""
+	if preflight {
+		w.Header().Set("Access-Control-Allow-Origin", cmp.Or(origin, "*"))
+		w.Header().Set("Access-Control-Allow-Methods", method)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		if h := r.Header.Get("Access-Control-Request-Headers"); h != "" {
+			w.Header().Set("Access-Control-Allow-Headers", h)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	} else {
+		c.launch.Hosts[host].ServeHTTP(w, r)
+	}
 	res := w.Result()
+	if h := res.Header; !preflight && origin != "" && origin != host && h.Get("Access-Control-Allow-Origin") == "" {
+		h.Set("Access-Control-Allow-Origin", origin)
+		h.Set("Access-Control-Allow-Credentials", "true")
+		h.Add("Vary", "Origin")
+	}
 	var headers []*fetch.HeaderEntry
 	for k, vs := range res.Header {
 		for _, v := range vs {
@@ -281,25 +315,27 @@ func (s session) send(ctx context.Context, method string, params any) (func(ctx 
 // answers, which wait collects.
 type batch struct {
 	s       session
+	methods []string
 	replies []func(context.Context, any) error
 }
 
 func (b *batch) Execute(ctx context.Context, method string, params, res any) error {
 	reply, err := b.s.send(ctx, method, params)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %w", method, err)
 	}
+	b.methods = append(b.methods, method)
 	b.replies = append(b.replies, reply)
 	return nil
 }
 
 // wait waits for the answers to the commands sent, and returns the first
-// error among them.
+// error among them, after the command's name.
 func (b *batch) wait(ctx context.Context) error {
 	var first error
-	for _, reply := range b.replies {
+	for i, reply := range b.replies {
 		if err := reply(ctx, nil); err != nil && first == nil {
-			first = err
+			first = fmt.Errorf("%s: %w", b.methods[i], err)
 		}
 	}
 	return first
