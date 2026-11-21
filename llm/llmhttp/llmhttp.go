@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -176,12 +177,28 @@ type Transport struct {
 	Log *Ring
 }
 
+func isOpenRouterHost(host string) bool {
+	host = strings.ToLower(host)
+	for _, d := range []string{"openrouter.ai", "openrouter.int.exe.xyz"} {
+		if host == d || strings.HasSuffix(host, "."+d) {
+			return true
+		}
+	}
+	return false
+}
+
 // RoundTrip implements http.RoundTripper.
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Clone the request to avoid modifying the original
 	req = req.Clone(req.Context())
 
 	req.Header.Set("User-Agent", version.UserAgent())
+	if isOpenRouterHost(req.URL.Hostname()) {
+		// https://openrouter.ai/docs/app-attribution
+		req.Header.Set("HTTP-Referer", "https://github.com/boldsoftware/shelley")
+		req.Header.Set("X-OpenRouter-Title", "Shelley")
+		req.Header.Set("X-OpenRouter-Categories", "cloud-agent")
+	}
 
 	// Assign a Shelley request id (or honor one already set) so every LLM
 	// request is correlatable. The id is echoed into any RequestTrace on the
