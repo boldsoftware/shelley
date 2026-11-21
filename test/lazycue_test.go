@@ -40,7 +40,8 @@ import (
 //
 //	LAZYCUE_ARTIFACT_DIR  write per-step screenshots + an HTML report here
 //	LAZYCUE_VIDEO_DIR     render an MP4 per test (prompt + captioned screenshots) here
-//	LAZYCUE_SUMMARY       write a machine-readable JSON cache-stats summary here
+//	LAZYCUE_SUMMARY       write a machine-readable JSON cache-stats summary here,
+//	                      rewritten as each test ends
 
 // app is the shared harness. Its BaseURL is filled in by TestMain once the
 // server is listening. appOpts keeps the options so lazyTestIsolated can build
@@ -134,12 +135,7 @@ func TestMain(m *testing.M) {
 	// Render per-test MP4s (out of the per-test hot path; concurrent). Do this
 	// before WriteReport/WriteSummary so the report embeds the videos and the
 	// summary records their paths. Best-effort.
-	results := app.Results()
-	results = append(results, recordingApp.Results()...)
-	for _, h := range isolatedApps {
-		results = append(results, h.Results()...)
-	}
-	results = append(results, e2eResults()...)
+	results := allResults()
 	// Only runs worth debugging get a video. A clean run from cache has nothing
 	// to show, and rendering all ~70 videos added ~14s to every CI run, after
 	// which a green run's artifacts are thrown away.
@@ -159,15 +155,51 @@ func TestMain(m *testing.M) {
 			slog.Warn("lazycue: write report", "error", err)
 		}
 	}
-	if path := os.Getenv("LAZYCUE_SUMMARY"); path != "" && len(results) > 0 {
-		if err := lazycue.WriteSummary(path, results); err != nil {
-			slog.Warn("lazycue: write summary", "error", err)
-		}
-	}
+	writeSummary()
 
 	stopE2E()
 	os.RemoveAll(tmp)
 	os.Exit(code)
+}
+
+// allResults is every harness's results so far.
+func allResults() []*lazycue.TestResult {
+	results := app.Results()
+	results = append(results, recordingApp.Results()...)
+	isolatedMu.Lock()
+	for _, h := range isolatedApps {
+		results = append(results, h.Results()...)
+	}
+	isolatedMu.Unlock()
+	return append(results, e2eResults()...)
+}
+
+// summaryMu serializes writing the LAZYCUE_SUMMARY file.
+var summaryMu sync.Mutex
+
+// writeSummary writes the LAZYCUE_SUMMARY file, if asked for, from the
+// results so far. Each test rewrites it as it ends, so a run that go test
+// -timeout kills, skipping the end of TestMain, still leaves what its
+// finished tests cost.
+func writeSummary() {
+	path := os.Getenv("LAZYCUE_SUMMARY")
+	if path == "" {
+		return
+	}
+	summaryMu.Lock()
+	defer summaryMu.Unlock()
+	results := allResults()
+	if len(results) == 0 {
+		return
+	}
+	// Whole or not at all, should the run be killed mid-write.
+	if err := lazycue.WriteSummary(path+".tmp", results); err != nil {
+		slog.Warn("lazycue: write summary", "error", err)
+		return
+	}
+	if err := os.Rename(path+".tmp", path); err != nil {
+		slog.Warn("lazycue: write summary", "error", err)
+	}
 }
 
 func lazyTest(t *testing.T, description string) {
@@ -181,6 +213,7 @@ func lazyTest(t *testing.T, description string) {
 	// each). Tests that depend on the conversation list (its order, or where
 	// its rows sit) must use lazyTestIsolated.
 	t.Parallel()
+	t.Cleanup(writeSummary)
 	app.Test(t, description)
 }
 
@@ -190,6 +223,7 @@ func lazyRecordingTest(t *testing.T, description string) {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run the LazyCue browser integration tests")
 	}
 	t.Parallel()
+	t.Cleanup(writeSummary)
 	recordingApp.Test(t, description)
 }
 
@@ -213,6 +247,7 @@ func lazyTestIsolated(t *testing.T, description string) {
 	isolatedMu.Lock()
 	isolatedApps = append(isolatedApps, h)
 	isolatedMu.Unlock()
+	t.Cleanup(writeSummary)
 	h.Test(t, description)
 }
 

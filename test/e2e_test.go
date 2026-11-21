@@ -207,6 +207,7 @@ func e2e(t *testing.T, description string, setup func(s *shelley)) {
 	e2eMu.Lock()
 	e2eHarnesses = append(e2eHarnesses, h)
 	e2eMu.Unlock()
+	t.Cleanup(writeSummary)
 	h.Test(t, description)
 }
 
