@@ -1,0 +1,125 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A task's install-custom run shows on its row as the stream sends it. Workspace mode is on, the screen is the default 393x727 phone, and drawer rows are full size. To \"open the workspace\": click the button named exactly \"Open tasks\" once it is visible; then the element with data-testid \"assistant-row\" should be in the viewport. Calls \"verifying\", \"failed\" (with the error \"lint failed; see the log\") and \"installed\" each report that step of the task's run to the server, as the install script does. Name elements by ARIA role and accessible name, as Playwright's getByRole does. \"The build line\" is the element matched by the selector .conversation-item[data-conversation-id=\"{{ID}}\"] + section[aria-label=\"Shelley build\"]; \"its status\" is the element with role \"status\" inside it; \"the restart button\" is the button inside it named exactly \"Restart Shelley\". Perform the steps in order. 1. Navigate to / and open the workspace. 2. There is no build line yet (count 0). 3. Call \"verifying\". Its status should have exactly the text \"Verifying…\", and there is no restart button (count 0). 4. Call \"failed\". Its status should have exactly the text \"Failed\", the build line should contain the text \"lint failed; see the log\", and there is no restart button (count 0). 5. Call \"installed\". Its status should have exactly the text \"Installed\", the build line must not contain the text \"12345678\" (no commit hash), and the restart button should be visible. 6. A reload gets the states when the stream connects: reload the page, open the workspace again, and its status should have exactly the text \"Installed\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open tasks",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[data-testid='assistant-row']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] + section[aria-label='Shelley build']",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "verifying"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] + section[aria-label='Shelley build']",
+      "role": "status",
+      "text": "Verifying…"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] + section[aria-label='Shelley build']",
+      "role": "button",
+      "name": "Restart Shelley",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "failed"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] + section[aria-label='Shelley build']",
+      "role": "status",
+      "text": "Failed"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] + section[aria-label='Shelley build']",
+      "text": "lint failed; see the log"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] + section[aria-label='Shelley build']",
+      "role": "button",
+      "name": "Restart Shelley",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "installed"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] + section[aria-label='Shelley build']",
+      "role": "status",
+      "text": "Installed"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] + section[aria-label='Shelley build']",
+      "text": "12345678"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] + section[aria-label='Shelley build']",
+      "role": "button",
+      "name": "Restart Shelley",
+      "exact": true
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open tasks",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[data-testid='assistant-row']"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] + section[aria-label='Shelley build']",
+      "role": "status",
+      "text": "Installed"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:33:41.271928746Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 47607,
+    "output_tokens": 2206,
+    "estimated_cost_usd": 0.06458925,
+    "mode": "generated"
+  }
+}

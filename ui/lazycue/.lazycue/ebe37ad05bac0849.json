@@ -1,0 +1,61 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Short drawer rows show a task's build as a badge. Workspace mode is on and the screen is the default 393x727 phone; the task's install-custom run has reported \"verifying\" already. To \"open the workspace\": click the button named exactly \"Open tasks\" once it is visible; then the element with data-testid \"assistant-row\" should be in the viewport. Call \"installed\" reports that the run installed, as the install script does. Name elements by ARIA role and accessible name, as Playwright's getByRole does. \"The badge\" is the element with role \"status\" and name exactly \"Shelley build\" inside .conversation-item[data-conversation-id=\"{{ID}}\"]. Perform the steps in order. 1. Navigate to / and open the workspace. 2. Click the button whose name contains \"View options\", then, inside the element with role \"group\" named \"Row size\", the button whose name contains \"Short\". 3. The badge should have exactly the text \"Verifying…\". 4. Call \"installed\": the badge should then have exactly the text \"Installed\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open tasks",
+      "exact": true
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[data-testid='assistant-row']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options"
+    },
+    {
+      "action": "click",
+      "selector": "[role=group][aria-labelledby=drawer-row-size-heading]",
+      "role": "button",
+      "name": "Short"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}']",
+      "role": "status",
+      "name": "Shelley build",
+      "exact": true,
+      "text": "Verifying…"
+    },
+    {
+      "action": "call",
+      "value": "installed"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}']",
+      "role": "status",
+      "name": "Shelley build",
+      "exact": true,
+      "text": "Installed"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:39:44.557427129Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 122226,
+    "output_tokens": 2375,
+    "estimated_cost_usd": 0.1088082,
+    "mode": "generated"
+  }
+}
