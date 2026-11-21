@@ -1,0 +1,119 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "In a Go file, Vim's \"gqip\" re-applies the \"// \" comment leader to the lines it wraps. The screen is 1280x800 (the Vim toggle is desktop-only). The conversation's directory holds {{FILE}}: \"package doc\", a blank line, a ragged three-line doc comment (\"// Frobnicate applies the frobnication transform to every element of xs\", \"// in\", \"// place and reports how many elements changed as a result.\"), and right after it, with no blank line, \"func Frobnicate(xs []int) int { return 0 }\". Call \"file\" returns the file's lines (its text split at \"\\n\") as a JSON array. To \"open the file with Vim\": press Control+p (the file finder); \".grp-filter\" should be visible (allow 10s). Fill it with \"doc.go\"; there should be exactly one \".grp-row\" (allow 10s). Press Enter with the filter focused. \"The modal\" is the element with role \"dialog\" whose accessible name contains \"Edit {{FILE}}\"; it should be visible (allow 15s). \"Monaco\" is the first \".monaco-editor\" inside the modal; the \".view-line\" inside it containing the text \"// in\" should be visible (allow 15s). The modal's \".vim-toggle\" should be visible; click it. The modal's \".monaco-vim-status\" (\"the status\") should contain the text \"NORMAL\" (allow 10s). Then focus Monaco's \"textarea.inputarea\" with an eval calling its focus(). Keys are typed key by key into the focused editor. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and open the file with Vim. 2. Line 3 is the first comment line: type \"3G\", then type \"gqip\" (\"ip\" covers the comment and the func line, but the change of leader keeps the func line apart). 3. Monaco's \".view-lines\" should contain the text \"// place and reports\" (allow 10s); the status should contain \"NORMAL\". 4. Call \"file\" until (up to 10s) it returns exactly [\"package doc\",\"\",\"// Frobnicate applies the frobnication transform to every element of xs in\",\"// place and reports how many elements changed as a result.\",\"func Frobnicate(xs []int) int { return 0 }\",\"\"]. 5. Click the modal's \".diff-viewer-close\": the modal should be hidden (allow 10s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "doc.go"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-row",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".grp-row",
+      "count": 1
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".grp-filter"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Edit {{FILE}}",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-editor .view-line",
+      "has_text": "// in",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .vim-toggle",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .vim-toggle"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-vim-status",
+      "text": "NORMAL",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=dialog] .monaco-editor textarea.inputarea').focus()"
+    },
+    {
+      "action": "type",
+      "value": "3G"
+    },
+    {
+      "action": "type",
+      "value": "gqip"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-editor .view-lines",
+      "has_text": "// place and reports",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-vim-status",
+      "text": "NORMAL"
+    },
+    {
+      "action": "call",
+      "value": "file",
+      "expect": "[\"package doc\",\"\",\"// Frobnicate applies the frobnication transform to every element of xs in\",\"// place and reports how many elements changed as a result.\",\"func Frobnicate(xs []int) int { return 0 }\",\"\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .diff-viewer-close"
+    },
+    {
+      "action": "wait_hidden",
+      "role": "dialog",
+      "name": "Edit {{FILE}}",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:36:27.85840457Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 29406,
+    "output_tokens": 1689,
+    "estimated_cost_usd": 0.044089050000000005,
+    "mode": "generated"
+  }
+}

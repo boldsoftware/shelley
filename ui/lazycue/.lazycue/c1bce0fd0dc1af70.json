@@ -1,0 +1,136 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "In the file editor with Vim on, \"gqip\" reflows the paragraph under the cursor to the text width. The screen is 1280x800 (the Vim toggle is desktop-only). The conversation's directory holds {{FILE}}, a first paragraph of a long line \"alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa\" and a short line \"quebec romeo\", then a blank line and a second paragraph \"second paragraph stays\". Call \"file\" returns the file's lines (its text split at \"\\n\") as a JSON array; call \"first four lines\" returns the first four of them. To \"open the file with Vim\": press Control+p (the file finder); \".grp-filter\" should be visible (allow 10s). Fill it with \"notes\"; there should be exactly one \".grp-row\" (allow 10s). Press Enter with the filter focused. \"The modal\" is the element with role \"dialog\" whose accessible name contains \"Edit {{FILE}}\"; it should be visible (allow 15s). \"Monaco\" is the first \".monaco-editor\" inside the modal; the \".view-line\" inside it containing the text \"quebec romeo\" should be visible (allow 15s). The modal's \".vim-toggle\" should be visible; click it. The modal's \".monaco-vim-status\" (\"the status\") should contain the text \"NORMAL\" (allow 10s). Then focus Monaco's \"textarea.inputarea\" with an eval calling its focus(). Keys are typed key by key into the focused editor. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and open the file with Vim. 2. Type \"gg\", then type \"gqip\". 3. Monaco's \".view-lines\" should contain the text \"papa quebec romeo\" (allow 10s) and the text \"second paragraph stays\"; the status should contain \"NORMAL\". 4. The editor auto-saves: call \"first four lines\" until (up to 10s) it returns exactly [\"alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike\",\"november oscar papa quebec romeo\",\"\",\"second paragraph stays\"]. 5. Undo restores the original text in one step: type \"u\". Monaco's \".view-lines\" should contain the text \"alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa\" (allow 10s), and call \"file\" should return (up to 10s) exactly [\"alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa\",\"quebec romeo\",\"\",\"second paragraph stays\",\"\"]. 6. Click the modal's \".diff-viewer-close\": the modal should be hidden (allow 10s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "notes"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".grp-row",
+      "count": 1,
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Edit {{FILE}}",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-editor .view-line",
+      "has_text": "quebec romeo",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .vim-toggle",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .vim-toggle"
+    },
+    {
+      "action": "wait_text",
+      "text": "NORMAL",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-vim-status",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=dialog][aria-label*=\"Edit {{FILE}}\"] .monaco-editor textarea.inputarea').focus()"
+    },
+    {
+      "action": "type",
+      "value": "gg"
+    },
+    {
+      "action": "type",
+      "value": "gqip"
+    },
+    {
+      "action": "wait_text",
+      "text": "papa quebec romeo",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-editor .view-lines",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-editor .view-lines",
+      "text": "second paragraph stays"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-vim-status",
+      "text": "NORMAL"
+    },
+    {
+      "action": "call",
+      "value": "first four lines",
+      "expect": "[\"alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike\",\"november oscar papa quebec romeo\",\"\",\"second paragraph stays\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=dialog][aria-label*=\"Edit {{FILE}}\"] .monaco-editor textarea.inputarea').focus()"
+    },
+    {
+      "action": "type",
+      "value": "u"
+    },
+    {
+      "action": "wait_text",
+      "text": "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .monaco-editor .view-lines",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "file",
+      "expect": "[\"alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa\",\"quebec romeo\",\"\",\"second paragraph stays\",\"\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[role=dialog][aria-label*='Edit {{FILE}}'] .diff-viewer-close"
+    },
+    {
+      "action": "wait_hidden",
+      "role": "dialog",
+      "name": "Edit {{FILE}}",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:36:15.587224203Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 30131,
+    "output_tokens": 2210,
+    "estimated_cost_usd": 0.05368785,
+    "mode": "generated"
+  }
+}
