@@ -1,0 +1,60 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Terms used below:\n- \"Wait for message X\" means: wait (allow 15s) until a [data-testid=\"message\"] element whose text contains X is visible. Always scope such waits to [data-testid=\"message\"]: the closed conversation drawer holds each conversation's latest text too, so a page-wide text match passes before the conversation has loaded.\n- \"Wait until \u003cid\u003e is cached\" means: an eval of window.__hasFullHistory(\"\u003cid\u003e\") (a function the page already defines) with expect \"true\" and a 15s timeout; it reads the conversation's IndexedDB row.\n- \"Select conversation \u003cslug\u003e\" means, on this phone-sized screen: click button[aria-label=\"Open conversations\"], wait for \".drawer.open\" to be visible (allow 5s), click the \".conversation-title\" element whose text is exactly \u003cslug\u003e (has_text \u003cslug\u003e with \"exact\": true), then wait until there is no \".drawer.open\" element (count 0, allow 10s).\nA page reload serves history from the IndexedDB cache. The conversation cache-one (ID {{ID}}) answered \"Hello! I'm Shelley, your AI assistant.\". Perform the steps in order.\n1. Navigate to /c/cache-one and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Wait for message \"Hello! I'm Shelley, your AI assistant.\".\n3. Wait until {{ID}} is cached (the write-behind persistence landed).\n4. Call \"mark\".\n5. Reload the page, then wait for message \"Hello! I'm Shelley, your AI assistant.\".\n6. Call \"one full loads\": it must return exactly \"0\". A complete cached history that the conversation list agrees is up to date needs no full download.\n7. The cache diagnostics agree it was a cache hit: an eval of (() =\u003e { const s = window.__shelleyCache?.stats() ?? {}; return Object.keys(s).includes('load.served_from_cache') \u0026\u0026 (s['load.full_rest'] ?? 0) === 0; })() with expect \"true\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/cache-one"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "Hello! I'm Shelley, your AI assistant.",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__hasFullHistory('{{ID}}')",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "mark"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "Hello! I'm Shelley, your AI assistant.",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "one full loads",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const s = window.__shelleyCache?.stats() ?? {}; return Object.keys(s).includes('load.served_from_cache') \u0026\u0026 (s['load.full_rest'] ?? 0) === 0; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T08:02:52.765028611Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 22897,
+    "output_tokens": 849,
+    "estimated_cost_usd": 0.02595255,
+    "mode": "generated"
+  }
+}

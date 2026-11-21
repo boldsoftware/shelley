@@ -1,0 +1,156 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Terms used below:\n- \"Wait for message X\" means: wait (allow 15s) until a [data-testid=\"message\"] element whose text contains X is visible. Always scope such waits to [data-testid=\"message\"]: the closed conversation drawer holds each conversation's latest text too, so a page-wide text match passes before the conversation has loaded.\n- \"Wait until <id> is cached\" means: an eval of window.__hasFullHistory(\"<id>\") (a function the page already defines) with expect \"true\" and a 15s timeout; it reads the conversation's IndexedDB row.\n- \"Select conversation <slug>\" means, on this phone-sized screen: click button[aria-label=\"Open conversations\"], wait for \".drawer.open\" to be visible (allow 5s), click the \".conversation-title\" element whose text is exactly <slug> (has_text <slug> with \"exact\": true), then wait until there is no \".drawer.open\" element (count 0, allow 10s).\nA stalled incremental refresh still reveals the hot cached history, at the bottom. The generated 15-turn conversation at /c/{{SLUG}} has ID {{ID}}; the conversation cache-other (ID {{OTHER_ID}}) answered \"Hello! I'm Shelley, your AI assistant.\". The page keeps every EventSource it opens in window.__testEventSources. Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Wait (allow 15s) until there are more than 20 [data-testid=\"message\"] elements. Wait until {{ID}} is cached.\n3. In one eval: set the \".messages-container\" element's scrollTop to 1000 and dispatch a \"scroll\" Event on it. Wait until localStorage.getItem(\"shelley_scroll_{{ID}}\") is exactly \"1000\" (an eval with expect).\n4. Select conversation cache-other, wait for message \"Hello! I'm Shelley, your AI assistant.\", and wait until {{OTHER_ID}} is cached.\n5. Call \"mark\".\n6. In one eval: close the last EventSource in window.__testEventSources (throw if there is none) and dispatch an \"online\" Event on window.\n7. Call \"new conversation\": it makes a new conversation on the server, an event for the reconnected stream.\n8. Call \"other incremental loads\" with expect \"some\" and a 15s timeout: the reconnect refreshed cache-other.\n9. Call \"hold tail\": from now on the server's answers to {{SLUG}}'s incremental refreshes (with last_sequence_id) are held back.\n10. Select conversation {{SLUG}}. Call \"tail held\" with expect \"true\": the refresh is in flight and stalled.\n11. With the network tail still blocked, the complete hot-memory history is already usable and unobscured, at the latest content (an explicit pick from the list opens at the bottom rather than at the old reading position): wait (allow 15s) until there are more than 20 [data-testid=\"message\"] elements; there is no \".conversation-loading-overlay\" (count 0); wait until the \".messages-container\" element's scrollHeight - clientHeight - scrollTop is less than 120 (an eval with expect \"true\"); there is no \".scroll-to-bottom-button\" (count 0).\n12. Call \"release tail\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"message\"]').length > 20",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__hasFullHistory('{{ID}}')",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const c = document.querySelector('.messages-container'); c.scrollTop = 1000; c.dispatchEvent(new Event('scroll')); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley_scroll_{{ID}}')",
+      "expect": "1000",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-title",
+      "has_text": "cache-other",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer.open",
+      "count": 0,
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "Hello! I'm Shelley, your AI assistant.",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__hasFullHistory('{{OTHER_ID}}')",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "mark"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const sources = window.__testEventSources; if (!sources || sources.length === 0) throw new Error('No EventSources'); sources[sources.length - 1].close(); window.dispatchEvent(new Event('online')); })()"
+    },
+    {
+      "action": "call",
+      "value": "new conversation"
+    },
+    {
+      "action": "call",
+      "value": "other incremental loads",
+      "expect": "some",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "hold tail"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-title",
+      "has_text": "{{SLUG}}",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer.open",
+      "count": 0,
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "tail held",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"message\"]').length > 20",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-loading-overlay",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const c = document.querySelector('.messages-container'); return (c.scrollHeight - c.clientHeight - c.scrollTop) < 120; })()",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".scroll-to-bottom-button",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "release tail"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T08:02:24.00869502Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 33619,
+    "output_tokens": 2129,
+    "estimated_cost_usd": 0.0538539,
+    "mode": "hand-edited"
+  }
+}

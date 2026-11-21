@@ -1,0 +1,74 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Terms used below:\n- \"Wait for message X\" means: wait (allow 15s) until a [data-testid=\"message\"] element whose text contains X is visible. Always scope such waits to [data-testid=\"message\"]: the closed conversation drawer holds each conversation's latest text too, so a page-wide text match passes before the conversation has loaded.\n- \"Wait until \u003cid\u003e is cached\" means: an eval of window.__hasFullHistory(\"\u003cid\u003e\") (a function the page already defines) with expect \"true\" and a 15s timeout; it reads the conversation's IndexedDB row.\n- \"Select conversation \u003cslug\u003e\" means, on this phone-sized screen: click button[aria-label=\"Open conversations\"], wait for \".drawer.open\" to be visible (allow 5s), click the \".conversation-title\" element whose text is exactly \u003cslug\u003e (has_text \u003cslug\u003e with \"exact\": true), then wait until there is no \".drawer.open\" element (count 0, allow 10s).\nArchiving while the tab is closed refreshes the cached metadata. The conversation cache-one (ID {{ID}}) answered \"Hello! I'm Shelley, your AI assistant.\". Perform the steps in order.\n1. Navigate to /c/cache-one and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Wait for message \"Hello! I'm Shelley, your AI assistant.\".\n3. Wait until {{ID}} is cached.\n4. Navigate to about:blank (leaving the app, so the page is disconnected).\n5. Call \"archive\": it archives cache-one through the API. Then call \"mark\".\n6. Navigate to /c/cache-one. Call \"one incremental loads\" with expect \"some\" and a 15s timeout: the page asked the server for what changed.\n7. Wait for message \"Hello! I'm Shelley, your AI assistant.\".\n8. The conversation shows as archived: the message input ([data-testid=\"message-input\"]) becomes hidden, and \".status-bar-archived\" is visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/cache-one"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "Hello! I'm Shelley, your AI assistant.",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__hasFullHistory(\"{{ID}}\")",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "navigate",
+      "url": "about:blank"
+    },
+    {
+      "action": "call",
+      "value": "archive"
+    },
+    {
+      "action": "call",
+      "value": "mark"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/cache-one"
+    },
+    {
+      "action": "call",
+      "value": "one incremental loads",
+      "expect": "some",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "Hello! I'm Shelley, your AI assistant.",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".status-bar-archived"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T08:02:19.336584683Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 86425,
+    "output_tokens": 1520,
+    "estimated_cost_usd": 0.08981294999999999,
+    "mode": "generated"
+  }
+}
