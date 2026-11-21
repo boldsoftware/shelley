@@ -584,6 +584,7 @@ func TestLookupOutputLimit(t *testing.T) {
 		{"GPT-6.1 Terra", "https://api.openai.com/v1", "gpt-6.1-terra", 128000, true},
 		{"GPT-6 Luna", "https://api.openai.com/v1", "gpt-6-luna", 128000, true},
 		{"Google endpoint", "https://generativelanguage.googleapis.com/v1beta", "gemini-3-flash-preview", 65536, true},
+		{"Gemini exe.dev proxy", "https://gemini.int.exe.xyz/v1beta", "gemini-3-flash-preview", 65536, true},
 		{"Fireworks endpoint", "https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/gpt-oss-120b", 32768, true},
 		{"gateway falls back by model name", "https://llm.int.exe.xyz/v1", "gpt-5.4", 128000, true},
 		{"unknown has no invented limit", "https://made-up.example/v1", "custom-model", 0, false},
