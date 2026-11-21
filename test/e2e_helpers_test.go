@@ -16,6 +16,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/boldsoftware/shelley/lazycue"
 )
 
 // Helpers several ported Playwright specs share (ui/e2e/helpers.ts,
@@ -151,4 +153,11 @@ func (s *shelley) waitTurns(id string, n int) {
 		}
 		return nil
 	})
+}
+
+// pixel5Desktop is a desktop window of the given size: no touch screen, at
+// the Pixel 5's scale, as a spec's test.use({ viewport, isMobile: false,
+// hasTouch: false }) over the Pixel 5 project gave.
+func pixel5Desktop(width, height int) lazycue.Device {
+	return lazycue.Device{Width: width, Height: height, Scale: lazycue.Pixel5.Scale}
 }

@@ -1,0 +1,41 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "window.composerAligned(ids) returns \"ok\" when the composer form is as tall as the message input and every control whose data-testid is in ids is vertically centred on the input, or else what is wrong. On a desktop, a conversation's composer aligns the textarea and the split-send actions. 1. Navigate to /c/alignment. 2. The message input (data-testid \"message-input\"), the attach button (data-testid \"attach-button\"), the send button (data-testid \"send-button\") and the send options button (data-testid \"send-options-button\") should be visible. 3. Eval window.composerAligned([\"attach-button\", \"send-button\", \"send-options-button\"]) with expect \"ok\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/alignment"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='attach-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='send-options-button']"
+    },
+    {
+      "action": "eval",
+      "expression": "window.composerAligned([\"attach-button\", \"send-button\", \"send-options-button\"])",
+      "expect": "ok"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:33:27.543859185Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 10728,
+    "output_tokens": 517,
+    "estimated_cost_usd": 0.01475235,
+    "mode": "generated"
+  }
+}
