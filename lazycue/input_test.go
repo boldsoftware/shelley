@@ -864,6 +864,52 @@ document.addEventListener('change', e => log.push('change:' + e.target.id));
 	}
 }
 
+// press_key, type and insert_text with an element focus it first, as
+// Playwright's locator.press and pressSequentially do: an input they were
+// not focused on gets its caret at the start.
+func TestKeysIntoElement(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<input id="a" aria-label="First">
+<input id="b" value="xyz">
+<input id="email" type="email" value="e">
+<div id="plain">Not focusable</div>
+<input id="off" disabled>
+<input id="gone" style="display: none">
+<script>b.setSelectionRange(3, 3)</script>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionClick, Selector: "#a"},
+		Step{Action: ActionType, Selector: "#b", Value: "hi"},
+		Step{Action: ActionType, Selector: "#b", Value: "!"},
+		Step{Action: ActionEval, Expression: `b.value`, Expect: ptr("hi!xyz")},
+		Step{Action: ActionInsertText, Role: "textbox", Name: "First", Value: "ins"},
+		Step{Action: ActionPressKey, Selector: "#a", Key: "Backspace"},
+		Step{Action: ActionEval, Expression: `a.value`, Expect: ptr("in")},
+		// An email input has no caret to move.
+		Step{Action: ActionType, Selector: "#email", Value: "x"},
+		Step{Action: ActionEval, Expression: `email.value.length + ' ' + email.value.includes('x')`, Expect: ptr("2 true")},
+		Step{Action: ActionAssertFocused, Selector: "#email"},
+		Step{Action: ActionAssertNotFocused, Selector: "#a"},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		{Step{Action: ActionType, Selector: "#plain", Value: "x"}, "#plain cannot take focus"},
+		{Step{Action: ActionPressKey, Selector: "#off", Key: "Enter"}, "#off is disabled"},
+		{Step{Action: ActionInsertText, Selector: "#gone", Value: "x"}, "#gone is not visible"},
+		{Step{Action: ActionAssertNotFocused, Selector: "#email"}, "#email is focused"},
+		{Step{Action: ActionAssertNotFocused, Selector: "#missing"}, "no element matches #missing"},
+	} {
+		c.step.Timeout = "300ms"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+}
+
 // Pointer and key steps carry the modifiers they name and those key_down
 // holds, as Playwright's do.
 func TestModifiers(t *testing.T) {

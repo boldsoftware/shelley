@@ -944,6 +944,15 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		return err
 	}
 
+	if (step.Action == ActionPressKey || step.Action == ActionType || step.Action == ActionInsertText) && (step.Selector != "" || step.Role != "") {
+		err := b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
+			return evalFind(runCtx, step, fmt.Sprintf(focusJS, findJS(step), describe(step)), nil)
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	switch step.Action {
 	case ActionNavigate:
 		url := step.URL
@@ -1299,6 +1308,18 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 			}
 			if got != want {
 				return fmt.Errorf("%s: %s is %s", step.Action, describe(step), got)
+			}
+			return nil
+		})
+
+	case ActionAssertNotFocused:
+		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
+			focused, err := elementString(runCtx, step, `String(el.getRootNode().activeElement === el)`)
+			if err != nil {
+				return fmt.Errorf("assert_not_focused: %w", err)
+			}
+			if focused == "true" {
+				return fmt.Errorf("assert_not_focused: %s is focused", describe(step))
 			}
 			return nil
 		})
@@ -1664,6 +1685,23 @@ const isVisibleJS = `function isVisible(el) {
 	const r = el.getBoundingClientRect();
 	return r.width > 0 && r.height > 0 && el.checkVisibility({visibilityProperty: true, checkVisibilityCSS: true});
 }`
+
+// focusJS focuses the element a press_key, type or insert_text step types
+// into, once it is visible and enabled, as Playwright's locator.press and
+// pressSequentially do: an input it moves focus to gets its caret at the
+// start. Format with findJS and describe.
+const focusJS = `(function(el, sel) {
+	` + isVisibleJS + `
+	if (!el) throw new Error('no element matches ' + sel);
+	if (!isVisible(el)) throw new Error(sel + ' is not visible');
+	if ((` + isDisabledJS + `)(el)) throw new Error(sel + ' is disabled');
+	const was = el.getRootNode().activeElement;
+	if (was === el) return;
+	el.focus();
+	if (el.getRootNode().activeElement !== el) throw new Error(sel + ' cannot take focus');
+	// An email or number input has no caret to place.
+	if (el instanceof HTMLInputElement && el.selectionStart !== null) el.setSelectionRange(0, 0);
+})(%s, %q)`
 
 // fillJS sets the value of an input, textarea, select or contenteditable
 // element the way typing would, so frameworks listening for input and change

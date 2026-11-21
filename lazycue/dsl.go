@@ -124,6 +124,7 @@ const (
 	ActionAssertEnabled         = "assert_enabled"
 	ActionAssertDisabled        = "assert_disabled"
 	ActionAssertFocused         = "assert_focused"
+	ActionAssertNotFocused      = "assert_not_focused"
 	ActionWaitURL               = "wait_url"
 	ActionAssertURL             = "assert_url"
 	ActionAssertTitle           = "assert_title"
@@ -207,7 +208,7 @@ func stepSummary(s Step) string {
 		}
 		return "touch " + s.Value + " " + describe(s) + pointSuffix(s)
 	case ActionType, ActionInsertText:
-		return s.Action + " " + truncateArg(s.Value, 30)
+		return s.Action + " " + keyTarget(s) + truncateArg(s.Value, 30)
 	case ActionCall:
 		if s.Expect != nil {
 			return "call " + s.Value + " expect=" + truncateArg(*s.Expect, 30)
@@ -231,9 +232,9 @@ func stepSummary(s Step) string {
 		return s.Action + " " + s.Key
 	case ActionPressKey:
 		if s.Modifiers != "" {
-			return "press_key " + s.Modifiers + "+" + s.Key
+			return "press_key " + keyTarget(s) + s.Modifiers + "+" + s.Key
 		}
-		return "press_key " + s.Key
+		return "press_key " + keyTarget(s) + s.Key
 	case ActionScreenshot:
 		return "screenshot"
 	case ActionEval:
@@ -257,7 +258,7 @@ func stepSummary(s Step) string {
 		return "assert_attribute " + describe(s) + " " + s.Attribute + "=" + truncateArg(s.Value, 20)
 	case ActionAssertValue:
 		return "assert_value " + describe(s) + " " + truncateArg(s.Value, 30)
-	case ActionAssertEnabled, ActionAssertDisabled, ActionAssertFocused:
+	case ActionAssertEnabled, ActionAssertDisabled, ActionAssertFocused, ActionAssertNotFocused:
 		return s.Action + " " + describe(s)
 	case ActionWaitURL:
 		if s.Value != "" {
@@ -315,6 +316,15 @@ func describe(s Step) string {
 		d += " within " + describe(s.Within.step())
 	}
 	return d + inFrame(s)
+}
+
+// keyTarget describes the element a key step types into, and a space, or
+// nothing when it types into whatever has focus.
+func keyTarget(s Step) string {
+	if s.Selector == "" && s.Role == "" {
+		return ""
+	}
+	return describe(s) + " "
 }
 
 // inFrame names a step's frame, if it has one.
