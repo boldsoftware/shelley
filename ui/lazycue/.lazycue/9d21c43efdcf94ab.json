@@ -1,0 +1,94 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The directory picker switches to recent directories and navigates to one. A conversation was started in the directory {{RECENT}}. The picker is \".modal.directory-picker-modal\"; its recent toggle is the element with data-testid \"recent-toggle\" inside it. 1. Navigate to /new and click the directory chip \".status-field-cwd .status-chip\". 2. The recent toggle should have aria-pressed=\"false\"; click it. 3. It should have aria-pressed=\"true\". In the picker's data-testid \"recent-list\", an element whose text is exactly \"Other\" should be visible. 4. Click the element in that list whose title attribute is exactly \"{{RECENT}}\". 5. The recent toggle should have aria-pressed=\"false\", and the picker's \".directory-picker-input\" should have the value exactly \"{{RECENT}}/\". 6. Click the recent toggle: aria-pressed=\"true\". 7. Click it again: aria-pressed=\"false\", and the data-testid \"recent-list\" should be hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "selector": ".status-field-cwd .status-chip"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal.directory-picker-modal",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".modal.directory-picker-modal [data-testid='recent-toggle']",
+      "attribute": "aria-pressed",
+      "value": "false"
+    },
+    {
+      "action": "click",
+      "selector": ".modal.directory-picker-modal [data-testid='recent-toggle']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".modal.directory-picker-modal [data-testid='recent-toggle']",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal.directory-picker-modal [data-testid='recent-list']",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll(\".modal.directory-picker-modal [data-testid=\\\"recent-list\\\"] *\")].some((e) => e.textContent.trim() === \"Other\" && e.getClientRects().length > 0)",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".modal.directory-picker-modal [data-testid='recent-list'] [title='{{RECENT}}']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".modal.directory-picker-modal [data-testid='recent-toggle']",
+      "attribute": "aria-pressed",
+      "value": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.modal.directory-picker-modal .directory-picker-input').value",
+      "expect": "{{RECENT}}/"
+    },
+    {
+      "action": "click",
+      "selector": ".modal.directory-picker-modal [data-testid='recent-toggle']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".modal.directory-picker-modal [data-testid='recent-toggle']",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".modal.directory-picker-modal [data-testid='recent-toggle']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".modal.directory-picker-modal [data-testid='recent-toggle']",
+      "attribute": "aria-pressed",
+      "value": "false"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".modal.directory-picker-modal [data-testid='recent-list']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:19:06.256486136Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 39064,
+    "output_tokens": 2519,
+    "estimated_cost_usd": 0.062014799999999995,
+    "mode": "generated"
+  }
+}

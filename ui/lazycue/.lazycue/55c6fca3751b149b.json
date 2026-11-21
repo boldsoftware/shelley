@@ -1,0 +1,68 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a 1280x800 screen, the base modal dismisses when the backdrop is clicked beside the panel at the panel's mid-height. 1. Navigate to /c/{{SLUG}} and wait for the message input (data-testid \"message-input\") to be visible. 2. Press Control+k, wait for \".command-palette-input\" to be visible, fill it with \"feature\" and click the first \".command-palette-item\". 3. Wait for the panel (\".modal\") to be visible and measure its bounding box with an eval (the layout is fixed, so the numbers hold on every run). 4. Click the page with no selector at the viewport point x = (panel left) / 2, y = panel top + panel height / 2: in the empty gap left of the panel, at its vertical middle. 5. \".modal\" count should become 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "feature"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "const r = document.querySelector('.modal').getBoundingClientRect(); JSON.stringify({left: r.left, top: r.top, width: r.width, height: r.height})"
+    },
+    {
+      "action": "click",
+      "x": 208,
+      "y": 400
+    },
+    {
+      "action": "assert_count",
+      "selector": ".modal",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:20:30.098172062Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 100160,
+    "output_tokens": 2308,
+    "estimated_cost_usd": 0.0997965,
+    "mode": "generated"
+  }
+}

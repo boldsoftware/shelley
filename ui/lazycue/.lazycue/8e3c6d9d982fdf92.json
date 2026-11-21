@@ -1,0 +1,175 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The base modal (a PrimeVue Dialog) opens via the command palette, traps focus, and closes via its X button, Escape and a backdrop click. To \"open the feature flags modal\": press Control+k (the command palette shortcut), wait for the command palette input (\".command-palette-input\") to be visible, fill it with \"feature\", wait for the first \".command-palette-item\" to be visible and click it. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and wait for the message input (data-testid \"message-input\") to be visible. 2. Open the feature flags modal. 3. The mask (\".modal-overlay\") and the panel (\".modal\") should be visible, and \".modal-title\" should have exactly the text \"Feature flags\". 4. The element with role=\"dialog\" should have aria-modal=\"true\" and a non-empty aria-labelledby; the element whose id is that aria-labelledby value must have exactly the text \"Feature flags\" and the class \"modal-title\" (PrimeVue's default, never-rendered header id would fail this). 5. Focus moves into the dialog: poll an eval of document.querySelector('.modal')?.contains(document.activeElement) until it is true. 6. The close button \".modal-header .btn-icon[aria-label='Close modal']\" should be visible. 7. Click it: then no \".modal\" element may exist at all (count 0). 8. Open the feature flags modal again and wait for \".modal\" to be visible; press Escape: \".modal\" count should become 0. 9. Open the feature flags modal again and wait for \".modal\" to be visible; click the mask \".modal-overlay\" 5 pixels right and 5 pixels down from its top-left corner (well outside the centered panel): \".modal\" count should become 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "15s"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "feature"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-item",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal-overlay",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".modal"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".modal-title",
+      "text": "Feature flags"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[role='dialog']",
+      "attribute": "aria-modal",
+      "value": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const dlg = document.querySelector('[role=\"dialog\"]'); const id = dlg ? dlg.getAttribute('aria-labelledby') : ''; return id \u0026\u0026 id.length \u003e 0 ? 'has-id' : 'no-id'; })()",
+      "expect": "has-id"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const dlg = document.querySelector('[role=\"dialog\"]'); const id = dlg.getAttribute('aria-labelledby'); if(!id) return 'no-id'; const el = document.getElementById(id); if(!el) return 'no-element'; return el.textContent.trim() + '|' + el.className; })()",
+      "expect": "Feature flags|modal-title"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.modal')?.contains(document.activeElement)",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".modal-header .btn-icon[aria-label='Close modal']"
+    },
+    {
+      "action": "click",
+      "selector": ".modal-header .btn-icon[aria-label='Close modal']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".modal",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "feature"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-item",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".modal",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "feature"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-item",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".modal-overlay",
+      "x": 5,
+      "y": 5
+    },
+    {
+      "action": "assert_count",
+      "selector": ".modal",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:06:50.879375184Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 26408,
+    "output_tokens": 2357,
+    "estimated_cost_usd": 0.0539127,
+    "mode": "generated"
+  }
+}

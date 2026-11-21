@@ -1,0 +1,102 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The directory picker caps rendering of huge directories and filters within them. On this phone-sized screen \"the directory control\" is in the overflow menu: when \".chat-overflow-popover\" is not visible, first click the header's button with aria-label exactly \"More options\"; the control is then the button in \".chat-overflow-popover\" whose accessible name starts with \"Directory\". The picker is \".modal.directory-picker-modal\". {{BIG}} is a directory holding 520 subdirectories sub-0000 to sub-0519 and one named zz-needle. 1. Navigate to /new and click the directory control. 2. The picker should be visible. 3. Fill its \".directory-picker-input\" with \"{{BIG}}/\". 4. There should be exactly 501 \".directory-picker-entry\" elements in the picker (500 rows plus the \"..\" parent row), and \".directory-picker-truncated\" should contain \"more — type to filter\". 5. Fill the input with \"{{BIG}}/zz\": there should be exactly 1 \".directory-picker-entry-name\" (the \"..\" row has none), containing \"zz-needle\". 6. Press Escape: the picker count should become 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label='More options']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover button",
+      "has_text": "Directory"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal.directory-picker-modal",
+      "timeout": "5s"
+    },
+    {
+      "action": "fill",
+      "selector": ".modal.directory-picker-modal .directory-picker-input",
+      "value": "{{BIG}}/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal.directory-picker-modal .directory-picker-truncated",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".modal.directory-picker-modal .directory-picker-entry",
+      "count": 501
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".modal.directory-picker-modal .directory-picker-truncated",
+      "text": "more — type to filter"
+    },
+    {
+      "action": "fill",
+      "selector": ".modal.directory-picker-modal .directory-picker-input",
+      "value": "{{BIG}}/zz"
+    },
+    {
+      "action": "wait_text",
+      "text": "zz-needle",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".modal.directory-picker-modal .directory-picker-entry-name",
+      "count": 1
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".modal.directory-picker-modal .directory-picker-entry-name",
+      "text": "zz-needle"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".modal.directory-picker-modal",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".modal.directory-picker-modal",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:15:35.091445698Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 83475,
+    "output_tokens": 2346,
+    "estimated_cost_usd": 0.0909492,
+    "mode": "generated"
+  }
+}

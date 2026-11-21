@@ -1,0 +1,116 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The new-conversation directory chip shows a home-relative path, and a stale directory listing does not overwrite a newer one. On this phone-sized screen \"the directory control\" is in the overflow menu: when \".chat-overflow-popover\" is not visible, first click the header's button with aria-label exactly \"More options\"; the control is then the button in \".chat-overflow-popover\" whose accessible name starts with \"Directory\". The directory {{HOME}}/exe exists. The picker is \".modal.directory-picker-modal\". The server's answer to listing the directory /definitely-missing-shelley-directory is held back: call \"requested\" says whether that listing request has arrived (\"true\" or \"false\"); call \"release\" lets it answer {\"error\": \"delayed directory error\"} and returns once it has. Perform the steps in order. 1. Navigate to /new. 2. window.__SHELLEY_INIT__.home_dir should be exactly \"{{HOME}}\". 3. Set localStorage \"shelley_selected_cwd\" to \"{{HOME}}/exe\" and reload by navigating to /new again. 4. The directory control should contain the text \"~/exe\". 5. Click the directory control. 6. The picker's \".directory-picker-input\" should have the value exactly \"{{HOME}}/exe/\". 7. Click the picker's button named \"Go to home directory\". 8. The input should have the value exactly \"{{HOME}}/\" and \".directory-picker-current-path\" exactly the text \"{{HOME}}\". 9. Fill the input with \"/definitely-missing-shelley-directory/\". 10. Call \"requested\" until it returns \"true\". 11. Click \"Go to home directory\" again. 12. The input should have the value exactly \"{{HOME}}/\" and \".directory-picker-current-path\" exactly the text \"{{HOME}}\". 13. Call \"release\". 14. Wait one animation frame (eval a promise that resolves in requestAnimationFrame). 15. There must be no \".directory-picker-error\" element (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__SHELLEY_INIT__.home_dir",
+      "expect": "{{HOME}}"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley_selected_cwd', '{{HOME}}/exe'); 'done'"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-overflow-popover button",
+      "has_text": "Directory",
+      "text": "~/exe"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover button",
+      "has_text": "Directory"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal.directory-picker-modal",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.modal.directory-picker-modal .directory-picker-input').value",
+      "expect": "{{HOME}}/exe/"
+    },
+    {
+      "action": "click",
+      "selector": ".modal.directory-picker-modal button",
+      "has_text": "Go to home directory"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.modal.directory-picker-modal .directory-picker-input').value",
+      "expect": "{{HOME}}/"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".modal.directory-picker-modal .directory-picker-current-path",
+      "text": "{{HOME}}"
+    },
+    {
+      "action": "fill",
+      "selector": ".modal.directory-picker-modal .directory-picker-input",
+      "value": "/definitely-missing-shelley-directory/"
+    },
+    {
+      "action": "call",
+      "value": "requested",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".modal.directory-picker-modal button",
+      "has_text": "Go to home directory"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.modal.directory-picker-modal .directory-picker-input').value",
+      "expect": "{{HOME}}/"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".modal.directory-picker-modal .directory-picker-current-path",
+      "text": "{{HOME}}"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(r =\u003e requestAnimationFrame(r)).then(() =\u003e 'done')",
+      "expect": "done"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".directory-picker-error",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:54:23.271989076Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 152399,
+    "output_tokens": 4801,
+    "estimated_cost_usd": 0.16043295,
+    "mode": "generated"
+  }
+}

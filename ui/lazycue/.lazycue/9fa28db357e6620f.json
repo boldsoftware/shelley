@@ -1,0 +1,82 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The command palette's home-directory action starts a new conversation in $HOME. On this phone-sized screen \"the directory control\" is in the overflow menu: when \".chat-overflow-popover\" is not visible, first click the header's button with aria-label exactly \"More options\"; the control is then the button in \".chat-overflow-popover\" whose accessible name starts with \"Directory\". 1. Navigate to /new. 2. window.__SHELLEY_INIT__.home_dir should be exactly \"{{HOME}}\". 3. Set localStorage \"shelley_selected_cwd\" to \"{{HOME}}/not-home\" and reload by navigating to /new again. 4. Press Control+k, wait for \".command-palette-input\" to be visible and fill it with \"home directory\". 5. Click the palette item (\".command-palette-item\") whose \".command-palette-item-title\" has exactly the text \"New Conversation in Home Directory\" (has_text alone on a broad selector would match an ancestor such as the whole page). 6. The directory control should contain the text \"~\". 7. localStorage \"shelley_selected_cwd\" should become exactly \"{{HOME}}\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__SHELLEY_INIT__.home_dir",
+      "expect": "{{HOME}}"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley_selected_cwd', '{{HOME}}/not-home')"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "home directory"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-item",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item .command-palette-item-title",
+      "has_text": "New Conversation in Home Directory"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-overflow-popover button",
+      "has_text": "Directory",
+      "text": "~"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley_selected_cwd')",
+      "expect": "{{HOME}}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:54:59.678531068Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 167952,
+    "output_tokens": 3655,
+    "estimated_cost_usd": 0.1529934,
+    "mode": "generated"
+  }
+}
