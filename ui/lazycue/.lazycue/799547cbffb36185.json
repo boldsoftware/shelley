@@ -1,0 +1,207 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Survives theme switches and keeps Ctrl+V and Ctrl+Shift+C off paste and ^C. The test seeded a conversation at /c/gh-theme, whose directory holds t.sh, which switches the terminal to raw mode without echo, prints the screen {{SCREEN}} (with a gap before the B, wide characters and a multi-code-point emoji), then reads raw input up to \"q\" and prints it as keys=\u003cinput, shell-quoted\u003e. \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]' and \"the input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Read all output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true). \"Read the visible screen until it matches P\" is the same with the menu item \"Insert visible screen into input\". \"Set the theme to T\" means what the theme menu does, the eval: localStorage.setItem(\"shelley-theme\", \"T\"); document.documentElement.classList.toggle(\"dark\", \"T\" === \"dark\"). window.__sockets lists the page's websockets in the order they opened, each as {termId: its URL's term_id parameter or null, outputs: how many \"output\" messages it received}; this terminal is the only terminal session on the server. \"The background\" is the eval `(() =\u003e { const c = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas'); const [r, g, b] = c.getContext(\"2d\").getImageData(c.width / 2, c.height - 2, 1, 1).data; return \"rgb(\" + r + \", \" + g + \", \" + b + \")\"; })()`.\n1. Navigate to /c/gh-theme. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"].\n2. The terminal should contain exactly 1 canvas and no \".xterm\" (count 0).\n3. Read all output until it contains {{SCREEN}} (eval document.querySelector('[data-testid=\"message-input\"]').value.includes(\"{{SCREEN}}\")).\n4. The background must be exactly \"rgb(248, 249, 250)\" (check once).\n5. Eval: window.__focused = []; document.addEventListener(\"focusin\", (e) =\u003e window.__focused.push(e.target.closest(\".terminal-panel-content\") ? \"terminal\" : \"elsewhere\")).\n6. Focus the input (eval .focus()). Eval: window.__oldCanvas = the terminal's canvas.\n7. Set the theme to dark. window.__oldCanvas.isConnected should become false. The background should become exactly \"rgb(26, 27, 38)\".\n8. Read all output until it contains {{SCREEN}}. Then window.__focused must not contain \"terminal\" (check once).\n9. A focused terminal stays focused: focus the terminal's input, '.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]' (eval .focus()). Eval: window.__oldCanvas = the terminal's canvas; window.__mark = window.__sockets.length.\n10. Set the theme to light. window.__oldCanvas.isConnected should become false. The background should become exactly \"rgb(248, 249, 250)\". The terminal's input should be focused (assert_focused).\n11. Focus returns before the replacement socket opens. Wait for the replay without moving focus through the composer: eval window.__sockets.slice(window.__mark).some((s) =\u003e s.termId \u0026\u0026 s.outputs \u003e 0) should become true.\n12. Press Control+v, then Control+Shift+c, then q (press_key, on the focused terminal input).\n13. There should be exactly 1 \".terminal-panel-tab-success\".\n14. Read all output until it matches /keys=\\$'\\\\026'/ (Ctrl+V reached the program as ^V; Ctrl+Shift+C neither pasted nor sent ^C).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/gh-theme"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-content [data-terminal-id][style*='display: block'] canvas",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] .xterm",
+      "count": 0
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid='message-input']",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label='Terminal menu']"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('{{SCREEN}}')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas'); const [r, g, b] = c.getContext('2d').getImageData(c.width / 2, c.height - 2, 1, 1).data; return 'rgb(' + r + ', ' + g + ', ' + b + ')'; })()",
+      "expect": "rgb(248, 249, 250)"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__focused = []; document.addEventListener('focusin', (e) =\u003e window.__focused.push(e.target.closest('.terminal-panel-content') ? 'terminal' : 'elsewhere')); 'ok'",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus(); 'ok'",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__oldCanvas = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas'); 'ok'",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley-theme', 'dark'); document.documentElement.classList.toggle('dark', true); 'ok'",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__oldCanvas.isConnected",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas'); const [r, g, b] = c.getContext('2d').getImageData(c.width / 2, c.height - 2, 1, 1).data; return 'rgb(' + r + ', ' + g + ', ' + b + ')'; })()",
+      "expect": "rgb(26, 27, 38)"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid='message-input']",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label='Terminal menu']"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('{{SCREEN}}')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "window.__focused.includes('terminal')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]').focus(); 'ok'",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__oldCanvas = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas'); window.__mark = window.__sockets.length; 'ok'",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley-theme', 'light'); document.documentElement.classList.toggle('dark', false); 'ok'",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__oldCanvas.isConnected",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas'); const [r, g, b] = c.getContext('2d').getImageData(c.width / 2, c.height - 2, 1, 1).data; return 'rgb(' + r + ', ' + g + ', ' + b + ')'; })()",
+      "expect": "rgb(248, 249, 250)"
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".terminal-panel-content [data-terminal-id][style*='display: block'] textarea[aria-label='Terminal input']"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__sockets.slice(window.__mark).some((s) =\u003e s.termId \u0026\u0026 s.outputs \u003e 0)",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "v",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "C",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "press_key",
+      "key": "q"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-success",
+      "count": 1
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid='message-input']",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label='Terminal menu']"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "/keys=\\$'\\\\026'/.test(document.querySelector('[data-testid=\"message-input\"]').value)",
+          "expect": "true"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:04:46.315889522Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 44536,
+    "output_tokens": 3730,
+    "estimated_cost_usd": 0.09421185,
+    "mode": "generated"
+  }
+}

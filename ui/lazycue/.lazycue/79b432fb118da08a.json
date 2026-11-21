@@ -1,0 +1,84 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Keeps 10,000 lines of history, as xterm.js does. The test seeded a conversation at /c/gh-history, whose directory holds t.sh, which prints the numbers 1 to 10000, one per line, and then echoes what it reads. \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]' and \"the input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Read all output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true). \"Read the visible screen until it matches P\" is the same with the menu item \"Insert visible screen into input\". \"Set the theme to T\" means what the theme menu does, the eval: localStorage.setItem(\"shelley-theme\", \"T\"); document.documentElement.classList.toggle(\"dark\", \"T\" === \"dark\"). \n1. Navigate to /c/gh-history. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"].\n2. Read all output until it contains a newline followed by \"10000\" (eval .value.includes(\"\\n10000\")).\n3. Read all output until it matches /^1$/m (the first line is still there).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/gh-history"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "retry",
+      "timeout": "60s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('\\n10000')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "retry",
+      "timeout": "30s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "/^1$/m.test(document.querySelector('[data-testid=\"message-input\"]').value)",
+          "expect": "true"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:15:31.966841864Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 81363,
+    "output_tokens": 1967,
+    "estimated_cost_usd": 0.07702485,
+    "mode": "generated"
+  }
+}

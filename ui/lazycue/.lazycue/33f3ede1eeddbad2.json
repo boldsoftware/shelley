@@ -1,0 +1,79 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Running work fits agent-first work previews to the available width. The test seeded a conversation at /c/rw-previews; the browser is told (through rewritten responses, with live updates cut off) that it has three idle subagents, \"demo-index\", \"demo-assets\" and \"demo-build\", each running one background job \"printf preview-ready; tail -f /dev/null\". \"The toggle\" is [data-testid=\"running-work-toggle\"]. \"The names\" are the texts of the toggle's \".running-work-name\" elements, in order, whitespace collapsed: eval `JSON.stringify([...document.querySelectorAll('[data-testid=\"running-work-toggle\"] .running-work-name')].map(e =\u003e e.textContent.replace(/\\s+/g, ' ').trim()))`. \"The overflow\" is scrollWidth - clientWidth of the toggle's \".running-work-names\".\n1. Navigate to /c/rw-previews.\n2. The names should be exactly [\"demo-index\",\"demo-assets\"]. The toggle's \".running-work-more\" should have exactly the text \"and 4 more\", and the toggle should contain \"3 tasks · 3 subagents\".\n3. Set the viewport to 1600x900. The names should become exactly [\"demo-index\",\"demo-assets\",\"demo-build\",\"printf preview-ready; tail -f /dev/null\",\"printf preview-ready; tail -f /dev/null\",\"printf preview-ready; tail -f /dev/null\"], and there should be no \".running-work-more\" in the toggle (count 0). The overflow should become at most 1.\n4. Set the viewport to 390x700. The names should become exactly [\"demo-index\",\"demo-assets\"] again, the toggle's \".running-work-more\" exactly \"and 4 more\", and the overflow should become at most 1.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/rw-previews"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"running-work-toggle\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll('[data-testid=\"running-work-toggle\"] .running-work-name')].map(e =\u003e e.textContent.replace(/\\s+/g, ' ').trim()))",
+      "expect": "[\"demo-index\",\"demo-assets\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"running-work-toggle\"] .running-work-more",
+      "text": "and 4 more"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"running-work-toggle\"]",
+      "text": "3 tasks · 3 subagents"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll('[data-testid=\"running-work-toggle\"] .running-work-name')].map(e =\u003e e.textContent.replace(/\\s+/g, ' ').trim()))",
+      "expect": "[\"demo-index\",\"demo-assets\",\"demo-build\",\"printf preview-ready; tail -f /dev/null\",\"printf preview-ready; tail -f /dev/null\",\"printf preview-ready; tail -f /dev/null\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"running-work-toggle\"] .running-work-more",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-testid=\"running-work-toggle\"] .running-work-names'); return el.scrollWidth - el.clientWidth \u003c= 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 700
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll('[data-testid=\"running-work-toggle\"] .running-work-name')].map(e =\u003e e.textContent.replace(/\\s+/g, ' ').trim()))",
+      "expect": "[\"demo-index\",\"demo-assets\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"running-work-toggle\"] .running-work-more",
+      "text": "and 4 more"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-testid=\"running-work-toggle\"] .running-work-names'); return el.scrollWidth - el.clientWidth \u003c= 1; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:23:23.766786386Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 44848,
+    "output_tokens": 3266,
+    "estimated_cost_usd": 0.08407065000000001,
+    "mode": "generated"
+  }
+}

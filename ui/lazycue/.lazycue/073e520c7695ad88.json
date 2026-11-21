@@ -1,0 +1,95 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Shift+drag selects and copies while the program tracks the mouse. The test seeded a conversation at /c/gh-shift-drag, whose directory holds t.sh, which switches the terminal to raw mode, turns on mouse tracking (SGR mouse reports), prints \"select-me-please\" and then reads (and discards) its input. \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]' and \"the input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Read all output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true). \"Read the visible screen until it matches P\" is the same with the menu item \"Insert visible screen into input\". \"Set the theme to T\" means what the theme menu does, the eval: localStorage.setItem(\"shelley-theme\", \"T\"); document.documentElement.classList.toggle(\"dark\", \"T\" === \"dark\"). window.__copied lists the texts the page wrote to the clipboard (navigator.clipboard.write or writeText). Offsets below are CSS pixels from the top-left corner of the terminal's canvas, whose width is W and height H.\n1. Navigate to /c/gh-shift-drag. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"].\n2. Read all output until it contains \"select-me-please\".\n3. Hold Shift (key_down Shift). Hover the canvas at (2, 2). Press the left mouse button (mouse_down). Hover the canvas at (W/2, H/2) in 5 steps (count 5), then at (W-2, H-2) in 5 steps. Release the button (mouse_up). Release Shift (key_up Shift).\n4. window.__copied should come to have an entry containing \"select-me-please\" (eval, expect true).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/gh-shift-drag"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-button\"]:not([disabled])"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('select-me-please')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "key_down",
+      "key": "Shift"
+    },
+    {
+      "action": "hover",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas",
+      "x": 2,
+      "y": 2
+    },
+    {
+      "action": "mouse_down",
+      "button": "left"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const c = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas'); const r = c.getBoundingClientRect(); return {x: r.left + r.width/2, y: r.top + r.height/2}; })()",
+      "count": 5
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const c = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas'); const r = c.getBoundingClientRect(); return {x: r.left + r.width - 2, y: r.top + r.height - 2}; })()",
+      "count": 5
+    },
+    {
+      "action": "mouse_up",
+      "button": "left"
+    },
+    {
+      "action": "key_up",
+      "key": "Shift"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.isArray(window.__copied) \u0026\u0026 window.__copied.some(t =\u003e typeof t === 'string' \u0026\u0026 t.includes('select-me-please'))",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:24:13.188605874Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 74022,
+    "output_tokens": 3801,
+    "estimated_cost_usd": 0.09893084999999999,
+    "mode": "generated"
+  }
+}

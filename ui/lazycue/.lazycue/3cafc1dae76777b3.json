@@ -1,0 +1,130 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The terminal menu works from the keyboard and closes with the panel. The test seeded a conversation at /c/term-menu-keys. \"The trigger\" is the button with aria-label exactly \"Terminal menu\", \"the menu\" is \".overflow-menu-panel\", and a menu item is the button inside the menu with exactly that text. Call \"go\" creates the file \"go\" in the terminal's directory. \"The terminal input\" is the visible terminal's input, '.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]' (other terminals' inputs are hidden); to type into it, focus it with an eval (.focus()), then use type steps, which type key by key, and press_key for Enter or Control+d. Press keys with press_key on whatever has focus; don't click menu items in steps 2 to 4.\n1. Navigate to /c/term-menu-keys. Fill [data-testid=\"message-input\"] with \"!bash\" and click [data-testid=\"send-button\"]. \".terminal-panel-tab-running\" should be visible.\n2. Focus the trigger (eval .focus()) and press Enter. The menu item \"Copy visible screen\" should be focused. Press Tab: the item \"Copy all output\" should be focused.\n3. Press Escape. The menu should be hidden and the trigger focused.\n4. Press Enter, then Enter again (opens the menu, then chooses \"Copy visible screen\"). The menu should be hidden and the trigger focused.\n5. The shell ends, and its tab and the panel go: so does the menu. Type into the terminal input: while [ ! -e go ]; do sleep 0.05; done; exit\n   Then press Enter.\n6. Click the trigger. The menu should be visible.\n7. Call \"go\". \".terminal-panel\" should become hidden, and the menu hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/term-menu-keys"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-tab-running",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[aria-label=\"Terminal menu\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Copy visible screen"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab"
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Copy all output"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "type",
+      "value": "while [ ! -e go ]; do sleep 0.05; done; exit"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "go"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".terminal-panel",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".overflow-menu-panel"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:51:59.806149634Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 35283,
+    "output_tokens": 1770,
+    "estimated_cost_usd": 0.054746100000000006,
+    "mode": "generated"
+  }
+}

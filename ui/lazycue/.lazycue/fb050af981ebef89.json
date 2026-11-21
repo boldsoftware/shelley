@@ -1,0 +1,393 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Tab switches retain output written while hidden (xterm). The test seeded a conversation at /c/gh-tabs-xterm, whose directory holds t.sh, which counts COUNT-001 to COUNT-100 in four batches of 25 lines: it prints the first batch, and each later batch once the test releases it (calls \"release50\", \"release75\" and \"release100\" each release one batch; the FIFO keeps output stopped while a tab is inspected, so new output cannot conceal a lost screen by immediately repainting it). Then it echoes what it reads. Terminals render with xterm. \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]' and \"the input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Read all output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true). \"Read the visible screen until it matches P\" is the same with the menu item \"Insert visible screen into input\". \"Set the theme to T\" means what the theme menu does, the eval: localStorage.setItem(\"shelley-theme\", \"T\"); document.documentElement.classList.toggle(\"dark\", \"T\" === \"dark\"). window.__received is all the output the page's websocket for this script (the one whose URL has cmd \"bash t.sh\") received, decoded. Call \"sockets\" says how many terminal websockets the page has opened. \"The first terminal\" is the eval document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]'), \"the second terminal\" the same with window.__secondId; \"the first tab\" is '.terminal-panel-tab[title=\"bash t.sh\"]' and \"the second tab\" is the last \".terminal-panel-tab\". An element is hidden when it has no box (getClientRects().length === 0) or computed visibility \"hidden\", visible otherwise. \"The counts check for N\" is the eval: JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value.match(/COUNT-\\d{3}/g)) === JSON.stringify(Array.from({length: N}, (_, i) =\u003e \"COUNT-\" + String(i + 1).padStart(3, \"0\"))).\n1. Navigate to /c/gh-tabs-xterm. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"].\n2. Eval: window.__firstId = the terminal's data-terminal-id; window.__surface = the first terminal's .xterm-screen.\n3. Read all output until it contains \"COUNT-025\".\n4. Click the button with aria-label exactly \"New terminal\". The first terminal should become hidden (eval, expect true). Call \"sockets\" should return \"2\". Eval: window.__secondId = the terminal's data-terminal-id (the new, visible one).\n5. Then, for N = 50, 75 and 100 in turn (write the steps out for each N; NNN is N with three digits):\n   a. Call \"releaseN\" (returns \"released\").\n   b. window.__received should come to contain \"COUNT-NNN\" (eval, expect true).\n   c. The first terminal must be hidden (eval, expect true). Click the first tab. The first terminal should become visible.\n   d. Read all output until it contains \"COUNT-NNN\".\n   e. The counts check for N must be true: every count, once, in order.\n   f. window.__surface.isConnected must be true (the first terminal's view was kept, not rebuilt).\n   g. Click the second tab. The second terminal should become visible.\n   h. Read all output until it does not contain \"COUNT-\" and is not empty (one eval: the second terminal's output has none of the counter's).\n6. Click the first tab. Read the visible screen until it contains \"COUNT-100\".\n7. Call \"sockets\" should return \"2\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/gh-tabs-xterm"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] .xterm-screen"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const t = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]'); window.__firstId = t.getAttribute('data-terminal-id'); window.__surface = document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"] .xterm-screen'); return window.__firstId; })()"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('COUNT-025')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"New terminal\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]').getClientRects().length === 0 || window.getComputedStyle(document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]')).visibility === 'hidden'",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "sockets",
+      "expect": "2"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const t = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]'); window.__secondId = t.getAttribute('data-terminal-id'); return window.__secondId; })()"
+    },
+    {
+      "action": "call",
+      "value": "release50",
+      "expect": "released"
+    },
+    {
+      "action": "eval",
+      "expression": "typeof window.__received === 'string' \u0026\u0026 window.__received.includes('COUNT-050')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]').getClientRects().length === 0 || window.getComputedStyle(document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]')).visibility === 'hidden'",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".terminal-panel-tab[title=\"bash t.sh\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const el = document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]'); return el.getClientRects().length \u003e 0 \u0026\u0026 window.getComputedStyle(el).visibility !== 'hidden'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('COUNT-050')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value.match(/COUNT-\\d{3}/g)) === JSON.stringify(Array.from({length: 50}, (_, i) =\u003e 'COUNT-' + String(i + 1).padStart(3, '0')))",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__surface.isConnected",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".terminal-panel-tab:last-child"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const el = document.querySelector('[data-terminal-id=\"' + window.__secondId + '\"]'); return el.getClientRects().length \u003e 0 \u0026\u0026 window.getComputedStyle(el).visibility !== 'hidden'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "(function(){ const v = document.querySelector('[data-testid=\"message-input\"]').value; return !v.includes('COUNT-') \u0026\u0026 v.length \u003e 0; })()",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "call",
+      "value": "release75",
+      "expect": "released"
+    },
+    {
+      "action": "eval",
+      "expression": "typeof window.__received === 'string' \u0026\u0026 window.__received.includes('COUNT-075')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]').getClientRects().length === 0 || window.getComputedStyle(document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]')).visibility === 'hidden'",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".terminal-panel-tab[title=\"bash t.sh\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const el = document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]'); return el.getClientRects().length \u003e 0 \u0026\u0026 window.getComputedStyle(el).visibility !== 'hidden'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('COUNT-075')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value.match(/COUNT-\\d{3}/g)) === JSON.stringify(Array.from({length: 75}, (_, i) =\u003e 'COUNT-' + String(i + 1).padStart(3, '0')))",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__surface.isConnected",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".terminal-panel-tab:last-child"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const el = document.querySelector('[data-terminal-id=\"' + window.__secondId + '\"]'); return el.getClientRects().length \u003e 0 \u0026\u0026 window.getComputedStyle(el).visibility !== 'hidden'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "(function(){ const v = document.querySelector('[data-testid=\"message-input\"]').value; return !v.includes('COUNT-') \u0026\u0026 v.length \u003e 0; })()",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "call",
+      "value": "release100",
+      "expect": "released"
+    },
+    {
+      "action": "eval",
+      "expression": "typeof window.__received === 'string' \u0026\u0026 window.__received.includes('COUNT-100')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]').getClientRects().length === 0 || window.getComputedStyle(document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]')).visibility === 'hidden'",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".terminal-panel-tab[title=\"bash t.sh\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const el = document.querySelector('[data-terminal-id=\"' + window.__firstId + '\"]'); return el.getClientRects().length \u003e 0 \u0026\u0026 window.getComputedStyle(el).visibility !== 'hidden'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('COUNT-100')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value.match(/COUNT-\\d{3}/g)) === JSON.stringify(Array.from({length: 100}, (_, i) =\u003e 'COUNT-' + String(i + 1).padStart(3, '0')))",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__surface.isConnected",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".terminal-panel-tab:last-child"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const el = document.querySelector('[data-terminal-id=\"' + window.__secondId + '\"]'); return el.getClientRects().length \u003e 0 \u0026\u0026 window.getComputedStyle(el).visibility !== 'hidden'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "(function(){ const v = document.querySelector('[data-testid=\"message-input\"]').value; return !v.includes('COUNT-') \u0026\u0026 v.length \u003e 0; })()",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "selector": ".terminal-panel-tab[title=\"bash t.sh\"]"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert visible screen into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('COUNT-100')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "call",
+      "value": "sockets",
+      "expect": "2"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:28:42.802363898Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 45417,
+    "output_tokens": 7220,
+    "estimated_cost_usd": 0.1455117,
+    "mode": "generated"
+  }
+}

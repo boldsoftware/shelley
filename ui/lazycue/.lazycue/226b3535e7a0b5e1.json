@@ -1,0 +1,214 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Running work exposes long commands and output in one expansion and stops the command. The test seeded a conversation at /c/bg-running whose bash tool started the background job \"echo ready; sleep 600\", with job ID {{JOB_ID}}. The browser is told (by a rewritten background-jobs response) that the job's command is {{DISPLAY_COMMAND}}, a long multi-line python3 command. \"The strip\" is '[aria-label=\"Running work\"]', \"the toggle\" is the strip's [data-testid=\"running-work-toggle\"], and \"the job\" is the strip's [data-testid=\"background-job\"]. The viewport starts at 1280x900.\n1. Navigate to /c/bg-running and wait up to 30s for [data-testid=\"message-input\"] to be visible.\n2. [data-testid=\"bash-tool-running-indicator\"] should become visible (wait up to 15s).\n3. The toggle should come to contain \"python3\" (wait up to 15s). The toggle's \".running-work-activity\" should have exactly the text \"ready\", and the toggle must not contain \"print(\".\n4. The toggle's \".running-work-name\" must have the computed text-overflow \"ellipsis\", and its scrollWidth must be greater than its clientWidth (the preview is cut short).\n5. Its getBoundingClientRect().width must be at most parseFloat(getComputedStyle(it).maxWidth) + 1, and that maxWidth must be a finite number (Number.isFinite).\n6. Set the viewport to 390x500. document.documentElement.scrollWidth must be at most innerWidth (nothing overflows sideways).\n7. Click the toggle. There should be exactly 1 job. The job's [data-testid=\"background-job-command\"] should have exactly the text {{DISPLAY_COMMAND}} (with its newlines). The toggle must no longer contain \"python3\". The job must contain no details or summary elements (count 0). The job's [data-testid=\"background-job-tail\"] should contain \"ready\". The job must not contain \"PGID\" nor \".log\".\n8. Click the job's [data-testid=\"background-job-kill\"]. The running indicator should become hidden (wait up to 15s), and the toggle should come to contain \"No running work\" (wait up to 15s). The toggle should have aria-expanded \"true\". There should still be exactly 1 job; its \".running-command-time\" should have exactly the text \"Finished\", it should have no kill button (count 0), and its tail should still contain \"ready\".\n9. Click the toggle. The strip should disappear (count 0, wait up to 15s).\n10. [data-testid=\"bash-tool-finished-job\"] should become visible (wait up to 15s) with exactly the text \"Failed\". \"The card\" is the \".bash-tool\" that contains it. The card should contain \"echo ready; sleep 600\". The card's button '[aria-label=\"Expand\"]' should have aria-expanded \"false\", and the card should have no \".bash-tool-details\" (count 0).\n11. Click the card's Expand button. The card's first \".bash-tool-code\" should have exactly the text \"echo ready; sleep 600\", and its last \".bash-tool-label\" exactly \"Output:\". The card must not contain {{JOB_ID}}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "action": "navigate",
+      "url": "/c/bg-running"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='bash-tool-running-indicator']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[aria-label='Running work'] [data-testid='running-work-toggle']",
+      "text": "python3"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[aria-label='Running work'] [data-testid='running-work-toggle'] .running-work-activity",
+      "text": "ready"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": "[aria-label='Running work'] [data-testid='running-work-toggle']",
+      "text": "print("
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[aria-label=\"Running work\"] [data-testid=\"running-work-toggle\"] .running-work-name'); return getComputedStyle(el).textOverflow; })()",
+      "expect": "ellipsis"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[aria-label=\"Running work\"] [data-testid=\"running-work-toggle\"] .running-work-name'); return el.scrollWidth \u003e el.clientWidth; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[aria-label=\"Running work\"] [data-testid=\"running-work-toggle\"] .running-work-name'); const rect = el.getBoundingClientRect(); const maxW = parseFloat(getComputedStyle(el).maxWidth); return rect.width \u003c= maxW + 1 \u0026\u0026 Number.isFinite(maxW); })()",
+      "expect": "true"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 500
+    },
+    {
+      "action": "eval",
+      "expression": "document.documentElement.scrollWidth \u003c= window.innerWidth",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label='Running work'] [data-testid='running-work-toggle']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label='Running work'] [data-testid='background-job']",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": "[aria-label='Running work'] [data-testid='background-job'] [data-testid='background-job-command']",
+      "text": "{{DISPLAY_COMMAND}}"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": "[aria-label='Running work'] [data-testid='running-work-toggle']",
+      "text": "python3"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label='Running work'] [data-testid='background-job'] details",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label='Running work'] [data-testid='background-job'] summary",
+      "count": 0
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[aria-label='Running work'] [data-testid='background-job'] [data-testid='background-job-tail']",
+      "text": "ready"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": "[aria-label='Running work'] [data-testid='background-job']",
+      "text": "PGID"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": "[aria-label='Running work'] [data-testid='background-job']",
+      "text": ".log"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label='Running work'] [data-testid='background-job'] [data-testid='background-job-kill']"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='bash-tool-running-indicator']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[aria-label='Running work'] [data-testid='running-work-toggle']",
+      "text": "No running work"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label='Running work'] [data-testid='running-work-toggle']",
+      "attribute": "aria-expanded",
+      "value": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label='Running work'] [data-testid='background-job']",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": "[aria-label='Running work'] [data-testid='background-job'] .running-command-time",
+      "text": "Finished"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label='Running work'] [data-testid='background-job'] [data-testid='background-job-kill']",
+      "count": 0
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[aria-label='Running work'] [data-testid='background-job'] [data-testid='background-job-tail']",
+      "text": "ready"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label='Running work'] [data-testid='running-work-toggle']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label='Running work']",
+      "count": 0,
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='bash-tool-finished-job']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='bash-tool-finished-job']",
+      "text": "Failed"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool:has([data-testid='bash-tool-finished-job'])",
+      "text": "echo ready; sleep 600"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".bash-tool:has([data-testid='bash-tool-finished-job']) button[aria-label='Expand']",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool:has([data-testid='bash-tool-finished-job']) .bash-tool-details",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool:has([data-testid='bash-tool-finished-job']) button[aria-label='Expand']"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".bash-tool:has([data-testid='bash-tool-finished-job']) .bash-tool-code",
+      "text": "echo ready; sleep 600"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const card = document.querySelector('.bash-tool:has([data-testid=\"bash-tool-finished-job\"])'); const labels = card.querySelectorAll('.bash-tool-label'); return labels[labels.length - 1].textContent.trim(); })()",
+      "expect": "Output:"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".bash-tool:has([data-testid='bash-tool-finished-job'])",
+      "text": "{{JOB_ID}}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:25:37.395115945Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 122026,
+    "output_tokens": 6587,
+    "estimated_cost_usd": 0.1920432,
+    "mode": "generated"
+  }
+}

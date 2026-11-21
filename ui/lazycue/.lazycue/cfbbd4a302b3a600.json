@@ -1,0 +1,62 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Bash output without ANSI codes renders as plain text. The test seeded a conversation at /c/ansi-plain whose bash tool call ran: echo \"just plain text with no escapes\". \"The card\" is the first \".bash-tool\" whose text contains \"just plain text with no escapes\". \"The output\" is the last \".bash-tool-code\" inside that card's \".bash-tool-details\". \n1. Navigate to /c/ansi-plain. The card should become visible (wait up to 15s). Click its \".bash-tool-header\"; its \".bash-tool-details\" should become visible.\n2. The output should be visible, and its textContent must contain \"just plain text with no escapes\".\n3. Plain text renders as a text node, not HTML: the output's innerHTML must not contain \"\u003cspan\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/ansi-plain"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool",
+      "has_text": "just plain text with no escapes",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool .bash-tool-header",
+      "has_text": "just plain text with no escapes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool .bash-tool-details",
+      "has_text": "just plain text with no escapes"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".bash-tool",
+        "has_text": "just plain text with no escapes"
+      },
+      "selector": ".bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "just plain text with no escapes",
+      "within": {
+        "selector": ".bash-tool",
+        "has_text": "just plain text with no escapes"
+      }
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".bash-tool",
+        "has_text": "just plain text with no escapes"
+      },
+      "selector": ".bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code span",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:29:38.043777944Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 40265,
+    "output_tokens": 1593,
+    "estimated_cost_usd": 0.05083875,
+    "mode": "generated"
+  }
+}

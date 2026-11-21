@@ -1,0 +1,97 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Bash commands are Shiki-tokenized without changing output rendering. The test seeded a conversation at /c/bash-syntax whose bash tool call ran the command \"if true; then echo bash-output-plain; fi\" (call it \"the command\"). \"The card\" is the first \".bash-tool\" whose text contains the command, and \"the summary\" is the card's \".bash-tool-command\".\n1. Navigate to /c/bash-syntax. The summary's text should become exactly the command (wait up to 30s).\n2. The summary must have no title attribute (no native tooltip: the browser renders it in a system font, and expanding the card already shows the full command).\n3. The summary must contain at least one \".shelley-code-token\" element (attached; it need not be visible).\n4. Record, in window variables: the number of \".shelley-code-token\" elements in the summary, getComputedStyle(first such token).color, and the summary's innerHTML.\n5. Add the class \"dark\" to the html element. The first token's computed color should become different from the recorded one.\n6. Then the summary must still have exactly the recorded number of tokens, and its innerHTML must be exactly the recorded innerHTML (the theme changes colors through CSS, not by re-rendering).\n7. Click the card's \".bash-tool-header\"; its \".bash-tool-details\" should become visible.\n8. The \".bash-tool-code\" inside the details whose text contains the command should have exactly the command as its text, and contain at least one \".shelley-code-token\".\n9. The last \".bash-tool-code\" inside the details is the output: its text should be exactly \"bash-output-plain\", it must contain no \".shelley-code-token\" elements (count 0), and its innerHTML must not contain \"shelley-code-token\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/bash-syntax"
+    },
+    {
+      "action": "wait_text",
+      "text": "if true; then echo bash-output-plain; fi",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.bash-tool .bash-tool-command').textContent",
+      "expect": "if true; then echo bash-output-plain; fi"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool .bash-tool-command[title]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.bash-tool .bash-tool-command .shelley-code-token').length \u003e 0 ? 'ready' : 'waiting'",
+      "expect": "ready"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var tokens = document.querySelectorAll('.bash-tool .bash-tool-command .shelley-code-token'); window._tokenCount = tokens.length; window._firstTokenColor = getComputedStyle(tokens[0]).color; window._summaryHTML = document.querySelector('.bash-tool .bash-tool-command').innerHTML; return window._tokenCount + '|' + window._firstTokenColor; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { document.documentElement.classList.add('dark'); var newColor = getComputedStyle(document.querySelector('.bash-tool .bash-tool-command .shelley-code-token')).color; return newColor !== window._firstTokenColor ? 'changed' : 'same'; })()",
+      "expect": "changed"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.bash-tool .bash-tool-command .shelley-code-token').length === window._tokenCount ? 'match' : 'mismatch'",
+      "expect": "match"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.bash-tool .bash-tool-command').innerHTML === window._summaryHTML ? 'match' : 'mismatch'",
+      "expect": "match"
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool .bash-tool-header"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool .bash-tool-details"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var el = Array.from(document.querySelectorAll('.bash-tool .bash-tool-details .bash-tool-code')).find(el =\u003e el.textContent.includes('if true; then echo bash-output-plain; fi')); return el ? el.textContent : 'NOT FOUND'; })()",
+      "expect": "if true; then echo bash-output-plain; fi"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var el = Array.from(document.querySelectorAll('.bash-tool .bash-tool-details .bash-tool-code')).find(el =\u003e el.textContent.includes('if true; then echo bash-output-plain; fi')); return el \u0026\u0026 el.querySelectorAll('.shelley-code-token').length \u003e 0 ? 'has-tokens' : 'no-tokens'; })()",
+      "expect": "has-tokens",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var codes = document.querySelectorAll('.bash-tool .bash-tool-details .bash-tool-code'); var last = codes[codes.length - 1]; return last.textContent.trim(); })()",
+      "expect": "bash-output-plain"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".bash-tool",
+        "has_text": "if true; then echo bash-output-plain; fi"
+      },
+      "selector": ".bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code .shelley-code-token",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var codes = document.querySelectorAll('.bash-tool .bash-tool-details .bash-tool-code'); var last = codes[codes.length - 1]; return last.innerHTML.includes('shelley-code-token') ? 'has' : 'none'; })()",
+      "expect": "none"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:27:14.323464407Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 160342,
+    "output_tokens": 6211,
+    "estimated_cost_usd": 0.18686115000000003,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A theme switch leaves a hidden terminal's size alone. The test seeded a conversation at /c/gh-hidden, whose directory holds t.sh, which prints \"ready\" and its size (stty size), prints \"winch\" and the new size whenever it is resized, and keeps running. \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]' and \"the input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Read all output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true). \"Read the visible screen until it matches P\" is the same with the menu item \"Insert visible screen into input\". \"Set the theme to T\" means what the theme menu does, the eval: localStorage.setItem(\"shelley-theme\", \"T\"); document.documentElement.classList.toggle(\"dark\", \"T\" === \"dark\"). \"The first terminal\" is the eval document.querySelector('.terminal-panel-content [data-terminal-id=\"' + window.__firstId + '\"]') and \"the first tab\" is '.terminal-panel-tab[title=\"bash t.sh\"]'. An element is hidden when it has no box (getClientRects().length === 0) or computed visibility \"hidden\".\n1. Navigate to /c/gh-hidden. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"].\n2. Read all output until it matches /ready \\d+ \\d+/.\n3. Eval: window.__firstId = the terminal's data-terminal-id; window.__oldCanvas = the first terminal's canvas.\n4. Click the button with aria-label exactly \"New terminal\". There should be exactly 1 \".terminal-panel-tab-active .terminal-panel-tab-running\". The first tab must not have the class \"terminal-panel-tab-active\" (assert_count '.terminal-panel-tab-active[title=\"bash t.sh\"]' is 0). The first terminal should become hidden (eval, expect true).\n5. Set the theme to dark. window.__oldCanvas.isConnected should become false. The first terminal should come to contain exactly 1 canvas (eval, expect true).\n6. Click the first tab. The first terminal should become visible (eval: it has a box, expect true). The first terminal's canvas background (eval `(() =\u003e { const c = document.querySelector('.terminal-panel-content [data-terminal-id=\"' + window.__firstId + '\"] canvas'); const [r, g, b] = c.getContext(\"2d\").getImageData(c.width / 2, c.height - 2, 1, 1).data; return \"rgb(\" + r + \", \" + g + \", \" + b + \")\"; })()`) should become exactly \"rgb(26, 27, 38)\".\n7. Read all output until it matches /ready \\d+ \\d+/ and does not contain \"winch\" (both in one eval; the program was never resized).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/gh-hidden"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-button\"]:not([disabled])"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "/ready \\d+ \\d+/.test(document.querySelector('[data-testid=\"message-input\"]').value)",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "window.__firstId = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]').getAttribute('data-terminal-id'); window.__oldCanvas = document.querySelector('.terminal-panel-content [data-terminal-id=\"' + window.__firstId + '\"]').querySelector('canvas'); window.__firstId"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "New terminal",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-active .terminal-panel-tab-running",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-active[title=\"bash t.sh\"]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id=\"' + window.__firstId + '\"]').getClientRects().length === 0 || getComputedStyle(document.querySelector('.terminal-panel-content [data-terminal-id=\"' + window.__firstId + '\"]')).visibility === 'hidden'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley-theme', 'dark'); document.documentElement.classList.toggle('dark', true); 'done'"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__oldCanvas.isConnected",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id=\"' + window.__firstId + '\"]').querySelectorAll('canvas').length === 1",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".terminal-panel-tab[title=\"bash t.sh\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id=\"' + window.__firstId + '\"]').getClientRects().length \u003e 0",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c = document.querySelector('.terminal-panel-content [data-terminal-id=\"' + window.__firstId + '\"] canvas'); const [r, g, b] = c.getContext('2d').getImageData(c.width / 2, c.height - 2, 1, 1).data; return 'rgb(' + r + ', ' + g + ', ' + b + ')'; })()",
+      "expect": "rgb(26, 27, 38)"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "(function() { var v = document.querySelector('[data-testid=\"message-input\"]').value; return /ready \\d+ \\d+/.test(v) \u0026\u0026 !v.includes('winch'); })()",
+          "expect": "true"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:21:15.000097661Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 103204,
+    "output_tokens": 4585,
+    "estimated_cost_usd": 0.13259265,
+    "mode": "generated"
+  }
+}

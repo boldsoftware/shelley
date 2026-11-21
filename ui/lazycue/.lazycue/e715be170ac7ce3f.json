@@ -1,0 +1,48 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The composer keeps one-shot bash output visible. The test seeded a conversation at /c/term-oneshot. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \n1. Navigate to /c/term-oneshot. Send \"!bash -c 'echo one-shot-output'\" (fill [data-testid=\"message-input\"] with it and click [data-testid=\"send-button\"]). There should be exactly 1 \".terminal-panel-tab-success\".\n2. Choose the terminal menu item \"Insert all output into input\". The message input's value should contain \"one-shot-output\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/term-oneshot"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash -c 'echo one-shot-output'"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-success",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Insert all output into input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('one-shot-output')",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:56:57.076831856Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 33196,
+    "output_tokens": 1043,
+    "estimated_cost_usd": 0.03818835,
+    "mode": "generated"
+  }
+}

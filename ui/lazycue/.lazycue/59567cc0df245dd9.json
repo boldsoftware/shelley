@@ -1,0 +1,123 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Bash output with ANSI colors renders styled text, not raw escapes. The test seeded a conversation at /c/ansi-colors whose bash tool call ran printf with green, red, bold and yellow escape sequences around the words \"Green\", \"Red\", \"Bold\" and \"Yellow\", then \" plain\". \"The output\" is the last \".bash-tool-code\" inside that card's \".bash-tool-details\". \n1. Navigate to /c/ansi-colors. The first '.bash-tool[data-testid=\"tool-call-completed\"]' should become visible (wait up to 15s). The bash card renders inline, collapsed: click that card's \".bash-tool-header\", and its \".bash-tool-details\" should become visible.\n2. The output should be visible.\n3. The output's textContent must not contain \"[0m\", \"[32m\", \"[31m\" or the escape character (U+001B, '\\u001b' in JS); it must contain each of \"Green\", \"Red\", \"Bold\", \"Yellow\" and \"plain\".\n4. The output's innerHTML must contain \"\u003cspan\", \"style=\" and \"color\" (AnsiText renders the colors as spans with inline styles).\n5. The span inside the output whose text contains \"Green\" should be visible and its style attribute must contain \"color\"; the same for the span containing \"Red\".\n6. The span inside the output whose text contains \"Bold\" should be visible and its style attribute must contain \"font-weight:bold\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/ansi-colors"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-header"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const codes = document.querySelectorAll('.bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details .bash-tool-code'); return codes.length \u003e 0 ? 'found' : 'not found'; })()",
+      "expect": "found"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "[0m"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "[32m"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "[31m"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "\u001b"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "Green"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "Red"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "Bold"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "Yellow"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "plain"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const codes = document.querySelectorAll('.bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details .bash-tool-code'); const last = codes[codes.length - 1]; const html = last ? last.innerHTML : ''; if (!html.includes('\u003cspan')) return 'FAIL: no \u003cspan'; if (!html.includes('style=')) return 'FAIL: no style='; if (!html.includes('color')) return 'FAIL: no color'; return 'ok'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details .bash-tool-code span",
+      "has_text": "Green"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const codes = document.querySelectorAll('.bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details .bash-tool-code'); const last = codes[codes.length - 1]; const spans = last ? last.querySelectorAll('span') : []; for (const span of spans) { if (span.textContent.includes('Green')) { const style = span.getAttribute('style') || ''; return style.includes('color') ? 'ok' : 'FAIL: Green span has no color style, got: ' + style; } } return 'FAIL: no span with Green text found'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details .bash-tool-code span",
+      "has_text": "Red"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const codes = document.querySelectorAll('.bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details .bash-tool-code'); const last = codes[codes.length - 1]; const spans = last ? last.querySelectorAll('span') : []; for (const span of spans) { if (span.textContent.includes('Red') \u0026\u0026 !span.textContent.includes('Green')) { const style = span.getAttribute('style') || ''; return style.includes('color') ? 'ok' : 'FAIL: Red span has no color style, got: ' + style; } } return 'FAIL: no span with Red text found'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details .bash-tool-code span",
+      "has_text": "Bold"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const codes = document.querySelectorAll('.bash-tool[data-testid=\"tool-call-completed\"] .bash-tool-details .bash-tool-code'); const last = codes[codes.length - 1]; const spans = last ? last.querySelectorAll('span') : []; for (const span of spans) { if (span.textContent.includes('Bold')) { const style = span.getAttribute('style') || ''; return style.includes('font-weight:bold') ? 'ok' : 'FAIL: Bold span missing font-weight:bold, got: ' + style; } } return 'FAIL: no span with Bold text found'; })()",
+      "expect": "ok"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:19:06.785865675Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 52976,
+    "output_tokens": 2856,
+    "estimated_cost_usd": 0.09407895000000001,
+    "mode": "generated"
+  }
+}

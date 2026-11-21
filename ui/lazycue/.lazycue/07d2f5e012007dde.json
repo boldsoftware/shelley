@@ -1,0 +1,93 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The terminal renders with WebGL and falls back to the DOM on context loss. The test seeded a conversation at /c/term-webgl; terminals render with xterm.js, on a phone screen at device scale 1. window.__terminalCols lists the cols of every init and resize message the page's terminals sent their server, in order. \"The WebGL canvas count\" is the eval [...document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]').querySelectorAll(\"canvas\")].filter(c =\u003e c.getContext(\"webgl2\")).length.\n1. Navigate to /c/term-webgl and open the Terminal workspace tool: phones keep workspace tools in the overflow menu, so click the visible button with aria-label exactly \"More options\", then the button in \".chat-overflow-popover\" whose text starts with \"Terminal\".\n2. The terminal, '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]', should become visible (wait up to 30s).\n3. The WebGL renderer replaces the DOM renderer's rows with a canvas: the WebGL canvas count should become 1, and the terminal should contain no \".xterm-rows\" (count 0).\n4. The last entry of window.__terminalCols should become greater than 0. Record it in a window variable as the WebGL cols.\n5. A context that is not restored (too many live contexts) must not leave the terminal blank. Eval: for every canvas in the terminal, c.getContext(\"webgl2\")?.getExtension(\"WEBGL_lose_context\")?.loseContext().\n6. xterm waits briefly for a restore, then the DOM renderer takes over: the terminal's \".xterm-rows\" should become visible (wait up to 10s) and contain \"$\". Then the WebGL canvas count must be 0 (check it once, right away).\n7. The terminal refits to the DOM renderer's wider cells: the last entry of window.__terminalCols should become less than the WebGL cols.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 393,
+      "height": 727,
+      "scale": 1,
+      "mobile": true,
+      "touch": true
+    },
+    {
+      "action": "navigate",
+      "url": "/c/term-webgl"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover button[aria-label='Terminal']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-content [data-terminal-id][style*='display: block']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]').querySelectorAll('canvas')].filter(c =\u003e c.getContext('webgl2')).length",
+      "expect": "1"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-content [data-terminal-id][style*='display: block'] .xterm-rows",
+      "count": 0
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "window.__terminalCols \u0026\u0026 window.__terminalCols.length \u003e 0 \u0026\u0026 window.__terminalCols[window.__terminalCols.length - 1] \u003e 0 ? 'ok' : 'waiting'"
+        },
+        {
+          "action": "eval",
+          "expression": "window.__terminalCols \u0026\u0026 window.__terminalCols.length \u003e 0 \u0026\u0026 window.__terminalCols[window.__terminalCols.length - 1] \u003e 0 ? 'ok' : 'waiting'",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "window.__webglCols = window.__terminalCols[window.__terminalCols.length - 1]; 'saved'"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]').querySelectorAll('canvas')].forEach(c =\u003e c.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext())"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-content [data-terminal-id][style*='display: block'] .xterm-rows",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] .xterm-rows",
+      "text": "$"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]').querySelectorAll('canvas')].filter(c =\u003e c.getContext('webgl2')).length",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__terminalCols[window.__terminalCols.length - 1] \u003c window.__webglCols",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:44:28.449026186Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 110528,
+    "output_tokens": 4524,
+    "estimated_cost_usd": 0.12749280000000002,
+    "mode": "generated"
+  }
+}

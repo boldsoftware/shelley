@@ -1,0 +1,196 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Output leaves a scrolled-back terminal where it is, typing doesn't. The test seeded a conversation at /c/gh-scrollback, whose directory holds t.sh, which prints the numbers 1 to 30000, waits for the file \"go\" (call \"go\" creates it), prints 30001 to 33000 and \"more-output\", and then echoes what it reads. \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]' and \"the input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Read all output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true). \"Read the visible screen until it matches P\" is the same with the menu item \"Insert visible screen into input\". \"Set the theme to T\" means what the theme menu does, the eval: localStorage.setItem(\"shelley-theme\", \"T\"); document.documentElement.classList.toggle(\"dark\", \"T\" === \"dark\"). \"Read the visible screen until it settles\" means: retry the following steps as one block until they pass (timeout 15s): eval window.__pass = (window.__pass || 0) + 1; fill the input with \"\"; choose the terminal menu item \"Insert visible screen into input\" (both clicks inside the block); then eval, with expect true, exactly: `(() =\u003e { const v = document.querySelector('[data-testid=\"message-input\"]').value; if (!v) return false; if (window.__readPass !== window.__pass) { window.__readPass = window.__pass; window.__last = window.__previous; window.__previous = v; } return window.__previous === window.__last; })()` (the same screen twice running; window.__previous is the screen last read). The viewport is 1400x900 (wide, so fewer lines fill the history).\n1. Navigate to /c/gh-scrollback. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"].\n2. Read the visible screen until it contains \"30000\".\n3. Hover the center of the terminal's canvas, then wheel by x 0, y -1500 there.\n4. Read the visible screen until it settles. window.__previous must not contain \"30000\" (check once).\n5. Call \"go\" (returns \"done\"). Read all output until it contains \"more-output\".\n6. Fill the input with \"\", choose the terminal menu item \"Insert visible screen into input\"; the input's value should be exactly window.__previous (eval with expect true): the view stayed put.\n7. Typing right after a wheel, before any scroll animation is over: in one eval, dispatch on the terminal's canvas a new WheelEvent(\"wheel\", {deltaY: -300, bubbles: true, cancelable: true}), then on the terminal's textarea a new KeyboardEvent(\"keydown\", {key: \"x\", code: \"KeyX\", bubbles: true, cancelable: true}).\n8. Read the visible screen until it settles. window.__previous must contain \"more-output\" (check once): the terminal went back to the bottom.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 1400,
+      "height": 900,
+      "scale": 2.75,
+      "mobile": true,
+      "touch": true
+    },
+    {
+      "action": "navigate",
+      "url": "/c/gh-scrollback"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "retry",
+      "timeout": "60s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert visible screen into input",
+          "exact": true
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('30000')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "hover",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas"
+    },
+    {
+      "action": "wheel",
+      "x": 0,
+      "y": -1500
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "window.__pass = (window.__pass || 0) + 1"
+        },
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert visible screen into input",
+          "exact": true
+        },
+        {
+          "action": "eval",
+          "expression": "(() =\u003e { const v = document.querySelector('[data-testid=\"message-input\"]').value; if (!v) return false; if (window.__readPass !== window.__pass) { window.__readPass = window.__pass; window.__last = window.__previous; window.__previous = v; } return window.__previous === window.__last; })()",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "window.__previous.includes('30000')",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "go"
+    },
+    {
+      "action": "retry",
+      "timeout": "60s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input",
+          "exact": true
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('more-output')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Insert visible screen into input",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value === window.__previous",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const term = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]'); const canvas = term.querySelector('canvas'); const textarea = term.querySelector('textarea'); canvas.dispatchEvent(new WheelEvent('wheel', {deltaY: -300, bubbles: true, cancelable: true})); textarea.dispatchEvent(new KeyboardEvent('keydown', {key: 'x', code: 'KeyX', bubbles: true, cancelable: true})); return 'done'; })()"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "window.__pass = (window.__pass || 0) + 1"
+        },
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert visible screen into input",
+          "exact": true
+        },
+        {
+          "action": "eval",
+          "expression": "(() =\u003e { const v = document.querySelector('[data-testid=\"message-input\"]').value; if (!v) return false; if (window.__readPass !== window.__pass) { window.__readPass = window.__pass; window.__last = window.__previous; window.__previous = v; } return window.__previous === window.__last; })()",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "window.__previous.includes('more-output')",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:19:23.508977611Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 152678,
+    "output_tokens": 5396,
+    "estimated_cost_usd": 0.1692921,
+    "mode": "generated"
+  }
+}

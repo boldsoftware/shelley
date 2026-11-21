@@ -1,0 +1,89 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The terminal panel keeps the terminal inside its padded content area. The test seeded a conversation at /c/term-layout. window.__terminalSizeMessages lists the init and resize messages ({type, cols, rows}) the page's terminals sent their server, in order. \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]'; terminals render with ghostty by default, which paints a canvas (the inside check takes either renderer's screen). The viewport starts at 1280x720.\n\"The inside check\" is this eval, which must become exactly {\"screenBottom\":true,\"screenRight\":true,\"terminalBottom\":true,\"terminalRight\":true} (xterm adds its screen after the container shows, so poll until then): (() =\u003e { const el = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]'); const t = el.getBoundingClientRect(); const c = el.parentElement.getBoundingClientRect(); const screen = el.querySelector(\".xterm-screen, canvas\"); if (!screen) return null; const s = screen.getBoundingClientRect(); return {terminalBottom: t.bottom \u003c= c.bottom, terminalRight: t.right \u003c= c.right, screenBottom: s.bottom \u003c= t.bottom, screenRight: s.right \u003c= t.right}; })()\n1. Navigate to /c/term-layout and open the Terminal workspace tool: click the visible button named exactly \"Terminal\" (aria-label or text) in \".chat-workspace-actions\"; only if there is none, use the overflow menu as phones do (the visible button with aria-label exactly \"More options\", then the button in \".chat-overflow-popover\" whose text starts with \"Terminal\").\n2. The terminal should become visible (wait up to 30s).\n3. Run the inside check.\n4. The cols of the first \"init\" message in window.__terminalSizeMessages should become greater than 0. Record them in a window variable as the initial cols.\n5. Click the button with aria-label exactly \"Minimize terminals\". The terminal should be hidden (minimizing sets display: none on \".terminal-panel-content\").\n6. Set the viewport to 900x720. Eval: wait two animation frames (a promise resolved by requestAnimationFrame inside requestAnimationFrame). Then eval: empty window.__terminalSizeMessages (set its length to 0).\n7. Click the button with aria-label exactly \"Expand terminals\". The terminal should be visible.\n8. Run the inside check again.\n9. The narrower window must shrink the terminal: (the cols of the last \"resize\" message in window.__terminalSizeMessages, or the initial cols if there is none) should become less than the initial cols.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/term-layout"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-workspace-actions"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions [aria-label=\"Terminal\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-content [data-terminal-id][style*='display: block']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]'); const t = el.getBoundingClientRect(); const c = el.parentElement.getBoundingClientRect(); const screen = el.querySelector('.xterm-screen, canvas'); if (!screen) return null; const s = screen.getBoundingClientRect(); return {terminalBottom: t.bottom \u003c= c.bottom, terminalRight: t.right \u003c= c.right, screenBottom: s.bottom \u003c= t.bottom, screenRight: s.right \u003c= t.right}; })()",
+      "expect": "{\"screenBottom\":true,\"screenRight\":true,\"terminalBottom\":true,\"terminalRight\":true}"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const msgs = window.__terminalSizeMessages; const init = msgs \u0026\u0026 msgs.find(m =\u003e m.type === 'init'); return !!(init \u0026\u0026 init.cols \u003e 0); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__initialCols = (() =\u003e { const msgs = window.__terminalSizeMessages; const init = msgs \u0026\u0026 msgs.find(m =\u003e m.type === 'init'); return init ? init.cols : 0; })()"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Minimize terminals"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"]"
+    },
+    {
+      "action": "set_viewport",
+      "width": 900,
+      "height": 720
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r)))"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__terminalSizeMessages.length = 0"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Expand terminals"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-content [data-terminal-id][style*='display: block']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]'); const t = el.getBoundingClientRect(); const c = el.parentElement.getBoundingClientRect(); const screen = el.querySelector('.xterm-screen, canvas'); if (!screen) return null; const s = screen.getBoundingClientRect(); return {terminalBottom: t.bottom \u003c= c.bottom, terminalRight: t.right \u003c= c.right, screenBottom: s.bottom \u003c= t.bottom, screenRight: s.right \u003c= t.right}; })()",
+      "expect": "{\"screenBottom\":true,\"screenRight\":true,\"terminalBottom\":true,\"terminalRight\":true}"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const msgs = window.__terminalSizeMessages; const last = msgs \u0026\u0026 msgs.length ? msgs.filter(m =\u003e m.type === 'resize').pop() : null; const cols = last ? last.cols : window.__initialCols; return cols \u003c window.__initialCols; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:27:49.448833049Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 230015,
+    "output_tokens": 10346,
+    "estimated_cost_usd": 0.2775399,
+    "mode": "generated"
+  }
+}

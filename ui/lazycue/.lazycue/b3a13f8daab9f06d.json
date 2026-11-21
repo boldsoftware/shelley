@@ -1,0 +1,306 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Running work keeps a subagent visible while its background task runs. The test seeded a conversation at /c/rw-subagent (ID {{PARENT_ID}}) whose subagent \"backgroundhelper\" started the background job \"printf agent-ready; tail -f /dev/null\"; neither agent is working any more. \"The strip\" is '[aria-label=\"Running work\"]', \"the toggle\" is its [data-testid=\"running-work-toggle\"], \"the names\" are the texts of the toggle's \".running-work-name\" elements, in order, whitespace collapsed (eval `JSON.stringify([...document.querySelectorAll('[data-testid=\"running-work-toggle\"] .running-work-name')].map(e =\u003e e.textContent.replace(/\\s+/g, ' ').trim()))`), \"the group\" is the strip's '[role=\"group\"][aria-label=\"Work by backgroundhelper\"]', \"the row\" is the group's \".running-work-agent\", and \"the job\" is the group's [data-testid=\"background-job\"]. \"The working indicator\" is [data-testid=\"agent-thinking\"], \"the parent's dot\" is '[data-conversation-id=\"{{PARENT_ID}}\"] .drawer-working-indicator', and \"the favicon\" is 'link[rel=\"icon\"]'; \"dimmed\" means the favicon's href contains \"opacity%3D%220.35%22\". The viewport starts at 1280x800.\n1. Navigate to /c/rw-subagent. The toggle should come to contain \"1 subagent\" (wait up to 30s), and contain \"1 task\".\n2. The names should be exactly [\"backgroundhelper\",\"printf agent-ready; tail -f /dev/null\"]. The first \".running-work-name\"'s scrollWidth - clientWidth should become at most 1. There should be no \".running-work-more\" in the toggle (count 0).\n3. The working indicator and the parent's dot should be visible, and the favicon dimmed. There should be no \".status-ready\" and no \".status-stop-button\" (both count 0), and \".status-readout-model\" should be enabled.\n4. Set the viewport to 390x800. \".status-bar-active \u003e .working-indicator\" should be hidden. Click the visible button with aria-label exactly \"More options\". \".model-picker-menu\" should have the class \"p-disabled\" and the computed opacity \"0.5\". Press Escape. Set the viewport back to 1280x800.\n5. Click the toggle. The row should contain \"backgroundhelper\" and \"Waiting on 1 background task\", and the row's \".running-work-agent-time\" should contain \"Running\". The job should contain \"printf agent-ready; tail -f /dev/null\". The strip should contain no details or summary elements (count 0). The job's [data-testid=\"background-job-tail\"] should contain \"agent-ready\".\n6. Click the toggle (it collapses). The toggle should contain \"1 subagent\", the names should be exactly [\"backgroundhelper\",\"printf agent-ready; tail -f /dev/null\"] again, and there should be no \".running-work-more\".\n7. Click the toggle again. The row should contain \"Waiting on 1 background task\", and the job's tail should be visible.\n8. Call \"parentJob\" (the parent starts the background job \"printf parent-ready; tail -f /dev/null\"); it should return \"ok\".\n9. The toggle should come to contain \"2 tasks\". The strip should have exactly 2 [data-testid=\"background-job\"], and the group exactly 1.\n10. Click the job's [data-testid=\"background-job-kill\"]. Call \"subagentKill\" should return \"ok\" (the browser's kill request for the subagent's job succeeded).\n11. The job's \".running-command-time\" should have exactly the text \"Finished\", the job should have no kill button (count 0), and its tail should still contain \"agent-ready\". The row's \".running-work-agent-time\" should come to have exactly the text \"Finished\" (wait up to 15s). The toggle should contain \"1 task\". The working indicator and the parent's dot should still be visible, and the favicon still dimmed. The strip's [data-testid=\"background-job\"] that contains \"parent-ready\" should have a \".running-command-time\" containing \"Running\".\n12. Call \"stopWork\" (stops all of the parent's work); it returns \"done\". The toggle should come to contain \"No running work\". The working indicator and the parent's dot should be gone (count 0), \".status-ready\" should be visible, and the favicon no longer dimmed.\n13. Click the toggle. The strip should disappear (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "navigate",
+      "url": "/c/rw-subagent"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='running-work-toggle']",
+      "text": "1 subagent",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='running-work-toggle']",
+      "text": "1 task"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll('[data-testid=\"running-work-toggle\"] .running-work-name')].map(e =\u003e e.textContent.replace(/\\s+/g, ' ').trim()))",
+      "expect": "[\"backgroundhelper\",\"printf agent-ready; tail -f /dev/null\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"running-work-toggle\"] .running-work-name').scrollWidth - document.querySelector('[data-testid=\"running-work-toggle\"] .running-work-name').clientWidth \u003c= 1 ? 'ok' : 'overflow'",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='running-work-toggle'] .running-work-more",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='agent-thinking']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-id='{{PARENT_ID}}'] .drawer-working-indicator"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('link[rel=\"icon\"]').href.includes('opacity%3D%220.35%22') ? 'dimmed' : 'not-dimmed'",
+      "expect": "dimmed"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".status-ready",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".status-stop-button",
+      "count": 0
+    },
+    {
+      "action": "assert_enabled",
+      "selector": ".status-readout-model"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 800
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-bar-active \u003e .working-indicator"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-menu"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.model-picker-menu').classList.contains('p-disabled') ? 'has-disabled' : 'no-disabled'",
+      "expect": "has-disabled"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.model-picker-menu')).opacity",
+      "expect": "0.5"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='running-work-toggle']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] .running-work-agent",
+      "text": "backgroundhelper"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] .running-work-agent",
+      "text": "Waiting on 1 background task"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] .running-work-agent-time",
+      "text": "Running"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] [data-testid='background-job']",
+      "text": "printf agent-ready; tail -f /dev/null"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label='Running work'] details",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label='Running work'] summary",
+      "count": 0
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] [data-testid='background-job-tail']",
+      "text": "agent-ready"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='running-work-toggle']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='running-work-toggle']",
+      "text": "1 subagent"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll('[data-testid=\"running-work-toggle\"] .running-work-name')].map(e =\u003e e.textContent.replace(/\\s+/g, ' ').trim()))",
+      "expect": "[\"backgroundhelper\",\"printf agent-ready; tail -f /dev/null\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='running-work-toggle'] .running-work-more",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='running-work-toggle']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] .running-work-agent",
+      "text": "Waiting on 1 background task"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] [data-testid='background-job-tail']"
+    },
+    {
+      "action": "call",
+      "value": "parentJob",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='running-work-toggle']",
+      "text": "2 tasks"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label='Running work'] [data-testid='background-job']",
+      "count": 2
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] [data-testid='background-job']",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] [data-testid='background-job-kill']"
+    },
+    {
+      "action": "call",
+      "value": "subagentKill",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] [data-testid='background-job'] .running-command-time",
+      "text": "Finished"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] [data-testid='background-job'] [data-testid='background-job-kill']",
+      "count": 0
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] [data-testid='background-job-tail']",
+      "text": "agent-ready"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[role='group'][aria-label='Work by backgroundhelper'] .running-work-agent-time",
+      "text": "Finished",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='running-work-toggle']",
+      "text": "1 task"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='agent-thinking']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-id='{{PARENT_ID}}'] .drawer-working-indicator"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('link[rel=\"icon\"]').href.includes('opacity%3D%220.35%22') ? 'dimmed' : 'not-dimmed'",
+      "expect": "dimmed"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='background-job']",
+      "has_text": "parent-ready",
+      "text": "parent-ready"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": "[aria-label='Running work'] [data-testid='background-job']",
+        "has_text": "parent-ready"
+      },
+      "selector": ".running-command-time",
+      "text": "Running"
+    },
+    {
+      "action": "call",
+      "value": "stopWork",
+      "expect": "done"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='running-work-toggle']",
+      "text": "No running work"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='agent-thinking']",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='{{PARENT_ID}}'] .drawer-working-indicator",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".status-ready"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('link[rel=\"icon\"]').href.includes('opacity%3D%220.35%22') ? 'dimmed' : 'not-dimmed'",
+      "expect": "not-dimmed"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='running-work-toggle']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label='Running work']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:36:18.895788498Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 240275,
+    "output_tokens": 13218,
+    "estimated_cost_usd": 0.36120465,
+    "mode": "generated"
+  }
+}

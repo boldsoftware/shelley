@@ -1,0 +1,108 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Terminal tabs follow the window title and + opens a shell. The test seeded a conversation at /c/term-tabs, whose directory holds title.sh, which sets the window title (OSC 2) to \"a long window title that ends in tab-tail\" (call it \"the title\"), prints \"title-set\" and then waits reading input. \"The active tab\" is \".terminal-panel-tab-active\", and a tab's label is its \".terminal-panel-tab-label\". \"The terminal input\" is the visible terminal's input, '.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]' (other terminals' inputs are hidden); to type into it, focus it with an eval (.focus()), then use type steps, which type key by key, and press_key for Enter or Control+d. \n1. Navigate to /c/term-tabs. Fill [data-testid=\"message-input\"] with \"!bash title.sh\" and click [data-testid=\"send-button\"].\n2. The active tab's label should have exactly the title as its text, and the active tab's \".terminal-panel-tab-label-tail\" exactly \"tab-tail\". The tail must be in the viewport: eval `new Promise(r =\u003e { const o = new IntersectionObserver(([e]) =\u003e { o.disconnect(); r(e.intersectionRatio \u003e 0); }); o.observe(document.querySelector('.terminal-panel-tab-active .terminal-panel-tab-label-tail')); })` must be true. The active tab's title attribute should be exactly the title.\n3. Reload. The active tab's label should again be exactly the title (the replayed screen carries no title; the tab remembers it).\n4. The button with aria-label exactly \"New terminal\" must be in the viewport (the same IntersectionObserver eval on it must be true). Click it.\n5. There should be exactly 2 \".terminal-panel-tab\", and the second one should have the class \"terminal-panel-tab-active\". The second tab's \".terminal-panel-tab-running\" should be visible (keys typed before the socket opens are dropped, so wait for it).\n6. Type into the terminal input, key by key: printf '\\033]2;second\\007'; cat\n   Then press Enter (cat keeps the prompt from retitling).\n7. The active tab's label should become exactly \"second\", and the first \".terminal-panel-tab\"'s label should still be exactly the title.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/term-tabs"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash title.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_text",
+      "text": "a long window title that ends in tab-tail",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".terminal-panel-tab-active .terminal-panel-tab-label",
+      "text": "a long window title that ends in tab-tail"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".terminal-panel-tab-active .terminal-panel-tab-label-tail",
+      "text": "tab-tail"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(r =\u003e { const o = new IntersectionObserver(([e]) =\u003e { o.disconnect(); r(e.intersectionRatio \u003e 0); }); o.observe(document.querySelector('.terminal-panel-tab-active .terminal-panel-tab-label-tail')); })",
+      "expect": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".terminal-panel-tab-active",
+      "attribute": "title",
+      "value": "a long window title that ends in tab-tail"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".terminal-panel-tab-active .terminal-panel-tab-label",
+      "text": "a long window title that ends in tab-tail"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(r =\u003e { const o = new IntersectionObserver(([e]) =\u003e { o.disconnect(); r(e.intersectionRatio \u003e 0); }); o.observe(document.querySelector('[aria-label=\"New terminal\"]')); })",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"New terminal\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 2
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".terminal-panel-tab:nth-child(2).terminal-panel-tab-active"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-tab-active .terminal-panel-tab-running",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "type",
+      "value": "printf '\\033]2;second\\007'; cat"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".terminal-panel-tab-active .terminal-panel-tab-label",
+      "text": "second"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".terminal-panel-tab:first-child .terminal-panel-tab-label",
+      "text": "a long window title that ends in tab-tail"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:44:24.188156037Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 61586,
+    "output_tokens": 2785,
+    "estimated_cost_usd": 0.0889281,
+    "mode": "generated"
+  }
+}

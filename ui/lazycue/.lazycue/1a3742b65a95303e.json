@@ -1,0 +1,54 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The terminal renders with the DOM without WebGL2. The test seeded a conversation at /c/term-webgl; terminals render with xterm.js, on a phone screen at device scale 1, and the browser offers no WebGL2 (canvas getContext(\"webgl2\") returns null).\n1. Navigate to /c/term-webgl and open the Terminal workspace tool: phones keep workspace tools in the overflow menu, so click the visible button with aria-label exactly \"More options\", then the button in \".chat-overflow-popover\" whose text starts with \"Terminal\".\n2. The terminal, '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]', should become visible (wait up to 30s).\n3. The terminal's \".xterm-rows\" should contain \"$\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 393,
+      "height": 727,
+      "scale": 1,
+      "mobile": true,
+      "touch": true
+    },
+    {
+      "action": "navigate",
+      "url": "/c/term-webgl"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover button[aria-label='Terminal']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-content [data-terminal-id][style*='display: block']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] .xterm-rows",
+      "text": "$"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:41:32.771595605Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 142369,
+    "output_tokens": 3586,
+    "estimated_cost_usd": 0.12267615,
+    "mode": "generated"
+  }
+}

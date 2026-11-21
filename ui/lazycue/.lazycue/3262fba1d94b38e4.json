@@ -1,0 +1,300 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The terminal menu switches renderers and remembers the choice. The test seeded a conversation at /c/term-renderer, whose directory holds t.sh, which prints \"before-switch\" and then echoes what it reads (cat). \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]', \"the menu\" is \".overflow-menu-panel\", and \"the input\" is [data-testid=\"message-input\"]. \"The terminal input\" is the visible terminal's input, '.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]' (other terminals' inputs are hidden); to type into it, focus it with an eval (.focus()), then use type steps, which type key by key, and press_key for Enter or Control+d. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Check the renderer is R\" means: click the button with aria-label exactly \"Terminal menu\"; the menu's [aria-pressed=\"true\"] should have exactly the text R; press Escape; the menu should be hidden. \"Read the output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true).\n1. Navigate to /c/term-renderer. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"]. \".terminal-panel-tab-running\" should be visible.\n2. ghostty-web paints a canvas; xterm.js renders into an .xterm element. Check the renderer is \"Render with ghostty\". The terminal should contain exactly 1 canvas and no \".xterm\" (count 0).\n3. Choose the terminal menu item \"Render with xterm.js\". The terminal should contain exactly 1 \".xterm\".\n4. Read the output until it matches /before-switch/.\n5. The insert focuses the input in a zero-delay timeout: let that timeout run first (eval, awaited: new Promise((resolve) =\u003e setTimeout(() =\u003e resolve(\"flushed\"), 0)), expect \"flushed\"), then type \"typed-in-xterm\" into the terminal input and press Enter.\n6. Read the output until it matches /typed-in-xterm\\n[^]*typed-in-xterm/ (the echo of the typed line, then cat's copy).\n7. Reload. \".terminal-panel-tab-running\" should be visible, and the terminal should contain exactly 1 \".xterm\".\n8. Check the renderer is \"Render with xterm.js\".\n9. Choose the terminal menu item \"Render with ghostty\". The terminal should contain no \".xterm\" (count 0) and exactly 1 canvas.\n10. Read the output until it matches /typed-in-xterm/.\n11. Again let the insert's timeout run first (the same eval), then type \"typed-in-ghostty\" into the terminal input and press Enter.\n12. Read the output until it matches /typed-in-ghostty\\n[^]*typed-in-ghostty/.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/term-renderer"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-tab-running",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".overflow-menu-panel [aria-pressed=\"true\"]",
+      "text": "Render with ghostty"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] .xterm",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Render with xterm.js"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] .xterm",
+      "count": 1
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "wait_visible",
+          "selector": ".overflow-menu-panel",
+          "timeout": "1s"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.match(/before-switch/) !== null",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve) =\u003e setTimeout(() =\u003e resolve(\"flushed\"), 0))",
+      "expect": "flushed"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "type",
+      "value": "typed-in-xterm"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "wait_visible",
+          "selector": ".overflow-menu-panel",
+          "timeout": "1s"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.match(/typed-in-xterm\\n[^]*typed-in-xterm/) !== null",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-tab-running",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] .xterm",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".overflow-menu-panel [aria-pressed=\"true\"]",
+      "text": "Render with xterm.js"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Render with ghostty"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] .xterm",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas",
+      "count": 1
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "wait_visible",
+          "selector": ".overflow-menu-panel",
+          "timeout": "1s"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.match(/typed-in-xterm/) !== null",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve) =\u003e setTimeout(() =\u003e resolve(\"flushed\"), 0))",
+      "expect": "flushed"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "type",
+      "value": "typed-in-ghostty"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "wait_visible",
+          "selector": ".overflow-menu-panel",
+          "timeout": "1s"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.match(/typed-in-ghostty\\n[^]*typed-in-ghostty/) !== null",
+          "expect": "true"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:51:32.376636527Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 47180,
+    "output_tokens": 4029,
+    "estimated_cost_usd": 0.09836805,
+    "mode": "generated"
+  }
+}

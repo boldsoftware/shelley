@@ -1,0 +1,387 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Ctrl+click opens a URL that wraps over several rows. The test seeded a conversation at /c/gh-url, whose directory holds t.sh, which prints \"ghostty-ready\"; once the file \"go\" exists (call \"go\" creates it) it writes the terminal size (stty size: \"\u003crows\u003e \u003ccols\u003e\") to the file \"size\", clears the screen and homes the cursor, then prints: https://example.com/ followed by 2*cols \"a\"s and \"/end\" (a URL wrapping over three rows); https://example.org/ followed by cols-20 \"b\"s (exactly one row: the newline, not a wrap, ends it); \"not-part-of-the-url\"; and an OSC 8 hyperlink to https://target.example/ whose text is https://example.net/ followed by cols \"c\"s (two rows). Once the file \"more\" exists (call \"more\" creates it) it prints the numbers 1 to 2*rows, pushing it all into the scrollback, then echoes what it reads. Fetching /e2e/size returns the file \"size\". \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]' and \"the input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Read all output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true). \"Read the visible screen until it matches P\" is the same with the menu item \"Insert visible screen into input\". \"Set the theme to T\" means what the theme menu does, the eval: localStorage.setItem(\"shelley-theme\", \"T\"); document.documentElement.classList.toggle(\"dark\", \"T\" === \"dark\"). window.__opened lists the URLs the page opened (window.open). \"Clear the opened list\" means eval window.__opened.length = 0. \"The opened list should be L\" means: eval JSON.stringify(window.__opened) === JSON.stringify(L) should become true. \"Cell (R, C)\" is the point `(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (C + 0.5) * (r.width / window.__size.cols), y: r.top + (R + 0.5) * (r.height / window.__size.rows)}; })()`, with R and C written in as numbers or expressions (cols means window.__size.cols). \"Ctrl+click cell (R, C)\" means: hover cell (R, C); key_down Control; click cell (R, C); key_up Control.\n1. Navigate to /c/gh-url. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"].\n2. Read all output until it contains \"ghostty-ready\".\n3. Call \"go\" (returns \"done\"). Read the visible screen until it contains \"https://example.net/\".\n4. Eval (awaited): const [rows, cols] = (await (await fetch(\"/e2e/size\")).text()).trim().split(\" \").map(Number); window.__size = {rows, cols}; window.__long = \"https://example.com/\" + \"a\".repeat(cols * 2) + \"/end\"; window.__short = \"https://example.org/\" + \"b\".repeat(cols - 20).\n5. The URL's three rows: for each of the cells (0, 2), (1, cols - 1) and (2, 1), in turn: Ctrl+click it; the opened list should be [window.__long]; clear the opened list.\n6. The one-row URL: Ctrl+click cell (3, cols - 1); the opened list should be [window.__short]; clear the opened list.\n7. The line after it opens nothing: Ctrl+click cell (4, 2), then Ctrl+click cell (3, 5) (a click that does open something, to wait for); the opened list should be [window.__short]; clear the opened list.\n8. The hyperlink's target, not its text, from either row, second row first: for rows 6 and then 5: Ctrl+click cell (row, 3); the opened list should be [\"https://target.example/\"]; clear the opened list.\n9. The pointer shows it's a link: hover cell (4, 2); the canvas's style.cursor should become \"text\". Hover cell (1, 3); it should become \"pointer\".\n10. Scrolled back to, from the scrollback, where ghostty-web keeps no wrap flags: call \"more\" (returns \"done\"). Read the visible screen until it contains a newline followed by the number 2 * window.__size.rows.\n11. Retry the following steps as one block until they pass (timeout 30s): hover cell (0, 0) (inserting the screen moved the pointer to the menu); wheel by x 0 and y minus half the canvas's height (the canvas's getBoundingClientRect().height / 2, measured, written as a negative number); fill the input with \"\"; choose the terminal menu item \"Insert visible screen into input\"; the input's value must match /^https:\\/\\/example\\.com\\/a+\\naaa/m (eval, expect true).\n12. Eval: window.__top = the index of the first line of the input's value (split on \"\\n\") that starts with \"https://example.com\".\n13. Ctrl+click cell (window.__top + 1, 3); the opened list should be [window.__long].",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/gh-url"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('ghostty-ready')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "call",
+      "value": "go",
+      "expect": "done"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert visible screen into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('https://example.net/')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const text = await (await fetch('/e2e/size')).text(); const parts = text.trim().split(' '); const rows = Number(parts[0]); const cols = Number(parts[1]); window.__size = {rows, cols}; window.__long = 'https://example.com/' + 'a'.repeat(cols * 2) + '/end'; window.__short = 'https://example.org/' + 'b'.repeat(cols - 20); return rows + 'x' + cols; })()"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (2 + 0.5) * (r.width / window.__size.cols), y: r.top + (0 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (2 + 0.5) * (r.width / window.__size.cols), y: r.top + (0 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__opened) === JSON.stringify([window.__long])",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__opened.length = 0; 'cleared'"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (window.__size.cols - 1 + 0.5) * (r.width / window.__size.cols), y: r.top + (1 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (window.__size.cols - 1 + 0.5) * (r.width / window.__size.cols), y: r.top + (1 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__opened) === JSON.stringify([window.__long])",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__opened.length = 0; 'cleared'"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (1 + 0.5) * (r.width / window.__size.cols), y: r.top + (2 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (1 + 0.5) * (r.width / window.__size.cols), y: r.top + (2 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__opened) === JSON.stringify([window.__long])",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__opened.length = 0; 'cleared'"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (window.__size.cols - 1 + 0.5) * (r.width / window.__size.cols), y: r.top + (3 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (window.__size.cols - 1 + 0.5) * (r.width / window.__size.cols), y: r.top + (3 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__opened) === JSON.stringify([window.__short])",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__opened.length = 0; 'cleared'"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (2 + 0.5) * (r.width / window.__size.cols), y: r.top + (4 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (2 + 0.5) * (r.width / window.__size.cols), y: r.top + (4 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (5 + 0.5) * (r.width / window.__size.cols), y: r.top + (3 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (5 + 0.5) * (r.width / window.__size.cols), y: r.top + (3 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__opened) === JSON.stringify([window.__short])",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__opened.length = 0; 'cleared'"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (3 + 0.5) * (r.width / window.__size.cols), y: r.top + (6 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (3 + 0.5) * (r.width / window.__size.cols), y: r.top + (6 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__opened) === JSON.stringify(['https://target.example/'])",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__opened.length = 0; 'cleared'"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (3 + 0.5) * (r.width / window.__size.cols), y: r.top + (5 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (3 + 0.5) * (r.width / window.__size.cols), y: r.top + (5 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__opened) === JSON.stringify(['https://target.example/'])",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__opened.length = 0; 'cleared'"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (2 + 0.5) * (r.width / window.__size.cols), y: r.top + (4 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').style.cursor",
+      "expect": "text"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (3 + 0.5) * (r.width / window.__size.cols), y: r.top + (1 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').style.cursor",
+      "expect": "pointer"
+    },
+    {
+      "action": "call",
+      "value": "more",
+      "expect": "done"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert visible screen into input"
+        },
+        {
+          "action": "eval",
+          "expression": "(function(){ var v = document.querySelector('[data-testid=\"message-input\"]').value; var target = '\\n' + (2 * window.__size.rows); return v.includes(target); })()",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "retry",
+      "timeout": "30s",
+      "steps": [
+        {
+          "action": "hover",
+          "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + 0.5 * (r.width / window.__size.cols), y: r.top + 0.5 * (r.height / window.__size.rows)}; })()"
+        },
+        {
+          "action": "wheel",
+          "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + 0.5 * (r.width / window.__size.cols), y: r.top + 0.5 * (r.height / window.__size.rows)}; })()",
+          "x": 0,
+          "y": -112.5
+        },
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert visible screen into input"
+        },
+        {
+          "action": "eval",
+          "expression": "/^https:\\/\\/example\\.com\\/a+\\naaa/m.test(document.querySelector('[data-testid=\"message-input\"]').value)",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top = document.querySelector('[data-testid=\"message-input\"]').value.split('\\n').findIndex(function(l){ return l.startsWith('https://example.com'); }); window.__top"
+    },
+    {
+      "action": "hover",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (3 + 0.5) * (r.width / window.__size.cols), y: r.top + (window.__top + 1 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const r = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas').getBoundingClientRect(); return {x: r.left + (3 + 0.5) * (r.width / window.__size.cols), y: r.top + (window.__top + 1 + 0.5) * (r.height / window.__size.rows)}; })()"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__opened) === JSON.stringify([window.__long])",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:09:20.187865611Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 187937,
+    "output_tokens": 19255,
+    "estimated_cost_usd": 0.43719555,
+    "mode": "generated"
+  }
+}

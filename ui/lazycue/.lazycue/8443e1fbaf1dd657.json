@@ -1,0 +1,53 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The terminal keeps launch errors visible. The test seeded a conversation at /c/term-launch-error; the page's terminal websockets that launch a command ask the server for a terminal session that doesn't exist, so the launch fails. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \n1. Navigate to /c/term-launch-error. Send \"!\" (fill [data-testid=\"message-input\"] with it and click [data-testid=\"send-button\"]). There should be exactly 1 \".terminal-panel-tab-error\".\n2. Choose the terminal menu item \"Insert all output into input\". The message input's value should contain \"Error:\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/term-launch-error"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "!"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-tab-error",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-error",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Terminal menu']"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Insert all output into input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('Error:')",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:02:02.976944856Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 152972,
+    "output_tokens": 2956,
+    "estimated_cost_usd": 0.1301127,
+    "mode": "generated"
+  }
+}

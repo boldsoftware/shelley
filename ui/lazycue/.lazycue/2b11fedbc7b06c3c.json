@@ -1,0 +1,40 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Running work uses the full preview width for a lone agent name. The test seeded a conversation at /c/rw-lone; the browser is told (through a rewritten conversation list, with live updates cut off) that it has one working subagent, \"background-worker-alpha\". \"The preview\" is the \".running-work-name\" inside [data-testid=\"running-work-toggle\"].\n1. Navigate to /c/rw-lone.\n2. The preview should have exactly the text \"background-worker-alpha\".\n3. The preview's scrollWidth - clientWidth should become at most 1 (the name is not cut short).\n4. The preview's scrollWidth must be greater than half the clientWidth of its closest \".running-work-summary\" (it uses the width it has).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/rw-lone"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='running-work-toggle']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='running-work-toggle'] .running-work-name",
+      "text": "background-worker-alpha"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-testid=\"running-work-toggle\"] .running-work-name'); return el.scrollWidth - el.clientWidth \u003c= 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const name = document.querySelector('[data-testid=\"running-work-toggle\"] .running-work-name'); const summary = name.closest('.running-work-summary'); return name.scrollWidth \u003e summary.clientWidth / 2; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:18:45.838822847Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 41776,
+    "output_tokens": 1300,
+    "estimated_cost_usd": 0.0643023,
+    "mode": "generated"
+  }
+}

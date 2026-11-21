@@ -1,0 +1,114 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Reopened and closed terminals free their emulators. The test seeded a conversation at /c/gh-free, whose directory holds t.sh, which prints \"ghostty-ready\" and then echoes what it reads. \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]' and \"the input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Read all output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true). \"Read the visible screen until it matches P\" is the same with the menu item \"Insert visible screen into input\". \"Set the theme to T\" means what the theme menu does, the eval: localStorage.setItem(\"shelley-theme\", \"T\"); document.documentElement.classList.toggle(\"dark\", \"T\" === \"dark\"). window.__memories holds a WeakRef to the WebAssembly memory of every WebAssembly instance the page made (each emulator has one). \"Watch the emulators\" means: eval window.__watched = window.__memories.filter((ref) =\u003e ref.deref()) (those alive now). \"Wait until a watched emulator is freed\" means: retry the following steps as one block until they pass (timeout 15s): collect_garbage; then eval window.__watched.filter((ref) =\u003e !ref.deref()).length \u003e 0 must be true. \"The tab\" is '.terminal-panel-tab[title=\"bash t.sh\"]'.\n1. Navigate to /c/gh-free. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"].\n2. Read all output until it contains \"ghostty-ready\".\n3. Watch the emulators.\n4. Set the theme to dark. The terminal's canvas background (eval `(() =\u003e { const c = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas'); const [r, g, b] = c.getContext(\"2d\").getImageData(c.width / 2, c.height - 2, 1, 1).data; return \"rgb(\" + r + \", \" + g + \", \" + b + \")\"; })()`) should become exactly \"rgb(26, 27, 38)\".\n5. Wait until a watched emulator is freed.\n6. Watch the emulators again.\n7. Click the tab's button with aria-label exactly \"Close terminal\". There should be no tab (count 0).\n8. Wait until a watched emulator is freed.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/gh-free"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid='message-input']",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label='Terminal menu']"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('ghostty-ready')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "window.__watched = window.__memories.filter((ref) =\u003e ref.deref())"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley-theme', 'dark'); document.documentElement.classList.toggle('dark', 'dark' === 'dark')"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "(() =\u003e { const c = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] canvas'); const [r, g, b] = c.getContext('2d').getImageData(c.width / 2, c.height - 2, 1, 1).data; return 'rgb(' + r + ', ' + g + ', ' + b + ')'; })()",
+          "expect": "rgb(26, 27, 38)"
+        }
+      ]
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "collect_garbage"
+        },
+        {
+          "action": "eval",
+          "expression": "window.__watched.filter((ref) =\u003e !ref.deref()).length \u003e 0",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "window.__watched = window.__memories.filter((ref) =\u003e ref.deref())"
+    },
+    {
+      "action": "click",
+      "selector": ".terminal-panel-tab[title='bash t.sh'] button[aria-label='Close terminal']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab[title='bash t.sh']",
+      "count": 0
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "collect_garbage"
+        },
+        {
+          "action": "eval",
+          "expression": "window.__watched.filter((ref) =\u003e !ref.deref()).length \u003e 0",
+          "expect": "true"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:04:32.910213726Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 39240,
+    "output_tokens": 1831,
+    "estimated_cost_usd": 0.05486100000000001,
+    "mode": "generated"
+  }
+}

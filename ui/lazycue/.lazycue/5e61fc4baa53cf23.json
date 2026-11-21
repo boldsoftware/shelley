@@ -1,0 +1,90 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Bash output with cursor-movement ANSI sequences renders no stray letters. The test seeded a conversation at /c/ansi-cursor whose bash tool call ran printf with three cursor-horizontal-absolute sequences (ESC [1G) followed by \"Dev code has changes not yet deployed\". \"The card\" is the first \".bash-tool\" whose text contains \"Dev code has changes\". \"The output\" is the last \".bash-tool-code\" inside that card's \".bash-tool-details\". \n1. Navigate to /c/ansi-cursor. The card should become visible (wait up to 15s). Click its \".bash-tool-header\"; its \".bash-tool-details\" should become visible.\n2. The output should be visible, and its textContent must contain \"Dev code has changes not yet deployed\".\n3. No stray escape letters or raw fragments leak through: the output's textContent must not contain \"GGG\", \"[1G\" or the escape character (U+001B, '\\u001b' in JS).\n4. Cursor-only sequences are not colors: the output's innerHTML must not contain \"\u003cspan\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/ansi-cursor"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool",
+      "has_text": "Dev code has changes",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool .bash-tool-header",
+      "has_text": "Dev code has changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool .bash-tool-details",
+      "has_text": "Dev code has changes",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".bash-tool",
+        "has_text": "Dev code has changes"
+      },
+      "selector": ".bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "Dev code has changes not yet deployed",
+      "within": {
+        "selector": ".bash-tool",
+        "has_text": "Dev code has changes"
+      }
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "GGG",
+      "within": {
+        "selector": ".bash-tool",
+        "has_text": "Dev code has changes"
+      }
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "[1G",
+      "within": {
+        "selector": ".bash-tool",
+        "has_text": "Dev code has changes"
+      }
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code",
+      "text": "\u001b",
+      "within": {
+        "selector": ".bash-tool",
+        "has_text": "Dev code has changes"
+      }
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".bash-tool",
+        "has_text": "Dev code has changes"
+      },
+      "selector": ".bash-tool-details \u003e .bash-tool-section:last-child .bash-tool-code span",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:28:03.05808784Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 24060,
+    "output_tokens": 1378,
+    "estimated_cost_usd": 0.0382584,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The terminal key shortcuts row contains its overscroll while staying scrollable. Key shortcuts are turned on. \"The row\" is '[role=\"group\"][aria-label=\"Terminal key shortcuts\"]'. The viewport is 393x851.\n1. Navigate to /new and open the Terminal workspace tool: phones keep workspace tools in the overflow menu, so click the visible button with aria-label exactly \"More options\", then the button in \".chat-overflow-popover\" whose text starts with \"Terminal\".\n2. The row should be visible, and its computed overscroll-behavior-x must be \"contain\".\n3. The row's scrollWidth - clientWidth should become greater than 0 (eval with expect true).\n4. Eval: set the row's scrollLeft to its scrollWidth. Its scrollLeft should become greater than 0.\n5. Click the button with aria-label exactly \"Close active terminal\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 393,
+      "height": 851
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover button[aria-label='Terminal']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=\"group\"][aria-label=\"Terminal key shortcuts\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[role=\"group\"][aria-label=\"Terminal key shortcuts\"]')).overscrollBehaviorX",
+      "expect": "contain"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var row = document.querySelector('[role=\"group\"][aria-label=\"Terminal key shortcuts\"]'); return row.scrollWidth - row.clientWidth \u003e 0; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var row = document.querySelector('[role=\"group\"][aria-label=\"Terminal key shortcuts\"]'); row.scrollLeft = row.scrollWidth; return row.scrollLeft \u003e 0; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Close active terminal']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:50:52.893575667Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 57080,
+    "output_tokens": 2008,
+    "estimated_cost_usd": 0.0687522,
+    "mode": "generated"
+  }
+}

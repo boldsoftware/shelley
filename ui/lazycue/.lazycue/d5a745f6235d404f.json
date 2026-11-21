@@ -1,0 +1,107 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "macOS Cmd+V reaches the browser when an app asks for the kitty keyboard protocol (ghostty). Terminals render with ghostty; the browser says it runs on a Mac (navigator.platform \"MacIntel\"). window.cmdKeydowns records, in order, {key, prevented} for every keydown with the Meta key held (other than Meta itself), as the window saw it once handlers had run. The test seeded a conversation at /c/term-kitty, whose directory holds keys.sh, which asks for the kitty keyboard protocol the way nvim does, prints \"kitty-ready\", then reports raw input (the terminal's reply included) up to \"q\" as keys=\u003cinput, shell-quoted\u003e. \"The input\" is [data-testid=\"message-input\"]. \"The terminal input\" is the visible terminal's input, '.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]' (other terminals' inputs are hidden); to type into it, focus it with an eval (.focus()), then use type steps, which type key by key, and press_key for Enter or Control+d. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \n1. Navigate to /c/term-kitty. Fill the input with \"!bash keys.sh\" and click [data-testid=\"send-button\"].\n2. Retry the following steps as one block until they pass (timeout 15s): choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); then the input's value must contain \"kitty-ready\" (eval with expect true).\n3. Fill the input with \"\".\n4. Focus the terminal input (eval .focus()), then press, each with press_key: Meta+v, Meta+c, Meta+l, q.\n5. There should be exactly 1 \".terminal-panel-tab-success\".\n6. Choose the terminal menu item \"Insert all output into input\". The input's value should contain \"keys=''\" (the program read nothing before the q: no key reports and no protocol reply).\n7. window.cmdKeydowns must be exactly [{\"key\":\"v\",\"prevented\":false},{\"key\":\"c\",\"prevented\":false},{\"key\":\"l\",\"prevented\":false}] (check once).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/term-kitty"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash keys.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('kitty-ready')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "v",
+      "modifiers": "Meta"
+    },
+    {
+      "action": "press_key",
+      "key": "c",
+      "modifiers": "Meta"
+    },
+    {
+      "action": "press_key",
+      "key": "l",
+      "modifiers": "Meta"
+    },
+    {
+      "action": "press_key",
+      "key": "q"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-success",
+      "count": 1
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes(\"keys=''\")",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.cmdKeydowns)",
+      "expect": "[{\"key\":\"v\",\"prevented\":false},{\"key\":\"c\",\"prevented\":false},{\"key\":\"l\",\"prevented\":false}]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:38:23.584396623Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 39692,
+    "output_tokens": 1523,
+    "estimated_cost_usd": 0.054282,
+    "mode": "generated"
+  }
+}

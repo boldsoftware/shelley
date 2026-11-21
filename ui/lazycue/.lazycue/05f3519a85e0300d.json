@@ -1,0 +1,119 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The composer restores each terminal's explicit exit policy after reload. The test seeded a conversation at /c/term-policy. \"The held command\" is: bash -c 'read -r answer; echo \"$answer\"'. \"The terminal input\" is the visible terminal's input, '.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]' (other terminals' inputs are hidden); to type into it, focus it with an eval (.focus()), then use type steps, which type key by key, and press_key for Enter or Control+d. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \n1. Navigate to /c/term-policy. Send \"!\" followed by the held command (fill [data-testid=\"message-input\"] with it and click [data-testid=\"send-button\"]), then send \"!bash\". There should be exactly 2 \".terminal-panel-tab-running\".\n2. Call \"closeOnExit\" (the close_on_exit of this conversation's terminals on the server, oldest first) should return exactly [false,true].\n3. Reload. There should be exactly 2 \".terminal-panel-tab-running\" again.\n4. Type \"exit 7\" into the terminal input (the \"!bash\" terminal, which is the visible one) and press Enter.\n5. There should be exactly 1 \".terminal-panel-tab\", and \".terminal-panel-tab-active\" should have the title attribute exactly the held command.\n6. A shell running a one-shot command retains output even though its executable is the same as the interactive shell that just closed: type \"retained-after-reload\" into the terminal input (now the held command's) and press Enter. There should be exactly 1 \".terminal-panel-tab-success\".\n7. Choose the terminal menu item \"Insert all output into input\". The message input's value should contain \"retained-after-reload\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/term-policy"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "!bash -c 'read -r answer; echo \"$answer\"'"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-tab-running"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "!bash"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-running",
+      "count": 2
+    },
+    {
+      "action": "call",
+      "value": "closeOnExit",
+      "expect": "[false,true]"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-running",
+      "count": 2,
+      "timeout": "20s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "type",
+      "value": "exit 7"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 1
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".terminal-panel-tab-active",
+      "attribute": "title",
+      "value": "bash -c 'read -r answer; echo \"$answer\"'"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "type",
+      "value": "retained-after-reload"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-success",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Terminal menu']"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Insert all output into input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('retained-after-reload')",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:55:08.638767221Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 84071,
+    "output_tokens": 3118,
+    "estimated_cost_usd": 0.09941399999999999,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A new terminal shows none of a closed one's text. The test seeded a conversation at /c/gh-closed, whose directory holds t.sh, which prints 3000 lines \"closed-terminal \u003cn\u003e zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\" (n from 1 to 3000) and then echoes what it reads; the directory also holds t2.sh, which prints the numbers 1 to 3000 and then echoes what it reads. \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]' and \"the input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Read all output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true). \"Read the visible screen until it matches P\" is the same with the menu item \"Insert visible screen into input\". \"Set the theme to T\" means what the theme menu does, the eval: localStorage.setItem(\"shelley-theme\", \"T\"); document.documentElement.classList.toggle(\"dark\", \"T\" === \"dark\"). \"The tab\" is '.terminal-panel-tab[title=\"bash t.sh\"]'.\n1. Navigate to /c/gh-closed. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"].\n2. Read all output until it contains \"closed-terminal 3000\".\n3. Click the tab's button with aria-label exactly \"Close terminal\". There should be no tab (count 0).\n4. Fill the input with \"!bash t2.sh\" and click [data-testid=\"send-button\"].\n5. Read all output until it contains a newline followed by \"3000\" and does not contain \"closed-terminal\" (both in one eval).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/gh-closed"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input",
+          "exact": true
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('closed-terminal 3000')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "selector": ".terminal-panel-tab[title=\"bash t.sh\"] button[aria-label=\"Close terminal\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab[title=\"bash t.sh\"]",
+      "count": 0
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t2.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input",
+          "exact": true
+        },
+        {
+          "action": "eval",
+          "expression": "(function(){ var v = document.querySelector('[data-testid=\"message-input\"]').value; return /\\n3000/.test(v) \u0026\u0026 !v.includes('closed-terminal'); })()",
+          "expect": "true"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:16:05.727422215Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 20662,
+    "output_tokens": 1370,
+    "estimated_cost_usd": 0.034525349999999996,
+    "mode": "generated"
+  }
+}

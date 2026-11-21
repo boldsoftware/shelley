@@ -1,0 +1,178 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A touch drag scrolls back as far as the finger moves, without focusing (xterm). The test seeded a conversation at /c/gh-touch-xterm, whose directory holds t.sh, which writes the terminal's row count (stty size) to the file \"rows\", prints the numbers 1 to 300, one per line, and then echoes what it reads. Terminals render with xterm; fetching /e2e/rows returns the file \"rows\". \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]' and \"the input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Read all output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true). \"Read the visible screen until it matches P\" is the same with the menu item \"Insert visible screen into input\". \"Set the theme to T\" means what the theme menu does, the eval: localStorage.setItem(\"shelley-theme\", \"T\"); document.documentElement.classList.toggle(\"dark\", \"T\" === \"dark\"). \"The top line\" of a screen read is parseInt of the input's value (base 10).\n1. Navigate to /c/gh-touch-xterm. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"].\n2. Read all output until it contains a newline followed by \"300\".\n3. Retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert visible screen into input\"; eval: const n = parseInt(input value, 10); if it is NaN return false; else window.__before = n and return true (expect true).\n4. Eval (awaited): const b = the terminal's getBoundingClientRect(); const rows = parseInt(await (await fetch(\"/e2e/rows\")).text(), 10); window.__drag = {x: b.x + b.width / 2, from: b.y + 10, to: b.y + b.height - 10}; window.__drag.rows = (window.__drag.to - window.__drag.from) / (b.height / rows); window.__drag.moves = Math.floor((window.__drag.to - window.__drag.from) / 10). Note the value of window.__drag.moves (call it M).\n5. Finger moves down: content follows it, older lines come into view. Touch start at the point `({x: window.__drag.x, y: window.__drag.from})`; touch move to the point `({x: window.__drag.x, y: window.__drag.from + 10 * window.__drag.moves})` with count M (a move every 10px); touch end.\n6. Retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose \"Insert visible screen into input\"; the top line must be less than window.__before - window.__drag.rows * 0.7 (eval, expect true).\n7. Settled, the same top line twice running: retry the following steps as one block until they pass (timeout 15s): eval window.__pass = (window.__pass || 0) + 1; fill the input with \"\"; choose \"Insert visible screen into input\"; then eval, with expect true, exactly: `(() =\u003e { const n = parseInt(document.querySelector('[data-testid=\"message-input\"]').value, 10); if (isNaN(n)) return false; if (window.__readPass !== window.__pass) { window.__readPass = window.__pass; window.__lastTop = window.__top; window.__top = n; } return window.__top === window.__lastTop; })()`.\n8. window.__before - window.__top must be less than window.__drag.rows * 1.3 (check once): it scrolled once, not twice.\n9. The terminal input ('textarea[aria-label=\"Terminal input\"]') must not be focused (eval: document.activeElement is not one, expect true).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/gh-touch-xterm"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "retry",
+      "timeout": "60s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Terminal menu",
+          "exact": true
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel",
+          "role": "button",
+          "name": "Insert all output into input",
+          "exact": true
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('\\n300')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Terminal menu",
+          "exact": true
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel",
+          "role": "button",
+          "name": "Insert visible screen into input",
+          "exact": true
+        },
+        {
+          "action": "eval",
+          "expression": "(() =\u003e { const n = parseInt(document.querySelector('[data-testid=\"message-input\"]').value, 10); if (isNaN(n)) return false; window.__before = n; return true; })()",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const b = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]').getBoundingClientRect(); const rows = parseInt(await (await fetch('/e2e/rows')).text(), 10); window.__drag = {x: b.x + b.width / 2, from: b.y + 10, to: b.y + b.height - 10}; window.__drag.rows = (window.__drag.to - window.__drag.from) / (b.height / rows); window.__drag.moves = Math.floor((window.__drag.to - window.__drag.from) / 10); return JSON.stringify(window.__drag); })()"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "point": "({x: window.__drag.x, y: window.__drag.from})"
+    },
+    {
+      "action": "touch",
+      "value": "move",
+      "point": "({x: window.__drag.x, y: window.__drag.from + 10 * window.__drag.moves})",
+      "count": 21
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Terminal menu",
+          "exact": true
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel",
+          "role": "button",
+          "name": "Insert visible screen into input",
+          "exact": true
+        },
+        {
+          "action": "eval",
+          "expression": "(() =\u003e { const n = parseInt(document.querySelector('[data-testid=\"message-input\"]').value, 10); if (isNaN(n)) return false; return n \u003c window.__before - window.__drag.rows * 0.7; })()",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "window.__pass = (window.__pass || 0) + 1;"
+        },
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Terminal menu",
+          "exact": true
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel",
+          "role": "button",
+          "name": "Insert visible screen into input",
+          "exact": true
+        },
+        {
+          "action": "eval",
+          "expression": "(() =\u003e { const n = parseInt(document.querySelector('[data-testid=\"message-input\"]').value, 10); if (isNaN(n)) return false; if (window.__readPass !== window.__pass) { window.__readPass = window.__pass; window.__lastTop = window.__top; window.__top = n; } return window.__top === window.__lastTop; })()",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "window.__before - window.__top \u003c window.__drag.rows * 1.3",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const input = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]'); return !!input \u0026\u0026 document.activeElement !== input; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:12:39.154335207Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 143417,
+    "output_tokens": 8719,
+    "estimated_cost_usd": 0.2221728,
+    "mode": "generated"
+  }
+}

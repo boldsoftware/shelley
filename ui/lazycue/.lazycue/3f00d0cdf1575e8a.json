@@ -1,0 +1,107 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "!/bin/bash -i closes its terminal tab after EOF. The test seeded a conversation at /c/term-eof-bash-i. Call \"terminals\" says how many terminals the server still has for this conversation. The test's init script sets window.__terminalsHydrated, a promise that resolves to \"hydrated\" once the page has fetched GET /api/terminals (which restores the server's terminals as tabs) and has had a turn to render the result. \"The terminal input\" is the visible terminal's input, '.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]' (other terminals' inputs are hidden); to type into it, focus it with an eval (.focus()), then use type steps, which type key by key, and press_key for Enter or Control+d. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \n1. Navigate to /c/term-eof-bash-i. Fill [data-testid=\"message-input\"] with \"!/bin/bash -i\" and click [data-testid=\"send-button\"]. There should be exactly 1 \".terminal-panel-tab-running\".\n2. Readline handles EOF at an empty prompt. Synchronize with the shell by waiting for a marker in real terminal output, not just the open socket: type into the terminal input, key by key, the 19 characters printf 'shell-ready\\n' (a backslash and an n, not a newline), then press Enter.\n3. Retry the following steps as one block until they pass (timeout 15s): choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); then the message input's value must match /shell-ready\\r?\\n/ (eval /shell-ready\\r?\\n/.test(document.querySelector('[data-testid=\"message-input\"]').value) with expect true).\n4. The insert focuses the message input in a zero-delay timeout: let that timeout run first (eval, awaited: new Promise((resolve) =\u003e setTimeout(() =\u003e resolve(\"flushed\"), 0)), expect \"flushed\"), then focus the terminal input again (eval .focus()) and press Control+d.\n5. There should be no \".terminal-panel-tab\" (count 0), and \".terminal-panel\" should be hidden.\n6. Call \"terminals\" should return \"0\".\n7. Reload. Wait until the page has restored the server's terminals (eval, awaited: window.__terminalsHydrated, expect \"hydrated\"). There should be no \".terminal-panel-tab\" (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/term-eof-bash-i"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!/bin/bash -i"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-running",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "type",
+      "value": "printf 'shell-ready\\n'"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input"
+        },
+        {
+          "action": "eval",
+          "expression": "/shell-ready\\r?\\n/.test(document.querySelector('[data-testid=\"message-input\"]').value)",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve) =\u003e setTimeout(() =\u003e resolve(\"flushed\"), 0))",
+      "expect": "flushed"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"] textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "d",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 0
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".terminal-panel"
+    },
+    {
+      "action": "call",
+      "value": "terminals",
+      "expect": "0"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__terminalsHydrated",
+      "expect": "hydrated"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:58:27.286210627Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 11786,
+    "output_tokens": 1118,
+    "estimated_cost_usd": 0.026641199999999997,
+    "mode": "generated"
+  }
+}

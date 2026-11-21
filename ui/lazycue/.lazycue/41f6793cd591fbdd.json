@@ -1,0 +1,149 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The terminal menu copies and inserts the output. The test seeded a conversation at /c/term-menu, whose directory holds t.sh, which prints \"early-1\" to \"early-200\" (one per line), then \"menu-ready\", then waits reading input. \"The trigger\" is the button with aria-label exactly \"Terminal menu\" and \"the menu\" is \".overflow-menu-panel\". \"The clipboard\" is the text the eval `navigator.clipboard.readText()` returns. \"The input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \n1. Navigate to /c/term-menu. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"]. \".terminal-panel-tab-running\" should be visible.\n2. Click the trigger. The menu's buttons (role button inside the menu) should have exactly these texts, in order (assert_texts): [\"Copy visible screen\",\"Copy all output\",\"Insert visible screen into input\",\"Insert all output into input\",\"Show key shortcuts\",\"Render with ghostty\",\"Render with xterm.js\"].\n3. Click the trigger again. The menu should be hidden.\n4. Retry the following steps as one block until they pass (timeout 15s): choose the terminal menu item \"Copy visible screen\" (both clicks inside the block); then the clipboard must contain \"menu-ready\" (eval with expect true).\n5. The menu should be hidden, and the trigger should have the class \"terminal-panel-action-btn-feedback\". The clipboard must not contain \"early-1\" followed by a newline (check once).\n6. Choose the terminal menu item \"Copy all output\". The clipboard should come to contain \"early-1\" followed by a newline (eval with expect true, polled).\n7. Choose the terminal menu item \"Insert visible screen into input\". The input's value should match /menu-ready/, and must not match /early-1\\n/.\n8. Fill the input with \"\". Choose the terminal menu item \"Insert all output into input\". The input's value should match /early-1\\n[^]*menu-ready/ (eval with expect true).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/term-menu"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-tab-running",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".overflow-menu-panel"
+    },
+    {
+      "action": "assert_texts",
+      "selector": ".overflow-menu-panel",
+      "role": "button",
+      "texts": [
+        "Copy visible screen",
+        "Copy all output",
+        "Insert visible screen into input",
+        "Insert all output into input",
+        "Show key shortcuts",
+        "Render with ghostty",
+        "Render with xterm.js"
+      ]
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".overflow-menu-panel"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "button[aria-label=\"Terminal menu\"]"
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Copy visible screen"
+        },
+        {
+          "action": "eval",
+          "expression": "navigator.clipboard.readText().then(t =\u003e t.includes('menu-ready'))",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".overflow-menu-panel"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "button[aria-label=\"Terminal menu\"].terminal-panel-action-btn-feedback"
+    },
+    {
+      "action": "eval",
+      "expression": "navigator.clipboard.readText().then(t =\u003e t.includes('early-1\\n'))",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Copy all output"
+    },
+    {
+      "action": "eval",
+      "expression": "navigator.clipboard.readText().then(t =\u003e t.includes('early-1\\n'))",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Insert visible screen into input"
+    },
+    {
+      "action": "eval",
+      "expression": "/menu-ready/.test(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "/early-1\\n/.test(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "false"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Terminal menu\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Insert all output into input"
+    },
+    {
+      "action": "eval",
+      "expression": "/early-1\\n[^]*menu-ready/.test(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:55:47.492216317Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 110325,
+    "output_tokens": 6389,
+    "estimated_cost_usd": 0.16702185,
+    "mode": "generated"
+  }
+}

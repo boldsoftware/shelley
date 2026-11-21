@@ -1,0 +1,71 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The terminal fits above a tall phone keyboard (ghostty). Terminals render with ghostty. \"The panel\" is \".terminal-panel\" and \"the screen\" is the visible canvas inside the panel (the first \"canvas\" in it with a nonzero box). The viewport starts at 393x851.\n1. Navigate to /new and open the Terminal workspace tool: phones keep workspace tools in the overflow menu, so click the visible button with aria-label exactly \"More options\", then the button in \".chat-overflow-popover\" whose text starts with \"Terminal\".\n2. The screen should be visible. Record the panel's getBoundingClientRect().height in a window variable as its original height.\n3. Android's resizes-content viewport policy makes a tall keyboard (or landscape) reduce the layout viewport; the grid and its input must remain reachable. Set the viewport to 393x320. Then this should become true (eval with expect, within 5s): the screen's getBoundingClientRect() has top \u003e= 0 and top + height \u003c= 320, and [data-testid=\"message-input\"]'s top + height \u003c= 320.\n4. They must recover their chosen height on dismissal: set the viewport to 393x851. The panel's height should become exactly the original height.\n5. Click the button with aria-label exactly \"Close active terminal\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 393,
+      "height": 851
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover button[aria-label='Terminal']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel canvas"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var panel = document.querySelector('.terminal-panel'); var rect = panel.getBoundingClientRect(); window._origPanelHeight = rect.height; return rect.height; })()"
+    },
+    {
+      "action": "set_viewport",
+      "width": 393,
+      "height": 320
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var canvas = Array.from(document.querySelectorAll('.terminal-panel canvas')).find(function(c) { var r = c.getBoundingClientRect(); return r.width \u003e 0 \u0026\u0026 r.height \u003e 0; }); var cr = canvas ? canvas.getBoundingClientRect() : null; var input = document.querySelector('[data-testid=\"message-input\"]'); var ir = input ? input.getBoundingClientRect() : null; if (!cr || !ir) return false; return cr.top \u003e= 0 \u0026\u0026 (cr.top + cr.height) \u003c= 320 \u0026\u0026 (ir.top + ir.height) \u003c= 320; })()",
+      "expect": "true",
+      "timeout": "5s"
+    },
+    {
+      "action": "set_viewport",
+      "width": 393,
+      "height": 851
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel').getBoundingClientRect().height === window._origPanelHeight",
+      "expect": "true",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Close active terminal']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:48:48.333177941Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 177580,
+    "output_tokens": 4146,
+    "estimated_cost_usd": 0.1684413,
+    "mode": "generated"
+  }
+}

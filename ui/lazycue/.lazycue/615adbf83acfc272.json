@@ -1,0 +1,78 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Running work discards finished subagent rows when the panel closes. The test seeded a conversation at /c/rw-finishhelper. \"The strip\" is '[aria-label=\"Running work\"]', \"the toggle\" is its [data-testid=\"running-work-toggle\"], and \"the row\" is the strip's \".running-work-agent\".\n1. Navigate to /c/rw-finishhelper and wait up to 30s for [data-testid=\"message-input\"] to be visible.\n2. Fill the message input with \"subagent: finishhelper bash: sleep 120\" and click [data-testid=\"send-button\"].\n3. The toggle should come to contain \"finishhelper\" (wait up to 30s). Click the toggle.\n4. The row should contain \"finishhelper\".\n5. Call \"cancelSubagent\" (cancels the subagent through the API); it should return \"ok\".\n6. The row's \".running-work-agent-time\" should come to have exactly the text \"Finished\" (wait up to 15s).\n7. Click the toggle. The strip should disappear (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/rw-finishhelper"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "subagent: finishhelper bash: sleep 120"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_text",
+      "text": "finishhelper",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[aria-label=\"Running work\"] [data-testid=\"running-work-toggle\"]",
+      "text": "finishhelper",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label=\"Running work\"] [data-testid=\"running-work-toggle\"]"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[aria-label=\"Running work\"] .running-work-agent",
+      "text": "finishhelper"
+    },
+    {
+      "action": "call",
+      "value": "cancelSubagent",
+      "expect": "ok"
+    },
+    {
+      "action": "wait_text",
+      "text": "Finished",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[aria-label=\"Running work\"] .running-work-agent .running-work-agent-time",
+      "text": "Finished"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label=\"Running work\"] [data-testid=\"running-work-toggle\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label=\"Running work\"]",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:19:15.680296581Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 10597,
+    "output_tokens": 1111,
+    "estimated_cost_usd": 0.02513415,
+    "mode": "generated"
+  }
+}
