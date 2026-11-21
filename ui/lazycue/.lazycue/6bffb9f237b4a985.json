@@ -1,0 +1,112 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a phone, the overflow menu's model row matches the Directory row, and the reasoning level chosen in it is saved to the live conversation. The screen is 390x800. To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". Call \"thinking\" returns the thinking_level the server stored in the conversation's options. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and open the model picker (through the overflow menu). 2. The picker must not have the class \"p-disabled\", and its \"svg.chat-menu-icon\" should be visible. 3. \"The directory row\" is the button in \".chat-overflow-popover\" whose accessible name starts with \"Directory\". Compare the picker's and the directory row's bounding boxes: their heights must be exactly equal, their x exactly equal, their widths exactly equal, and the picker's bottom (y + height) must be \u003c= the directory row's y. 4. Click the element with role \"radio\" and accessible name exactly \"high\" in \".model-picker-panel\". 5. Call \"thinking\" until it returns \"high\". 6. The panel should still be visible. 7. Reload by navigating to /c/{{SLUG}} again and open the model picker. 8. The panel's radio named exactly \"high\" should have aria-checked=\"true\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 800
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .model-picker.p-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-overflow-popover .model-picker.p-select:not(.p-disabled)",
+      "count": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-overflow-popover .model-picker svg.chat-menu-icon"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const mp = document.querySelector('.chat-overflow-popover .model-picker.p-select'); const dir = [...document.querySelectorAll('.chat-overflow-popover button')].find(b =\u003e b.textContent.trim().startsWith('Directory')); if(!mp || !dir) return 'missing: ' + (mp?'mp ok':'no mp') + ' ' + (dir?'dir ok':'no dir'); const mpB = mp.getBoundingClientRect(); const dirB = dir.getBoundingClientRect(); const errors = []; if(mpB.height !== dirB.height) errors.push('height mismatch: mp=' + mpB.height + ' dir=' + dirB.height); if(mpB.x !== dirB.x) errors.push('x mismatch: mp=' + mpB.x + ' dir=' + dirB.x); if(mpB.width !== dirB.width) errors.push('width mismatch: mp=' + mpB.width + ' dir=' + dirB.width); if(mpB.bottom \u003e dirB.y) errors.push('picker bottom \u003e dir y: ' + mpB.bottom + ' \u003e ' + dirB.y); return errors.length ? errors.join('; ') : 'ok'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-panel [role='radio']",
+      "has_text": "high"
+    },
+    {
+      "action": "call",
+      "value": "thinking",
+      "expect": "high"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .model-picker.p-select"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const panel = document.querySelector('.model-picker-panel'); const high = [...panel.querySelectorAll('[role=radio]')].find(r =\u003e r.textContent.trim() === 'high'); return high ? high.getAttribute('aria-checked') : 'not found'; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:04:39.760080232Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 252882,
+    "output_tokens": 6610,
+    "estimated_cost_usd": 0.22913820000000001,
+    "mode": "generated"
+  }
+}

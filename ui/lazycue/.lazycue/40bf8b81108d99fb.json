@@ -1,0 +1,265 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The language picker dismisses without changes and supports keyboard selection. \"The trigger\" is \".chat-overflow-menu-wrapper .btn-icon\"; \"the popover\" is \".chat-overflow-popover\"; \"the dialog\" is the element with role=\"dialog\" that contains a \".language-picker-modal\" (\"[role=dialog]:has(.language-picker-modal)\"). Accessible names here: the popover's language action is a plain button whose name is its text, \"Change Language\" followed by the current language's name (in a \".overflow-menu-language\" span); the dialog's name is the text of the element its aria-labelledby refers to (its \".modal-title\"); each option is a \".language-picker-option\" button whose name is its text minus an aria-hidden flag span, i.e. the text of its other span (such as \"English\" or \"日本語\"). To \"open the picker\": click the trigger, focus (with an eval calling .focus()) the popover's button whose accessible name contains \"Change Language\", press Enter, wait for the dialog to be visible, and check that the dialog's button named exactly \"English\" is document.activeElement. Perform the steps in order. 1. Navigate to /new. 2. Open the picker. Press Escape: the dialog should be hidden, the trigger must be document.activeElement, and the popover should be hidden. 3. Open the picker. Click the dialog's button named \"Close modal\": the dialog should be hidden and the trigger document.activeElement. 4. Open the picker. Click \".modal-overlay\" 2 pixels right and 2 pixels down from its top-left corner: the dialog should be hidden and the trigger document.activeElement; localStorage \"shelley-locale\" must be null (nothing was changed). 5. Open the picker. Press Tab: the dialog's button named exactly \"日本語\" must become document.activeElement, with computed outline-style exactly \"solid\" and outline-width exactly \"2px\". 6. Press Enter: the dialog should be hidden, the trigger document.activeElement, and localStorage \"shelley-locale\" exactly \"ja\". 7. Reload by navigating to /new again, click the trigger, then click the popover's button whose accessible name contains \"言語を切り替える\". 8. The dialog's button named exactly \"日本語\" should become document.activeElement.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-menu-wrapper .btn-icon"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-menu-wrapper .btn-icon"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-overflow-popover button:has(.overflow-menu-language)",
+      "text": "Change Language"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-overflow-popover button:has(.overflow-menu-language)').focus(); 'focused'"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=dialog]:has(.language-picker-modal)"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const a = document.activeElement; return !!a && !!a.closest('[role=dialog]:has(.language-picker-modal)') && a.matches('.language-picker-option') ? a.querySelector('span:not([aria-hidden])').textContent.trim() : 'not an option'; })()",
+      "expect": "English"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[role=dialog]:has(.language-picker-modal)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.chat-overflow-menu-wrapper .btn-icon')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-menu-wrapper .btn-icon"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-overflow-popover button:has(.overflow-menu-language)",
+      "text": "Change Language"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-overflow-popover button:has(.overflow-menu-language)').focus(); 'focused'"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=dialog]:has(.language-picker-modal)"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const a = document.activeElement; return !!a && !!a.closest('[role=dialog]:has(.language-picker-modal)') && a.matches('.language-picker-option') ? a.querySelector('span:not([aria-hidden])').textContent.trim() : 'not an option'; })()",
+      "expect": "English"
+    },
+    {
+      "action": "click",
+      "selector": "[role=dialog]:has(.language-picker-modal) button[aria-label='Close modal']"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[role=dialog]:has(.language-picker-modal)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.chat-overflow-menu-wrapper .btn-icon')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-menu-wrapper .btn-icon"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-overflow-popover button:has(.overflow-menu-language)",
+      "text": "Change Language"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-overflow-popover button:has(.overflow-menu-language)').focus(); 'focused'"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=dialog]:has(.language-picker-modal)"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const a = document.activeElement; return !!a && !!a.closest('[role=dialog]:has(.language-picker-modal)') && a.matches('.language-picker-option') ? a.querySelector('span:not([aria-hidden])').textContent.trim() : 'not an option'; })()",
+      "expect": "English"
+    },
+    {
+      "action": "click",
+      "selector": ".modal-overlay",
+      "x": 2,
+      "y": 2
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[role=dialog]:has(.language-picker-modal)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.chat-overflow-menu-wrapper .btn-icon')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley-locale')",
+      "expect": "null"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-menu-wrapper .btn-icon"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-overflow-popover button:has(.overflow-menu-language)",
+      "text": "Change Language"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-overflow-popover button:has(.overflow-menu-language)').focus(); 'focused'"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=dialog]:has(.language-picker-modal)"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const a = document.activeElement; return !!a && !!a.closest('[role=dialog]:has(.language-picker-modal)') && a.matches('.language-picker-option') ? a.querySelector('span:not([aria-hidden])').textContent.trim() : 'not an option'; })()",
+      "expect": "English"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const a = document.activeElement; return !!a && !!a.closest('[role=dialog]:has(.language-picker-modal)') && a.matches('.language-picker-option') ? a.querySelector('span:not([aria-hidden])').textContent.trim() : 'not an option'; })()",
+      "expect": "日本語"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.activeElement).outlineStyle",
+      "expect": "solid"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.activeElement).outlineWidth",
+      "expect": "2px"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[role=dialog]:has(.language-picker-modal)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.chat-overflow-menu-wrapper .btn-icon')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley-locale')",
+      "expect": "ja"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-menu-wrapper .btn-icon"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-menu-wrapper .btn-icon"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".chat-overflow-popover button:has(.overflow-menu-language)",
+      "text": "言語を切り替える"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover button:has(.overflow-menu-language)"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=dialog]:has(.language-picker-modal)"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const a = document.activeElement; return !!a && !!a.closest('[role=dialog]:has(.language-picker-modal)') && a.matches('.language-picker-option') ? a.querySelector('span:not([aria-hidden])').textContent.trim() : 'not an option'; })()",
+      "expect": "日本語"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:01:43.087429603Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 405309,
+    "output_tokens": 11321,
+    "estimated_cost_usd": 0.3766032,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The overflow menu popover opens and its compact controls work. The page's Notification API is fake: its permission starts \"default\", and requestPermission() denies it. \"The trigger\" is \".chat-overflow-menu-wrapper .btn-icon\"; \"the popover\" is \".chat-overflow-popover\". Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Set localStorage \"shelley-theme\" to \"system\" and \"shelley-notification-prefs\" to '{\"channels\":{\"favicon\":{\"enabled\":true},\"browser\":{\"enabled\":true}}}', then reload by navigating to /c/{{SLUG}} again. 3. The trigger should be visible; click it. 4. The popover should be visible. Every choice is visible and the active icon is emphasized: the popover should have exactly 3 \".overflow-quick-control\", elements whose text is exactly \"Brevity\", \"Look\" and \"Notifications\" should be visible, and it should have exactly 3 \".overflow-choice-options\", exactly 7 \".overflow-choice-option\" and exactly 3 \".overflow-choice-option.is-selected\". 5. In data-testid \"theme-cycle\", the button whose accessible name contains \"System\" should have aria-pressed=\"true\". 6. In data-testid \"notification-toggle\" (\"the notification options\"), the button named \"Enable Notifications\" should have aria-pressed=\"true\". 7. Click the button named \"Disable Notifications\": it should get aria-pressed=\"true\", and the \"Enable Notifications\" button should be enabled. 8. Click the \"Enable Notifications\" button. 9. The notification options' button named \"Blocked by browser\" should be disabled, and JSON.parse(localStorage.getItem(\"shelley-notification-prefs\") || \"{}\").channels?.browser?.enabled must be exactly false. 10. Click the theme-cycle button named \"Light\": the html element must not have the class \"dark\", and localStorage \"shelley-theme\" must be exactly \"light\". 11. Click the theme-cycle button named \"Dark\": the html element should have the class \"dark\", and localStorage \"shelley-theme\" must be exactly \"dark\". 12. The popover should still be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley-theme', 'system'); localStorage.setItem('shelley-notification-prefs', JSON.stringify({channels:{favicon:{enabled:true},browser:{enabled:true}}})); 'done'"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-menu-wrapper .btn-icon",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-menu-wrapper .btn-icon"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-overflow-popover .overflow-quick-control",
+      "count": 3
+    },
+    {
+      "action": "eval",
+      "expression": "[\"Brevity\", \"Look\", \"Notifications\"].map((t) => [...document.querySelectorAll(\".chat-overflow-popover *\")].some((e) => e.textContent.replace(/\\s+/g, \" \").trim() === t && e.getClientRects().length > 0 && e.checkVisibility({visibilityProperty: true}))).join()",
+      "expect": "true,true,true"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-overflow-popover .overflow-choice-options",
+      "count": 3
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-overflow-popover .overflow-choice-option",
+      "count": 7
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-overflow-popover .overflow-choice-option.is-selected",
+      "count": 3
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"theme-cycle\"] button[aria-label=\"System\"]",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"notification-toggle\"] button[aria-label=\"Enable Notifications\"]",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"notification-toggle\"] button[aria-label=\"Disable Notifications\"]"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"notification-toggle\"] button[aria-label=\"Disable Notifications\"]",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"notification-toggle\"] button[aria-label=\"Enable Notifications\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"notification-toggle\"] button[aria-label=\"Enable Notifications\"]"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "[data-testid=\"notification-toggle\"] button[aria-label=\"Blocked by browser\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.parse(localStorage.getItem('shelley-notification-prefs') || '{}').channels?.browser?.enabled",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"theme-cycle\"] button[aria-label=\"Light\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.documentElement.classList.contains('dark')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley-theme')",
+      "expect": "light"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"theme-cycle\"] button[aria-label=\"Dark\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.documentElement.classList.contains('dark')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley-theme')",
+      "expect": "dark"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-overflow-popover"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:35:53.210838343Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 240262,
+    "output_tokens": 7450,
+    "estimated_cost_usd": 0.24026789999999998,
+    "mode": "generated"
+  }
+}

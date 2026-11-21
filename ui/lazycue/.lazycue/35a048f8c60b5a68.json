@@ -1,0 +1,185 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a phone (the default Pixel 5 touch screen), the overflow menu's Directory item opens the directory picker and closes the menu. To \"tap\" an element, do a touch start on it and then a touch end (not a click). Name elements by ARIA role and accessible name, as Playwright's getByRole does. \"The trigger\" is the button named \"More options\"; \"the menu\" is \".chat-overflow-popover\"; \"the directory item\" is the menu's button whose name starts with \"Directory\" (role button, name \"Directory\" inside the menu: no other menu button's name contains that word); \"the picker\" is \".modal.directory-picker-modal\". Perform the steps in order. 1. Navigate to /new and tap the trigger. 2. The menu and the directory item should be visible. 3. Navigate to /c/{{SLUG}}. 4. The picker should be hidden. Tap the trigger. 5. The menu and the directory item should be visible, and so should the menu's button named exactly \"Command menu\" (exact match) and its button whose name starts with \"Terminal\" (name \"Terminal\"). 6. The directory item's \".overflow-menu-cwd\" should have exactly the text \"{{CWD}}\" and the title attribute exactly \"{{CWD}}\". 7. Tap the directory item. 8. The picker should be visible, the menu hidden, and the trigger should have aria-expanded=\"false\". 9. Tap the picker's button named exactly \"Cancel\" (exact match): the picker should be hidden. 10. Tap the trigger: the directory item should be visible. 11. Set the viewport to 1280x800 (a set_viewport giving only width and height, so the phone keeps its touch screen and scale; do not navigate). 12. The menu should still be visible, and there must be no directory item at all (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Directory",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".modal.directory-picker-modal"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Directory",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Command menu",
+      "exact": true,
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Terminal",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".chat-overflow-popover .overflow-menu-cwd.ellipsize-start",
+      "text": "{{CWD}}"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".chat-overflow-popover .overflow-menu-cwd.ellipsize-start",
+      "attribute": "title",
+      "value": "{{CWD}}"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "role": "button",
+      "name": "Directory",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".modal.directory-picker-modal"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".modal.directory-picker-modal"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_attribute",
+      "role": "button",
+      "name": "More options",
+      "attribute": "aria-expanded",
+      "value": "false"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "role": "button",
+      "name": "Cancel",
+      "exact": true,
+      "selector": ".modal.directory-picker-modal"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".modal.directory-picker-modal"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".modal.directory-picker-modal"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Directory",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-overflow-popover button",
+      "has_text": "Directory",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:50:49.769719121Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 236129,
+    "output_tokens": 5953,
+    "estimated_cost_usd": 0.20917425000000006,
+    "mode": "generated"
+  }
+}

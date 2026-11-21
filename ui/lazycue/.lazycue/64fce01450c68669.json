@@ -1,0 +1,92 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The overflow menu can show only user, end-of-turn and notification messages. Conversation {{ID}} is an 18-turn conversation: each turn has a user message starting \"Turn N:\", an agent message starting \"I'll work on turn N.\", a tool call, and a final \"Done with turn N.\"; turn 18 also has a notification starting \"Warning on turn 18:\". \"Text X is present\" means some element's text contains X; for \"absent\", check that document.body.textContent does not include X at all (hidden elements count too). Perform the steps in order. 1. Navigate to /c/{{ID}}. 2. Wait for the first elements containing \"Turn 1:\", \"I'll work on turn 1.\" and \"Done with turn 1.\" to be visible, and the first data-testid \"tool-call-completed\" to be visible. 3. Click \".chat-overflow-menu-wrapper .btn-icon\". 4. In data-testid \"conversation-view-toggle\", the button named \"See All\" should have aria-pressed=\"true\". Click the button named \"See End of Turn Messages Only\": it should get aria-pressed=\"true\". 5. The first elements containing \"Turn 1:\" and \"Done with turn 1.\" should be visible, and the one element containing \"Warning on turn 18:\" should be visible. 6. \"I'll work on turn 1.\" must be absent, and there must be no data-testid \"tool-call-completed\" (count 0). 7. localStorage \"shelley-conversation-view\" must be exactly \"end-of-turn\". 8. Reload by navigating to /c/{{ID}} again. 9. The first element containing \"Done with turn 1.\" should be visible, and \"I'll work on turn 1.\" must be absent.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }; const norm = (s) => s.replace(/\\s+/g, ' '); const all = (t) => [...document.body.querySelectorAll('*')].filter((e) => norm(e.textContent).includes(t) && ![...e.children].some((c) => norm(c.textContent).includes(t))); return [[\"first\", \"Turn 1:\"], [\"first\", \"I'll work on turn 1.\"], [\"first\", \"Done with turn 1.\"]].map(([k, t]) => { const m = all(t); return (k === 'one' ? m.length === 1 : m.length > 0) && vis(m[0]); }).join(); })()",
+      "expect": "true,true,true",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='tool-call-completed']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-menu-wrapper .btn-icon"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='conversation-view-toggle']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-view-toggle'] button[aria-label='See All']",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-view-toggle'] button[aria-label='See End of Turn Messages Only']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-view-toggle'] button[aria-label='See End of Turn Messages Only']",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }; const norm = (s) => s.replace(/\\s+/g, ' '); const all = (t) => [...document.body.querySelectorAll('*')].filter((e) => norm(e.textContent).includes(t) && ![...e.children].some((c) => norm(c.textContent).includes(t))); return [[\"first\", \"Turn 1:\"], [\"first\", \"Done with turn 1.\"], [\"one\", \"Warning on turn 18:\"]].map(([k, t]) => { const m = all(t); return (k === 'one' ? m.length === 1 : m.length > 0) && vis(m[0]); }).join(); })()",
+      "expect": "true,true,true",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.body.textContent.includes(\"I'll work on turn 1.\")",
+      "expect": "false"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='tool-call-completed']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley-conversation-view')",
+      "expect": "end-of-turn"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }; const norm = (s) => s.replace(/\\s+/g, ' '); const all = (t) => [...document.body.querySelectorAll('*')].filter((e) => norm(e.textContent).includes(t) && ![...e.children].some((c) => norm(c.textContent).includes(t))); return [[\"first\", \"Done with turn 1.\"]].map(([k, t]) => { const m = all(t); return (k === 'one' ? m.length === 1 : m.length > 0) && vis(m[0]); }).join(); })()",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.body.textContent.includes(\"I'll work on turn 1.\")",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:23:48.220403744Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 52672,
+    "output_tokens": 2492,
+    "estimated_cost_usd": 0.08461469999999999,
+    "mode": "generated"
+  }
+}
