@@ -203,7 +203,10 @@ Available DSL actions:
 - assert_not_visible: {"action": "assert_not_visible", "selector": "..."} - Assert element is not visible
 - assert_text: {"action": "assert_text", "selector": "...", "text": "..."} - Assert exact text content
 - assert_text_contains: {"action": "assert_text_contains", "selector": "...", "text": "..."} - Assert text contains substring
-- assert_attribute: {"action": "assert_attribute", "selector": "...", "attribute": "...", "value": "..."}
+- assert_attribute: {"action": "assert_attribute", "selector": "...", "attribute": "...", "value": "..."} - Assert an attribute is present with this value; it fails when the attribute is absent, even for value "". To check that an attribute is present or absent, use assert_count with an attribute selector, e.g. {"action": "assert_count", "selector": "#save:not([disabled])", "count": 1}.
+- assert_value: {"action": "assert_value", "selector": "...", "value": "..."} - Assert the current value of an input, textarea or select (the DOM property, which typing changes; not the value attribute).
+- assert_enabled / assert_disabled: {"action": "assert_enabled", "selector": "..."} - Assert a control is enabled or disabled: disabled means a disabled form control (or one in a disabled fieldset) or inside aria-disabled="true".
+- assert_focused: {"action": "assert_focused", "selector": "..."} - Assert the element has keyboard focus (document.activeElement, through shadow roots).
 - wait_url: {"action": "wait_url", "text": "...", "timeout": "10s"} (substring) or {"action": "wait_url", "value": "..."} (exact) - Wait for the browser URL to match. Use this (not assert_url) when a click triggers an async SPA route change, e.g. /new -> /c/<slug>.
 - assert_url: {"action": "assert_url", "value": "..."} or {"action": "assert_url", "text": "..."} for contains - Asserts the URL immediately (no waiting).
 - assert_title: {"action": "assert_title", "text": "..."}

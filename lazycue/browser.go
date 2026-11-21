@@ -841,12 +841,62 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 
 	case ActionAssertAttribute:
 		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
-			got, err := elementString(runCtx, step, fmt.Sprintf("el.getAttribute(%q) ?? ''", step.Attribute))
+			// An absent attribute is not an empty one: an assertion that a
+			// boolean attribute such as disabled is "" must not pass when
+			// it is missing.
+			got, err := elementString(runCtx, step, fmt.Sprintf("el.hasAttribute(%[1]q) ? '=' + el.getAttribute(%[1]q) : 'absent'", step.Attribute))
 			if err != nil {
 				return fmt.Errorf("assert_attribute: %w", err)
 			}
+			if got == "absent" {
+				return fmt.Errorf("assert_attribute: %s has no %q attribute", describe(step), step.Attribute)
+			}
+			if got[1:] != step.Value {
+				return fmt.Errorf("assert_attribute %q: expected %q, got %q", step.Attribute, step.Value, got[1:])
+			}
+			return nil
+		})
+
+	case ActionAssertValue:
+		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
+			got, err := elementString(runCtx, step, `(function() {
+				if (!('value' in el) || el instanceof HTMLButtonElement || el instanceof HTMLLIElement) throw new Error('a <' + el.tagName.toLowerCase() + '> has no value');
+				return el.value;
+			})()`)
+			if err != nil {
+				return fmt.Errorf("assert_value: %w", err)
+			}
 			if got != step.Value {
-				return fmt.Errorf("assert_attribute %q: expected %q, got %q", step.Attribute, step.Value, got)
+				return fmt.Errorf("assert_value: expected %q, got %q", step.Value, got)
+			}
+			return nil
+		})
+
+	case ActionAssertEnabled, ActionAssertDisabled:
+		want := map[string]string{ActionAssertEnabled: "enabled", ActionAssertDisabled: "disabled"}[step.Action]
+		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
+			got, err := elementString(runCtx, step, "("+isDisabledJS+")(el) ? 'disabled' : 'enabled'")
+			if err != nil {
+				return fmt.Errorf("%s: %w", step.Action, err)
+			}
+			if got != want {
+				return fmt.Errorf("%s: %s is %s", step.Action, describe(step), got)
+			}
+			return nil
+		})
+
+	case ActionAssertFocused:
+		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
+			got, err := elementString(runCtx, step, `(function() {
+				let a = document.activeElement;
+				while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
+				return a === el ? 'focused' : a ? a.tagName.toLowerCase() + (a.id ? '#' + a.id : '') : 'nothing';
+			})()`)
+			if err != nil {
+				return fmt.Errorf("assert_focused: %w", err)
+			}
+			if got != "focused" {
+				return fmt.Errorf("assert_focused: %s is not focused; %s is", describe(step), got)
 			}
 			return nil
 		})
@@ -959,6 +1009,13 @@ func visibleJS(step Step) string {
 	})(%s)`, findJS(step))
 }
 
+// isDisabledJS is a function of an element: whether it is disabled, as
+// Playwright has it: a disabled form control (or one in a disabled
+// fieldset), or inside an element with aria-disabled="true".
+const isDisabledJS = `function(el) {
+	return !!(el.closest(':disabled') || el.closest('[aria-disabled="true"]'));
+}`
+
 // isVisibleJS declares isVisible(el), the test visibleJS describes.
 const isVisibleJS = `function isVisible(el) {
 	const r = el.getBoundingClientRect();
@@ -1009,7 +1066,7 @@ const targetJS = `(async function(el, sel, dx, dy, checkEnabled) {
 	await new Promise(done => raf(() => raf(done)));
 	const r2 = el.getBoundingClientRect();
 	if (r2.x !== r.x || r2.y !== r.y || r2.width !== r.width || r2.height !== r.height) return {err: sel + ' is moving'};
-	if (checkEnabled && (el.closest(':disabled') || el.closest('[aria-disabled="true"]'))) return {err: sel + ' is disabled'};
+	if (checkEnabled && (` + isDisabledJS + `)(el)) return {err: sel + ' is disabled'};
 	const box = dx === null ? [...el.getClientRects()].find(b => b.width > 0 && b.height > 0) || r : null;
 	const x = box ? box.left + box.width / 2 : r.left + dx;
 	const y = box ? box.top + box.height / 2 : r.top + dy;

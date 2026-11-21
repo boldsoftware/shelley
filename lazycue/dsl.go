@@ -66,6 +66,10 @@ const (
 	ActionAssertText         = "assert_text"
 	ActionAssertTextContains = "assert_text_contains"
 	ActionAssertAttribute    = "assert_attribute"
+	ActionAssertValue        = "assert_value"
+	ActionAssertEnabled      = "assert_enabled"
+	ActionAssertDisabled     = "assert_disabled"
+	ActionAssertFocused      = "assert_focused"
 	ActionWaitURL            = "wait_url"
 	ActionAssertURL          = "assert_url"
 	ActionAssertTitle        = "assert_title"
@@ -179,6 +183,10 @@ func stepSummary(s Step) string {
 		return "assert_text_contains " + picked(s) + " " + truncateArg(s.Text, 30)
 	case ActionAssertAttribute:
 		return "assert_attribute " + picked(s) + " " + s.Attribute + "=" + truncateArg(s.Value, 20)
+	case ActionAssertValue:
+		return "assert_value " + picked(s) + " " + truncateArg(s.Value, 30)
+	case ActionAssertEnabled, ActionAssertDisabled, ActionAssertFocused:
+		return s.Action + " " + picked(s)
 	case ActionWaitURL:
 		if s.Value != "" {
 			return s.Action + " " + s.Value

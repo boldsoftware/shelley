@@ -154,6 +154,50 @@ func TestHasText(t *testing.T) {
 	}
 }
 
+func TestFormStateAssertions(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<input id="name" value="attr">
+<button id="on">on</button><button id="off" disabled>off</button>
+<fieldset disabled><button id="inset">in set</button></fieldset>
+<div aria-disabled="true"><button id="aria">aria</button></div>
+<button id="empty" data-x="">empty</button>
+<select id="pick"><option>a</option><option selected>b</option></select>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionFill, Selector: "#name", Value: "typed"},
+		Step{Action: ActionAssertValue, Selector: "#name", Value: "typed"},
+		Step{Action: ActionAssertAttribute, Selector: "#name", Attribute: "value", Value: "attr"},
+		Step{Action: ActionAssertValue, Selector: "#pick", Value: "b"},
+		Step{Action: ActionAssertEnabled, Selector: "#on"},
+		Step{Action: ActionAssertDisabled, Selector: "#off"},
+		Step{Action: ActionAssertDisabled, Selector: "#inset"},
+		Step{Action: ActionAssertDisabled, Selector: "#aria"},
+		Step{Action: ActionAssertAttribute, Selector: "#off", Attribute: "disabled", Value: ""},
+		Step{Action: ActionAssertAttribute, Selector: "#empty", Attribute: "data-x", Value: ""},
+		Step{Action: ActionAssertFocused, Selector: "#name"},
+		Step{Action: ActionClick, Selector: "#on"},
+		Step{Action: ActionAssertFocused, Selector: "#on"},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		{Step{Action: ActionAssertAttribute, Selector: "#on", Attribute: "disabled", Value: ""}, `#on has no "disabled" attribute`},
+		{Step{Action: ActionAssertValue, Selector: "#name", Value: "attr"}, `expected "attr", got "typed"`},
+		{Step{Action: ActionAssertValue, Selector: "#on", Value: ""}, "a <button> has no value"},
+		{Step{Action: ActionAssertEnabled, Selector: "#off"}, "#off is disabled"},
+		{Step{Action: ActionAssertDisabled, Selector: "#on"}, "#on is enabled"},
+		{Step{Action: ActionAssertFocused, Selector: "#name"}, "#name is not focused; button#on is"},
+	} {
+		c.step.Timeout = "300ms"
+		if err := failSteps(t, br, env, Step{Action: ActionNavigate, URL: "/"}, Step{Action: ActionFill, Selector: "#name", Value: "typed"}, Step{Action: ActionClick, Selector: "#on"}, c.step); err == nil || !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+}
+
 const clickPage = `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0">
 <button id="b" style="width: 100px; height: 40px">b</button>
 <button id="off" disabled>off</button>
