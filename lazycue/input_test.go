@@ -94,6 +94,26 @@ func TestLaunchSettings(t *testing.T) {
 	runSteps(t, br, env, steps...)
 }
 
+// An eval runs again, when it polls or a retry block repeats, though it
+// declares a const at the top: evals run as DevTools' console runs them.
+func TestEvalRunsTwice(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><body>
+<iframe srcdoc="<p>x</p>"></iframe>
+<script>setTimeout(() => document.title = 'ready', 300);</script>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: `const f = document.title; f`, Expect: ptr("ready")},
+		Step{Action: ActionRetry, Steps: []Step{
+			{Action: ActionEval, Expression: `const g = window.tries = (window.tries || 0) + 1; if (g < 2) throw new Error('again'); g`},
+		}},
+		Step{Action: ActionEval, Expression: `const r = await fetch('/'); r.status`, Expect: ptr("200")},
+		Step{Action: ActionEval, Frame: "iframe", Expression: `let h = 1; h`},
+		Step{Action: ActionEval, Frame: "iframe", Expression: `let h = 2; h`, Expect: ptr("2")},
+	)
+}
+
 func TestEvalAwaitsPromisesAndRendersJSON(t *testing.T) {
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, blankPage)}
