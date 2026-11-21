@@ -1,0 +1,83 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Highlight callouts keep their space as the editor narrows. The commit also highlights src/zeta.ts line 10 with a long comment that wraps onto more lines as the editor narrows. The conversation at /c/{{SLUG}} works in a git repo whose top commit, \"Highlighted commit\", changes src/zeta.ts (line 160 becomes \"const critical = true;\"), README.md and src/alpha.ts, and carries commit highlights that rank the files zeta.ts, README.md, alpha.ts and comment on src/zeta.ts line 160 (\"The one line that matters.\") and README.md line 3 (\"Docs follow the code.\"). \"The overlay\" is the \".diff-viewer-overlay\" element; \"the files\" are the overlay's \".diff-tree-row[aria-selected]\" elements, in document order; \"the second file\" is the one at index 1 (pick it with \"nth\": 1, scoped with \"within\" the overlay). Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Open the Diffs workspace tool: wait for the \".header\" element to be visible, then click the button with accessible name exactly \"Diffs\" inside \".chat-workspace-actions\" (when that toolbar is not shown, click the button named exactly \"More options\" and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"). The overlay becomes visible (allow 30s).\n3. Click the second file. \"The callout\" is the FIRST \".diff-highlight-zone\" in the overlay; \"the next line\" is the overlay's \".editor.modified .view-line\" element whose textContent matches /^line\\s11$/. \"The gap\" is the next line's getBoundingClientRect().y - (the callout's y + height), or NaN when either is missing (Monaco re-renders lines as it lays out).\n4. The callout is in the viewport.\n5. The line after the highlight starts where its callout ends: wait (with an eval that has expect \"true\") until Math.abs(gap) < 0.5.\n6. In one eval (no expect), store the callout's getBoundingClientRect().height in window.__height.\n7. Narrow the window to 800x900 (set_viewport with only width 800 and height 900, keeping the rest of the device).\n8. Wait (with an eval that has expect \"true\") until the callout's height is greater than window.__height: the comment wraps onto more lines.\n9. Wait (with an eval that has expect \"true\") until Math.abs(gap) < 0.5 again.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-workspace-actions"
+      },
+      "role": "button",
+      "name": "Diffs",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row[aria-selected]",
+      "nth": 1
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .diff-highlight-zone"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": ".diff-viewer-overlay .diff-highlight-zone"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const callout = document.querySelector('.diff-viewer-overlay .diff-highlight-zone'); const nextLine = Array.from(document.querySelectorAll('.diff-viewer-overlay .editor.modified .view-line')).find(l => /^line\\s11$/.test(l.textContent.trim())); if (!callout || !nextLine) return NaN; const cr = callout.getBoundingClientRect(); const lr = nextLine.getBoundingClientRect(); const gap = lr.y - (cr.y + cr.height); return Math.abs(gap) < 0.5; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__height = document.querySelector('.diff-viewer-overlay .diff-highlight-zone').getBoundingClientRect().height"
+    },
+    {
+      "action": "set_viewport",
+      "width": 800,
+      "height": 900
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-viewer-overlay .diff-highlight-zone').getBoundingClientRect().height > window.__height",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const callout = document.querySelector('.diff-viewer-overlay .diff-highlight-zone'); const nextLine = Array.from(document.querySelectorAll('.diff-viewer-overlay .editor.modified .view-line')).find(l => /^line\\s11$/.test(l.textContent.trim())); if (!callout || !nextLine) return NaN; const cr = callout.getBoundingClientRect(); const lr = nextLine.getBoundingClientRect(); const gap = lr.y - (cr.y + cr.height); return Math.abs(gap) < 0.5; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:20:10.4516814Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 714042,
+    "output_tokens": 13753,
+    "estimated_cost_usd": 0.53850975,
+    "mode": "generated"
+  }
+}

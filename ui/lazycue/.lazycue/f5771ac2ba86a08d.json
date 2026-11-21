@@ -1,0 +1,133 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Tabbing to a highlight callout's button scrolls it into view. The commit also highlights src/zeta.ts line 10 (\"Far above the other.\"). The conversation at /c/{{SLUG}} works in a git repo whose top commit, \"Highlighted commit\", changes src/zeta.ts (line 160 becomes \"const critical = true;\"), README.md and src/alpha.ts, and carries commit highlights that rank the files zeta.ts, README.md, alpha.ts and comment on src/zeta.ts line 160 (\"The one line that matters.\") and README.md line 3 (\"Docs follow the code.\"). \"The overlay\" is the \".diff-viewer-overlay\" element; \"the files\" are the overlay's \".diff-tree-row[aria-selected]\" elements, in document order; \"the second file\" is the one at index 1 (pick it with \"nth\": 1, scoped with \"within\" the overlay). Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Open the Diffs workspace tool: wait for the \".header\" element to be visible, then click the button with accessible name exactly \"Diffs\" inside \".chat-workspace-actions\" (when that toolbar is not shown, click the button named exactly \"More options\" and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"). The overlay becomes visible (allow 30s).\n3. Click the second file. It opens at its first highlight; the second is far below: \"the notes\" are the overlay's elements with role \"note\"; the first note is in the viewport and the last note is NOT in the viewport.\n4. Focus the first note's button with role \"button\" and name \"Comment\" (in an eval: .focus()), then press Tab.\n5. The last note's button with role \"button\" and name \"Comment\" has focus; the last note is in the viewport, and its text contains \"The one line that matters.\".\n6. Press Enter. The \".diff-viewer-comment-dialog\" text contains \"Add Comment (Line 160, new)\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-workspace-actions"
+      },
+      "role": "button",
+      "name": "Diffs",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row[aria-selected]",
+      "nth": 1
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "role": "note",
+      "count": 2
+    },
+    {
+      "action": "assert_in_viewport",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "role": "note",
+      "nth": 0
+    },
+    {
+      "action": "assert_not_in_viewport",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "role": "note",
+      "nth": -1
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=note]').querySelector('button[aria-label=\"Comment\"]').focus()"
+    },
+    {
+      "action": "assert_focused",
+      "within": {
+        "selector": "[role=note]",
+        "nth": 0
+      },
+      "role": "button",
+      "name": "Comment"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab"
+    },
+    {
+      "action": "assert_focused",
+      "within": {
+        "selector": "[role=note]",
+        "nth": -1
+      },
+      "role": "button",
+      "name": "Comment"
+    },
+    {
+      "action": "assert_in_viewport",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "role": "note",
+      "nth": -1
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "role": "note",
+      "nth": -1,
+      "text": "The one line that matters."
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_text",
+      "text": "Add Comment (Line 160, new)",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-viewer-comment-dialog",
+      "text": "Add Comment (Line 160, new)"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:25:48.790544587Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 769744,
+    "output_tokens": 11982,
+    "estimated_cost_usd": 0.5058604499999999,
+    "mode": "generated"
+  }
+}

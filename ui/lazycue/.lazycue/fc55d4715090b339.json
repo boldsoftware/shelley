@@ -1,0 +1,125 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A phone's diff file picker follows the ranked order. The conversation at /c/{{SLUG}} works in a git repo whose top commit, \"Highlighted commit\", changes src/zeta.ts (line 160 becomes \"const critical = true;\"), README.md and src/alpha.ts, and carries commit highlights that rank the files zeta.ts, README.md, alpha.ts and comment on src/zeta.ts line 160 (\"The one line that matters.\") and README.md line 3 (\"Docs follow the code.\"). \"The overlay\" is the \".diff-viewer-overlay\" element; \"the files\" are the overlay's \".diff-tree-row[aria-selected]\" elements, in document order; \"the second file\" is the one at index 1 (pick it with \"nth\": 1, scoped with \"within\" the overlay). Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Open the Diffs workspace tool: wait for the \".header\" element to be visible, then click the button with accessible name exactly \"Diffs\" inside \".chat-workspace-actions\" (when that toolbar is not shown, click the button named exactly \"More options\" and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"). The overlay becomes visible (allow 30s).\n3. \"The picker\" is the VISIBLE select element matching \".diff-viewer-file-selector-wrapper select\" in the overlay; \"the options\" are its option elements. There are exactly 5 options: a placeholder, the commit message, then the ranked files.\n4. In one eval with expect \"true\" testing each option's raw textContent: the third option matches / src\\/zeta\\.ts .*★1$/, the fourth matches / README\\.md .*★1$/ and the fifth matches / src\\/alpha\\.ts /.\n5. The narrow diff is inline; the comment still shows under its line: select the option with value \"src/zeta.ts\" in the picker. \"The callout\" is the overlay's \".diff-highlight-callout-text\": it has exactly the text \"The one line that matters.\" and is in the viewport.\n6. A tap on the callout's button opens the comment dialog, though Monaco claims touches inside the editor: tap (touch start, then touch end) the button with role \"button\" and name \"Comment\" inside the overlay's element with role \"note\". The \".diff-viewer-comment-dialog\" text then contains \"Add Comment (Line 160, new)\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover",
+      "role": "button",
+      "name": "Diffs"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('.diff-viewer-overlay .diff-viewer-file-selector-wrapper select')].find(e => e.checkVisibility())?.options.length",
+      "expect": "5"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-viewer-file-selector-wrapper select",
+      "visible": true
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay .diff-viewer-file-selector-wrapper select",
+        "visible": true
+      },
+      "selector": "option",
+      "count": 5
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const sel = [...document.querySelectorAll('.diff-viewer-overlay .diff-viewer-file-selector-wrapper select')].find(e => e.checkVisibility()); const opts = [...sel.options]; const t2 = opts[2].textContent; const t3 = opts[3].textContent; const t4 = opts[4].textContent; const r2 = / src\\/zeta\\.ts .*★1$/.test(t2); const r3 = / README\\.md .*★1$/.test(t3); const r4 = / src\\/alpha\\.ts /.test(t4); return String(r2 && r3 && r4); })()",
+      "expect": "true"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-viewer-file-selector-wrapper select",
+      "value": "src/zeta.ts",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .diff-highlight-callout-text",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-viewer-overlay .diff-highlight-callout-text",
+      "text": "The one line that matters."
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": ".diff-viewer-overlay .diff-highlight-callout-text"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "within": {
+        "role": "note"
+      },
+      "role": "button",
+      "name": "Comment"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-dialog",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-viewer-comment-dialog",
+      "text": "Add Comment (Line 160, new)"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:24:36.66985448Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 735073,
+    "output_tokens": 12749,
+    "estimated_cost_usd": 0.50252475,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,310 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The diff viewer's sidebar ranks files by commit highlights and marks highlighted lines. The conversation at /c/{{SLUG}} works in a git repo whose top commit, \"Highlighted commit\", changes src/zeta.ts (line 160 becomes \"const critical = true;\"), README.md and src/alpha.ts, and carries commit highlights that rank the files zeta.ts, README.md, alpha.ts and comment on src/zeta.ts line 160 (\"The one line that matters.\") and README.md line 3 (\"Docs follow the code.\"). \"The overlay\" is the \".diff-viewer-overlay\" element; \"the files\" are the overlay's \".diff-tree-row[aria-selected]\" elements, in document order; \"the second file\" is the one at index 1 (pick it with \"nth\": 1, scoped with \"within\" the overlay). Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Open the Diffs workspace tool: wait for the \".header\" element to be visible, then click the button with accessible name exactly \"Diffs\" inside \".chat-workspace-actions\" (when that toolbar is not shown, click the button named exactly \"More options\" and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"). The overlay becomes visible (allow 30s).\n3. A clean tree defaults to the highlighted top commit: the overlay's element with role \"radio\" and name \"Single commit\" has aria-checked exactly \"true\".\n4. The overlay's \".diff-viewer-commit-list-item .commit-picker-highlights-badge\" has exactly the text \"highlights\".\n5. An element in the overlay with the text \"Commit Messages and Files by Importance\" is visible.\n6. There are exactly 4 files, and their \".diff-tree-label\" elements have exactly the texts \"Highlighted commit\", \"zeta.ts\", \"README.md\", \"alpha.ts\", in order.\n7. The first file contains no \".ellipsis-start\" element (count 0); the second file contains exactly 1.\n8. Each file sits under its folder, so src repeats around README.md: the overlay's \".diff-tree-row .diff-tree-label\" elements have exactly the texts \"Commit messages\", \"Highlighted commit\", \"src\", \"zeta.ts\", \"README.md\", \"src\", \"alpha.ts\", in order.\n9. Files show how many highlights they carry, not the comments: the files' \".diff-tree-highlight-count\" elements have exactly the texts \"★1\", \"★1\", in order; the second file's accessible name contains \"1 highlight\"; the fourth file contains no \".diff-tree-highlight-count\" (count 0); and no element in the overlay has the text \"The one line that matters.\" (count 0).\n10. A file opens at its first highlight, with the comment under it: click the second file. It gets aria-selected exactly \"true\". \"The callout\" is the overlay's \".diff-highlight-callout-text\": it has exactly the text \"The one line that matters.\" and is in the viewport. The LAST \".view-lines\" element in the overlay contains the text \"const critical = true;\". The overlay has exactly 1 \".diff-highlight-gutter\".\n11. The next file follows the ranked order: click the overlay's button with name \"Next file (>)\". The third file gets aria-selected exactly \"true\", and the callout has exactly the text \"Docs follow the code.\".\n12. Click \"Next file (>)\" again. The fourth file gets aria-selected exactly \"true\"; there is no callout (count 0) and no \".diff-highlight-gutter\" in the overlay (count 0).\n13. Highlights describe one commit; a range keeps the alphabetical tree: click the overlay's role \"radio\" named \"Through working tree\". An element in the overlay whose whole text is exactly \"Commit Messages and Files\" is visible; the files contain no \".diff-tree-highlight-count\" (count 0); and the overlay's \".diff-tree-row:not([aria-selected]) .diff-tree-label\" elements have exactly the texts \"Commit messages\", \"src\", in order.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-workspace-actions"
+      },
+      "role": "button",
+      "name": "Diffs",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "role": "radio",
+      "name": "Single commit",
+      "exact": true,
+      "attribute": "aria-checked",
+      "value": "true"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-viewer-commit-list-item .commit-picker-highlights-badge",
+      "text": "highlights"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": "*",
+      "has_text": "Commit Messages and Files by Importance"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row[aria-selected]",
+      "count": 4
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row[aria-selected] .diff-tree-label",
+      "texts": [
+        "Highlighted commit",
+        "zeta.ts",
+        "README.md",
+        "alpha.ts"
+      ]
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay .diff-tree-row[aria-selected]",
+        "nth": 0
+      },
+      "selector": ".ellipsis-start",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay .diff-tree-row[aria-selected]",
+        "nth": 1
+      },
+      "selector": ".ellipsis-start",
+      "count": 1
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row .diff-tree-label",
+      "texts": [
+        "Commit messages",
+        "Highlighted commit",
+        "src",
+        "zeta.ts",
+        "README.md",
+        "src",
+        "alpha.ts"
+      ]
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row[aria-selected] .diff-tree-highlight-count",
+      "texts": [
+        "★1",
+        "★1"
+      ]
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "role": "treeitem",
+      "name": "1 highlight",
+      "nth": 0,
+      "text": "zeta.ts"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay .diff-tree-row[aria-selected]",
+        "nth": 3
+      },
+      "selector": ".diff-tree-highlight-count",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": "*",
+      "has_text": "The one line that matters.",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row[aria-selected]",
+      "nth": 1
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row[aria-selected]",
+      "nth": 1,
+      "attribute": "aria-selected",
+      "value": "true"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-highlight-callout-text",
+      "text": "The one line that matters."
+    },
+    {
+      "action": "assert_in_viewport",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-highlight-callout-text"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".view-lines",
+      "nth": -1,
+      "text": "const critical = true;"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-highlight-gutter",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "role": "button",
+      "name": "Next file (>)"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row[aria-selected]",
+      "nth": 2,
+      "attribute": "aria-selected",
+      "value": "true"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-highlight-callout-text",
+      "text": "Docs follow the code."
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "role": "button",
+      "name": "Next file (>)"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row[aria-selected]",
+      "nth": 3,
+      "attribute": "aria-selected",
+      "value": "true"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-highlight-callout-text",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-highlight-gutter",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "role": "radio",
+      "name": "Through working tree"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": "*",
+      "has_text": "Commit Messages and Files",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row[aria-selected] .diff-tree-highlight-count",
+      "count": 0
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-tree-row:not([aria-selected]) .diff-tree-label",
+      "texts": [
+        "Commit messages",
+        "src"
+      ]
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:18:38.451187497Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 362267,
+    "output_tokens": 11172,
+    "estimated_cost_usd": 0.371454,
+    "mode": "generated"
+  }
+}
