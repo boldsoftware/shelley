@@ -5991,13 +5991,17 @@ svg {
   display: contents;
 }
 
-/* Inline TOC trigger, immediately after the model readout. */
+/* Inline TOC trigger, immediately after the model readout, and the place
+   it holds until it shows. */
+.toc-button-placeholder,
 .toc-button {
   flex: none;
+  width: 1.5rem;
+}
+.toc-button {
   background: none;
   border: none;
   border-radius: 0.25rem;
-  width: 1.5rem;
   height: 1.5rem;
   padding: 0;
   display: flex;

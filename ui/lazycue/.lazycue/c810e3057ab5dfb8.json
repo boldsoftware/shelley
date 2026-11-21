@@ -1,0 +1,48 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A saved draft's new-conversation fields are as wide as a new conversation's, on a phone. \"The fields\" are \".status-bar-new-conversation\". Perform the steps in order. 1. Navigate to /new. 2. The fields should be visible (allow 30s). 3. Eval String(Math.round(document.querySelector('.status-bar-new-conversation').getBoundingClientRect().width)) and save the result as NEW_WIDTH. 4. Navigate to /c/{{DRAFT}}. 5. data-testid \"message-input\" should have the value \"half a thought\". 6. The fields should be visible. 7. Eval the same expression with expect \"{{NEW_WIDTH}}\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".status-bar-new-conversation",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "String(Math.round(document.querySelector('.status-bar-new-conversation').getBoundingClientRect().width))",
+      "save": "NEW_WIDTH"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{DRAFT}}"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "half a thought"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".status-bar-new-conversation"
+    },
+    {
+      "action": "eval",
+      "expression": "String(Math.round(document.querySelector('.status-bar-new-conversation').getBoundingClientRect().width))",
+      "expect": "{{NEW_WIDTH}}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T17:17:38.046232591Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 7401,
+    "output_tokens": 285,
+    "estimated_cost_usd": 0.03202725,
+    "mode": "generated"
+  }
+}

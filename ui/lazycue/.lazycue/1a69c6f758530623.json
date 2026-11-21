@@ -1,0 +1,37 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand \u2014 it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The status readout's model picker stays put while a conversation opens: the table of contents button that shows beside it once the messages are in must not push it aside. The screen is 1280x800. An init script records, every animation frame, the x position of \".model-picker-inline\" (rounded to 0.1px, only while it has a width) in the array window.__triggerXs whenever it differs from the last one recorded. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The button named exactly \"Conversation table of contents\" should be visible (allow 30s). 3. Eval new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(() =\u003e r('done')))) with expect \"done\". 4. Eval window.__triggerXs.length with expect \"1\": the picker has had one position since it first showed.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true,
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(() =\u003e r('done'))))",
+      "expect": "done"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__triggerXs.length",
+      "expect": "1"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T16:57:06.753990626Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 7440,
+    "output_tokens": 350,
+    "estimated_cost_usd": 0.010071450000000001,
+    "mode": "generated"
+  }
+}

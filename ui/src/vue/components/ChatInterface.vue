@@ -557,7 +557,9 @@
     <div :class="statusBarClass">
       <div class="status-bar-content">
         <ChatStatusContent v-if="showStatusContent" v-bind="statusContentProps" />
-        <span :id="`${tocTargetId}-desktop`" class="status-navigation" />
+        <span :id="`${tocTargetId}-desktop`" class="status-navigation">
+          <span v-if="tocPending && !statusSlotInline" class="toc-button-placeholder" />
+        </span>
       </div>
     </div>
 
@@ -1252,6 +1254,14 @@ defineExpose({
 // proxies made every computed walking a large conversation track each field
 // it read, which dominated opening one.
 const messages = shallowRef<Message[]>([]);
+// The TOC button shows once an opened conversation's messages are in; until
+// then a placeholder holds its place, so the readout beside it (the model
+// picker, whose panel may be open) doesn't shift when it shows. A saved
+// draft has no messages to wait for.
+const tocPending = computed(
+  () =>
+    !!props.conversationId && !props.currentConversation?.is_draft && messages.value.length === 0,
+);
 const btwExchanges = ref<BtwExchange[]>([]);
 
 // The id of the bottom-most message in the conversation. Provided to

@@ -545,6 +545,40 @@ func TestE2EPopoversReadoutReasoningPillPersists(t *testing.T) {
 	})
 }
 
+// triggerMovesJS records, every frame, where the status readout's model
+// picker is, whenever that changes.
+const triggerMovesJS = `(() => {
+  window.__triggerXs = [];
+  const look = () => {
+    const rect = document.querySelector('.model-picker-inline')?.getBoundingClientRect();
+    if (rect && rect.width > 0) {
+      const x = Math.round(rect.x * 10) / 10;
+      if (window.__triggerXs[window.__triggerXs.length - 1] !== x) window.__triggerXs.push(x);
+    }
+    requestAnimationFrame(look);
+  };
+  requestAnimationFrame(look);
+})()`
+
+// The picker's panel follows the trigger whenever it re-renders, so a
+// trigger that moves under an open panel makes it jump between a press and
+// its release, losing the click.
+func TestE2EPopoversReadoutPickerStaysPutWhileOpening(t *testing.T) {
+	e2e(t, `The status readout's model picker stays put while a conversation opens: the table of contents button that shows beside it once the messages are in must not push it aside. The screen is 1280x800. An init script records, every animation frame, the x position of ".model-picker-inline" (rounded to 0.1px, only while it has a width) in the array window.__triggerXs whenever it differs from the last one recorded. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The button named exactly "Conversation table of contents" should be visible (allow 30s). 3. Eval new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r('done')))) with expect "done". 4. Eval window.__triggerXs.length with expect "1": the picker has had one position since it first showed.`, func(s *shelley) {
+		s.viewport(1280, 800)
+		s.initScript(triggerMovesJS)
+		s.v("SLUG", s.conversation("echo trigger", "").Slug)
+	})
+}
+
+// A saved draft never loads messages, so it must not hold a place for
+// the TOC button.
+func TestE2EPopoversDraftFieldsKeepTheirWidth(t *testing.T) {
+	e2e(t, `A saved draft's new-conversation fields are as wide as a new conversation's, on a phone. "The fields" are ".status-bar-new-conversation". Perform the steps in order. 1. Navigate to /new. 2. The fields should be visible (allow 30s). 3. Eval String(Math.round(document.querySelector('.status-bar-new-conversation').getBoundingClientRect().width)) and save the result as NEW_WIDTH. 4. Navigate to /c/{{DRAFT}}. 5. data-testid "message-input" should have the value "half a thought". 6. The fields should be visible. 7. Eval the same expression with expect "{{NEW_WIDTH}}".`, func(s *shelley) {
+		s.v("DRAFT", s.draft("half a thought"))
+	})
+}
+
 func TestE2EPopoversReadoutPickerClosesWhenTurnStarts(t *testing.T) {
 	e2e(t, `An open model picker closes when a turn starts. The screen is 1280x800. Call "mark settings" remembers how many requests to a /settings URL the page has sent; call "settings since mark" returns how many it has sent since. Call "start turn" sends the conversation the message "bash: sleep 8" through the API (not through the page), starting a turn that runs for 8 seconds. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. data-testid "message-input" should be visible (allow 30s). 3. Click ".model-picker-inline .p-select-label": ".model-picker-panel" should be visible. 4. Call "mark settings". 5. Call "start turn". 6. data-testid "agent-thinking" should be visible (allow 20s). 7. There should be no ".model-picker-panel" (count 0). 8. Call "settings since mark": it must return "0".`, func(s *shelley) {
 		s.viewport(1280, 800)
