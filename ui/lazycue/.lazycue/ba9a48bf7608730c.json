@@ -1,0 +1,40 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "An expired exe.dev login reloads the page into the auth flow, keeping its place. The page's EventSource is a fake (the page already defines it): window.__testStream is the stream the app opened, and the test fails it as a dropped connection would. The server answers GET /api/upload/raw, the app's login probe, with a 307 redirect to /__exe.dev/login?redirect=%2Fnew, as exe.dev does once the login has expired. Perform the steps in order. 1. Navigate to /new#keep-my-place; the element with data-testid \"message-input\" should be visible. 2. Fail the stream with one eval: (() =\u003e { const s = window.__testStream; if (!s || !s.onerror) throw new Error(\"global stream was not initialized\"); s.readyState = 0; s.onerror(); return \"failed\"; })() which must return \"failed\". 3. The page must reload: performance.getEntriesByType(\"navigation\")[0]?.type should become exactly \"reload\". 4. location.hash must be exactly \"#keep-my-place\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new#keep-my-place"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const s = window.__testStream; if (!s || !s.onerror) throw new Error(\"global stream was not initialized\"); s.readyState = 0; s.onerror(); return \"failed\"; })()",
+      "expect": "failed"
+    },
+    {
+      "action": "eval",
+      "expression": "performance.getEntriesByType(\"navigation\")[0]?.type",
+      "expect": "reload"
+    },
+    {
+      "action": "eval",
+      "expression": "location.hash",
+      "expect": "#keep-my-place"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:36:44.152575991Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 48308,
+    "output_tokens": 791,
+    "estimated_cost_usd": 0.0510825,
+    "mode": "generated"
+  }
+}
