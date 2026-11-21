@@ -1,0 +1,64 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A git graph diffstat link opens the selected changed file in the diff viewer. The conversation /c/{{SLUG}} runs in a git repository whose commits only ever changed example.txt. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input (data-testid \"message-input\") to be visible. 2. Open the Git Graph tool: click the button with aria-label exactly \"Git Graph\" in the header's workspace toolbar (\".chat-workspace-actions\"). 3. \".git-graph-container\" should be visible (up to 30s). 4. The first \".git-graph-diffstat-link\" in it should be visible (up to 30s). 5. Its title attribute is the changed file's path: it must be exactly \"example.txt\". 6. Its href must match the regular expression [?\u0026]file=example\\.txt (the path, URI-encoded, in a file query parameter). 7. Click that link. 8. The first \"select.diff-viewer-select\" in \".diff-viewer-overlay\" should come to have the value \"example.txt\" (up to 30s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions button[aria-label='Git Graph']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container .git-graph-diffstat-link",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".git-graph-container .git-graph-diffstat-link",
+      "attribute": "title",
+      "value": "example.txt"
+    },
+    {
+      "action": "eval",
+      "expression": "/[?\u0026]file=example\\.txt/.test(document.querySelector('.git-graph-container .git-graph-diffstat-link').getAttribute('href'))",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-container .git-graph-diffstat-link"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay select.diff-viewer-select",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-viewer-overlay select.diff-viewer-select').value",
+      "expect": "example.txt"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:15:38.364328943Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 26213,
+    "output_tokens": 1382,
+    "estimated_cost_usd": 0.038118299999999994,
+    "mode": "generated"
+  }
+}

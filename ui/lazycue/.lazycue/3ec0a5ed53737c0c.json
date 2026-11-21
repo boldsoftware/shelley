@@ -1,0 +1,156 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The git graph's diffstat keeps long paths distinct, counts aligned, and full-path links intact. The conversation /c/{{SLUG}} runs in a git repository whose last commit, \"Update long paths\", changed exactly five files: db/db.go, server/integrations/github/webhooks/notifications/dispatcher.go, server/integrations/slack/webhooks/notifications/dispatcher.go, server/a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_test.go (text files, one line replaced each) and assets/logo.bin (binary). \"The link for P\" is the element a[title=\"P\"] in \".git-graph-container\"; \"the links\" are its \".git-graph-diffstat-link\" elements. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and wait for the message input (data-testid \"message-input\") to be visible. 2. Open the Git Graph tool: click the button with aria-label exactly \"Git Graph\" in the header's workspace toolbar (\".chat-workspace-actions\"). 3. There should come to be exactly 5 links. 4. The container must hold exactly 0 \".git-graph-diffstat-bar\" elements, and exactly one \".git-graph-diffstat-binary\" element, with exactly the text \"bin\". 5. The \".git-graph-diffstat-path\" of the link for server/integrations/github/webhooks/notifications/dispatcher.go should have exactly the text \"server/…/github/…/dispatcher.go\", and that of the link for server/integrations/slack/webhooks/notifications/dispatcher.go exactly \"server/…/slack/…/dispatcher.go\". 6. The link for db/db.go should contain the text \"db/db.go\", and the link for server/a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_test.go the text \"a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_test.go\". 7. The link for server/integrations/github/webhooks/notifications/dispatcher.go should have exactly the accessible name \"server/integrations/github/webhooks/notifications/dispatcher.go, 1 added, 1 removed\" (its aria-label), and the link for assets/logo.bin exactly \"assets/logo.bin, binary\". 8. The link for server/integrations/github/webhooks/notifications/dispatcher.go should have the title attribute exactly \"server/integrations/github/webhooks/notifications/dispatcher.go\" and an href matching the regular expression [?\u0026]file=server%2Fintegrations%2Fgithub%2Fwebhooks%2Fnotifications%2Fdispatcher.go. 9. In one eval, read getBoundingClientRect().right of every \".git-graph-diffstat-counts\" inside the links: the largest minus the smallest must be less than 1. 10. Set the viewport to width 1280, height 900 (only width and height), then poll until every link has scrollWidth \u003c= clientWidth + 1. 11. Set the viewport to width 390, height 900, then poll the same: every link has scrollWidth \u003c= clientWidth + 1. 12. Set the viewport back to width 1280, height 900. 13. Set the style.width of the container's \".git-graph-detail\" to \"900px\". 14. The \".git-graph-diffstat-path\" of the link for server/integrations/github/webhooks/notifications/dispatcher.go should then have exactly the text \"server/integrations/github/webhooks/notifications/dispatcher.go\" (the full path). 15. Click the link for server/integrations/github/webhooks/notifications/dispatcher.go. 16. The first \"select.diff-viewer-select\" in \".diff-viewer-overlay\" should come to have the value \"server/integrations/github/webhooks/notifications/dispatcher.go\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions button[aria-label='Git Graph']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-diffstat-link",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".git-graph-container .git-graph-diffstat-link",
+      "count": 5
+    },
+    {
+      "action": "assert_count",
+      "selector": ".git-graph-container .git-graph-diffstat-bar",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".git-graph-container .git-graph-diffstat-binary",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": ".git-graph-container .git-graph-diffstat-binary",
+      "text": "bin"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".git-graph-container a[title='server/integrations/github/webhooks/notifications/dispatcher.go'] .git-graph-diffstat-path",
+      "text": "server/…/github/…/dispatcher.go"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".git-graph-container a[title='server/integrations/slack/webhooks/notifications/dispatcher.go'] .git-graph-diffstat-path",
+      "text": "server/…/slack/…/dispatcher.go"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".git-graph-container a[title='db/db.go']",
+      "text": "db/db.go"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".git-graph-container a[title='server/a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_test.go']",
+      "text": "a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_a_very_long_filename_test.go"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".git-graph-container a[title='server/integrations/github/webhooks/notifications/dispatcher.go']",
+      "attribute": "aria-label",
+      "value": "server/integrations/github/webhooks/notifications/dispatcher.go, 1 added, 1 removed"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".git-graph-container a[title='assets/logo.bin']",
+      "attribute": "aria-label",
+      "value": "assets/logo.bin, binary"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".git-graph-container a[title='server/integrations/github/webhooks/notifications/dispatcher.go']",
+      "attribute": "title",
+      "value": "server/integrations/github/webhooks/notifications/dispatcher.go"
+    },
+    {
+      "action": "eval",
+      "expression": "/[?\u0026]file=server%2Fintegrations%2Fgithub%2Fwebhooks%2Fnotifications%2Fdispatcher\\.go/.test(document.querySelector(\".git-graph-container a[title='server/integrations/github/webhooks/notifications/dispatcher.go']\").getAttribute('href') || '')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const els = Array.from(document.querySelectorAll('.git-graph-container .git-graph-diffstat-link .git-graph-diffstat-counts')); const rects = els.map(e =\u003e e.getBoundingClientRect().right); const diff = Math.max(...rects) - Math.min(...rects); return diff \u003c 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.git-graph-container .git-graph-diffstat-link')).every(e =\u003e e.scrollWidth \u003c= e.clientWidth + 1)",
+      "expect": "true"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 900
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.git-graph-container .git-graph-diffstat-link')).every(e =\u003e e.scrollWidth \u003c= e.clientWidth + 1)",
+      "expect": "true"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.git-graph-container .git-graph-detail').style.width = '900px'; 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".git-graph-container a[title='server/integrations/github/webhooks/notifications/dispatcher.go'] .git-graph-diffstat-path",
+      "text": "server/integrations/github/webhooks/notifications/dispatcher.go"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-container a[title='server/integrations/github/webhooks/notifications/dispatcher.go']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay select.diff-viewer-select",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_value",
+      "selector": ".diff-viewer-overlay select.diff-viewer-select",
+      "value": "server/integrations/github/webhooks/notifications/dispatcher.go"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:00:48.081770339Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 258937,
+    "output_tokens": 6245,
+    "estimated_cost_usd": 0.2352474,
+    "mode": "generated"
+  }
+}
