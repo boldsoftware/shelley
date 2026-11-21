@@ -1,0 +1,162 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Shell control keys arrive in the terminal (xterm), but the terminal toggle does not. Terminals render with xterm. The browser is a 1280x900 desktop window. \"Press K on X\" means: focus X with an eval calling X.focus(), then press K (for example \"Control+Shift+D\" is the key \"D\" with modifiers Control+Shift, and \"Control+Backquote\" is the key \"`\" with modifier Control). \"The message input\" is data-testid \"message-input\"; \"the terminal input\" is the element with role \"textbox\" and accessible name exactly \"Terminal input\" that is visible; \"focused\" means it is document.activeElement. The conversation's directory holds keys.sh, a script that puts the terminal in raw mode, creates a file \"ready\", reads keys up to a \"q\" and writes their hex bytes to a file \"received\". Call \"ready\" says whether the file \"ready\" exists (\"true\" or \"false\"); call \"received\" returns the trimmed content of \"received\" (\"\" while it does not exist). Perform the steps in order. 1. Navigate to /c/{{ID}}. 2. Fill the message input with \"!bash keys.sh\" and click the send button (data-testid \"send-button\"). 3. Call \"ready\" until it returns \"true\". 4. Press Control+Backquote on the message input: the terminal input should be focused. 5. Press Control+k on the terminal input: there must be no \".command-palette-overlay\" (count 0). Press Control+b on the terminal input: still no \".command-palette-overlay\" (count 0). 6. Press Control+Backquote on the terminal input: the message input should be focused. 7. Press Control+Backquote on the message input: the terminal input should be focused. 8. Press Control+Shift+D on the message input: \".diff-viewer-overlay\" should be visible. 9. Press Control+Backquote on the terminal input: \".terminal-panel\" must not have the class \"terminal-panel-minimized\". 10. Focus the message input and press Escape: there should be no \".diff-viewer-overlay\" (count 0). 11. Press \"q\" on the terminal input. 12. Call \"received\" until it returns exactly \"0b 02\" (Control+k and Control+b reached the shell; the toggle presses did not).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "!bash keys.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "call",
+      "value": "ready",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "textarea[aria-label='Terminal input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('textarea[aria-label=\"Terminal input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-overlay",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "b",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-overlay",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('textarea[aria-label=\"Terminal input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "D",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".terminal-panel\")?.classList.contains(\"terminal-panel-minimized\")",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "q"
+    },
+    {
+      "action": "call",
+      "value": "received",
+      "expect": "0b 02"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:35:23.123318859Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 99005,
+    "output_tokens": 4653,
+    "estimated_cost_usd": 0.13575464999999998,
+    "mode": "generated"
+  }
+}

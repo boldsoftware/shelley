@@ -1,0 +1,277 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Keyboard shortcuts: dialogs keep background actions and the terminal toggle out. The browser is a 1280x900 desktop window. \"Press K on X\" means: focus X with an eval calling X.focus(), then press K (for example \"Control+Shift+D\" is the key \"D\" with modifiers Control+Shift, and \"Control+Backquote\" is the key \"`\" with modifier Control). \"The message input\" is data-testid \"message-input\"; \"the terminal input\" is the element with role \"textbox\" and accessible name exactly \"Terminal input\" that is visible; \"focused\" means it is document.activeElement. Perform the steps in order. 1. Navigate to /c/{{ID}} and wait for the message input to be visible. 2. Press Control+p on the message input. 3. \"The finder\" is the first element with role \"textbox\" inside the element with role \"dialog\": it should be focused. Remember the current URL (location.href) in a window variable. 4. For each of the keys Control+Shift+D, Control+Shift+X, Control+Backquote and Alt+ArrowDown, in turn: press it on the finder, then check that the dialog is still visible, that there is no \".diff-viewer-overlay\" (count 0), and that \".terminal-panel\" is hidden (absent or not visible). 5. Press Control+m on the finder, then press \"n\" on it: the finder's value must be exactly \"n\", and location.href must still be the remembered URL. 6. Press Escape: the dialog should be hidden. 7. Press Control+k on the message input: \".command-palette-input\" should be focused. 8. Press Control+Shift+D on it, then Control+Backquote on it: there must be no \".diff-viewer-overlay\" (count 0) and \".terminal-panel\" must be hidden. 9. Press Control+k on the palette input: \".command-palette-input\" should be hidden. 10. Press Control+Shift+D on the message input: \".diff-viewer-overlay\" should be visible. 11. This overlay need not move focus, so checking only event.target is insufficient: press Control+Backquote on the message input, then press Control+Shift+X on it. 12. \".terminal-panel\" must be hidden, and location.href must still be the remembered URL.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog']",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[role=\"dialog\"] input"
+    },
+    {
+      "action": "eval",
+      "expression": "window._savedUrl = location.href; location.href"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"] input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "D",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".terminal-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"] input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "X",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".terminal-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"] input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".terminal-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"] input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown",
+      "modifiers": "Alt"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".terminal-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"] input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "m",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"] input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "n"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"] input').value",
+      "expect": "n"
+    },
+    {
+      "action": "eval",
+      "expression": "location.href === window._savedUrl",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[role='dialog']",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.command-palette-input')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.command-palette-input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "D",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.command-palette-input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".terminal-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.command-palette-input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".command-palette-input",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "D",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "X",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".terminal-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "location.href === window._savedUrl",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:25:22.292549625Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 213454,
+    "output_tokens": 7277,
+    "estimated_cost_usd": 0.24789975000000003,
+    "mode": "generated"
+  }
+}

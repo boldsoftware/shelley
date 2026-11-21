@@ -1,0 +1,170 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The terminal toggle (ghostty) keeps the selected tab and restores hardware-keyboard focus. Terminals render with ghostty, and the desktop window also has a touch screen. The browser is a 1280x900 desktop window. \"Press K on X\" means: focus X with an eval calling X.focus(), then press K (for example \"Control+Shift+D\" is the key \"D\" with modifiers Control+Shift, and \"Control+Backquote\" is the key \"`\" with modifier Control). \"The message input\" is data-testid \"message-input\"; \"the terminal input\" is the element with role \"textbox\" and accessible name exactly \"Terminal input\" that is visible; \"focused\" means it is document.activeElement. \"The selected view\" is the one visible element with a data-terminal-id attribute. Perform the steps in order. 1. Navigate to /c/{{ID}} and wait for the message input to be enabled. 2. Press Control+Backquote on the message input: the terminal input should be focused, and there should be exactly 1 \".terminal-panel-tab-running\". 3. Remember the selected view's data-terminal-id (in a window variable) as the first terminal's ID. 4. Click the button with accessible name exactly \"New terminal\": there should be exactly 2 \".terminal-panel-tab-running\", and the terminal input should be focused. 5. Click the first \".terminal-panel-tab\": the selected view's data-terminal-id should be the first terminal's ID. 6. Focus the message input (eval). 7. key_down Control, then key_down \"`\" (hold them): the terminal input should be focused, and the selected view's data-terminal-id should still be the first terminal's ID. 8. key_down \"`\" again while it is still held (an auto-repeat): \".terminal-panel\" must not have the class \"terminal-panel-minimized\", and the terminal input must still be focused. 9. key_up \"`\", then key_up Control. 10. Press Control+Backquote on the terminal input: \".terminal-panel\" should have the class \"terminal-panel-minimized\", and the message input should be focused. 11. Press Control+Backquote on the message input: the terminal input should be focused, the selected view's data-terminal-id should be the first terminal's ID, and there should be exactly 2 \".terminal-panel-tab-running\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "textarea[aria-label='Terminal input']",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('textarea[aria-label=\"Terminal input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-running",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const v = [...document.querySelectorAll('[data-terminal-id]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }); window._firstTerminalId = v.length === 1 ? v[0].getAttribute('data-terminal-id') : null; return window._firstTerminalId; })()"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='New terminal']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-running",
+      "count": 2
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const els = Array.from(document.querySelectorAll('textarea[aria-label=\"Terminal input\"]')); const vis = els.find(e => e.offsetWidth > 0); return vis && document.activeElement === vis; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".terminal-panel-tab"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const v = [...document.querySelectorAll('[data-terminal-id]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }); return v.length === 1 && v[0].getAttribute('data-terminal-id') === window._firstTerminalId; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "key_down",
+      "key": "Control"
+    },
+    {
+      "action": "key_down",
+      "key": "`"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const els = Array.from(document.querySelectorAll('textarea[aria-label=\"Terminal input\"]')); const vis = els.find(e => e.offsetWidth > 0); return vis && document.activeElement === vis; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const v = [...document.querySelectorAll('[data-terminal-id]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }); return v.length === 1 && v[0].getAttribute('data-terminal-id') === window._firstTerminalId; })()",
+      "expect": "true"
+    },
+    {
+      "action": "key_down",
+      "key": "`"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel:not(.terminal-panel-minimized)",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const els = Array.from(document.querySelectorAll('textarea[aria-label=\"Terminal input\"]')); const vis = els.find(e => e.offsetWidth > 0); return vis && document.activeElement === vis; })()",
+      "expect": "true"
+    },
+    {
+      "action": "key_up",
+      "key": "`"
+    },
+    {
+      "action": "key_up",
+      "key": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const els = Array.from(document.querySelectorAll('textarea[aria-label=\"Terminal input\"]')); const vis = els.find(e => e.offsetWidth > 0); vis && vis.focus(); })()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel.terminal-panel-minimized",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const els = Array.from(document.querySelectorAll('textarea[aria-label=\"Terminal input\"]')); const vis = els.find(e => e.offsetWidth > 0); return vis && document.activeElement === vis; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const v = [...document.querySelectorAll('[data-terminal-id]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }); return v.length === 1 && v[0].getAttribute('data-terminal-id') === window._firstTerminalId; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-running",
+      "count": 2
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:36:57.874697642Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 121230,
+    "output_tokens": 7126,
+    "estimated_cost_usd": 0.1834506,
+    "mode": "generated"
+  }
+}

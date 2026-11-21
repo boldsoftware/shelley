@@ -1,0 +1,87 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Keyboard shortcuts: a terminal of another conversation does not swallow opening the current one's. Terminals render with ghostty. The browser is a 1280x900 desktop window. \"Press K on X\" means: focus X with an eval calling X.focus(), then press K (for example \"Control+Shift+D\" is the key \"D\" with modifiers Control+Shift, and \"Control+Backquote\" is the key \"`\" with modifier Control). \"The message input\" is data-testid \"message-input\"; \"the terminal input\" is the element with role \"textbox\" and accessible name exactly \"Terminal input\" that is visible; \"focused\" means it is document.activeElement. Call \"second\" starts a second conversation in the same directory and sets {{SECOND}} to its ID; call \"terminals\" returns how many of the server's terminals belong to conversation {{SECOND}}. Perform the steps in order. 1. Navigate to /c/{{ID}}. 2. Press Control+Backquote on the message input: there should be exactly 1 \".terminal-panel-tab-running\". 3. Call \"second\". 4. Navigate to /c/{{SECOND}}: \".terminal-panel\" should be hidden (absent or not visible). 5. Press Control+Backquote on the message input: the terminal input should be focused, and there should be exactly 1 \".terminal-panel-tab-running\". 6. Call \"terminals\" until it returns \"1\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-running",
+      "count": 1
+    },
+    {
+      "action": "call",
+      "value": "second"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SECOND}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".terminal-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-tab-running",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement && document.activeElement.getAttribute('aria-label')",
+      "expect": "Terminal input"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "textarea[aria-label='Terminal input']:focus"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab-running",
+      "count": 1
+    },
+    {
+      "action": "call",
+      "value": "terminals",
+      "expect": "1"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:54:10.938987607Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 149460,
+    "output_tokens": 7263,
+    "estimated_cost_usd": 0.2091285,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,322 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Keyboard shortcuts: text fields and menus respect local key handlers. The browser is a 1280x900 desktop window. \"Press K on X\" means: focus X with an eval calling X.focus(), then press K (for example \"Control+Shift+D\" is the key \"D\" with modifiers Control+Shift, and \"Control+Backquote\" is the key \"`\" with modifier Control). \"The message input\" is data-testid \"message-input\"; \"the terminal input\" is the element with role \"textbox\" and accessible name exactly \"Terminal input\" that is visible; \"focused\" means it is document.activeElement. Perform the steps in order. 1. Navigate to /c/{{ID}} and fill the message input with \"keep this draft\". 2. Add two extra fields with one eval: for tag of \"input\" and \"div\", create the element (the div with contentEditable = \"true\"), give it id \"terminal-shortcut-<tag>\" and style.cssText \"position:fixed;top:0;left:0;width:100px;height:30px;z-index:9999\", and append it to document.body. 3. For each field F of the message input, #terminal-shortcut-input and #terminal-shortcut-div, in turn: a. press Control+Shift+D on F: \".diff-viewer-overlay\" should be visible; b. press Escape: there should be no \".diff-viewer-overlay\" (count 0); c. eval F.onkeydown = (event) => { if (event.code === 'Backquote') event.preventDefault(); }; d. press Control+Backquote on F: there must be no \".terminal-panel-tab\" (count 0), and F must be focused; e. eval F.onkeydown = null; f. press Control+Backquote on F: the terminal input should be focused and there should be exactly 1 \".terminal-panel-tab\"; g. press Control+Backquote (on the terminal input, still focused): the message input should be focused; h. click the button with accessible name exactly \"Close terminal\": \".terminal-panel-tab\" count should become 0. 4. The message input's value must be exactly \"keep this draft\". 5. Click the button with aria-label exactly \"More options\": \".chat-overflow-popover\" should be visible. 6. Press Control+Shift+D (without moving focus): \".diff-viewer-overlay\" should be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "15s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "keep this draft"
+    },
+    {
+      "action": "eval",
+      "expression": "for (const tag of ['input', 'div']) { const el = document.createElement(tag); if (tag === 'div') el.contentEditable = 'true'; el.id = 'terminal-shortcut-' + tag; el.style.cssText = 'position:fixed;top:0;left:0;width:100px;height:30px;z-index:9999'; document.body.appendChild(el); }"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "D",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').onkeydown = (event) => { if (event.code === 'Backquote') event.preventDefault(); };"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]') ? 'focused' : 'not focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').onkeydown = null;"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('textarea[aria-label=\"Terminal input\"]') ? 'focused' : 'not focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]') ? 'focused' : 'not focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Close terminal']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#terminal-shortcut-input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "D",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#terminal-shortcut-input').onkeydown = (event) => { if (event.code === 'Backquote') event.preventDefault(); };"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#terminal-shortcut-input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('#terminal-shortcut-input') ? 'focused' : 'not focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#terminal-shortcut-input').onkeydown = null;"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#terminal-shortcut-input').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('textarea[aria-label=\"Terminal input\"]') ? 'focused' : 'not focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]') ? 'focused' : 'not focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Close terminal']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#terminal-shortcut-div').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "D",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#terminal-shortcut-div').onkeydown = (event) => { if (event.code === 'Backquote') event.preventDefault(); };"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#terminal-shortcut-div').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('#terminal-shortcut-div') ? 'focused' : 'not focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#terminal-shortcut-div').onkeydown = null;"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#terminal-shortcut-div').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('textarea[aria-label=\"Terminal input\"]') ? 'focused' : 'not focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]') ? 'focused' : 'not focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Close terminal']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".terminal-panel-tab",
+      "count": 0
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "keep this draft"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "D",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:17:47.125424606Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 250814,
+    "output_tokens": 8263,
+    "estimated_cost_usd": 0.27665205000000004,
+    "mode": "generated"
+  }
+}

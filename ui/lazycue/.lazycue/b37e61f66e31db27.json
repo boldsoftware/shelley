@@ -1,0 +1,108 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Keyboard shortcuts: on a Mac, Command shortcuts still reach Shelley from the terminal. navigator.platform is \"MacIntel\", and terminals render with xterm. The browser is a 1280x900 desktop window. \"Press K on X\" means: focus X with an eval calling X.focus(), then press K (for example \"Control+Shift+D\" is the key \"D\" with modifiers Control+Shift, and \"Control+Backquote\" is the key \"`\" with modifier Control). \"The message input\" is data-testid \"message-input\"; \"the terminal input\" is the element with role \"textbox\" and accessible name exactly \"Terminal input\" that is visible; \"focused\" means it is document.activeElement. Perform the steps in order. 1. Navigate to /c/{{ID}} and wait for the message input to be enabled. 2. Press Control+Backquote on the message input: the terminal input should be focused. 3. Press Meta+k on the terminal input: \".command-palette-input\" should be focused. 4. Press Meta+k on the palette input: there should be no \".command-palette-input\" (count 0). 5. Press Meta+Shift+D on the terminal input (the key \"D\" with modifiers Meta+Shift): \".diff-viewer-overlay\" should be visible. 6. Focus the message input and press Escape: there should be no \".diff-viewer-overlay\" (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus(); 'focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "press_key",
+      "key": "`",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "textarea[aria-label='Terminal input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('textarea[aria-label=\"Terminal input\"]') === document.activeElement ? 'yes' : 'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Meta"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement.classList.contains('command-palette-input') ? 'yes' : document.activeElement.className",
+      "expect": "yes"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.command-palette-input').focus(); 'focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Meta"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-input",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('textarea[aria-label=\"Terminal input\"]').focus(); 'focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "press_key",
+      "key": "D",
+      "modifiers": "Meta+Shift"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus(); 'focused'",
+      "expect": "focused"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:11:06.563826013Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 79640,
+    "output_tokens": 3748,
+    "estimated_cost_usd": 0.10771065,
+    "mode": "generated"
+  }
+}
