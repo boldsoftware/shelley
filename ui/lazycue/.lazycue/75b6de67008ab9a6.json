@@ -1,0 +1,214 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The context count opens the usage graphs on desktop and mobile widths. \"The count\" is \".context-usage-label\"; \"the popup\" is \".chat-context-popup\". \"Hidden\" means hidden or absent. Perform the steps in order. 1. Navigate to /c/usage. 2. For each width W of 1280, 768, 767, 390 and 320 in turn: a. resize the viewport to W x 800 (set_viewport width and height only); b. the count should be visible; c. only when W is below 768 (phones show the count alone, without the model and directory): \".status-readout-model\" and \".status-readout-cwd\" should be hidden; d. click the count; e. the popup should be visible and entirely within the viewport (all of it in view); f. \".chat-context-popup .token-cost-graph-svg\" should be visible; g. press Escape; h. the popup should become hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/usage"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": ".chat-context-popup",
+      "ratio": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup .token-cost-graph-svg"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "set_viewport",
+      "width": 768,
+      "height": 800
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": ".chat-context-popup",
+      "ratio": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup .token-cost-graph-svg"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "set_viewport",
+      "width": 767,
+      "height": 800
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-readout-model"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-readout-cwd"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": ".chat-context-popup",
+      "ratio": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup .token-cost-graph-svg"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 800
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-readout-model"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-readout-cwd"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": ".chat-context-popup",
+      "ratio": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup .token-cost-graph-svg"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "set_viewport",
+      "width": 320,
+      "height": 800
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-readout-model"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-readout-cwd"
+    },
+    {
+      "action": "click",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": ".chat-context-popup",
+      "ratio": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".chat-context-popup .token-cost-graph-svg"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-context-popup"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:29:43.696703054Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 95820,
+    "output_tokens": 3416,
+    "estimated_cost_usd": 0.10750455,
+    "mode": "generated"
+  }
+}

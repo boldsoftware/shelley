@@ -1,0 +1,723 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The table of contents button shares the compact status row across desktop and mobile widths, while the agent works and after. \"The TOC\" is the button named exactly \"Conversation table of contents\". Evals of window.statusRowGeometry(W), window.statusRowAria(), window.statusRowModelLocked() and window.statusRowIdleTokens() return \"ok\" or what is wrong; use each with expect \"ok\". \"Hidden\" means hidden or absent. Perform the steps in order. 1. Navigate to /c/contents-row. 2. The TOC should be visible. Mark it: eval document.querySelector('[aria-label=\"Conversation table of contents\"]').dataset.mountIdentity = \"original\" (check first that exactly one element has that aria-label and it is the TOC). 3. There must be no TOC in the navigation cluster: \".chat-nav-cluster .toc-button\" count 0. 4. Fill the message input (data-testid \"message-input\") with \"{{BLOCK}}\" and click the send button (data-testid \"send-button\"); the command blocks until Stop. 5. The agent-thinking indicator (data-testid \"agent-thinking\") should become visible. 6. For each width W of 1280, 900, 800, 700, 650, 600, 575, 550, 525, 500, 460, 420, 390, 360 and 320 in turn, as one block of steps per width: a. resize the viewport to W x 800 (set_viewport width and height only); b. eval window.statusRowGeometry(W) with expect \"ok\"; c. eval window.statusRowAria() with expect \"ok\"; d. the TOC's data-mount-identity attribute should be \"original\" (it was never remounted); e. click the TOC; f. \".toc-popover\" should be visible; g. press Escape; h. only when W is 390, then also: click the button named exactly \"More options\", eval window.statusRowModelLocked() with expect \"ok\", and press Escape. 7. Resize the viewport to 1280x800. A narrow conversation pane on a desktop shortens the label too: eval document.querySelector('.main-content').style.maxWidth = '320px'. 8. The first \".working-prefix\" and the first \".working-word\" should be hidden; \".animated-working .sr-only\" should be visible. 9. Click the button named exactly \"Stop\". The agent-thinking indicator should become hidden, and the TOC should be visible. 10. Eval document.querySelector('.main-content').style.maxWidth = ''. 11. Resize the viewport to 390x800. \".status-ready\" should be hidden; \".status-stop-button\" count 0; \".context-usage-label\" should be visible. 12. Eval window.statusRowIdleTokens() with expect \"ok\". 13. \".status-readout-cwd-leaf\" and \".status-readout-cwd-path\" should be hidden. 14. Emulate the light color scheme (emulate_media prefers-color-scheme light); the html element must not have the class \"dark\" (eval document.documentElement.classList.contains('dark') with expect \"false\"); \".status-ready\" and \".status-readout-sep-cwd\" should be hidden. 15. Emulate the dark color scheme; the html element should come to have the class \"dark\" (expect \"true\"); \".status-ready\" and \".status-readout-sep-cwd\" should be hidden. 16. Call \"archive\", then reload the page. 17. The message input should be hidden; \".toc-button\" count should be exactly 1; the TOC should be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/contents-row"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "count": 1
+    },
+    {
+      "action": "wait_visible",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[aria-label=\"Conversation table of contents\"]').dataset.mountIdentity = 'original'"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-nav-cluster .toc-button",
+      "count": 0
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "{{BLOCK}}"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(1280)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 900,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(900)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 800,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(800)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 700,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(700)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 650,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(650)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 600,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(600)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 575,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(575)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 550,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(550)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 525,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(525)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 500,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(500)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 460,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(460)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 420,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(420)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(390)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowModelLocked()",
+      "expect": "ok"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 360,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(360)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 320,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowGeometry(320)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowAria()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[aria-label=\"Conversation table of contents\"]",
+      "attribute": "data-mount-identity",
+      "value": "original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.main-content').style.maxWidth = '320px'"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".working-prefix"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".working-word"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".animated-working .sr-only"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Stop",
+      "exact": true
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.main-content').style.maxWidth = ''"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 800
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-ready"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".status-stop-button",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowIdleTokens()",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-readout-cwd-leaf"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-readout-cwd-path"
+    },
+    {
+      "action": "emulate_media",
+      "value": "prefers-color-scheme: light"
+    },
+    {
+      "action": "eval",
+      "expression": "document.documentElement.classList.contains('dark')",
+      "expect": "false"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-ready"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-readout-sep-cwd"
+    },
+    {
+      "action": "emulate_media",
+      "value": "prefers-color-scheme: dark"
+    },
+    {
+      "action": "eval",
+      "expression": "document.documentElement.classList.contains('dark')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-ready"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-readout-sep-cwd"
+    },
+    {
+      "action": "call",
+      "value": "archive"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".toc-button",
+      "count": 1
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:31:13.169381683Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 57335,
+    "output_tokens": 7918,
+    "estimated_cost_usd": 0.172587,
+    "mode": "generated"
+  }
+}

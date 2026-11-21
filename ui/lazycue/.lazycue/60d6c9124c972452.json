@@ -1,0 +1,218 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A phone's composer keeps attachments and wrapped errors above the input. window.setInputFiles(selector, files) chooses files (a list of [name, content] pairs) on a file input; window.attachmentsLayout(minHeight) and window.errorLayout() return \"ok\" or what is wrong; use them with expect \"ok\". The page's uploads succeed at once, and its messages to this conversation fail with 503 and the text \"The server could not accept this message because the requested model is unavailable. Please select another model and try sending the message again.\". \"Hidden\" means hidden or absent. Perform the steps in order. 1. Navigate to /c/layout. 2. The message input (data-testid \"message-input\") and \".context-usage-label\" should be visible; \".status-ready\" should be hidden. 3. Eval window.setInputFiles('input[type=\"file\"]', [[\"attachment-1-0.txt\", \"layout fixture\"]]). 4. \".message-attachment-uploading\" count should be 0, and \".message-attachment-ready\" count exactly 1. 5. For each width W of 390 then 320: resize the viewport to W x 800 (set_viewport width and height only), then eval window.attachmentsLayout(64) with expect \"ok\". 6. Eval window.setInputFiles('input[type=\"file\"]', [[\"attachment-5-0.txt\", \"layout fixture\"], [\"attachment-5-1.txt\", \"layout fixture\"], [\"attachment-5-2.txt\", \"layout fixture\"], [\"attachment-5-3.txt\", \"layout fixture\"], [\"attachment-5-4.txt\", \"layout fixture\"]]). 7. \".message-attachment-uploading\" count should be 0, and \".message-attachment-ready\" count exactly 6. 8. For each width W of 390 then 320: resize the viewport to W x 800, then eval window.attachmentsLayout(128) with expect \"ok\". 9. Remove every attachment: click the first \".message-attachment-remove\" six times, waiting each time for the count of \".message-attachment-remove\" to drop by one. 10. [data-testid=\"message-attachments\"] count should be 0. 11. Fill the message input with \"keep my draft\" and click the send button (data-testid \"send-button\"). 12. \".message-controls-status-slot .status-error\" should contain \"The server could not accept this message because the requested model is unavailable. Please select another model and try sending the message again.\". 13. For each width W of 390 then 320: resize the viewport to W x 800, then eval window.errorLayout() with expect \"ok\". 14. Click \".message-controls-status-slot .status-button-text\". 15. The message input and \".context-usage-label\" should be visible, \".status-ready\" hidden, and the message input's value exactly \"keep my draft\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/layout"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-ready"
+    },
+    {
+      "action": "eval",
+      "expression": "window.setInputFiles('input[type=\"file\"]', [['attachment-1-0.txt', 'layout fixture']])"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-uploading",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 1
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.attachmentsLayout(64)",
+      "expect": "ok"
+    },
+    {
+      "action": "set_viewport",
+      "width": 320,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.attachmentsLayout(64)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.setInputFiles('input[type=\"file\"]', [['attachment-5-0.txt', 'layout fixture'], ['attachment-5-1.txt', 'layout fixture'], ['attachment-5-2.txt', 'layout fixture'], ['attachment-5-3.txt', 'layout fixture'], ['attachment-5-4.txt', 'layout fixture']])"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-uploading",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 6
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.attachmentsLayout(128)",
+      "expect": "ok"
+    },
+    {
+      "action": "set_viewport",
+      "width": 320,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.attachmentsLayout(128)",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "selector": ".message-attachment-remove"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-remove",
+      "count": 5
+    },
+    {
+      "action": "click",
+      "selector": ".message-attachment-remove"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-remove",
+      "count": 4
+    },
+    {
+      "action": "click",
+      "selector": ".message-attachment-remove"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-remove",
+      "count": 3
+    },
+    {
+      "action": "click",
+      "selector": ".message-attachment-remove"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-remove",
+      "count": 2
+    },
+    {
+      "action": "click",
+      "selector": ".message-attachment-remove"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-remove",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": ".message-attachment-remove"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-remove",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='message-attachments']",
+      "count": 0
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "keep my draft"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-controls-status-slot .status-error",
+      "text": "The server could not accept this message because the requested model is unavailable. Please select another model and try sending the message again."
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.errorLayout()",
+      "expect": "ok"
+    },
+    {
+      "action": "set_viewport",
+      "width": 320,
+      "height": 800
+    },
+    {
+      "action": "eval",
+      "expression": "window.errorLayout()",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "selector": ".message-controls-status-slot .status-button-text"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".context-usage-label"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".status-ready"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "keep my draft"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:30:21.426092968Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 53859,
+    "output_tokens": 3135,
+    "estimated_cost_usd": 0.07895355,
+    "mode": "generated"
+  }
+}
