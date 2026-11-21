@@ -1,0 +1,236 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "tag: opens a dropdown, completes, ANDs, and narrows the offers. Conversation {{ALPHA}} is tagged tf-alpha and tf-shared, {{BETA}} tf-beta and tf-shared, and {{GAMMA}} (slug {{GAMMA_SLUG}}) tf-gamma. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"). To \"open the drawer\": click the button \"Open conversations\", then wait until \".drawer\" has the class \"open\" (eval, polled). To \"open the search\": click the button \"Search conversations...\" (the search is closed at first), then wait for the editor to be visible. The tag dropdown (\"the panel\") is data-testid \"tag-filter-panel\"; \"the option T\" is [data-testid=\"tag-filter-option\"][data-tag=\"T\"] and its count is its \".tag-filter-option-count\". To \"open the actions of\" a row: hover the row, click the button \"Actions\" inside it, then wait for data-testid \"conversation-actions-menu\" to be visible; its items are role menuitem. The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /c/{{GAMMA_SLUG}} and wait up to 30s for data-testid \"message-input\" to be visible. 2. Open the drawer. 3. Open the search. 4. There is no panel (no dropdown until the tag: cue is typed). 5. Click the button \"Add tag filter\". 6. The query is \"tag:\". 7. There is no [data-conversation-query-token=\"tag\"] inside the editor. 8. The panel is visible. 9. The count of the option tf-shared has text exactly \"2\", and that of the option tf-alpha exactly \"1\" (the size of the result set each tag would produce). 10. Set the query to \"tag:shared\". 11. The option tf-shared is visible, and there is no option tf-alpha. 12. Press Space in the editor (it accepts the highlighted match). 13. The query is \"tag:tf-shared \" (with the trailing space), and the editor's [data-conversation-query-token=\"tag\"][data-query-raw=\"tag:tf-shared\"] is visible. 14. The rows of {{ALPHA}} and {{BETA}} are visible, and the row of {{GAMMA}} is not visible (assert_not_visible). 15. Click the button \"Add tag filter\". 16. The query is \"tag:tf-shared tag:\". 17. The panel is visible; there is no option tf-gamma (it never co-occurs with tf-shared) and no option tf-shared (already selected), and the option tf-alpha is visible. 18. Click the option tf-alpha. 19. The query is \"tag:tf-shared tag:tf-alpha \". 20. The editor holds exactly 2 [data-conversation-query-token=\"tag\"]. 21. The row of {{ALPHA}} is visible and the row of {{BETA}} is not visible. 22. Type \"temporary text\" key by key (type action) into the focused editor. 23. The query is \"tag:tf-shared tag:tf-alpha temporary text\". 24. Press Escape. 25. The query is \"tag:tf-shared tag:tf-alpha \" (Escape cleared the free text and kept the tags). 26. The row of {{BETA}} is not visible. 27. Clear the query. 28. The rows of {{ALPHA}}, {{BETA}} and {{GAMMA}} are all visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{GAMMA_SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='conversation-query-editor']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='tag-filter-panel']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add tag filter",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "tag:"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-query-editor'] [data-conversation-query-token='tag']",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-filter-panel']"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='tag-filter-option'][data-tag='tf-shared'] .tag-filter-option-count",
+      "text": "2"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='tag-filter-option'][data-tag='tf-alpha'] .tag-filter-option-count",
+      "text": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "tag:shared"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "tag:shared"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-filter-option'][data-tag='tf-shared']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='tag-filter-option'][data-tag='tf-alpha']",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Space"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "tag:tf-shared "
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-query-editor'] [data-conversation-query-token='tag'][data-query-raw='tag:tf-shared']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ALPHA}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{BETA}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{GAMMA}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add tag filter",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "tag:tf-shared tag:"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-filter-panel']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='tag-filter-option'][data-tag='tf-gamma']",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='tag-filter-option'][data-tag='tf-shared']",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-filter-option'][data-tag='tf-alpha']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='tag-filter-option'][data-tag='tf-alpha']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "tag:tf-shared tag:tf-alpha "
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-query-editor'] [data-conversation-query-token='tag']",
+      "count": 2
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ALPHA}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{BETA}}']"
+    },
+    {
+      "action": "type",
+      "value": "temporary text"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "tag:tf-shared tag:tf-alpha temporary text"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "tag:tf-shared tag:tf-alpha "
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{BETA}}']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": ""
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ALPHA}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{BETA}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{GAMMA}}']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:30:13.272155601Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 29456,
+    "output_tokens": 4973,
+    "estimated_cost_usd": 0.10751325,
+    "mode": "generated"
+  }
+}

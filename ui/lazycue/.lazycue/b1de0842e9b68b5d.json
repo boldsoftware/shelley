@@ -1,0 +1,79 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "a row that joins a group lands on top of it until re-sorted. Three conversations sort {{FIRST}}, {{SECOND}}, {{MOVER}} in the drawer's plain order (newest bucket of updated_at first, then newest created). {{FIRST}} and {{SECOND}} are tagged so-home; {{MOVER}} (slug {{MOVER_SLUG}}) is tagged so-away. Call \"join-home\" retags {{MOVER}} so-home (which does not change its updated_at). Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"). To \"open the drawer\": click the button \"Open conversations\", then wait until \".drawer\" has the class \"open\" (eval, polled). To \"open the search\": click the button \"Search conversations...\" (the search is closed at first), then wait for the editor to be visible. The tag dropdown (\"the panel\") is data-testid \"tag-filter-panel\"; \"the option T\" is [data-testid=\"tag-filter-option\"][data-tag=\"T\"] and its count is its \".tag-filter-option-count\". To \"open the actions of\" a row: hover the row, click the button \"Actions\" inside it, then wait for data-testid \"conversation-actions-menu\" to be visible; its items are role menuitem. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The home ids\" are the data-conversation-ids of the rows of the home group in order: what this eval returns: JSON.stringify([...document.querySelectorAll(\".conversation-group:has(.conversation-item[data-conversation-id='{{FIRST}}']) .conversation-item\")].map(r =\u003e r.getAttribute(\"data-conversation-id\"))). 1. Navigate to /c/{{MOVER_SLUG}} and wait up to 30s for data-testid \"message-input\" to be visible. 2. Open the drawer. 3. Click the button \"View options\", then the button \"Tags\". 4. The home ids are exactly [\"{{FIRST}}\",\"{{SECOND}}\"] (polled with expect). 5. Call \"join-home\". 6. The home ids are exactly [\"{{MOVER}}\",\"{{FIRST}}\",\"{{SECOND}}\"] (the newcomer lands on top). 7. Click the button \"View options\", then the button \"Re-sort now\". 8. The home ids are exactly [\"{{FIRST}}\",\"{{SECOND}}\",\"{{MOVER}}\"] (the plain order).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{MOVER_SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Tags",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll(\".conversation-group:has(.conversation-item[data-conversation-id='{{FIRST}}']) .conversation-item\")].map(r =\u003e r.getAttribute('data-conversation-id')))",
+      "expect": "[\"{{FIRST}}\",\"{{SECOND}}\"]"
+    },
+    {
+      "action": "call",
+      "value": "join-home"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll(\".conversation-group:has(.conversation-item[data-conversation-id='{{FIRST}}']) .conversation-item\")].map(r =\u003e r.getAttribute('data-conversation-id')))",
+      "expect": "[\"{{MOVER}}\",\"{{FIRST}}\",\"{{SECOND}}\"]"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Re-sort now",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll(\".conversation-group:has(.conversation-item[data-conversation-id='{{FIRST}}']) .conversation-item\")].map(r =\u003e r.getAttribute('data-conversation-id')))",
+      "expect": "[\"{{FIRST}}\",\"{{SECOND}}\",\"{{MOVER}}\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:30:31.076156118Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14657,
+    "output_tokens": 1284,
+    "estimated_cost_usd": 0.031872750000000005,
+    "mode": "generated"
+  }
+}

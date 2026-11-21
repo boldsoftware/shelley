@@ -1,0 +1,163 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "the row tag editor offers a dropdown of matching tags. Conversation {{DONOR}} is tagged ac-terminal-work and workbench, {{DONOR2}} ac-terminal-work and spare-tag, and {{TARGET}} (slug {{TARGET_SLUG}}) nothing. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"). To \"open the drawer\": click the button \"Open conversations\", then wait until \".drawer\" has the class \"open\" (eval, polled). To \"open the search\": click the button \"Search conversations...\" (the search is closed at first), then wait for the editor to be visible. The tag dropdown (\"the panel\") is data-testid \"tag-filter-panel\"; \"the option T\" is [data-testid=\"tag-filter-option\"][data-tag=\"T\"] and its count is its \".tag-filter-option-count\". To \"open the actions of\" a row: hover the row, click the button \"Actions\" inside it, then wait for data-testid \"conversation-actions-menu\" to be visible; its items are role menuitem. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The input\" is the row of {{TARGET}}'s \".conversation-tag-inline-input\"; \"the menu\" is data-testid \"tag-editor-menu\" and its offers are its [data-testid=\"tag-editor-option\"] elements. Type with the type action (key by key) and press keys with press_key, both on the focused input. 1. Navigate to /c/{{TARGET_SLUG}} and wait up to 30s for data-testid \"message-input\" to be visible. 2. Open the drawer. 3. Open the actions of the row of {{TARGET}} and click the menu item \"Edit tags\" in the menu (exact name). 4. The input has focus. 5. The menu is visible and its [data-tag=\"ac-terminal-work\"] is visible (focusing the empty input offers the vocabulary). 6. Type \"work\". 7. The menu holds exactly 2 offers, whose data-tag attributes are in order \"workbench\" then \"ac-terminal-work\" (the prefix hit ranks first): eval with expect '[\"workbench\",\"ac-terminal-work\"]' of JSON.stringify([...document.querySelectorAll(\"[data-testid='tag-editor-menu'] [data-testid='tag-editor-option']\")].map(o =\u003e o.getAttribute(\"data-tag\"))). 8. Press ArrowDown, then Enter (arrow keys move the highlight; Enter commits the highlighted offer). 9. The row of {{TARGET}}'s \".conversation-tag\" with text \"ac-terminal-work\" (has_text) is visible. 10. The input still has focus and its value is \"\" (the editor stays open, cleared and focused). 11. Type \"work\". 12. The menu holds exactly 1 offer, with data-tag \"workbench\" (the tag on the row is excluded): the same eval with expect '[\"workbench\"]'. 13. Click the first offer. 14. The row of {{TARGET}}'s \".conversation-tag\" with text \"workbench\" is visible. 15. Type \"brand-new-tag\". 16. There is no menu (text matching nothing closes it). 17. Press Enter. 18. The row of {{TARGET}}'s \".conversation-tag\" with text \"brand-new-tag\" is visible (Enter saved it literally). 19. The menu is visible (spare-tag is still on offer). 20. Press Escape. 21. There is no menu, and the input still has focus (Escape peels one layer). 22. Press Escape. 23. The row of {{TARGET}} holds no \".conversation-tag-inline-input\" (the editor closed).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{TARGET_SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "true"
+    },
+    {
+      "action": "hover",
+      "selector": ".conversation-item[data-conversation-id='{{TARGET}}']"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{TARGET}}']",
+      "role": "button",
+      "name": "Actions",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='conversation-actions-menu']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-actions-menu']",
+      "role": "menuitem",
+      "name": "Edit tags",
+      "exact": true
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".conversation-item[data-conversation-id='{{TARGET}}'] .conversation-tag-inline-input"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='tag-editor-menu']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-editor-menu'] [data-testid='tag-editor-option'][data-tag='ac-terminal-work']"
+    },
+    {
+      "action": "type",
+      "value": "work"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll(\"[data-testid='tag-editor-menu'] [data-testid='tag-editor-option']\")].map(o =\u003e o.getAttribute('data-tag')))",
+      "expect": "[\"workbench\",\"ac-terminal-work\"]"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{TARGET}}'] .conversation-tag",
+      "has_text": "ac-terminal-work"
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".conversation-item[data-conversation-id='{{TARGET}}'] .conversation-tag-inline-input"
+    },
+    {
+      "action": "assert_value",
+      "selector": ".conversation-item[data-conversation-id='{{TARGET}}'] .conversation-tag-inline-input",
+      "value": ""
+    },
+    {
+      "action": "type",
+      "value": "work"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...document.querySelectorAll(\"[data-testid='tag-editor-menu'] [data-testid='tag-editor-option']\")].map(o =\u003e o.getAttribute('data-tag')))",
+      "expect": "[\"workbench\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='tag-editor-menu'] [data-testid='tag-editor-option']:first-child"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{TARGET}}'] .conversation-tag",
+      "has_text": "workbench"
+    },
+    {
+      "action": "type",
+      "value": "brand-new-tag"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='tag-editor-menu']",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{TARGET}}'] .conversation-tag",
+      "has_text": "brand-new-tag"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-editor-menu']"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='tag-editor-menu']",
+      "count": 0
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".conversation-item[data-conversation-id='{{TARGET}}'] .conversation-tag-inline-input"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id='{{TARGET}}'] .conversation-tag-inline-input",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:30:15.979917135Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 16026,
+    "output_tokens": 2273,
+    "estimated_cost_usd": 0.05087205,
+    "mode": "generated"
+  }
+}

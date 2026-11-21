@@ -1,0 +1,76 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "the remove button on an overlong tag stays clickable. Conversation {{ID}} (slug {{SLUG}}) is tagged {{LONG}} (\"overlong-\" and 120 x's). Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"). To \"open the drawer\": click the button \"Open conversations\", then wait until \".drawer\" has the class \"open\" (eval, polled). To \"open the search\": click the button \"Search conversations...\" (the search is closed at first), then wait for the editor to be visible. The tag dropdown (\"the panel\") is data-testid \"tag-filter-panel\"; \"the option T\" is [data-testid=\"tag-filter-option\"][data-tag=\"T\"] and its count is its \".tag-filter-option-count\". To \"open the actions of\" a row: hover the row, click the button \"Actions\" inside it, then wait for data-testid \"conversation-actions-menu\" to be visible; its items are role menuitem. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /c/{{SLUG}} and wait up to 30s for data-testid \"message-input\" to be visible. 2. Open the drawer. 3. Open the actions of the row of {{ID}} and click the menu item \"Edit tags\" in the menu (exact name). 4. Click the row of {{ID}}'s button[aria-label=\"Remove tag {{LONG}}\"] (a real click, which needs the button visible and not covered). 5. The row of {{ID}} holds no \".conversation-tag-removable\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer') \u0026\u0026 document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer') \u0026\u0026 document.querySelector('.drawer').classList.contains('open')",
+      "expect": "true"
+    },
+    {
+      "action": "hover",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Actions",
+      "exact": true,
+      "selector": ".conversation-item[data-conversation-id='{{ID}}']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='conversation-actions-menu']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-actions-menu']",
+      "role": "menuitem",
+      "name": "Edit tags",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] button[aria-label='Remove tag {{LONG}}']"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] button[aria-label='Remove tag {{LONG}}']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'] .conversation-tag-removable",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:29:46.927831605Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14034,
+    "output_tokens": 1067,
+    "estimated_cost_usd": 0.0270543,
+    "mode": "generated"
+  }
+}

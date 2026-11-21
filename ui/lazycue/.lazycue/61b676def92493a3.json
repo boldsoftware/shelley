@@ -1,0 +1,133 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "group by tag buckets whole tag sets, with untagged last. Conversations {{BOTH}} (slug {{BOTH_SLUG}}) is tagged gt-red and gt-blue, {{BOTH_AGAIN}} gt-blue and gt-red (the same set, in the opposite order), {{SINGLE}} gt-red, and {{NONE}} nothing. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"). To \"open the drawer\": click the button \"Open conversations\", then wait until \".drawer\" has the class \"open\" (eval, polled). To \"open the search\": click the button \"Search conversations...\" (the search is closed at first), then wait for the editor to be visible. The tag dropdown (\"the panel\") is data-testid \"tag-filter-panel\"; \"the option T\" is [data-testid=\"tag-filter-option\"][data-tag=\"T\"] and its count is its \".tag-filter-option-count\". To \"open the actions of\" a row: hover the row, click the button \"Actions\" inside it, then wait for data-testid \"conversation-actions-menu\" to be visible; its items are role menuitem. The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The group of X\" is \".conversation-group:has(.conversation-item[data-conversation-id='X'])\" and its label is the \".conversation-group-label\" inside it. 1. Navigate to /c/{{BOTH_SLUG}} and wait up to 30s for data-testid \"message-input\" to be visible. 2. Open the drawer. 3. Click the button \"View options\", then the button \"Tags\". 4. There is exactly 1 group of {{BOTH}} (assert_count). 5. Its label's text is exactly \"#gt-blue #gt-red\" (the sorted set), and its title attribute is exactly \"#gt-blue #gt-red\" (the full readable set the narrow drawer truncates). 6. The group of {{BOTH}} holds exactly 1 [data-conversation-id=\"{{BOTH_AGAIN}}\"] (one group holds both). 7. The label of the group of {{SINGLE}} reads exactly \"#gt-red\" (a subset is its own group), and the group of {{SINGLE}} holds no [data-conversation-id=\"{{BOTH}}\"]. 8. The label of the group of {{NONE}} reads exactly \"Untagged\". 9. The page holds exactly 1 [data-conversation-id=\"{{BOTH}}\"] (every conversation appears exactly once). 10. Open the search. 11. Set the query to \"tag:gt-blue \" (grouping and filtering compose). 12. The row of {{BOTH}} is visible; the rows of {{SINGLE}} and {{NONE}} are not visible (assert_not_visible). 13. The label of the group of {{BOTH}} still reads exactly \"#gt-blue #gt-red\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{BOTH_SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Tags",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-group:has(.conversation-item[data-conversation-id='{{BOTH}}'])",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-group:has(.conversation-item[data-conversation-id='{{BOTH}}']) .conversation-group-label",
+      "text": "#gt-blue #gt-red"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-group:has(.conversation-item[data-conversation-id='{{BOTH}}']) .conversation-group-label\").getAttribute('title')",
+      "expect": "#gt-blue #gt-red"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-group:has(.conversation-item[data-conversation-id='{{BOTH}}']) [data-conversation-id='{{BOTH_AGAIN}}']",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-group:has(.conversation-item[data-conversation-id='{{SINGLE}}']) .conversation-group-label",
+      "text": "#gt-red"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-group:has(.conversation-item[data-conversation-id='{{SINGLE}}']) [data-conversation-id='{{BOTH}}']",
+      "count": 0
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-group:has(.conversation-item[data-conversation-id='{{NONE}}']) .conversation-group-label",
+      "text": "Untagged"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='{{BOTH}}']",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='conversation-query-editor']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='conversation-query-editor']\").focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "tag:gt-blue "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='conversation-query-editor']\").getAttribute('data-query-value')",
+      "expect": "tag:gt-blue "
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{BOTH}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{SINGLE}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{NONE}}']"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".conversation-group:has(.conversation-item[data-conversation-id='{{BOTH}}']) .conversation-group-label",
+      "text": "#gt-blue #gt-red"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:30:41.923111446Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 15753,
+    "output_tokens": 2139,
+    "estimated_cost_usd": 0.0478176,
+    "mode": "generated"
+  }
+}

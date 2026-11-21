@@ -1,0 +1,106 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "row tag chips write into the query and compose with git-repo grouping. Conversation {{IN}} (slug {{IN_SLUG}}) runs in the server's git repository and is tagged chip-tag; {{OUT}} runs outside any repository and is tagged chip-other. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"). To \"open the drawer\": click the button \"Open conversations\", then wait until \".drawer\" has the class \"open\" (eval, polled). To \"open the search\": click the button \"Search conversations...\" (the search is closed at first), then wait for the editor to be visible. The tag dropdown (\"the panel\") is data-testid \"tag-filter-panel\"; \"the option T\" is [data-testid=\"tag-filter-option\"][data-tag=\"T\"] and its count is its \".tag-filter-option-count\". To \"open the actions of\" a row: hover the row, click the button \"Actions\" inside it, then wait for data-testid \"conversation-actions-menu\" to be visible; its items are role menuitem. The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The chip\" is the element with data-testid \"conversation-tag-chip\" inside the row of {{IN}} whose text contains \"chip-tag\" (has_text). 1. Navigate to /c/{{IN_SLUG}} and wait up to 30s for data-testid \"message-input\" to be visible. 2. Open the drawer. 3. The chip is visible. 4. Click the chip (it opens the search box and writes the term). 5. The query is \"tag:chip-tag \". 6. The row of {{IN}} is visible and the row of {{OUT}} is not visible (assert_not_visible). 7. Clicking a chip must not also navigate: the URL is exactly /c/{{IN_SLUG}} (assert_url value). 8. The chip's aria-pressed is \"true\". 9. Click the button \"View options\", then the button \"Git Repo\" (a tag-only query is a filter, not a search: the list keeps its grouping). 10. Exactly one \".conversation-group\" holds the row of {{IN}}: assert_count of \".conversation-group:has(.conversation-item[data-conversation-id='{{IN}}'])\" is 1. 11. That group's \".conversation-group-label\" does not read \"Other\": eval with expect \"true\" of (() =\u003e { const l = document.querySelector(\".conversation-group:has(.conversation-item[data-conversation-id='{{IN}}']) .conversation-group-label\"); return l ? String(l.textContent.trim() !== \"Other\") : \"no label\"; })(). 12. Click the chip again (it removes its term). 13. The query is \"\". 14. The row of {{OUT}} is visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{IN_SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-id='{{IN}}'] [data-testid='conversation-tag-chip']",
+      "has_text": "chip-tag"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='{{IN}}'] [data-testid='conversation-tag-chip']",
+      "has_text": "chip-tag"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:chip-tag "
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{IN}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OUT}}']"
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/{{IN_SLUG}}"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-conversation-id='{{IN}}'] [data-testid='conversation-tag-chip']",
+      "has_text": "chip-tag",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Git Repo",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-group:has(.conversation-item[data-conversation-id='{{IN}}'])",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const l = document.querySelector(\".conversation-group:has(.conversation-item[data-conversation-id='{{IN}}']) .conversation-group-label\"); return l ? String(l.textContent.trim() !== 'Other') : 'no label'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='{{IN}}'] [data-testid='conversation-tag-chip']",
+      "has_text": "chip-tag"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": ""
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OUT}}']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:31:26.490299136Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 15357,
+    "output_tokens": 1536,
+    "estimated_cost_usd": 0.0374463,
+    "mode": "generated"
+  }
+}

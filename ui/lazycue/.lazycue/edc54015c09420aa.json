@@ -1,0 +1,151 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "a tag containing a space is quoted, and round-trips. Conversation {{SPACED}} (slug {{SPACED_SLUG}}) is tagged \"sp tag\"; {{PLAIN}} is tagged sp-plain. Call \"add-quote-tag\" tags {{SPACED}} with \"sp tag\" and 'sp\" quote' (a tag holding a double quote). Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"). To \"open the drawer\": click the button \"Open conversations\", then wait until \".drawer\" has the class \"open\" (eval, polled). To \"open the search\": click the button \"Search conversations...\" (the search is closed at first), then wait for the editor to be visible. The tag dropdown (\"the panel\") is data-testid \"tag-filter-panel\"; \"the option T\" is [data-testid=\"tag-filter-option\"][data-tag=\"T\"] and its count is its \".tag-filter-option-count\". To \"open the actions of\" a row: hover the row, click the button \"Actions\" inside it, then wait for data-testid \"conversation-actions-menu\" to be visible; its items are role menuitem. The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The chip\" is the element with data-testid \"conversation-tag-chip\" inside the row of {{SPACED}} whose text contains \"sp tag\" (has_text); \"the quote chip\" is the row of {{SPACED}}'s [data-testid=\"conversation-tag-chip\"][data-tag='sp\" quote']. 1. Navigate to /c/{{SPACED_SLUG}} and wait up to 30s for data-testid \"message-input\" to be visible. 2. Open the drawer. 3. Click the chip. 4. The query is 'tag:\"sp tag\" ' (the chip writes the quoted term). 5. The row of {{SPACED}} is visible and the row of {{PLAIN}} is not visible (assert_not_visible). 6. Click the chip again. 7. The query is \"\" (the whole quoted term is gone). 8. Set the query to 'tag:\"sp t' (typing inside an open quote keeps narrowing instead of committing). 9. The option \"sp tag\" is visible. 10. Press Enter. 11. The query is 'tag:\"sp tag\" ' (completing from the dropdown quotes too). 12. The row of {{SPACED}} is visible and the row of {{PLAIN}} is not visible. 13. Call \"add-quote-tag\". 14. Clear the query. 15. Click the quote chip. 16. The query is 'tag:\"sp\\\" quote\" ' (the quote mark is backslash-escaped: the query is the 18 characters t a g : \" s p \\ \" space q u o t e \" space). 17. The row of {{SPACED}} is visible and the row of {{PLAIN}} is not visible. 18. Click the quote chip again. 19. The query is \"\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SPACED_SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{SPACED}}'] [data-testid='conversation-tag-chip']",
+      "has_text": "sp tag"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:\"sp tag\" "
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{SPACED}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{PLAIN}}']"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{SPACED}}'] [data-testid='conversation-tag-chip']",
+      "has_text": "sp tag"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": ""
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "tag:\"sp t"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:\"sp t"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-filter-option'][data-tag='sp tag']"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:\"sp tag\" "
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{SPACED}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{PLAIN}}']"
+    },
+    {
+      "action": "call",
+      "value": "add-quote-tag"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": ""
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{SPACED}}'] [data-testid='conversation-tag-chip'][data-tag='sp\" quote']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:\"sp\\\" quote\" "
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{SPACED}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{PLAIN}}']"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{SPACED}}'] [data-testid='conversation-tag-chip'][data-tag='sp\" quote']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": ""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:31:45.881438681Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 35830,
+    "output_tokens": 3526,
+    "estimated_cost_usd": 0.08253089999999999,
+    "mode": "generated"
+  }
+}
