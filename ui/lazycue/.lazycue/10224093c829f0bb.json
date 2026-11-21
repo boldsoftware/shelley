@@ -119,9 +119,13 @@
       "timeout": "30s"
     },
     {
-      "action": "eval",
-      "expression": "(() => { const r = [...document.querySelectorAll(\"[data-testid=btw-inline]\")].filter(el => el.textContent.includes(\"echo: after clear\")); if (r.length !== 1) return \"readers \" + r.length; const a = r[0].querySelectorAll(\".btw-inline-answer\"); return a.length === 1 && a[0].textContent.includes(\"after clear\"); })()",
-      "expect": "true",
+      "action": "assert_text_contains",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: after clear"
+      },
+      "selector": ".btw-inline-answer",
+      "text": "after clear",
       "timeout": "30s"
     },
     {
@@ -134,9 +138,13 @@
       "timeout": "30s"
     },
     {
-      "action": "eval",
-      "expression": "(() => { const r = [...document.querySelectorAll(\"[data-testid=btw-inline]\")].filter(el => el.textContent.includes(\"echo: after clear\")); if (r.length !== 1) return \"readers \" + r.length; const a = r[0].querySelectorAll(\".btw-inline-answer\"); return a.length === 1 && a[0].textContent.includes(\"after clear\"); })()",
-      "expect": "true",
+      "action": "assert_text_contains",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: after clear"
+      },
+      "selector": ".btw-inline-answer",
+      "text": "after clear",
       "timeout": "30s"
     }
   ],

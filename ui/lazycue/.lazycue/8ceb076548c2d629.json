@@ -71,9 +71,9 @@
       "exact": true
     },
     {
-      "action": "eval",
-      "expression": "document.querySelector('[data-testid=\"next-prompt-suggestion\"]')?.textContent?.replace(/\\s+/g, ' ').trim().includes('echo: More about More about water the basil')",
-      "expect": "true"
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"next-prompt-suggestion\"]",
+      "text": "echo: More about More about water the basil"
     },
     {
       "action": "click",

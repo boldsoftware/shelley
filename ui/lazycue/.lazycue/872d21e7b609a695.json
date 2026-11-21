@@ -28,9 +28,10 @@
       "has_text": "/clear"
     },
     {
-      "action": "eval",
-      "expression": "[...document.querySelectorAll(\"[data-testid=slash-command-menu] .slash-command-name\")].some(e => e.textContent.trim() === \"/clear\" && e.getClientRects().length > 0)",
-      "expect": "true"
+      "action": "assert_visible",
+      "selector": "[data-testid=\"slash-command-menu\"] .slash-command-name",
+      "has_text": "/clear",
+      "exact": true
     }
   ],
   "metadata": {

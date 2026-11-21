@@ -66,15 +66,23 @@
       "timeout": "30s"
     },
     {
-      "action": "eval",
-      "expression": "(() => { const r = [...document.querySelectorAll(\"[data-testid=btw-inline]\")].filter(el => el.textContent.includes(\"echo: side one\")); if (r.length !== 1) return \"readers \" + r.length; const a = r[0].querySelectorAll(\".btw-inline-answer\"); return a.length === 1 && a[0].textContent.includes(\"side one\"); })()",
-      "expect": "true",
+      "action": "assert_text_contains",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "selector": ".btw-inline-answer",
+      "text": "side one",
       "timeout": "30s"
     },
     {
-      "action": "eval",
-      "expression": "(() => { const r = [...document.querySelectorAll(\"[data-testid=btw-inline]\")].filter(el => el.textContent.includes(\"echo: side two\")); if (r.length !== 1) return \"readers \" + r.length; const a = r[0].querySelectorAll(\".btw-inline-answer\"); return a.length === 1 && a[0].textContent.includes(\"side two\"); })()",
-      "expect": "true",
+      "action": "assert_text_contains",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side two"
+      },
+      "selector": ".btw-inline-answer",
+      "text": "side two",
       "timeout": "30s"
     },
     {
@@ -90,16 +98,40 @@
       "timeout": "30s"
     },
     {
-      "action": "eval",
-      "expression": "(() => { const r = [...document.querySelectorAll(\"[data-testid=btw-inline]\")].filter(el => el.textContent.includes(\"echo: side one\")); if (r.length !== 1) return \"readers \" + r.length; const b = [...r[0].querySelectorAll(\"button\")].filter(b => b.textContent.trim() === \"Summarize to input\"); const f = r[0].querySelector(\"[data-btw-follow-up]\"); return b.length === 1 && b[0].checkVisibility() && !!f && !f.disabled; })()",
-      "expect": "true",
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "role": "button",
+      "name": "Summarize to input",
       "timeout": "30s"
     },
     {
-      "action": "eval",
-      "expression": "(() => { const r = [...document.querySelectorAll(\"[data-testid=btw-inline]\")].filter(el => el.textContent.includes(\"echo: side two\")); if (r.length !== 1) return \"readers \" + r.length; const b = [...r[0].querySelectorAll(\"button\")].filter(b => b.textContent.trim() === \"Summarize to input\"); const f = r[0].querySelector(\"[data-btw-follow-up]\"); return b.length === 1 && b[0].checkVisibility() && !!f && !f.disabled; })()",
-      "expect": "true",
+      "action": "assert_enabled",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "selector": "[data-btw-follow-up]"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side two"
+      },
+      "role": "button",
+      "name": "Summarize to input",
       "timeout": "30s"
+    },
+    {
+      "action": "assert_enabled",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side two"
+      },
+      "selector": "[data-btw-follow-up]"
     },
     {
       "action": "click",
@@ -117,36 +149,72 @@
       "count": 2
     },
     {
-      "action": "eval",
-      "expression": "(() => { const r = Array.from(document.querySelectorAll('[data-testid=\"btw-inline\"]')).find(el => el.textContent.includes('echo: side one')); const ta = r?.querySelector('[data-btw-follow-up]'); if (ta) { ta.focus(); const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; nativeInputValueSetter.call(ta, 'unsent follow-up'); ta.dispatchEvent(new Event('input', {bubbles:true})); ta.dispatchEvent(new Event('change', {bubbles:true})); } return ta?.value; })()",
-      "expect": "unsent follow-up"
+      "action": "fill",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "selector": "[data-btw-follow-up]",
+      "value": "unsent follow-up"
     },
     {
-      "action": "eval",
-      "expression": "Array.from(document.querySelectorAll('[data-testid=\"btw-inline\"]')).find(el => el.textContent.includes('echo: side one'))?.querySelector('.btw-inline-label')?.click()"
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "selector": ".btw-inline-body"
     },
     {
-      "action": "eval",
-      "expression": "Array.from(document.querySelectorAll('[data-testid=\"btw-inline\"]')).find(el => el.textContent.includes('echo: side one'))?.querySelector('.btw-inline-body')?.style?.display",
-      "expect": "none"
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "selector": ".btw-inline-label"
     },
     {
-      "action": "eval",
-      "expression": "Array.from(document.querySelectorAll('[data-testid=\"btw-inline\"]')).find(el => el.textContent.includes('echo: side one'))?.querySelector('.btw-inline-label')?.click()"
+      "action": "assert_not_visible",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "selector": ".btw-inline-body"
     },
     {
-      "action": "eval",
-      "expression": "Array.from(document.querySelectorAll('[data-testid=\"btw-inline\"]')).find(el => el.textContent.includes('echo: side one'))?.querySelector('[data-btw-follow-up]')?.value",
-      "expect": "unsent follow-up"
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "selector": ".btw-inline-label"
     },
     {
-      "action": "eval",
-      "expression": "(() => { const r = Array.from(document.querySelectorAll('[data-testid=\"btw-inline\"]')).find(el => el.textContent.includes('echo: side one')); const ta = r?.querySelector('[data-btw-follow-up]'); if (ta) { ta.focus(); const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; nativeInputValueSetter.call(ta, 'echo: follow-up answer'); ta.dispatchEvent(new Event('input', {bubbles:true})); ta.dispatchEvent(new Event('change', {bubbles:true})); } return ta?.value; })()",
-      "expect": "echo: follow-up answer"
+      "action": "assert_value",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "selector": "[data-btw-follow-up]",
+      "value": "unsent follow-up"
     },
     {
-      "action": "eval",
-      "expression": "Array.from(document.querySelectorAll('[data-testid=\"btw-inline\"]')).find(el => el.textContent.includes('echo: side one'))?.querySelector('button[aria-label=\"Submit follow up\"]')?.click()"
+      "action": "fill",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "selector": "[data-btw-follow-up]",
+      "value": "echo: follow-up answer"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "role": "button",
+      "name": "Submit follow up"
     },
     {
       "action": "eval",
@@ -161,15 +229,31 @@
       "timeout": "30s"
     },
     {
-      "action": "eval",
-      "expression": "(() => { const r = [...document.querySelectorAll(\"[data-testid=btw-inline]\")].filter(el => el.textContent.includes(\"echo: side one\")); if (r.length !== 1) return \"readers \" + r.length; const b = [...r[0].querySelectorAll(\"button\")].filter(b => b.textContent.trim() === \"Summarize to input\"); const f = r[0].querySelector(\"[data-btw-follow-up]\"); return b.length === 1 && b[0].checkVisibility() && !!f && !f.disabled; })()",
-      "expect": "true",
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "role": "button",
+      "name": "Summarize to input",
       "timeout": "30s"
     },
     {
-      "action": "eval",
-      "expression": "(() => { const r = [...document.querySelectorAll(\"[data-testid=btw-inline]\")].filter(el => el.textContent.includes(\"echo: side one\")); if (r.length !== 1) return \"readers \" + r.length; const b = [...r[0].querySelectorAll(\"button\")].filter(b => b.textContent.trim() === \"Summarize to input\"); if (b.length !== 1) return \"buttons \" + b.length; b[0].click(); return \"clicked\"; })()",
-      "expect": "clicked"
+      "action": "assert_enabled",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "selector": "[data-btw-follow-up]"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "role": "button",
+      "name": "Summarize to input"
     },
     {
       "action": "eval",
@@ -202,9 +286,13 @@
       "expect": "ok"
     },
     {
-      "action": "eval",
-      "expression": "(() => { const r = [...document.querySelectorAll(\"[data-testid=btw-inline]\")].filter(el => el.textContent.includes(\"echo: side one\")); if (r.length !== 1) return \"readers \" + r.length; const b = [...r[0].querySelectorAll(\"button\")].filter(b => b.textContent.trim() === \"Dismiss\"); if (b.length !== 1) return \"buttons \" + b.length; b[0].click(); return \"clicked\"; })()",
-      "expect": "clicked"
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side one"
+      },
+      "role": "button",
+      "name": "Dismiss"
     },
     {
       "action": "assert_count",
@@ -245,7 +333,12 @@
     },
     {
       "action": "click",
-      "selector": "[data-testid='btw-inline'] a.btw-inline-open-subagent"
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: side two"
+      },
+      "role": "link",
+      "name": "Open subagent"
     },
     {
       "action": "wait_url",
