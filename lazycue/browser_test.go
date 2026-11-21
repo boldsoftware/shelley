@@ -168,7 +168,7 @@ func TestAssertVariantsPollUntilSettled(t *testing.T) {
 }
 
 // TestBlockingStepsHonorTheirTimeout is a regression test for a CI hang: a
-// lazycue test burned its entire 8-minute perTestBudget and took the step down
+// lazycue test burned its entire 8-minute budget and took the step down
 // with "relaunch browser: set viewport: context deadline exceeded" (CI builds
 // 8614 and 8635, both on TestNewPageCompactAndSend).
 //

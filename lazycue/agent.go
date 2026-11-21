@@ -59,23 +59,13 @@ type AgentResult struct {
 	// Effort diagnostics, surfaced so a human can see how hard the agent
 	// worked (e.g. did a heal converge in 1-2 turns, or thrash to the limit?).
 	Turns       int  // number of API round trips the agent took
-	HitMaxTurns bool // true if the agent ran out of turns (maxAgentTurns)
+	HitMaxTurns bool // true if the agent ran out of turns (agentTurns)
 	ToolCalls   int  // total tool_use calls the agent issued (run_steps/screenshot/git_command)
 }
-
-const maxAgentTurns = 25
 
 // maxGitCommands caps git_command calls per agent run. Agents left to it
 // read the test harness and the tests themselves instead of trying steps.
 const maxGitCommands = 12
-
-// agentBudget bounds the total wall-clock time a single heal/generate agent run
-// may consume. It is kept well under the `go test` package timeout (10m by
-// default) so that a slow or stuck heal fails its one test gracefully (via a
-// context-deadline error that surfaces as t.Fatal) instead of running until the
-// package deadline and panicking with "test timed out", which aborts every
-// other test in the package too.
-const agentBudget = 5 * time.Minute
 
 // anthropicCallTimeout bounds a single LLM HTTP request. http.DefaultClient has
 // no timeout, so without this a hung request could block a heal indefinitely
@@ -562,11 +552,11 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 		r.Cost = totalCost
 		r.Turns = turnsTaken
 		r.ToolCalls = toolCallCount
-		r.HitMaxTurns = turnsTaken >= maxAgentTurns
+		r.HitMaxTurns = turnsTaken >= agentTurns
 		return r, nil
 	}
 
-	for turn := 0; turn < maxAgentTurns; turn++ {
+	for turn := 0; turn < agentTurns; turn++ {
 		turnsTaken = turn + 1
 		logf("turn %d", turn)
 

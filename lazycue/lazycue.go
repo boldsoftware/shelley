@@ -128,17 +128,11 @@ func detectRepoRoot() string {
 	return root
 }
 
-// perTestBudget bounds the whole resolution of a single lazycue test: the
-// cached attempt and its retries, the wait for an agent slot, and the agent
-// (agentBudget). It is kept under the `go test` package deadline (10m
-// default) so that a single stuck test fails cleanly via t.Fatal rather than
-// letting the package time out and panic, which would abort every other test
-// in the package.
-//
-// It is set comfortably above agentBudget rather than just above it: under
-// the flaky-long-wait conditions that trigger heals, the attempts before the
-// agent (each with long wait timeouts) can consume a minute or more.
-const perTestBudget = 8 * time.Minute
+// beforeAgent is the time a test has beyond agentBudget, for the cached
+// attempt and its retries and the wait for an agent slot. Under the
+// flaky-long-wait conditions that trigger heals, those attempts (each with
+// long wait timeouts) can take a minute or more.
+const beforeAgent = 3 * time.Minute
 
 // RunMode describes how the test was resolved.
 type RunMode string
@@ -222,7 +216,7 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 	// Bound the whole test resolution so a stall anywhere (browser exec, retry,
 	// or heal) fails this one test cleanly instead of running until the package
 	// test deadline and panicking (which takes the rest of the package down).
-	ctx, cancel := context.WithTimeout(ctx, perTestBudget)
+	ctx, cancel := context.WithTimeout(ctx, agentBudget+beforeAgent)
 	defer cancel()
 
 	if opts.Setup == nil {
@@ -495,6 +489,14 @@ var (
 	// LAZYCUE_MAX_AGENT_RUNS sets it (default, or negative: unlimited). Zero
 	// runs cached scripts only, failing any test without one that passes.
 	agentRunsLeft atomic.Int64
+	// agentTurns caps an agent run's API round trips; LAZYCUE_AGENT_TURNS
+	// sets it (default 25).
+	agentTurns int
+	// agentBudget bounds an agent run's wall-clock time;
+	// LAZYCUE_AGENT_BUDGET sets it (default 5m). With beforeAgent it bounds
+	// a test, which by default stays under go test's 10m package timeout, so
+	// a stuck test fails by itself instead of panicking the package.
+	agentBudget time.Duration
 )
 
 func init() {
@@ -504,6 +506,11 @@ func init() {
 	}
 	agentSlots = make(chan struct{}, n)
 	agentRunsLeft.Store(int64(envInt("LAZYCUE_MAX_AGENT_RUNS", -1)))
+	agentTurns = envInt("LAZYCUE_AGENT_TURNS", 25)
+	if agentTurns < 1 {
+		panic("LAZYCUE_AGENT_TURNS must be at least 1")
+	}
+	agentBudget = envDuration("LAZYCUE_AGENT_BUDGET", 5*time.Minute)
 }
 
 // errNoAgent is why a test got no agent to generate or heal its script.
@@ -544,6 +551,20 @@ func envInt(name string, def int) int {
 		panic(fmt.Sprintf("%s=%q is not an integer", name, v))
 	}
 	return n
+}
+
+// envDuration reads a positive Go duration from the environment, def when
+// unset.
+func envDuration(name string, def time.Duration) time.Duration {
+	v := os.Getenv(name)
+	if v == "" {
+		return def
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		panic(fmt.Sprintf("%s=%q is not a positive duration such as 10m", name, v))
+	}
+	return d
 }
 
 func summarizeFailure(results []StepResult) string {

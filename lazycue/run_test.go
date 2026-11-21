@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Every attempt at a test gets a fresh app from Setup, closed afterwards.
@@ -178,4 +179,40 @@ func TestAgentGitCommandsAreCapped(t *testing.T) {
 	if len(seen) < maxGitCommands+2 || strings.Contains(seen[maxGitCommands], limited) || !strings.Contains(seen[maxGitCommands+1], limited) {
 		t.Errorf("want git commands 1-%d to run and the next refused; saw %q", maxGitCommands, seen)
 	}
+}
+
+func TestEnvKnobs(t *testing.T) {
+	t.Setenv("LAZYCUE_TEST_KNOB", "")
+	if got := envInt("LAZYCUE_TEST_KNOB", 25); got != 25 {
+		t.Errorf("unset int = %d, want the default", got)
+	}
+	if got := envDuration("LAZYCUE_TEST_KNOB", 5*time.Minute); got != 5*time.Minute {
+		t.Errorf("unset duration = %v, want the default", got)
+	}
+	t.Setenv("LAZYCUE_TEST_KNOB", "60")
+	if got := envInt("LAZYCUE_TEST_KNOB", 25); got != 60 {
+		t.Errorf("int = %d, want 60", got)
+	}
+	t.Setenv("LAZYCUE_TEST_KNOB", "15m")
+	if got := envDuration("LAZYCUE_TEST_KNOB", 5*time.Minute); got != 15*time.Minute {
+		t.Errorf("duration = %v, want 15m", got)
+	}
+	for _, bad := range []string{"15", "-1m", "0s", "soon"} {
+		t.Setenv("LAZYCUE_TEST_KNOB", bad)
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("duration %q did not panic", bad)
+				}
+			}()
+			envDuration("LAZYCUE_TEST_KNOB", 5*time.Minute)
+		}()
+	}
+	t.Setenv("LAZYCUE_TEST_KNOB", "many")
+	defer func() {
+		if recover() == nil {
+			t.Error("int \"many\" did not panic")
+		}
+	}()
+	envInt("LAZYCUE_TEST_KNOB", 25)
 }

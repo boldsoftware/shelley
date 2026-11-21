@@ -120,6 +120,8 @@ and the app shows "Y", that's a genuine failure.
 | `Options.Setup` | | Starts a fresh app for every attempt at a test (and every run of steps by the agent) and returns its `Env`: base URL, `{{NAME}}` placeholder values, host-side `call` functions and the browser's `Launch` settings (init script, device, CSS media, time zone, other origins answered by Go handlers as Playwright routes would; default a Pixel 5 with touch that prefers reduced motion) (Go harness only) |
 | `LAZYCUE_MAX_AGENT_RUNS` | unlimited | Agent runs (generations and heals) a process may start; 0 runs cached scripts only |
 | `LAZYCUE_AGENT_CONCURRENCY` | 4 | Agents running at once |
+| `LAZYCUE_AGENT_TURNS` | 25 | API round trips an agent run may take |
+| `LAZYCUE_AGENT_BUDGET` | `5m` | Wall-clock time an agent run may take; a test gets 3m more, for the attempts before its agent. Past 7m, raise `go test -timeout` (10m by default) to match |
 
 ## Screenshots & Video Artifacts
 
