@@ -1,0 +1,148 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "partial archive Undo keeps progress and retries only unfinished restores. Conversations {{FIRST}} and {{SECOND}} are tagged undo-retry. The test records every unarchive request and fails the second one with a 500 \"undo restore failure\". Call \"after-first-undo\" checks that exactly two restores were requested, one for each conversation, and that the one requested first is no longer archived while the other still is; it returns \"ok\" or what is wrong. Call \"after-second-undo\" checks that the restores requested are exactly the first two followed by a repeat of the second (only the unfinished one was retried), returning \"ok\" or what is wrong. Call \"archived\" returns the sorted names (first, second) of the archived conversations. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"), and \"the check\" of a row is its \".drawer-selection-check\" checkbox; whether a checkbox \"is checked\" is an eval of its .checked (polled with expect). \"The visible rows\" are the elements matching \".drawer .conversation-item\" with \"visible\": true. \"The status\" is \".drawer-bulk-status\" and \"the selection count\" is \".drawer-bulk-count\". To \"open the search at P\": navigate to P, click the button \"Open conversations\", click the button \"Search conversations...\", then wait for \".drawer-search-input\" to be visible. To \"select the N matches\": click the button \"Select conversations\", click the checkbox named exactly \"Select all N matching conversations\" (role checkbox), then check that the selection count reads exactly \"N selected\". The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The Undo button\" is the button \"Undo\" inside the status (selector \".drawer-bulk-status\" with role button, exact name). 1. Open the search at /new. 2. Set the query to \"tag:undo-retry \". 3. Select the 2 matches. 4. Click the button \"Archive selected conversations\". 5. The status contains \"2 archived\". 6. Click the Undo button. 7. \".drawer-row-error\" contains \"undo restore failure\". 8. The status contains \"1 of 2\". 9. The Undo button is visible and enabled. 10. Call \"after-first-undo\" with expect \"ok\". 11. Click the Undo button. 12. The status reads exactly \"Undone\". 13. Call \"after-second-undo\" with expect \"ok\". 14. The rows of {{FIRST}} and {{SECOND}} are visible, and call \"archived\" with expect '[]'.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer-search-input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "tag:undo-retry "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:undo-retry "
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "checkbox",
+      "name": "Select all 2 matching conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "2 selected"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Archive selected conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".drawer-bulk-status",
+      "text": "2 archived"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-bulk-status",
+      "role": "button",
+      "name": "Undo",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".drawer-row-error",
+      "text": "undo restore failure"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".drawer-bulk-status",
+      "text": "1 of 2"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".drawer-bulk-status",
+      "role": "button",
+      "name": "Undo",
+      "exact": true
+    },
+    {
+      "action": "assert_enabled",
+      "selector": ".drawer-bulk-status",
+      "role": "button",
+      "name": "Undo",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "after-first-undo",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-bulk-status",
+      "role": "button",
+      "name": "Undo",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-status",
+      "text": "Undone"
+    },
+    {
+      "action": "call",
+      "value": "after-second-undo",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{FIRST}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{SECOND}}']"
+    },
+    {
+      "action": "call",
+      "value": "archived",
+      "expect": "[]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:40:28.629275985Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 25791,
+    "output_tokens": 2415,
+    "estimated_cost_usd": 0.05934975,
+    "mode": "generated"
+  }
+}

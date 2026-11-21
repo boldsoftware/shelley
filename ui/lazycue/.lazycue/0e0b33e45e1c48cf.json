@@ -1,0 +1,171 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Archived revisits exclude restored rows and include newly archived rows. Conversations {{RESTORED}}, {{KEPT}} and {{LATER}} (slug {{LATER_SLUG}}) are tagged archive-cache; {{RESTORED}} and {{KEPT}} are archived. Call \"archived\" returns the sorted names (restored, kept, later) of the archived conversations. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"), and \"the check\" of a row is its \".drawer-selection-check\" checkbox; whether a checkbox \"is checked\" is an eval of its .checked (polled with expect). \"The visible rows\" are the elements matching \".drawer .conversation-item\" with \"visible\": true. \"The status\" is \".drawer-bulk-status\" and \"the selection count\" is \".drawer-bulk-count\". To \"open the search at P\": navigate to P, click the button \"Open conversations\", click the button \"Search conversations...\", then wait for \".drawer-search-input\" to be visible. To \"select the N matches\": click the button \"Select conversations\", click the checkbox named exactly \"Select all N matching conversations\" (role checkbox), then check that the selection count reads exactly \"N selected\". The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Open the search at /c/{{LATER_SLUG}}. 2. Set the query to \"tag:archive-cache \". 3. Click the button \"View Archived\". 4. There are exactly 2 visible rows. 5. Click the button \"Select conversations\". 6. Click the check of the row of {{RESTORED}}. 7. Click the button \"Restore selected conversations\". 8. The status reads exactly \"1 restored\". 9. Click the button \"View Archived\". 10. The row of {{KEPT}} is visible; the rows of {{RESTORED}} and {{LATER}} are not visible (assert_not_visible). 11. There is exactly 1 visible row. 12. Click the button \"Back to conversations\". 13. The row of {{RESTORED}} is visible. 14. Click the button \"Select conversations\". 15. Click the check of the row of {{LATER}}. 16. Click the button \"Archive selected conversations\". 17. The status contains \"1 archived\". 18. Click the button \"View Archived\". 19. The rows of {{KEPT}} and {{LATER}} are visible, and the row of {{RESTORED}} is not visible. 20. There are exactly 2 visible rows. 21. Call \"archived\" with expect '[\"kept\",\"later\"]'.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{LATER_SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer-search-input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "tag:archive-cache "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:archive-cache "
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View Archived",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item",
+      "visible": true,
+      "count": 2
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{RESTORED}}'] .drawer-selection-check"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Restore selected conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-status",
+      "text": "1 restored"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View Archived",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{KEPT}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{RESTORED}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{LATER}}']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item",
+      "visible": true,
+      "count": 1
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Back to conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{RESTORED}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{LATER}}'] .drawer-selection-check"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Archive selected conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".drawer-bulk-status",
+      "text": "1 archived"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View Archived",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{KEPT}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{LATER}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{RESTORED}}']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item",
+      "visible": true,
+      "count": 2
+    },
+    {
+      "action": "call",
+      "value": "archived",
+      "expect": "[\"kept\",\"later\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:39:34.840397693Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 16047,
+    "output_tokens": 1906,
+    "estimated_cost_usd": 0.044773049999999995,
+    "mode": "generated"
+  }
+}

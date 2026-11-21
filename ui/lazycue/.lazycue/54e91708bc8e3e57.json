@@ -1,0 +1,175 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "folded tag groups reset selection and stay out of Shift ranges. Conversations {{A}}, {{B}} (slug {{B_SLUG}}) and {{C}} are all tagged fold, and each also fold-a, fold-b and fold-c respectively. The test records the archive requests: call \"archive-requests\" returns the sorted names (a, b, c) of the conversations archive was requested for, and call \"archived\" the sorted names of the archived conversations. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"), and \"the check\" of a row is its \".drawer-selection-check\" checkbox; whether a checkbox \"is checked\" is an eval of its .checked (polled with expect). \"The visible rows\" are the elements matching \".drawer .conversation-item\" with \"visible\": true. \"The status\" is \".drawer-bulk-status\" and \"the selection count\" is \".drawer-bulk-count\". To \"open the search at P\": navigate to P, click the button \"Open conversations\", click the button \"Search conversations...\", then wait for \".drawer-search-input\" to be visible. To \"select the N matches\": click the button \"Select conversations\", click the checkbox named exactly \"Select all N matching conversations\" (role checkbox), then check that the selection count reads exactly \"N selected\". The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Open the search at /c/{{B_SLUG}}. 2. Set the query to \"tag:fold \". 3. Click the button \"View options\", then the button \"Tags\". 4. The texts of \".conversation-group .conversation-group-label\" are exactly [\"#fold #fold-a\", \"#fold #fold-b\", \"#fold #fold-c\"]. 5. Click the button \"Select conversations\". 6. Click the check of the row of {{B}}. 7. The selection count reads exactly \"1 selected\". 8. Fold the middle group: click the \".conversation-group-header\" of the \".conversation-group\" whose \".conversation-group-label\" contains \"#fold-b\" (has_text \"#fold-b\" on \".conversation-group-header\"). 9. The row of {{B}} is not visible (assert_not_visible). 10. The button \"Select conversations\" is visible (folding reset the selection). 11. Select the 3 matches. 12. Click the checkbox \"Select all 3 matching conversations\" to uncheck it; the selection count reads exactly \"0 selected\". 13. There are exactly 2 visible checks: assert_count of \".drawer .conversation-item .drawer-selection-check\" with \"visible\": true is 2. 14. Click the first visible check; then click, with modifiers \"Shift\", the last visible check, aiming with a point expression that computes the center of the last of the \".drawer .conversation-item .drawer-selection-check\" elements whose checkVisibility() is true. 15. The selection count reads exactly \"2 selected\" (the folded row stays out of the range). 16. Click the button \"Archive selected conversations\". 17. The status contains \"2 archived\". 18. Call \"archive-requests\" with expect '[\"a\",\"c\"]'. 19. Call \"archived\" with expect '[\"a\",\"c\"]' ({{B}} was not archived).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{B_SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer-search-input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "tag:fold "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:fold "
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Tags",
+      "exact": true
+    },
+    {
+      "action": "assert_texts",
+      "selector": ".conversation-group .conversation-group-label",
+      "texts": [
+        "#fold #fold-a",
+        "#fold #fold-b",
+        "#fold #fold-c"
+      ]
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{B}}'] .drawer-selection-check"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "1 selected"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-group-header",
+      "has_text": "#fold-b"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{B}}']"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "checkbox",
+      "name": "Select all 3 matching conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "3 selected"
+    },
+    {
+      "action": "click",
+      "role": "checkbox",
+      "name": "Select all 3 matching conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "0 selected"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item .drawer-selection-check",
+      "visible": true,
+      "count": 2
+    },
+    {
+      "action": "click",
+      "selector": ".drawer .conversation-item .drawer-selection-check",
+      "visible": true
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const els = Array.from(document.querySelectorAll('.drawer .conversation-item .drawer-selection-check')).filter(e =\u003e e.checkVisibility()); const last = els[els.length - 1]; const r = last.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()",
+      "modifiers": "Shift"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "2 selected"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Archive selected conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".drawer-bulk-status",
+      "text": "2 archived"
+    },
+    {
+      "action": "call",
+      "value": "archive-requests",
+      "expect": "[\"a\",\"c\"]"
+    },
+    {
+      "action": "call",
+      "value": "archived",
+      "expect": "[\"a\",\"c\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:40:13.109695341Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 16423,
+    "output_tokens": 2027,
+    "estimated_cost_usd": 0.047415,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "moves idle conversations between named projects and undoes the move. Projects move-source and move-destination run in the server's directory. Conversations {{M0}} (slug {{M0_SLUG}}) and {{M1}} are tagged move and in project move-source. Call \"projects\" returns the project of each conversation by name (m0, m1), as the workspace reports it. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"), and \"the check\" of a row is its \".drawer-selection-check\" checkbox; whether a checkbox \"is checked\" is an eval of its .checked (polled with expect). \"The visible rows\" are the elements matching \".drawer .conversation-item\" with \"visible\": true. \"The status\" is \".drawer-bulk-status\" and \"the selection count\" is \".drawer-bulk-count\". To \"open the search at P\": navigate to P, click the button \"Open conversations\", click the button \"Search conversations...\", then wait for \".drawer-search-input\" to be visible. To \"select the N matches\": click the button \"Select conversations\", click the checkbox named exactly \"Select all N matching conversations\" (role checkbox), then check that the selection count reads exactly \"N selected\". The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The Undo button\" is the button \"Undo\" inside the status (selector \".drawer-bulk-status\" with role button, exact name). 1. Open the search at /c/{{M0_SLUG}}. 2. Set the query to \"tag:move \". 3. Select the 2 matches. 4. Click the button \"Move to project\". 5. Click the button named exactly \"move-destination\" inside \".drawer-bulk-popover\". 6. The status contains \"2 moved to move-destination\". 7. Call \"projects\" with expect '{\"m0\":\"move-destination\",\"m1\":\"move-destination\"}'. 8. Click the Undo button. 9. The status reads exactly \"Undone\". 10. Call \"projects\" with expect '{\"m0\":\"move-source\",\"m1\":\"move-source\"}'. 11. Reload the page (reload action). 12. The option chosen in the select labelled \"Conversation project\" reads exactly \"move-source\": eval with expect \"move-source\" of (() =\u003e { const s = [...document.querySelectorAll(\"select\")].find(s =\u003e [...s.labels].some(l =\u003e l.textContent.trim() === \"Conversation project\")); return s ? (s.selectedOptions[0]?.textContent.trim() ?? \"none\") : \"no select\"; })().",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{M0_SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer-search-input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "tag:move "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:move "
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "checkbox",
+      "name": "Select all 2 matching conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "2 selected"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Move to project",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "move-destination",
+      "selector": ".drawer-bulk-popover",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".drawer-bulk-status",
+      "text": "2 moved to move-destination"
+    },
+    {
+      "action": "call",
+      "value": "projects",
+      "expect": "{\"m0\":\"move-destination\",\"m1\":\"move-destination\"}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Undo",
+      "selector": ".drawer-bulk-status",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-status",
+      "text": "Undone"
+    },
+    {
+      "action": "call",
+      "value": "projects",
+      "expect": "{\"m0\":\"move-source\",\"m1\":\"move-source\"}"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const s = [...document.querySelectorAll('select')].find(s =\u003e [...s.labels].some(l =\u003e l.textContent.trim() === 'Conversation project')); return s ? (s.selectedOptions[0]?.textContent.trim() ?? 'none') : 'no select'; })()",
+      "expect": "move-source"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:38:45.530866193Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 15573,
+    "output_tokens": 1434,
+    "estimated_cost_usd": 0.0360156,
+    "mode": "generated"
+  }
+}

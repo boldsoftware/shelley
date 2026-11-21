@@ -1,0 +1,333 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "selection stays in the filtered list; tags preserve untouched values; archive can be undone and restored. Conversations {{B0}}, {{B1}} and {{B2}} are tagged bulk and bulk-common, and {{B0}} also bulk-private; {{OUTSIDE}} (slug {{OUTSIDE_SLUG}}) has no tags. Call \"tags\" returns the sorted tags of each conversation by name (b0, b1, b2, outside), and call \"archived\" the sorted names of the archived conversations. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"), and \"the check\" of a row is its \".drawer-selection-check\" checkbox; whether a checkbox \"is checked\" is an eval of its .checked (polled with expect). \"The visible rows\" are the elements matching \".drawer .conversation-item\" with \"visible\": true. \"The status\" is \".drawer-bulk-status\" and \"the selection count\" is \".drawer-bulk-count\". To \"open the search at P\": navigate to P, click the button \"Open conversations\", click the button \"Search conversations...\", then wait for \".drawer-search-input\" to be visible. To \"select the N matches\": click the button \"Select conversations\", click the checkbox named exactly \"Select all N matching conversations\" (role checkbox), then check that the selection count reads exactly \"N selected\". The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The tag popover\" is \".drawer-bulk-popover:has(input[aria-label='New tag'])\", and its checkbox for tag T is the input inside its label whose text contains \"#T\". 1. Open the search at /c/{{OUTSIDE_SLUG}}. 2. Set the query to \"tag:bulk \". 3. There are exactly 3 visible rows, and the row of {{OUTSIDE}} is not visible (assert_not_visible). 4. Click the button \"Select conversations\". 5. Click the check of the first visible row; then click, with modifiers \"Shift\", the check of the last visible row, aiming with a point expression that computes the center of the last of the \".drawer .conversation-item .drawer-selection-check\" elements whose checkVisibility() is true. 6. The selection count reads exactly \"3 selected\". 7. The checks of the rows of {{B0}}, {{B1}} and {{B2}} are checked. 8. The URL is still exactly /c/{{OUTSIDE_SLUG}} (assert_url value). 9. Click the checkbox \"Select all 3 matching conversations\" to uncheck it: it is not checked, and the selection count reads exactly \"0 selected\". 10. Click it again to check it, and it is checked. 11. Click the button \"Tag selected conversations\". 12. The tag popover's checkbox for bulk-private is indeterminate (eval of its .indeterminate, expect \"true\"; some of the selection have it). 13. Its checkbox for bulk-common is checked; click it to uncheck it, and it is not checked. 14. Fill the tag popover's input labelled \"New tag\" (role textbox, exact name) with \"bulk-added\". 15. Click the button \"Apply tags\" in the tag popover. 16. The status reads exactly \"Tags updated on 3 conversations\". 17. Call \"tags\" with expect '{\"b0\":[\"bulk\",\"bulk-added\",\"bulk-private\"],\"b1\":[\"bulk\",\"bulk-added\"],\"b2\":[\"bulk\",\"bulk-added\"],\"outside\":[]}' (untouched tags stay). 18. Click the button \"Archive selected conversations\". 19. The status contains \"3 archived\". 20. The rows of {{B0}}, {{B1}} and {{B2}} are not visible. 21. Call \"archived\" with expect '[\"b0\",\"b1\",\"b2\"]'. 22. Click the button \"Undo\" inside the status (selector \".drawer-bulk-status\" with role button, exact name). 23. The status reads exactly \"Undone\". 24. The rows of {{B0}}, {{B1}} and {{B2}} are visible, and call \"archived\" with expect '[]'. 25. Select the 3 matches. 26. Click the button \"Archive selected conversations\". 27. The status contains \"3 archived\". 28. Click the button \"View Archived\". 29. There are exactly 3 visible rows. 30. Select the 3 matches. 31. Click the button \"Restore selected conversations\". 32. The status reads exactly \"3 restored\". 33. The button \"View Archived\" is visible. 34. The rows of {{B0}}, {{B1}} and {{B2}} are visible, and call \"archived\" with expect '[]'.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{OUTSIDE_SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer-search-input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "tag:bulk "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:bulk "
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item",
+      "visible": true,
+      "count": 3
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OUTSIDE}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const els = Array.from(document.querySelectorAll('.drawer .conversation-item .drawer-selection-check')).filter(e =\u003e e.checkVisibility()); const first = els[0]; const r = first.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()"
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const els = Array.from(document.querySelectorAll('.drawer .conversation-item .drawer-selection-check')).filter(e =\u003e e.checkVisibility()); const last = els[els.length - 1]; const r = last.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()",
+      "modifiers": "Shift"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "3 selected"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-item[data-conversation-id='{{B0}}'] .drawer-selection-check\").checked",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-item[data-conversation-id='{{B1}}'] .drawer-selection-check\").checked",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-item[data-conversation-id='{{B2}}'] .drawer-selection-check\").checked",
+      "expect": "true"
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/{{OUTSIDE_SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "checkbox",
+      "name": "Select all 3 matching conversations",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = Array.from(document.querySelectorAll('input[type=checkbox]')).find(e =\u003e e.getAttribute('aria-label') === 'Select all 3 matching conversations') || Array.from(document.querySelectorAll('[role=checkbox]')).find(e =\u003e (e.getAttribute('aria-label') || '') === 'Select all 3 matching conversations'); return el ? el.checked : null; })()",
+      "expect": "false"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "0 selected"
+    },
+    {
+      "action": "click",
+      "role": "checkbox",
+      "name": "Select all 3 matching conversations",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = Array.from(document.querySelectorAll('input[type=checkbox]')).find(e =\u003e e.getAttribute('aria-label') === 'Select all 3 matching conversations') || Array.from(document.querySelectorAll('[role=checkbox]')).find(e =\u003e (e.getAttribute('aria-label') || '') === 'Select all 3 matching conversations'); return el ? el.checked : null; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Tag selected conversations",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer-bulk-popover:has(input[aria-label='New tag'])"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const popover = document.querySelector('.drawer-bulk-popover:has(input[aria-label=\"New tag\"])'); const labels = popover.querySelectorAll('label'); const label = Array.from(labels).find(l =\u003e l.textContent.includes('#bulk-private')); return label ? label.querySelector('input').indeterminate : 'not found'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const popover = document.querySelector('.drawer-bulk-popover:has(input[aria-label=\"New tag\"])'); const labels = popover.querySelectorAll('label'); const label = Array.from(labels).find(l =\u003e l.textContent.includes('#bulk-common')); return label ? label.querySelector('input').checked : 'not found'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-bulk-popover:has(input[aria-label='New tag']) label",
+      "has_text": "#bulk-common"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const popover = document.querySelector('.drawer-bulk-popover:has(input[aria-label=\"New tag\"])'); const labels = popover.querySelectorAll('label'); const label = Array.from(labels).find(l =\u003e l.textContent.includes('#bulk-common')); return label ? label.querySelector('input').checked : 'not found'; })()",
+      "expect": "false"
+    },
+    {
+      "action": "fill",
+      "selector": ".drawer-bulk-popover:has(input[aria-label='New tag'])",
+      "role": "textbox",
+      "name": "New tag",
+      "exact": true,
+      "value": "bulk-added"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-bulk-popover:has(input[aria-label='New tag'])",
+      "role": "button",
+      "name": "Apply tags",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-status",
+      "text": "Tags updated on 3 conversations"
+    },
+    {
+      "action": "call",
+      "value": "tags",
+      "expect": "{\"b0\":[\"bulk\",\"bulk-added\",\"bulk-private\"],\"b1\":[\"bulk\",\"bulk-added\"],\"b2\":[\"bulk\",\"bulk-added\"],\"outside\":[]}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Archive selected conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".drawer-bulk-status",
+      "text": "3 archived"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{B0}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{B1}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{B2}}']"
+    },
+    {
+      "action": "call",
+      "value": "archived",
+      "expect": "[\"b0\",\"b1\",\"b2\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-bulk-status",
+      "role": "button",
+      "name": "Undo",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-status",
+      "text": "Undone"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{B0}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{B1}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{B2}}']"
+    },
+    {
+      "action": "call",
+      "value": "archived",
+      "expect": "[]"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "checkbox",
+      "name": "Select all 3 matching conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "3 selected"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Archive selected conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".drawer-bulk-status",
+      "text": "3 archived"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "View Archived",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item",
+      "visible": true,
+      "count": 3
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "checkbox",
+      "name": "Select all 3 matching conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "3 selected"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Restore selected conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-status",
+      "text": "3 restored"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "View Archived",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{B0}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{B1}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{B2}}']"
+    },
+    {
+      "action": "call",
+      "value": "archived",
+      "expect": "[]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:39:21.945091827Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 66331,
+    "output_tokens": 10098,
+    "estimated_cost_usd": 0.2161389,
+    "mode": "generated"
+  }
+}

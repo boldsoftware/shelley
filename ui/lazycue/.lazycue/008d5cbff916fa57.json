@@ -1,0 +1,158 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "cancelling the first VM archive confirmation stops the batch and keeps selection. Conversations {{FIRST}} (slug {{FIRST_SLUG}}) and {{SECOND}} are tagged cancel-archive; the drawer lists {{FIRST_VISUAL}} first. The test's workspace says conversation {{FIRST_VISUAL}} runs on the VM bulk-cancel-vm, and answers every archive request with a 500 (call \"archive-requests\" counts them). Call \"archived\" returns the sorted names (first, second) of the archived conversations. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"), and \"the check\" of a row is its \".drawer-selection-check\" checkbox; whether a checkbox \"is checked\" is an eval of its .checked (polled with expect). \"The visible rows\" are the elements matching \".drawer .conversation-item\" with \"visible\": true. \"The status\" is \".drawer-bulk-status\" and \"the selection count\" is \".drawer-bulk-count\". To \"open the search at P\": navigate to P, click the button \"Open conversations\", click the button \"Search conversations...\", then wait for \".drawer-search-input\" to be visible. To \"select the N matches\": click the button \"Select conversations\", click the checkbox named exactly \"Select all N matching conversations\" (role checkbox), then check that the selection count reads exactly \"N selected\". The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. \"The confirmation\" is the element with role dialog named exactly \"Archive conversation?\". 1. Open the search at /c/{{FIRST_SLUG}}. 2. Set the query to \"tag:cancel-archive \". 3. There are exactly 2 visible rows, and the first visible row's data-conversation-id is exactly \"{{FIRST_VISUAL}}\". 4. Select the 2 matches. 5. Click the button \"Archive selected conversations\". 6. The confirmation contains the text \"Archiving deletes VM bulk-cancel-vm\". 7. Call \"archive-requests\" with expect \"0\". 8. Click the button \"Cancel\" inside the confirmation (exact name). 9. There is no confirmation. 10. The status reads exactly \"0 of 2 archived; cancelled\". 11. The button \"Archive selected conversations\" is enabled. 12. The selection count reads exactly \"2 selected\". 13. The checks of the rows of {{FIRST}} and {{SECOND}} are checked. 14. Call \"archived\" with expect '[]'. 15. Call \"archive-requests\" with expect \"0\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{FIRST_SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer-search-input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "tag:cancel-archive "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:cancel-archive "
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item",
+      "count": 2,
+      "visible": true
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".drawer .conversation-item",
+      "visible": true,
+      "attribute": "data-conversation-id",
+      "value": "{{FIRST_VISUAL}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select conversations",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "checkbox",
+      "name": "Select all 2 matching conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "2 selected"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Archive selected conversations",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Archive conversation?",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "role": "dialog",
+      "name": "Archive conversation?",
+      "exact": true,
+      "text": "Archiving deletes VM bulk-cancel-vm"
+    },
+    {
+      "action": "call",
+      "value": "archive-requests",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "selector": "[role='dialog']:has([data-testid='archive-confirm'])",
+      "role": "button",
+      "name": "Cancel",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "role": "dialog",
+      "name": "Archive conversation?",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-status",
+      "text": "0 of 2 archived; cancelled"
+    },
+    {
+      "action": "assert_enabled",
+      "role": "button",
+      "name": "Archive selected conversations",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer-bulk-count",
+      "text": "2 selected"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-item[data-conversation-id='{{FIRST}}']\").querySelector('.drawer-selection-check').checked",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-item[data-conversation-id='{{SECOND}}']\").querySelector('.drawer-selection-check').checked",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "archived",
+      "expect": "[]"
+    },
+    {
+      "action": "call",
+      "value": "archive-requests",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:36:37.958881941Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 15776,
+    "output_tokens": 1697,
+    "estimated_cost_usd": 0.04074255,
+    "mode": "generated"
+  }
+}
