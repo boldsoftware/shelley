@@ -1,0 +1,67 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Screenshot tool images are commentable and reference the file on disk. \"The overlay\" is \".image-comment-overlay\"; \"the frame\" is \".image-comment-overlay .image-comment-frame\" (it shrink-wraps the image, so its box is the image's displayed pixels and a fraction of it is a fraction of the image). \"Drag from (a, b) to (c, d)\" means: move the mouse over the frame at offsets (a × its width, b × its height) from its top-left, press the left button, move to (c × width, d × height) in N steps (5 unless said otherwise), and release; read the frame's box with getBoundingClientRect when computing the offsets. \"Drag the middle half\" is a drag from (0.25, 0.25) to (0.75, 0.75). The open comment dialog has its title \".diff-viewer-comment-dialog-handle\" (it names the region being commented on), its input \".diff-viewer-comment-input\" and its button \"Add Comment\" (name exactly that). window.geometry() returns the WxH+X+Y region the dialog title names; window.middleHalf(W, H) returns \"ok\" if that region is the middle half of a WxH image, within tolerance, and otherwise what is off; window.keepGeometry() keeps the current geometry for later, and window.kept(i) returns the i-th one kept (from 0). Check the message input's (data-testid \"message-input\") value with an eval comparing it to the exact string, building it with window.kept(i) where it says G or Gi; \\n is a newline. Perform the steps in order.\n1. Navigate to /c/shot. Wait (up to 30s) for the first \".screenshot-tool .commentable-image\" to be visible.\n2. The affordance that says the image is clickable at all: this browser emulates a Pixel 5, so (hover: none) applies and the badge is always shown. The first \".screenshot-tool .commentable-image-badge\" should have computed opacity exactly \"1\".\n3. Click the image. The overlay should be visible. The header names the screenshot's on-disk path (Display.path), which the agent can crop, rather than the image endpoint URL: the overlay's \".image-comment-title\" text should end with \".png\".\n4. Click the overlay's button \"Comment on the whole image\", fill the dialog's input with \"check the header\" and click \"Add Comment\".\n5. The message input's value should match the regular expression /\u003e image \\/tmp\\/shelley-screenshots\\/[^\\s]+\\.png \\[whole image, \\d+x\\d+\\]\\ncheck the header/ (eval regex.test(value), expect true).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/shot"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".screenshot-tool .commentable-image",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.screenshot-tool .commentable-image-badge')).opacity",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "selector": ".screenshot-tool .commentable-image"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".image-comment-overlay"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.image-comment-overlay .image-comment-title').textContent.trim().endsWith('.png')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".image-comment-overlay button",
+      "has_text": "Comment on the whole image"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-viewer-comment-input",
+      "value": "check the header"
+    },
+    {
+      "action": "click",
+      "selector": "button",
+      "has_text": "Add Comment"
+    },
+    {
+      "action": "eval",
+      "expression": "/\u003e image \\/tmp\\/shelley-screenshots\\/[^\\s]+\\.png \\[whole image, \\d+x\\d+\\]\\ncheck the header/.test(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:34:24.854795645Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 67797,
+    "output_tokens": 2019,
+    "estimated_cost_usd": 0.07133385,
+    "mode": "generated"
+  }
+}

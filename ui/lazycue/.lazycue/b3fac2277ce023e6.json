@@ -1,0 +1,91 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A touch drag draws a box, and a second finger cannot hijack it: the conversation read an 800x600 PNG with read_image. \"The overlay\" is \".image-comment-overlay\"; \"the frame\" is \".image-comment-overlay .image-comment-frame\" (it shrink-wraps the image, so its box is the image's displayed pixels and a fraction of it is a fraction of the image). \"Drag from (a, b) to (c, d)\" means: move the mouse over the frame at offsets (a × its width, b × its height) from its top-left, press the left button, move to (c × width, d × height) in N steps (5 unless said otherwise), and release; read the frame's box with getBoundingClientRect when computing the offsets. \"Drag the middle half\" is a drag from (0.25, 0.25) to (0.75, 0.75). The open comment dialog has its title \".diff-viewer-comment-dialog-handle\" (it names the region being commented on), its input \".diff-viewer-comment-input\" and its button \"Add Comment\" (name exactly that). window.geometry() returns the WxH+X+Y region the dialog title names; window.middleHalf(W, H) returns \"ok\" if that region is the middle half of a WxH image, within tolerance, and otherwise what is off; window.keepGeometry() keeps the current geometry for later, and window.kept(i) returns the i-th one kept (from 0). Check the message input's (data-testid \"message-input\") value with an eval comparing it to the exact string, building it with window.kept(i) where it says G or Gi; \\n is a newline. Touch points below are fractions (a, b) of the frame: offsets (a × its width, b × its height) from its top-left; touch on the frame. \"The draft is half the frame wide\" means: in an eval, wait two animation frames (one for Vue to flush the style, one for layout: new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r)))), then check that the width of \".image-comment-overlay .image-comment-draft\" is within 0.5px of half the frame's width (getBoundingClientRect), expect true. Perform the steps in order.\n1. Navigate to /c/image. Wait (up to 30s) for the first \".screenshot-tool .commentable-image\" (the image) to be visible. Tap it (touch start on it, then touch end).\n2. The overlay's button \"Comment on the whole image\" should be enabled.\n3. Finger one drags the middle half: touch start at (0.25, 0.25), then touch move to (0.75, 0.75). The draft should be half the frame wide (percentage layout plus coordinate quantization put this within a pixel; a hijacked drag would be off by a third of the image).\n4. Finger two arrives mid-drag and wanders to the far corner. It gets its own pointerId, so the box in flight must not follow it -- if it did, the box would shrink back toward that corner: touch start with two fingers at (0.75, 0.75) and (0.05, 0.95), then touch move with them at (0.75, 0.75) and (0.02, 0.98). The draft should still be half the frame wide.\n5. Lift the fingers (touch end).\n6. window.middleHalf(800, 600) should return exactly \"ok\". And the drag really is over: no draft box is left hanging (\".image-comment-overlay .image-comment-draft\" count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/image"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".screenshot-tool .commentable-image",
+      "timeout": "30s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": ".screenshot-tool .commentable-image"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".image-comment-overlay"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "button",
+      "has_text": "Comment on the whole image"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": ".image-comment-overlay .image-comment-frame",
+      "points": "200,150"
+    },
+    {
+      "action": "touch",
+      "value": "move",
+      "selector": ".image-comment-overlay .image-comment-frame",
+      "points": "600,450"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r))); const frame = document.querySelector('.image-comment-overlay .image-comment-frame'); const draft = document.querySelector('.image-comment-overlay .image-comment-draft'); const fw = frame.getBoundingClientRect().width; const dw = draft ? draft.getBoundingClientRect().width : null; return Math.abs(dw - fw/2) \u003c 0.5; })()",
+      "expect": "true"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": ".image-comment-overlay .image-comment-frame",
+      "points": "600,450 40,570"
+    },
+    {
+      "action": "touch",
+      "value": "move",
+      "selector": ".image-comment-overlay .image-comment-frame",
+      "points": "600,450 16,588"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r))); const frame = document.querySelector('.image-comment-overlay .image-comment-frame'); const draft = document.querySelector('.image-comment-overlay .image-comment-draft'); const fw = frame.getBoundingClientRect().width; const dw = draft ? draft.getBoundingClientRect().width : null; return Math.abs(dw - fw/2) \u003c 0.5; })()",
+      "expect": "true"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "eval",
+      "expression": "window.middleHalf(800, 600)",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".image-comment-overlay .image-comment-draft",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:31:23.079923203Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 192825,
+    "output_tokens": 4950,
+    "estimated_cost_usd": 0.1849119,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Drag a region, comment, and it lands in the message input. \"The overlay\" is \".image-comment-overlay\"; \"the frame\" is \".image-comment-overlay .image-comment-frame\" (it shrink-wraps the image, so its box is the image's displayed pixels and a fraction of it is a fraction of the image). \"Drag from (a, b) to (c, d)\" means: move the mouse over the frame at offsets (a × its width, b × its height) from its top-left, press the left button, move to (c × width, d × height) in N steps (5 unless said otherwise), and release; read the frame's box with getBoundingClientRect when computing the offsets. \"Drag the middle half\" is a drag from (0.25, 0.25) to (0.75, 0.75). The open comment dialog has its title \".diff-viewer-comment-dialog-handle\" (it names the region being commented on), its input \".diff-viewer-comment-input\" and its button \"Add Comment\" (name exactly that). window.geometry() returns the WxH+X+Y region the dialog title names; window.middleHalf(W, H) returns \"ok\" if that region is the middle half of a WxH image, within tolerance, and otherwise what is off; window.keepGeometry() keeps the current geometry for later, and window.kept(i) returns the i-th one kept (from 0). Check the message input's (data-testid \"message-input\") value with an eval comparing it to the exact string, building it with window.kept(i) where it says G or Gi; \\n is a newline. Perform the steps in order.\n1. Navigate to /c/inline. Wait (up to 30s) for the image \".markdown-content img[src*=\\\"shelley-inline-image-demo.png\\\"]\" to be visible. Click it.\n2. The overlay should be visible, and its \".image-comment-title\" should have text exactly \"shelley-inline-image-demo.png\". Drawing is inert until the image reports its intrinsic size, so wait for the overlay's \".image-comment-hint\" to contain \"Drag a box\".\n3. Drag the middle half.\n4. Releasing the drag opens the comment dialog for that region, named in the 48x48 image's own pixels: the dialog's input should be focused (document.activeElement), window.middleHalf(48, 48) should return exactly \"ok\". Keep the geometry (G0).\n5. Fill the dialog's input with \"this corner is wrong\" and click \"Add Comment\".\n6. The comment goes straight into the message input, and the view stays open so more of the same image can be commented on: there should be no dialog input (count 0); the overlay should still be visible; its \".image-comment-sent\" should contain \"1 comment added\". The region stays drawn and numbered, so it is clear what has been covered: exactly 1 \".image-comment-overlay .image-comment-region\", and \".image-comment-overlay .image-comment-region-badge\" with text exactly \"1\". The message input's value should be exactly \"> image shelley-inline-image-demo.png [region G0 of 48x48]\\nthis corner is wrong\\n\\n\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/inline"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".markdown-content img[src*=\"shelley-inline-image-demo.png\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".markdown-content img[src*=\"shelley-inline-image-demo.png\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".image-comment-overlay"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".image-comment-overlay .image-comment-title",
+      "text": "shelley-inline-image-demo.png"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".image-comment-overlay .image-comment-hint",
+      "text": "Drag a box"
+    },
+    {
+      "action": "hover",
+      "selector": ".image-comment-overlay .image-comment-frame",
+      "x": 12,
+      "y": 12
+    },
+    {
+      "action": "mouse_down",
+      "button": "left"
+    },
+    {
+      "action": "hover",
+      "selector": ".image-comment-overlay .image-comment-frame",
+      "x": 36,
+      "y": 36,
+      "count": 5
+    },
+    {
+      "action": "mouse_up",
+      "button": "left"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-dialog",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".diff-viewer-comment-input"
+    },
+    {
+      "action": "eval",
+      "expression": "window.geometry()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.middleHalf(48, 48)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.keepGeometry()"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-viewer-comment-input",
+      "value": "this corner is wrong"
+    },
+    {
+      "action": "click",
+      "selector": "button",
+      "has_text": "Add Comment"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-comment-input",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".image-comment-overlay"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".image-comment-sent",
+      "text": "1 comment added"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".image-comment-overlay .image-comment-region",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": ".image-comment-overlay .image-comment-region-badge",
+      "text": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value === ('> image shelley-inline-image-demo.png [region ' + window.kept(0) + ' of 48x48]\\nthis corner is wrong\\n\\n') ? 'ok' : ('mismatch actual=' + JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value))",
+      "expect": "ok"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:35:38.664311038Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 97604,
+    "output_tokens": 3995,
+    "estimated_cost_usd": 0.1278069,
+    "mode": "generated"
+  }
+}

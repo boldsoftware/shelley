@@ -1,0 +1,39 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "With a mouse, the comment badge appears on hover. Perform the steps in order.\n1. Navigate to /c/inline. Wait (up to 30s) for the image \".markdown-content img[src*=\\\"shelley-inline-image-demo.png\\\"]\" to be visible. \n2. The first \".markdown-content .commentable-image-badge\" (the badge) should have computed opacity exactly \"0\".\n3. Hover the image. The badge's computed opacity should become exactly \"1\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/inline"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".markdown-content img[src*=\"shelley-inline-image-demo.png\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.markdown-content .commentable-image-badge')).opacity",
+      "expect": "0"
+    },
+    {
+      "action": "hover",
+      "selector": ".markdown-content img[src*=\"shelley-inline-image-demo.png\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.markdown-content .commentable-image-badge')).opacity",
+      "expect": "1"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:56:52.15590371Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 4717,
+    "output_tokens": 248,
+    "estimated_cost_usd": 0.00718635,
+    "mode": "generated"
+  }
+}

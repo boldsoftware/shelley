@@ -1,0 +1,75 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A tall image on desktop viewport (1280x800) still maps regions correctly: the conversation read a 400x1600 PNG with read_image. \"The overlay\" is \".image-comment-overlay\"; \"the frame\" is \".image-comment-overlay .image-comment-frame\" (it shrink-wraps the image, so its box is the image's displayed pixels and a fraction of it is a fraction of the image). \"Drag from (a, b) to (c, d)\" means: move the mouse over the frame at offsets (a × its width, b × its height) from its top-left, press the left button, move to (c × width, d × height) in N steps (5 unless said otherwise), and release; read the frame's box with getBoundingClientRect when computing the offsets. \"Drag the middle half\" is a drag from (0.25, 0.25) to (0.75, 0.75). The open comment dialog has its title \".diff-viewer-comment-dialog-handle\" (it names the region being commented on), its input \".diff-viewer-comment-input\" and its button \"Add Comment\" (name exactly that). window.geometry() returns the WxH+X+Y region the dialog title names; window.middleHalf(W, H) returns \"ok\" if that region is the middle half of a WxH image, within tolerance, and otherwise what is off; window.keepGeometry() keeps the current geometry for later, and window.kept(i) returns the i-th one kept (from 0). Check the message input's (data-testid \"message-input\") value with an eval comparing it to the exact string, building it with window.kept(i) where it says G or Gi; \\n is a newline. Perform the steps in order.\n1. Navigate to /c/image. Wait (up to 30s) for the first \".screenshot-tool .commentable-image\" (the image) to be visible. Click it.\n2. The hint that gates other tests is hidden at phone width, so wait on the whole-image button instead: it is disabled until the image reports its size, which is also when drawing becomes live. The overlay's button \"Comment on the whole image\" should be enabled.\n3. The frame shrink-wraps the image, which is what makes a fraction of the frame a fraction of the image; and the whole image is reachable without scrolling, so every part of it can be dragged on: window.shrinkWraps(800) should return exactly \"ok\".\n4. Drag the middle half. window.middleHalf(400, 1600) should return exactly \"ok\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/image"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".screenshot-tool .commentable-image",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".screenshot-tool .commentable-image"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".image-comment-overlay",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "button",
+      "has_text": "Comment on the whole image"
+    },
+    {
+      "action": "eval",
+      "expression": "window.shrinkWraps(800)",
+      "expect": "ok"
+    },
+    {
+      "action": "hover",
+      "selector": ".image-comment-overlay .image-comment-frame",
+      "x": 41,
+      "y": 164
+    },
+    {
+      "action": "mouse_down",
+      "button": "left"
+    },
+    {
+      "action": "hover",
+      "selector": ".image-comment-overlay .image-comment-frame",
+      "x": 123,
+      "y": 492,
+      "count": 5
+    },
+    {
+      "action": "mouse_up",
+      "button": "left"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-dialog",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.middleHalf(400, 1600)",
+      "expect": "ok"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:33:51.710720704Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 216132,
+    "output_tokens": 4835,
+    "estimated_cost_usd": 0.18669225,
+    "mode": "generated"
+  }
+}

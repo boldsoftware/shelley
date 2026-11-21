@@ -1,0 +1,72 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Images fit the conversation on desktop viewport (1280x800). Markdown images carry no size; tool cards pass width/height attributes (of the downscaled copy) to reserve their space. /c/markdown shows a 1170x4000 tall.png and a 3000x200 wide.png as markdown images; /c/image read the same tall.png with read_image. window.fits(selector, W, H) returns \"ok\" if the first image matching selector, of a WxH source, fits the conversation: it fits the column (\".messages-container\") and the message area (the container's clientHeight), keeps its aspect ratio (within half a pixel), its \".commentable-image-link\" hugs it (width within half a pixel), and the link's \".commentable-image-badge\" is on the image; otherwise it says what is off. \"Check that S of WxH fits\" means: wait (up to 30s) for the first image matching S to be visible; wait (up to 15s) for its naturalWidth to be greater than 0, since before the bytes arrive a markdown image has no size; then window.fits(S, W, H) should return exactly \"ok\". Perform the steps in order.\n1. Navigate to /c/markdown. Check that \".markdown-content img[src*=\\\"tall.png\\\"]\" of 1170x4000 fits, then that \".markdown-content img[src*=\\\"wide.png\\\"]\" of 3000x200 fits.\n2. Navigate to /c/image. Check that \".screenshot-tool .commentable-image\" of 1170x4000 fits.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/markdown"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".markdown-content img[src*=\"tall.png\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.markdown-content img[src*=\"tall.png\"]').naturalWidth > 0 ? 'yes' : 'no'",
+      "expect": "yes",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.fits('.markdown-content img[src*=\"tall.png\"]', 1170, 4000)",
+      "expect": "ok"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".markdown-content img[src*=\"wide.png\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.markdown-content img[src*=\"wide.png\"]').naturalWidth > 0 ? 'yes' : 'no'",
+      "expect": "yes",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.fits('.markdown-content img[src*=\"wide.png\"]', 3000, 200)",
+      "expect": "ok"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/image"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".screenshot-tool .commentable-image",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.screenshot-tool .commentable-image').naturalWidth > 0 ? 'yes' : 'no'",
+      "expect": "yes",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.fits('.screenshot-tool .commentable-image', 1170, 4000)",
+      "expect": "ok"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:29:44.312044546Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 42239,
+    "output_tokens": 1148,
+    "estimated_cost_usd": 0.04755045000000001,
+    "mode": "generated"
+  }
+}

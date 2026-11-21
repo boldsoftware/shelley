@@ -1,0 +1,104 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Regions are reported in the source file's pixels, not the downscaled copy's: the conversation read a 3001x60 PNG, {{IMAGE}}, with read_image, which serves a downscaled copy. \"The overlay\" is \".image-comment-overlay\"; \"the frame\" is \".image-comment-overlay .image-comment-frame\" (it shrink-wraps the image, so its box is the image's displayed pixels and a fraction of it is a fraction of the image). \"Drag from (a, b) to (c, d)\" means: move the mouse over the frame at offsets (a × its width, b × its height) from its top-left, press the left button, move to (c × width, d × height) in N steps (5 unless said otherwise), and release; read the frame's box with getBoundingClientRect when computing the offsets. \"Drag the middle half\" is a drag from (0.25, 0.25) to (0.75, 0.75). The open comment dialog has its title \".diff-viewer-comment-dialog-handle\" (it names the region being commented on), its input \".diff-viewer-comment-input\" and its button \"Add Comment\" (name exactly that). window.geometry() returns the WxH+X+Y region the dialog title names; window.middleHalf(W, H) returns \"ok\" if that region is the middle half of a WxH image, within tolerance, and otherwise what is off; window.keepGeometry() keeps the current geometry for later, and window.kept(i) returns the i-th one kept (from 0). Check the message input's (data-testid \"message-input\") value with an eval comparing it to the exact string, building it with window.kept(i) where it says G or Gi; \\n is a newline. Perform the steps in order.\n1. Navigate to /c/image. Wait (up to 30s) for the first \".screenshot-tool .commentable-image\" (the image) to be visible. \n2. The served copy really is downscaled, and did load; otherwise this test proves nothing (predictable's MaxImageDimension is 2000): the image's naturalWidth should come (within 15s) to be greater than 0, and should then be less than 3001.\n3. Click the image. The overlay's \".image-comment-hint\" should contain \"Drag a box\".\n4. Drag the middle half. Reported in the 3001x60 source's pixels, not the rendered copy's: window.middleHalf(3001, 60) should return exactly \"ok\". Keep the geometry (G0).\n5. Fill the dialog's input with \"scaled correctly\" and click \"Add Comment\". The message input's value should be exactly \"> image {{IMAGE}} [region G0 of 3001x60]\\nscaled correctly\\n\\n\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/image"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".screenshot-tool .commentable-image",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.screenshot-tool .commentable-image').naturalWidth > 0",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.screenshot-tool .commentable-image').naturalWidth < 3001",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".screenshot-tool .commentable-image"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".image-comment-overlay .image-comment-hint",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".image-comment-overlay .image-comment-hint",
+      "text": "Drag a box"
+    },
+    {
+      "action": "eval",
+      "expression": "const r = document.querySelector('.image-comment-overlay .image-comment-frame').getBoundingClientRect(); window._drag = {sx: Math.round(r.width*0.25), sy: Math.round(r.height*0.25), ex: Math.round(r.width*0.75), ey: Math.round(r.height*0.75)}; `${window._drag.sx},${window._drag.sy} -> ${window._drag.ex},${window._drag.ey}`"
+    },
+    {
+      "action": "hover",
+      "selector": ".image-comment-overlay .image-comment-frame",
+      "x": 296,
+      "y": 6
+    },
+    {
+      "action": "mouse_down",
+      "button": "left"
+    },
+    {
+      "action": "hover",
+      "selector": ".image-comment-overlay .image-comment-frame",
+      "x": 888,
+      "y": 17,
+      "count": 5
+    },
+    {
+      "action": "mouse_up",
+      "button": "left"
+    },
+    {
+      "action": "eval",
+      "expression": "window.middleHalf(3001, 60)",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.keepGeometry()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-dialog-handle",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-viewer-comment-input",
+      "value": "scaled correctly"
+    },
+    {
+      "action": "click",
+      "selector": "button",
+      "has_text": "Add Comment"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]')?.value === `> image {{IMAGE}} [region ${window.kept(0)} of 3001x60]\nscaled correctly\n\n`",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:25:18.680361567Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 83518,
+    "output_tokens": 4481,
+    "estimated_cost_usd": 0.1221426,
+    "mode": "generated"
+  }
+}
