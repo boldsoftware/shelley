@@ -1,0 +1,168 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The Markdown file editor offers a live side-by-side editor and preview. The conversation /c/{{SLUG}} runs in a directory holding draft.md: a heading \"Draft\", a table and a js code block. \"The editor pane\" is the modal's \".diff-viewer-editor\". To \"open F\": press \"p\" (lowercase) with the Control modifier (on whatever has focus); wait for the finder input \".grp-filter\" to be visible; fill it with F; wait for the FIRST \".grp-row\" to contain F (assert_text_contains on \".grp-row\", which checks the first match: the finder lists every file until the query applies, and Enter opens the top row, so waiting for any row with the text is not enough); press Enter in the finder input; the dialog (role \"dialog\") whose accessible name matches the regular expression /Edit .*F/ is then \"the modal\" for F, and its \".monaco-editor\" should become visible (up to 15s). \"The preview\" is the modal's region (role \"region\") named \"Markdown preview\". \"The editor input\" is the modal's \".monaco-editor textarea.inputarea\"; to focus it, eval its focus(). Key presses go to whatever has focus; do not click anything to focus first unless a step says so. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Open draft.md. 3. Click the modal's button named \"Split view\". 4. The preview's table should be visible. 5. The editor pane's right edge must meet the preview's left edge: with getBoundingClientRect(), Math.abs(pane.x + pane.width - preview.x) \u003c 3. 6. The editor input should already be focused (assert_focused): the app focuses it, so the test must not focus it itself. 7. Press \"End\" with the Control modifier. 8. Type, key by key, \"\\n\\n## New while typing\" (each \\n presses Enter). 9. The preview should show a visible heading (an h1-h6 element) with the text \"New while typing\". 10. Click the modal's button named \"Preview mode\". 11. The editor pane should be hidden, and the preview should still show a visible heading \"New while typing\". 12. The preview's \"pre \u003e code\" should come to have a data-shelley-code-highlight attribute of exactly \"js\" or \"javascript\" (poll: it reads \"pending\" while highlighting loads). 13. Press \"K\" with the modifiers Control+Shift (this goes back to the mode before preview: split view). 14. The editor pane and the preview should both be visible. 15. Press \"p\" (lowercase) with the modifiers Control+Alt. 16. The editor pane should be hidden. 17. Set the viewport to width 390, height 844 (only width and height). 18. The modal should come to have exactly 0 buttons named \"Split view\". 19. Press \"p\" (lowercase) with the modifiers Control+Alt. 20. The editor pane should be visible, and there must be exactly 0 previews in the modal.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "draft.md"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
+      "text": "draft.md"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'][aria-label*='Edit '] .monaco-editor",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[role='dialog'][aria-label*='Edit '] button[aria-label='Split view']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'][aria-label*='Edit '] [role='region'][aria-label='Markdown preview'] table",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "const pane = document.querySelector('[role=\"dialog\"] .diff-viewer-editor').getBoundingClientRect(); const preview = document.querySelector('[role=\"dialog\"] [role=\"region\"][aria-label=\"Markdown preview\"]').getBoundingClientRect(); Math.abs(pane.x + pane.width - preview.x) \u003c 3",
+      "expect": "true"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[role='dialog'] .monaco-editor textarea.inputarea"
+    },
+    {
+      "action": "press_key",
+      "key": "End",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "type",
+      "value": "## New while typing"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'] [role='region'][aria-label='Markdown preview'] :is(h1,h2,h3,h4,h5,h6)",
+      "has_text": "New while typing",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='dialog'] [role='region'][aria-label='Markdown preview'] :is(h1,h2,h3,h4,h5,h6)",
+      "has_text": "New while typing",
+      "text": "New while typing"
+    },
+    {
+      "action": "click",
+      "selector": "[role='dialog'][aria-label*='Edit '] button[aria-label='Preview mode']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[role='dialog'] .diff-viewer-editor"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'] [role='region'][aria-label='Markdown preview'] :is(h1,h2,h3,h4,h5,h6)",
+      "has_text": "New while typing",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='dialog'] [role='region'][aria-label='Markdown preview'] :is(h1,h2,h3,h4,h5,h6)",
+      "has_text": "New while typing",
+      "text": "New while typing"
+    },
+    {
+      "action": "eval",
+      "expression": "/^(js|javascript)$/.test(document.querySelector(\"[role=dialog] [role=region][aria-label=\\\"Markdown preview\\\"] pre \u003e code\")?.getAttribute(\"data-shelley-code-highlight\") || \"\")",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "press_key",
+      "key": "K",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog'] .diff-viewer-editor"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog'] [role='region'][aria-label='Markdown preview']"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control+Alt"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[role='dialog'] .diff-viewer-editor"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role='dialog'] button[aria-label='Split view']",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control+Alt"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog'] .diff-viewer-editor"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role='dialog'] [role='region'][aria-label='Markdown preview']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:07:21.35888163Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 95513,
+    "output_tokens": 6961,
+    "estimated_cost_usd": 0.17663489999999998,
+    "mode": "generated"
+  }
+}

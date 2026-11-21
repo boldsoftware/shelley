@@ -1,0 +1,231 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The Markdown file editor preview renders tables and pending edits without running file contents. The conversation /c/{{SLUG}} runs in a directory holding notes.md, a Markdown file with: a heading \"Release notes\"; a table with a \"Ready\" cell; a paragraph \"Wrapped paragraph\" whose source continues on a second line \"continues here.\"; three paragraphs \"Hard break with spaces.\", \"Hard break with backslash.\" and \"Hard break with HTML.\" each followed by a hard line break and \"Next line.\"; three paragraphs with inline code, \"Single token: `here_is-a_piece-of-code`.\", \"Words: `here is a piece of code`.\" and \"Oversized: \" with one very long unbroken code token; a js code block of two lines, \"window.__previewExecuted = true;\" and \"// Code stays on its own line.\"; and raw HTML that would set window.__previewExecuted = true if it ran (an img with onerror, an svg with onload, an iframe with a script in srcdoc, a script), plus a div with the class \"diff-viewer-overlay\" holding \"spoofed overlay\". window.__previewExecuted starts out false on every page. \"The wrapped paragraph\" is the preview's \"p\" element containing \"Wrapped paragraph\". To \"open F\": press \"p\" (lowercase) with the Control modifier (on whatever has focus); wait for the finder input \".grp-filter\" to be visible; fill it with F; wait for the FIRST \".grp-row\" to contain F (assert_text_contains on \".grp-row\", which checks the first match: the finder lists every file until the query applies, and Enter opens the top row, so waiting for any row with the text is not enough); press Enter in the finder input; the dialog (role \"dialog\") whose accessible name matches the regular expression /Edit .*F/ is then \"the modal\" for F, and its \".monaco-editor\" should become visible (up to 15s). \"The preview\" is the modal's region (role \"region\") named \"Markdown preview\". \"The editor input\" is the modal's \".monaco-editor textarea.inputarea\"; to focus it, eval its focus(). Key presses go to whatever has focus; do not click anything to focus first unless a step says so. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Open notes.md. 3. The modal's button named \"Preview mode\" should be visible. 4. Press \"p\" (lowercase) with the modifiers Control+Alt. 5. The preview should be visible and focused (document.activeElement is it). 6. The preview should show a visible heading \"Release notes\" and a visible table cell \"Ready\" in its table. 7. The wrapped paragraph's text, whitespace-collapsed and trimmed, must be exactly \"Wrapped paragraph continues here.\", and it must hold exactly 0 \"br\" elements. 8. For each of \"spaces\", \"backslash\" and \"HTML\": the preview's \"p\" elements containing \"Hard break with \u003ckind\u003e.\" must hold exactly 1 \"br\" in total. 9. The preview must have exactly one \"pre code\" element, whose textContent is exactly \"window.__previewExecuted = true;\\n// Code stays on its own line.\\n\" (two lines, each ending in a newline). 10. The preview must hold exactly 0 elements matching \"script, iframe, img, [onerror], [onload]\", exactly 0 \".diff-viewer-overlay\" elements, and still contain the text \"spoofed overlay\". 11. Its \"pre \u003e code\" must have the class \"language-js\". 12. It must hold exactly 0 \".markdown-content \u003e svg\" elements (the UI's own code-copy button has an SVG icon; the file's SVG markup must still be removed). 13. Eval window.__previewExecuted: it must be exactly false. 14. Eval this, with PREVIEW replaced by an expression for the preview; it must return \"ok\": (() =\u003e { const codes = [...PREVIEW.querySelectorAll('p \u003e code')]; const layout = codes.map((code, index) =\u003e { const paragraph = code.parentElement; paragraph.style.width = index === 1 ? '120px' : '250px'; const range = document.createRange(); range.selectNodeContents(code); return { lines: range.getClientRects().length, display: getComputedStyle(code).display, belowPrefix: code.getBoundingClientRect().top - paragraph.getBoundingClientRect().top \u003e parseFloat(getComputedStyle(paragraph).lineHeight) / 2, overflow: paragraph.scrollWidth \u003e paragraph.clientWidth }; }); const bad = []; if (!(layout[0].lines === 1 \u0026\u0026 layout[0].belowPrefix === true)) bad.push('first ' + JSON.stringify(layout[0])); if (layout[1].display !== 'inline') bad.push('second display ' + layout[1].display); if (!(layout[1].lines \u003e 1)) bad.push('second lines ' + layout[1].lines); if (!(layout[2].lines \u003e 1)) bad.push('third lines ' + layout[2].lines); if (!layout.every((c) =\u003e !c.overflow)) bad.push('overflow ' + JSON.stringify(layout)); return bad.length ? bad.join('; ') : 'ok'; })(). 15. Click the modal's button named \"Split view\". 16. The wrapped paragraph should come to hold exactly 1 \"br\" (split keeps the source's line breaks), and the preview's first \"p \u003e code\" should have the computed display \"inline\". 17. Click the modal's button named \"Preview mode\". 18. The wrapped paragraph should come to hold exactly 0 \"br\" (full preview alone reflows). 19. Press \"K\" with the modifiers Control+Shift to return to Monaco (this goes back to the mode before preview, split view here, so the editor shows again). 20. Focus the editor input. 21. Press \"End\" with the Control modifier. 22. Type, key by key, \"\\n\\n## Unsaved view\\n\\nA fresh line.\" (each \\n presses Enter). 23. Click the modal's button named \"Preview mode\". 24. The preview should show a visible heading (an h1-h6 element) with the text \"Unsaved view\" and contain \"A fresh line.\": no save or reload is needed to see the current editor buffer. 25. Click the modal's button named \"Edit mode\". 26. The modal's \".view-lines\" should come to contain \"Unsaved view\" (assert_text_contains, which polls: Monaco draws its lines a moment after the editor shows again).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_text",
+      "text": "Ready on",
+      "timeout": "15s"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "15s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "notes.md"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
+      "text": "notes.md"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "notes.md",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=dialog] .monaco-editor",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Preview mode"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control+Alt"
+    },
+    {
+      "action": "wait_visible",
+      "role": "region",
+      "name": "Markdown preview",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[role=region][aria-label=\"Markdown preview\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=region][aria-label='Markdown preview'] :is(h1,h2,h3,h4,h5,h6)",
+      "has_text": "Release notes"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=region][aria-label='Markdown preview'] :is(td,th)",
+      "has_text": "Ready"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const preview = document.querySelector('[role=region][aria-label=\"Markdown preview\"]'); const ps = [...preview.querySelectorAll('p')]; const wp = ps.find(p =\u003e p.textContent.includes('Wrapped paragraph')); return wp ? wp.textContent.trim().replace(/\\s+/g, ' ') : 'NOT FOUND'; })()",
+      "expect": "Wrapped paragraph continues here."
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const preview = document.querySelector('[role=region][aria-label=\"Markdown preview\"]'); const ps = [...preview.querySelectorAll('p')]; const wp = ps.find(p =\u003e p.textContent.includes('Wrapped paragraph')); return wp ? wp.querySelectorAll('br').length : -1; })()",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const preview = document.querySelector('[role=region][aria-label=\"Markdown preview\"]'); const ps = [...preview.querySelectorAll('p')]; const sp = ps.find(p =\u003e p.textContent.includes('Hard break with spaces.')); return sp ? sp.querySelectorAll('br').length : -1; })()",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const preview = document.querySelector('[role=region][aria-label=\"Markdown preview\"]'); const ps = [...preview.querySelectorAll('p')]; const sp = ps.find(p =\u003e p.textContent.includes('Hard break with backslash.')); return sp ? sp.querySelectorAll('br').length : -1; })()",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const preview = document.querySelector('[role=region][aria-label=\"Markdown preview\"]'); const ps = [...preview.querySelectorAll('p')]; const sp = ps.find(p =\u003e p.textContent.includes('Hard break with HTML.')); return sp ? sp.querySelectorAll('br').length : -1; })()",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=region][aria-label=\"Markdown preview\"]').querySelectorAll('pre code').length",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[role=region][aria-label=\"Markdown preview\"] pre code').textContent)",
+      "expect": "\"window.__previewExecuted = true;\\n// Code stays on its own line.\\n\""
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=region][aria-label=\"Markdown preview\"]').querySelectorAll('script, iframe, img, [onerror], [onload]').length",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=region][aria-label=\"Markdown preview\"]').querySelectorAll('.diff-viewer-overlay').length",
+      "expect": "0"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role=region][aria-label='Markdown preview']",
+      "text": "spoofed overlay"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=region][aria-label=\"Markdown preview\"] pre \u003e code').classList.contains('language-js')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=region][aria-label=\"Markdown preview\"]').querySelectorAll('.markdown-content \u003e svg').length",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__previewExecuted",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const PREVIEW = document.querySelector('[role=region][aria-label=\"Markdown preview\"]'); const codes = [...PREVIEW.querySelectorAll('p \u003e code')]; const layout = codes.map((code, index) =\u003e { const paragraph = code.parentElement; paragraph.style.width = index === 1 ? '120px' : '250px'; const range = document.createRange(); range.selectNodeContents(code); return { lines: range.getClientRects().length, display: getComputedStyle(code).display, belowPrefix: code.getBoundingClientRect().top - paragraph.getBoundingClientRect().top \u003e parseFloat(getComputedStyle(paragraph).lineHeight) / 2, overflow: paragraph.scrollWidth \u003e paragraph.clientWidth }; }); const bad = []; if (!(layout[0].lines === 1 \u0026\u0026 layout[0].belowPrefix === true)) bad.push('first ' + JSON.stringify(layout[0])); if (layout[1].display !== 'inline') bad.push('second display ' + layout[1].display); if (!(layout[1].lines \u003e 1)) bad.push('second lines ' + layout[1].lines); if (!(layout[2].lines \u003e 1)) bad.push('third lines ' + layout[2].lines); if (!layout.every((c) =\u003e !c.overflow)) bad.push('overflow ' + JSON.stringify(layout)); return bad.length ? bad.join('; ') : 'ok'; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Split view"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const preview = document.querySelector('[role=region][aria-label=\"Markdown preview\"]'); const ps = [...preview.querySelectorAll('p')]; const wp = ps.find(p =\u003e p.textContent.includes('Wrapped paragraph')); return wp ? wp.querySelectorAll('br').length : -1; })()",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const PREVIEW = document.querySelector('[role=region][aria-label=\"Markdown preview\"]'); const codes = [...PREVIEW.querySelectorAll('p \u003e code')]; if (!codes.length) return 'no codes'; return getComputedStyle(codes[0]).display; })()",
+      "expect": "inline"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Preview mode"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const preview = document.querySelector('[role=region][aria-label=\"Markdown preview\"]'); const ps = [...preview.querySelectorAll('p')]; const wp = ps.find(p =\u003e p.textContent.includes('Wrapped paragraph')); return wp ? wp.querySelectorAll('br').length : -1; })()",
+      "expect": "0"
+    },
+    {
+      "action": "press_key",
+      "key": "K",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector(\"[role=dialog] .monaco-editor textarea.inputarea\"); if (!el) return \"missing\"; el.focus(); return document.activeElement === el ? \"focused\" : \"not focused\"; })()",
+      "expect": "focused"
+    },
+    {
+      "action": "press_key",
+      "key": "End",
+      "modifiers": "Control"
+    },
+    {
+      "action": "type",
+      "value": "\n\n## Unsaved view\n\nA fresh line."
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Preview mode"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=region][aria-label='Markdown preview'] :is(h1,h2,h3,h4,h5,h6)",
+      "has_text": "Unsaved view",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role=region][aria-label='Markdown preview']",
+      "text": "A fresh line."
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Edit mode"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role=dialog] .view-lines",
+      "text": "Unsaved view"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:18:59.976293662Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 181224,
+    "output_tokens": 10028,
+    "estimated_cost_usd": 0.30359385,
+    "mode": "generated"
+  }
+}

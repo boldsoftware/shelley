@@ -1,0 +1,163 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Reopening a different file keeps the editor buffers and pending saves separate. The conversation /c/{{SLUG}} runs in a directory holding first.md, which reads \"# First file\", and second.md, which reads \"# Second file\". Call \"first.md\" says whether first.md on disk contains \"Pending edit\" (\"true\" or \"false\"); call \"second.md\" returns second.md's contents on disk, JSON-encoded. To \"open F\": press \"p\" (lowercase) with the Control modifier (on whatever has focus); wait for the finder input \".grp-filter\" to be visible; fill it with F; wait for the FIRST \".grp-row\" to contain F (assert_text_contains on \".grp-row\", which checks the first match: the finder lists every file until the query applies, and Enter opens the top row, so waiting for any row with the text is not enough); press Enter in the finder input; the dialog (role \"dialog\") whose accessible name matches the regular expression /Edit .*F/ is then \"the modal\" for F, and its \".monaco-editor\" should become visible (up to 15s). \"The preview\" is the modal's region (role \"region\") named \"Markdown preview\". \"The editor input\" is the modal's \".monaco-editor textarea.inputarea\"; to focus it, eval its focus(). Key presses go to whatever has focus; do not click anything to focus first unless a step says so. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Open first.md. 3. Focus the editor input. 4. Press \"End\" with the Control modifier. 5. Type, key by key, \"\\n## Pending edit\" (the \\n presses Enter). 6. Press \"p\" (lowercase) with the modifiers Control+Alt. 7. The modal should show a visible heading \"Pending edit\". 8. The finder stacks above the editor: press \"p\" (lowercase) with the Control modifier, wait for \".grp-filter\" to be visible, fill it with \"second.md\", and wait for the first \".grp-row\" to contain \"second.md\". 9. Press \"p\" (lowercase) with the modifiers Control+Alt (focus is in the finder). 10. The first.md modal's \"Markdown preview\" region should still be visible. 11. Press Enter in the finder input. Selecting a second file must unmount the first editor, flushing its pending save to the FIRST path. 12. In the dialog whose accessible name matches /Edit .*second\\.md/ (\"the second modal\"), \".monaco-editor\" should be visible. 13. The second modal must hold exactly 0 regions named \"Markdown preview\". 14. Click the second modal's button named \"Preview mode\". 15. The second modal should show a visible heading \"Second file\". 16. The second modal must not contain the text \"Pending edit\". 17. Call \"first.md\" until it returns \"true\". 18. Call \"second.md\": it must return exactly \"\\\"# Second file\\\\n\\\"\" (the file unchanged).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "15s"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "first.md"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
+      "text": "first.md",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'] .monaco-editor",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"] .monaco-editor textarea.inputarea').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "End",
+      "modifiers": "Control"
+    },
+    {
+      "action": "type",
+      "value": "\n## Pending edit"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control+Alt"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=\"dialog\"][aria-label*=\"first.md\"] [role=\"region\"][aria-label=\"Markdown preview\"] :is(h1, h2, h3, h4, h5, h6)",
+      "has_text": "Pending edit",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"dialog\"][aria-label*=\"first.md\"] [role=\"region\"][aria-label=\"Markdown preview\"] :is(h1, h2, h3, h4, h5, h6)",
+      "has_text": "Pending edit"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "second.md"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".grp-row",
+      "text": "second.md",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control+Alt"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"dialog\"][aria-label*=\"first.md\"] [role=\"region\"][aria-label=\"Markdown preview\"]"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'][aria-label*='second.md'] .monaco-editor",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role='dialog'][aria-label*='second.md'] [role='region'][aria-label='Markdown preview']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "[role='dialog'][aria-label*='second.md'] button[aria-label='Preview mode']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=\"dialog\"][aria-label*=\"second.md\"] [role=\"region\"][aria-label=\"Markdown preview\"] :is(h1, h2, h3, h4, h5, h6)",
+      "has_text": "Second file",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"dialog\"][aria-label*=\"second.md\"] [role=\"region\"][aria-label=\"Markdown preview\"] :is(h1, h2, h3, h4, h5, h6)",
+      "has_text": "Second file"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[role=\\\"dialog\\\"][aria-label*=\\\"second.md\\\"]\").textContent.includes(\"Pending edit\")",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "first.md",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "second.md",
+      "expect": "\"# Second file\\n\""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:15:42.196956351Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 296237,
+    "output_tokens": 3931,
+    "estimated_cost_usd": 0.22642905,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The Markdown file editor leaves shortcuts to the stacked command palette. The conversation /c/{{SLUG}} runs in a directory holding notes.md, which reads \"# A note\". To \"open F\": press \"p\" (lowercase) with the Control modifier (on whatever has focus); wait for the finder input \".grp-filter\" to be visible; fill it with F; wait for the FIRST \".grp-row\" to contain F (assert_text_contains on \".grp-row\", which checks the first match: the finder lists every file until the query applies, and Enter opens the top row, so waiting for any row with the text is not enough); press Enter in the finder input; the dialog (role \"dialog\") whose accessible name matches the regular expression /Edit .*F/ is then \"the modal\" for F, and its \".monaco-editor\" should become visible (up to 15s). \"The preview\" is the modal's region (role \"region\") named \"Markdown preview\". \"The editor input\" is the modal's \".monaco-editor textarea.inputarea\"; to focus it, eval its focus(). Key presses go to whatever has focus; do not click anything to focus first unless a step says so. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Open notes.md. 3. Click the modal's button named \"Preview mode\". 4. Press \"k\" with the Control modifier. 5. The command palette's input \".command-palette-input\" should become focused (document.activeElement is it; the palette focuses its input a task after it opens, and until then the shortcut is still the editor's). 6. Press \"p\" (lowercase) with the modifiers Control+Alt. 7. The preview should still be visible. 8. \".command-palette-input\" should still be focused.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_text",
+      "text": "Ready on",
+      "timeout": "15s"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".grp-filter",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".grp-filter",
+      "value": "notes.md"
+    },
+    {
+      "action": "wait_text",
+      "text": "notes.md",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'][aria-label*='Edit'][aria-label*='notes.md'] .monaco-editor",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[role='dialog'][aria-label*='Edit'][aria-label*='notes.md'] button[aria-label='Preview mode']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'][aria-label*='Edit'][aria-label*='notes.md'] [role='region'][aria-label='Markdown preview']",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.command-palette-input')",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "p",
+      "modifiers": "Control+Alt"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog'][aria-label*='Edit'][aria-label*='notes.md'] [role='region'][aria-label='Markdown preview']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('.command-palette-input')",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:08:20.386023339Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 158243,
+    "output_tokens": 2898,
+    "estimated_cost_usd": 0.14053500000000002,
+    "mode": "generated"
+  }
+}
