@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -60,6 +61,10 @@ type AgentResult struct {
 }
 
 const maxAgentTurns = 25
+
+// maxGitCommands caps git_command calls per agent run. Agents left to it
+// read the test harness and the tests themselves instead of trying steps.
+const maxGitCommands = 12
 
 // agentBudget bounds the total wall-clock time a single heal/generate agent run
 // may consume. It is kept well under the `go test` package timeout (10m by
@@ -207,8 +212,8 @@ Available DSL actions:
 - assert_value: {"action": "assert_value", "selector": "...", "value": "..."} - Assert the current value of an input, textarea or select (the DOM property, which typing changes; not the value attribute).
 - assert_enabled / assert_disabled: {"action": "assert_enabled", "selector": "..."} - Assert a control is enabled or disabled: disabled means a disabled form control (or one in a disabled fieldset) or inside aria-disabled="true".
 - assert_focused: {"action": "assert_focused", "selector": "..."} - Assert the element has keyboard focus. For a custom element with a shadow root, focus anywhere inside it counts.
-- wait_url: {"action": "wait_url", "text": "...", "timeout": "10s"} (substring) or {"action": "wait_url", "value": "..."} (exact) - Wait for the browser URL to match. Use this (not assert_url) when a click triggers an async SPA route change, e.g. /new -> /c/<slug>.
-- assert_url: {"action": "assert_url", "value": "..."} or {"action": "assert_url", "text": "..."} for contains - Asserts the URL.
+- wait_url: {"action": "wait_url", "text": "...", "timeout": "10s"} (substring) or {"action": "wait_url", "value": "..."} (exact) - Wait for the browser URL to match. Its exact "value" may be a whole URL or just the path, query and hash.
+- assert_url: {"action": "assert_url", "value": "..."} or {"action": "assert_url", "text": "..."} for contains - Assert the URL; an exact "value" must be the whole URL.
 - assert_title: {"action": "assert_title", "text": "..."}
 - assert_count: {"action": "assert_count", "selector": "...", "count": 3}
 - sleep: {"action": "sleep", "timeout": "1s"}
@@ -216,16 +221,16 @@ Available DSL actions:
 
 Every assert_* and wait_* step retries until it holds or its timeout (default 15s) passes, so they wait for the app on their own; don't add sleeps or eval polls before them.
 
-Visible means rendered with a box of some size and not visibility: hidden; opacity does not matter. Selectors are CSS and match the first element. Any step with a selector may add "has_text": "..." to keep only the elements whose text contains it (whitespace collapsed), e.g. {"action": "click", "selector": "button", "has_text": "Archive"}; prefer it to eval for picking an element by its text. The browser emulates a Pixel 5 phone (393x727, touch screen) that prefers reduced motion and may use the clipboard, unless the test launched it otherwise.
+Visible means rendered with a box of some size and not visibility: hidden; opacity does not matter. Selectors are CSS and match the first element. Any step with a selector may add "has_text": "..." to keep only the elements whose text contains it (whitespace collapsed), e.g. {"action": "click", "selector": "button", "has_text": "Archive"}; prefer it to eval for picking an element by its text. Of nested matches only the innermost counts, so {"selector": "*", "has_text": "Saved"} is the element that holds the text itself, not <html>. The browser emulates a Pixel 5 phone (393x727, touch screen) that prefers reduced motion and may use the clipboard, unless the test launched it otherwise.
 
 TABS: any step may add "tab": "<name>" to act in another tab of the same browser profile — like a user with two tabs open, the tabs share localStorage, cookies and IndexedDB but have their own windows. The tab the browser started with has no name: steps without "tab" act in it, and a description's "this tab", "the first tab" or "tab A" means it, so never give it a name (a navigate with a new name opens ANOTHER tab). A navigate step with a not-yet-open tab name opens that tab; {"action": "navigate", "tab": "B"} with no url opens it on the page the first tab is currently on (use this for a URL the app assigned, like a conversation's /c/<slug>). When a description says "in tab B" or "another tab", use this rather than iframes or window.open.
 
 WORKFLOW:
 1. Every run_steps call gets a fresh app and browser, exactly as a cached run will: nothing carries over from an earlier call (no page, storage or server state), so start each one by navigating to the appropriate page.
-2. Use wait_visible and wait_text with appropriate timeouts before asserting.
+2. Steps wait up to 15s on their own; give a step a longer timeout only when the app needs more.
 3. Use the run_steps tool to test your DSL steps. Review the results and fix any failures.
 4. Use screenshot to see what the page looks like if you're unsure about selectors or page state.
-5. Use git_command to explore the codebase (grep for selectors, data-testid attributes, etc.) when you need to discover the app's structure.
+5. Use git_command sparingly (at most ` + strconv.Itoa(maxGitCommands) + ` calls) to look up the app's own source: selectors, data-testid attributes, labels. Placeholders, window helpers and calls a description names come from the test, not the app: try them with run_steps (eval) instead of searching for them, and don't read other tests or their cached scripts.
 6. Your FINAL call to run_steps must be the COMPLETE, passing test that exercises every part of the description. Submit it by setting "final": true on that run_steps call (exploratory probes must NOT set final). The harness caches exactly the steps from your final submission, so it must contain all the assertions — never submit a bare navigation/probe as final.
 7. Minimize the number of tool calls. Aim for 1-3 run_steps calls total.
 
@@ -355,7 +360,7 @@ func buildTools() []apiTool {
 		},
 		{
 			Name:        "git_command",
-			Description: "Run a read-only git command in the repository root. Use for: git grep, git ls-files, git show, git log, git diff. Helps you understand the codebase to write better tests.",
+			Description: "Run a read-only git command in the app's source directory: git grep, git ls-files, git show, git log, git diff. Paths are relative to that directory, so read a file with git show HEAD:./<path>. Limited to a few calls per run.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
@@ -511,7 +516,7 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 	var totalCost float64
 	// Effort accounting for heal diagnostics: how many API round trips and tool
 	// calls the agent took, and whether it exhausted its turn budget.
-	var turnsTaken, toolCallCount int
+	var turnsTaken, toolCallCount, gitCommands int
 	finish := func(r *AgentResult) (*AgentResult, error) {
 		r.InputTokens = totalInputTokens
 		r.OutputTokens = totalOutputTokens
@@ -749,7 +754,11 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 				}
 
 				logf("tool: git_command %s", input.Command)
-				result := executeGitCommand(cfg.RepoRoot, input.Command)
+				gitCommands++
+				result := fmt.Sprintf("Error: git_command is limited to %d calls per run; work with run_steps and screenshot now.", maxGitCommands)
+				if gitCommands <= maxGitCommands {
+					result = executeGitCommand(cfg.RepoRoot, input.Command)
+				}
 				toolResults = append(toolResults, makeToolResult(tu.ID, result))
 
 			default:

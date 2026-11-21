@@ -145,3 +145,37 @@ func TestAgentRunsGetFreshApps(t *testing.T) {
 		t.Errorf("first run's result does not list its placeholders: %v", turns)
 	}
 }
+
+// An agent gets a limited number of git commands, then has to test.
+func TestAgentGitCommandsAreCapped(t *testing.T) {
+	var seen []string // what the fake model saw last on each turn
+	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Messages []struct {
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		seen = append(seen, string(req.Messages[len(req.Messages)-1].Content))
+		turns := len(seen)
+		if turns > maxGitCommands+1 {
+			fmt.Fprint(w, `{"content":[{"type":"text","text":"giving up"}],"stop_reason":"end_turn","usage":{}}`)
+			return
+		}
+		fmt.Fprintf(w, `{"content":[{"type":"tool_use","id":"t%d","name":"git_command","input":{"command":"git rev-parse --is-inside-work-tree"}}],"stop_reason":"tool_use","usage":{}}`, turns)
+	}))
+	t.Cleanup(model.Close)
+	opts := Options{
+		CacheDir:         t.TempDir(),
+		AnthropicBaseURL: model.URL,
+		AnthropicAPIKey:  "test-key",
+		Setup:            func(context.Context) (*Env, error) { return &Env{BaseURL: "http://127.0.0.1:1"}, nil },
+	}
+	if _, err := Run(context.Background(), opts, "Explore forever."); err != nil {
+		t.Fatal(err)
+	}
+	limited := fmt.Sprintf("git_command is limited to %d calls", maxGitCommands)
+	if len(seen) < maxGitCommands+2 || strings.Contains(seen[maxGitCommands], limited) || !strings.Contains(seen[maxGitCommands+1], limited) {
+		t.Errorf("want git commands 1-%d to run and the next refused; saw %q", maxGitCommands, seen)
+	}
+}

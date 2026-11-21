@@ -52,6 +52,12 @@ func TestDefaultDeviceIsAPixel5(t *testing.T) {
 			Expect: ptr("393 727 2.75 true 5 true true"),
 		},
 		Step{Action: ActionEval, Expression: `navigator.clipboard.writeText('copied').then(() => navigator.clipboard.readText())`, Expect: ptr("copied")},
+		// A copy button, as apps have, writes from a real click.
+		Step{Action: ActionEval, Expression: `const b = document.body.appendChild(document.createElement('button')); b.id = 'copy'; b.textContent = 'Copy';
+			b.onclick = () => navigator.clipboard.writeText('clicked').then(() => b.textContent = 'ok', e => b.textContent = e.name)`},
+		Step{Action: ActionClick, Selector: "#copy"},
+		Step{Action: ActionAssertText, Selector: "#copy", Text: "ok"},
+		Step{Action: ActionEval, Expression: `navigator.clipboard.readText()`, Expect: ptr("clicked")},
 	)
 }
 
@@ -134,6 +140,8 @@ func TestVisibility(t *testing.T) {
 func TestHasText(t *testing.T) {
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<p style="display: none">Hidden note</p>
+<div>Outer <div>Inner</div></div>
 <ul><li><button>Rename</button></li><li><button title="a">Archive
   this</button></li><li><button>Archive that</button></li></ul>
 <script>document.addEventListener('click', e => document.title = e.target.title || e.target.textContent)</script>
@@ -145,6 +153,9 @@ func TestHasText(t *testing.T) {
 		Step{Action: ActionAssertAttribute, Selector: "button", HasText: "Archive this", Attribute: "title", Value: "a"},
 		Step{Action: ActionAssertText, Selector: "li", HasText: "that", Text: "Archive that"},
 		Step{Action: ActionAssertNotVisible, Selector: "button", HasText: "Delete"},
+		Step{Action: ActionAssertNotVisible, Selector: "*", HasText: "Hidden note"},
+		Step{Action: ActionAssertText, Selector: "div", HasText: "Inner", Text: "Inner"},
+		Step{Action: ActionAssertCount, Selector: "*", HasText: "Archive", Count: 2},
 		Step{Action: ActionClick, Selector: "button", HasText: "that"},
 		Step{Action: ActionAssertTitle, Text: "Archive that"},
 	)
@@ -208,6 +219,23 @@ customElements.define('x-picker', class extends HTMLElement {
 			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
 		}
 	}
+}
+
+// Dialogs close as Playwright closes them when no test listens: the page
+// may be left on beforeunload, and alerts, confirms and prompts cancel.
+func TestDialogsClose(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<button id="b">b</button>
+<script>addEventListener('beforeunload', e => e.preventDefault());</script>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionClick, Selector: "#b"},
+		Step{Action: ActionEval, Expression: "alert('a'); [confirm('c'), prompt('p', 'x')]", Expect: ptr("[false,null]")},
+		Step{Action: ActionNavigate, URL: "/?left", Timeout: "5s"},
+		Step{Action: ActionAssertURL, Text: "?left"},
+	)
 }
 
 const clickPage = `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0">
@@ -432,6 +460,18 @@ func TestModifiers(t *testing.T) {
 		Step{Action: ActionKeyUp, Key: "`"},
 		Step{Action: ActionKeyDown, Key: "`"},
 		Step{Action: ActionEval, Expression: "repeats.join(' ')", Expect: ptr("Control:true:false `:true:false `:true:true `:true:false")},
+		Step{Action: ActionKeyUp, Key: "`"},
+		Step{Action: ActionKeyUp, Key: "Control"},
+	)
+	// Shift gives a key's shifted character; a capital holds Shift.
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: "keys = []; document.addEventListener('keydown', e => keys.push(e.key + ':' + e.code + ':' + e.ctrlKey + ':' + e.shiftKey))"},
+		Step{Action: ActionPressKey, Key: "k", Modifiers: "Control+Shift"},
+		Step{Action: ActionPressKey, Key: "p", Modifiers: "Control"},
+		Step{Action: ActionPressKey, Key: "P", Modifiers: "Control"},
+		Step{Action: ActionPressKey, Key: "/", Modifiers: "Shift"},
+		Step{Action: ActionEval, Expression: "keys.join(' ')", Expect: ptr("K:KeyK:true:true p:KeyP:true:false P:KeyP:true:true ?:Slash:false:true")},
 	)
 	if err := failSteps(t, br, env, Step{Action: ActionClick, Selector: "#b", Modifiers: "Hyper"}); !strings.Contains(err.Error(), `unknown modifier "Hyper"`) {
 		t.Errorf("bad modifier error = %v", err)

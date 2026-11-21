@@ -166,10 +166,15 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 func grantClipboard() chromedp.Action {
 	return chromedp.ActionFunc(func(ctx context.Context) error {
 		bctx := cdp.WithExecutor(ctx, chromedp.FromContext(ctx).Browser)
-		for _, name := range []string{"clipboard-read", "clipboard-write"} {
-			desc := &browser.PermissionDescriptor{Name: name, AllowWithoutSanitization: true}
+		// Plain clipboard-write is what navigator.clipboard.writeText
+		// needs; the unsanitized grants cover reading and other formats.
+		for _, desc := range []*browser.PermissionDescriptor{
+			{Name: "clipboard-read", AllowWithoutSanitization: true},
+			{Name: "clipboard-write", AllowWithoutSanitization: true},
+			{Name: "clipboard-write"},
+		} {
 			if err := browser.SetPermission(desc, browser.PermissionSettingGranted).Do(bctx); err != nil {
-				return fmt.Errorf("grant %s: %w", name, err)
+				return fmt.Errorf("grant %s: %w", desc.Name, err)
 			}
 		}
 		return nil
@@ -196,6 +201,14 @@ func setUpTab(launch Launch, st *tabState) chromedp.Action {
 				return fmt.Errorf("install init script: %w", err)
 			}
 		}
+		// Close dialogs as Playwright does when no test listens for them:
+		// leave the page on beforeunload, cancel alerts, confirms and
+		// prompts. Otherwise the page hangs on them.
+		chromedp.ListenTarget(ctx, func(ev any) {
+			if e, ok := ev.(*page.EventJavascriptDialogOpening); ok {
+				go page.HandleJavaScriptDialog(e.Type == page.DialogTypeBeforeunload).Do(ctx) //nolint:errcheck // the page may be gone
+			}
+		})
 		*st = tabState{media: launch.media()}
 		if err := setDevice(ctx, st, launch.device()); err != nil {
 			return err
@@ -906,9 +919,8 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		})
 
 	case ActionWaitURL:
-		// Poll the current location until it matches. Useful for SPA route
-		// changes (e.g. /new -> /c/<slug>) that happen asynchronously after a
-		// click and can't be caught by the instantaneous assert_url.
+		// Like assert_url, but an exact value may also be just the path,
+		// query and hash.
 		if step.Value != "" {
 			return b.pollJS(ctx, tabCtx, timeout, fmt.Sprintf(
 				`window.location.href === %q || (window.location.pathname + window.location.search + window.location.hash) === %q`,
@@ -969,13 +981,24 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 }
 
 // findAllJS is an expression for the elements a step's selector and has_text
-// match, in document order.
+// match, in document order. With has_text, an element that holds another
+// match does not count, as with Playwright's getByText.
 func findAllJS(step Step) string {
 	return fmt.Sprintf(`(function(sel, hasText) {
 		const all = Array.from(document.querySelectorAll(sel));
 		if (hasText === '') return all;
 		const norm = s => s.replace(/\s+/g, ' ').trim();
-		return all.filter(el => norm(el.textContent).includes(norm(hasText)));
+		const matches = all.filter(el => norm(el.textContent).includes(norm(hasText)));
+		// Keep the innermost: an element holding a match holds its text
+		// too, and "*" would otherwise pick <html>.
+		const outer = new Set();
+		const set = new Set(matches);
+		for (const el of matches) {
+			for (let p = el.parentElement; p && !outer.has(p); p = p.parentElement) {
+				if (set.has(p)) outer.add(p);
+			}
+		}
+		return matches.filter(el => !outer.has(el));
 	})(%q, %q)`, step.Selector, step.HasText)
 }
 
@@ -1408,6 +1431,18 @@ func pressKey(key, modifiers string, held input.Modifier) (chromedp.Action, erro
 
 // keyEvents builds the keyDown and keyUp events of a key, by name from
 // keyNames or a single character, pressed with mods held.
+// shiftedKeys maps a key's code to what it gives with Shift held, for the
+// keys whose character Shift changes.
+var shiftedKeys = func() map[string]*kb.Key {
+	m := map[string]*kb.Key{}
+	for _, k := range kb.Keys {
+		if k.Shift && k.Code != "" && k.Text != "" {
+			m[k.Code] = k
+		}
+	}
+	return m
+}()
+
 func keyEvents(key string, mods input.Modifier) (down, up *input.DispatchKeyEventParams, err error) {
 	r, ok := keyNames[key]
 	if !ok {
@@ -1424,6 +1459,10 @@ func keyEvents(key string, mods input.Modifier) (down, up *input.DispatchKeyEven
 	}
 	if def.Shift {
 		mods |= input.ModifierShift
+	} else if shifted, ok := shiftedKeys[def.Code]; ok && mods&input.ModifierShift != 0 {
+		// With Shift held a key gives its shifted character, as on a
+		// real keyboard and in Playwright: Control+Shift+k is "K".
+		def = shifted
 	}
 	down = &input.DispatchKeyEventParams{
 		Type:                  input.KeyDown,
