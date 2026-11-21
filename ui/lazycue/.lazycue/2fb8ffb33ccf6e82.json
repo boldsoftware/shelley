@@ -1,0 +1,90 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "End-of-turn hook health: troubleshooting starts a safe new chat; failed requests preserve the current composer. The page's live stream (/api/stream2) reports the end-of-turn hook failing twice in a row, latest at 2026-11-14T23:00:00Z, in conversation \"affected-conversation\". Starting a conversation (POST /api/conversations/new) fails with HTTP 500 \"chat creation failed\" until call \"allow new chats\", after which such requests go through to the server and the first one's body is kept. Call \"safe prompt\" checks that kept body: it returns \"no request yet\" until there is one, then \"ok\" if its message contains \"end-of-turn\", \"Consecutive failed invocations: 2\", \"Latest failure (UTC): 2026-11-14T23:00:00Z\" and \"Latest affected conversation ID: affected-conversation\", mentions read-only or inspect and redact or secret (any case), and mentions none of stderr, credential-value or webhook-token; otherwise it says what is wrong. Call \"posts\" counts the POST requests the page sent, as \"new=\u003cPOSTs to /api/conversations/new\u003e chat=\u003cPOSTs to paths ending in /chat\u003e\". \"The notice\" is the element with data-testid \"hook-health-notice\"; \"the composer\" is [data-testid=\"message-input\"]. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The notice should be visible (allow 30s). 3. Fill the composer with \"keep my current unsent note\". 4. Click the button whose accessible name is exactly \"Troubleshoot with Shelley\". 5. The notice should still be visible. 6. The composer's value must be exactly \"keep my current unsent note\". 7. An element with the text \"Failed to start conversation: chat creation failed\" should be visible. 8. Call \"allow new chats\". 9. Click the button named exactly \"Troubleshoot with Shelley\" again. 10. Call \"safe prompt\" until it returns exactly \"ok\". 11. The page should leave the conversation: eval location.pathname !== \"/c/{{SLUG}}\" should give true. 12. The first \".messages-container .message-user\" whose text contains \"end-of-turn\" should be visible (allow 30s). 13. Call \"posts\": it must return exactly \"new=2 chat=0\" right now (no polling needed; check it once). 14. Navigate to /c/{{SLUG}}. 15. The composer's value must be exactly \"keep my current unsent note\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='hook-health-notice']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "keep my current unsent note"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Troubleshoot with Shelley",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='hook-health-notice']"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "keep my current unsent note"
+    },
+    {
+      "action": "wait_text",
+      "text": "Failed to start conversation: chat creation failed",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "allow new chats"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Troubleshoot with Shelley",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "safe prompt",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "location.pathname !== '/c/{{SLUG}}'",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container .message-user",
+      "has_text": "end-of-turn",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "posts",
+      "expect": "new=2 chat=0"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "keep my current unsent note"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:24:10.804255662Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 47233,
+    "output_tokens": 1189,
+    "estimated_cost_usd": 0.043350150000000004,
+    "mode": "generated"
+  }
+}

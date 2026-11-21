@@ -1,0 +1,104 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "End-of-turn hook health keeps the mobile action below the full hook name and failure count. The page's live stream (/api/stream2) reports the end-of-turn hook failing; calls \"1 failure\" and \"111 failures\" set how many consecutive failures later page loads see (it starts at 1). \"The notice\" is the element with data-testid \"hook-health-notice\". \"Check the layout\" means: the notice should be visible, then this eval must give exactly {\"actionBelowText\":true,\"fits\":true,\"titleLines\":1}: (async () =\u003e { await document.fonts.ready; const element = document.querySelector('[data-testid=\"hook-health-notice\"]'); const title = element.querySelector('[data-testid=hook-health-title]'); const text = element.querySelector('.resource-notice-text'); const action = element.querySelector('[data-testid=hook-health-troubleshoot]'); const range = document.createRange(); range.selectNodeContents(title); return { titleLines: range.getClientRects().length, actionBelowText: action.getBoundingClientRect().top \u003e= text.getBoundingClientRect().bottom, fits: element.scrollWidth \u003c= element.clientWidth }; })(). The device starts 320x844. Perform the steps in order, navigating (not reloading) each time: 1. Call \"1 failure\", navigate to /new and check the layout. 2. Call \"111 failures\", navigate to /new and check the layout. 3. Set the viewport to 390x844 (set_viewport with only width and height). 4. Call \"1 failure\", navigate to /new and check the layout. 5. Call \"111 failures\", navigate to /new and check the layout. 6. Set the viewport to 1280x844 (only width and height). 7. Without navigating, the notice must have the computed CSS display exactly \"flex\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 320,
+      "height": 844
+    },
+    {
+      "action": "call",
+      "value": "1 failure"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='hook-health-notice']"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await document.fonts.ready; const element = document.querySelector('[data-testid=\"hook-health-notice\"]'); const title = element.querySelector('[data-testid=hook-health-title]'); const text = element.querySelector('.resource-notice-text'); const action = element.querySelector('[data-testid=hook-health-troubleshoot]'); const range = document.createRange(); range.selectNodeContents(title); return { titleLines: range.getClientRects().length, actionBelowText: action.getBoundingClientRect().top \u003e= text.getBoundingClientRect().bottom, fits: element.scrollWidth \u003c= element.clientWidth }; })()",
+      "expect": "{\"actionBelowText\":true,\"fits\":true,\"titleLines\":1}"
+    },
+    {
+      "action": "call",
+      "value": "111 failures"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='hook-health-notice']"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await document.fonts.ready; const element = document.querySelector('[data-testid=\"hook-health-notice\"]'); const title = element.querySelector('[data-testid=hook-health-title]'); const text = element.querySelector('.resource-notice-text'); const action = element.querySelector('[data-testid=hook-health-troubleshoot]'); const range = document.createRange(); range.selectNodeContents(title); return { titleLines: range.getClientRects().length, actionBelowText: action.getBoundingClientRect().top \u003e= text.getBoundingClientRect().bottom, fits: element.scrollWidth \u003c= element.clientWidth }; })()",
+      "expect": "{\"actionBelowText\":true,\"fits\":true,\"titleLines\":1}"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "action": "call",
+      "value": "1 failure"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='hook-health-notice']"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await document.fonts.ready; const element = document.querySelector('[data-testid=\"hook-health-notice\"]'); const title = element.querySelector('[data-testid=hook-health-title]'); const text = element.querySelector('.resource-notice-text'); const action = element.querySelector('[data-testid=hook-health-troubleshoot]'); const range = document.createRange(); range.selectNodeContents(title); return { titleLines: range.getClientRects().length, actionBelowText: action.getBoundingClientRect().top \u003e= text.getBoundingClientRect().bottom, fits: element.scrollWidth \u003c= element.clientWidth }; })()",
+      "expect": "{\"actionBelowText\":true,\"fits\":true,\"titleLines\":1}"
+    },
+    {
+      "action": "call",
+      "value": "111 failures"
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='hook-health-notice']"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await document.fonts.ready; const element = document.querySelector('[data-testid=\"hook-health-notice\"]'); const title = element.querySelector('[data-testid=hook-health-title]'); const text = element.querySelector('.resource-notice-text'); const action = element.querySelector('[data-testid=hook-health-troubleshoot]'); const range = document.createRange(); range.selectNodeContents(title); return { titleLines: range.getClientRects().length, actionBelowText: action.getBoundingClientRect().top \u003e= text.getBoundingClientRect().bottom, fits: element.scrollWidth \u003c= element.clientWidth }; })()",
+      "expect": "{\"actionBelowText\":true,\"fits\":true,\"titleLines\":1}"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 844
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('[data-testid=\"hook-health-notice\"]')).display",
+      "expect": "flex"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:25:05.177522736Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 44569,
+    "output_tokens": 2756,
+    "estimated_cost_usd": 0.06612495,
+    "mode": "generated"
+  }
+}
