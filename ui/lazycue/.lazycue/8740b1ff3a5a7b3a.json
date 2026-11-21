@@ -1,0 +1,133 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Directory lookup failures are visible and can be retried. Conversation {{ID}} runs in {{DIR}}, an empty directory that is not a git repository, and is archived; another conversation is in the list. Call \"break lookups\" makes the server's directory lookups (GET /api/list-directory) fail with HTTP 503 \"Directory lookup unavailable\"; call \"fix lookups\" lets them through again. To \"start a new conversation\": wait for \".header\" to be visible; if the button in \".header\" whose accessible name is exactly \"New Conversation\" is visible, click it; otherwise click the button in \".header\" named exactly \"More options\", then the button named exactly \"New Conversation\" in \".chat-overflow-popover\". \"The directory control\" on this phone-sized screen is the button in \".chat-overflow-popover\" whose accessible name starts with \"Directory\"; to reach it, click the button named exactly \"More options\" first unless \".chat-overflow-popover\" is already visible. Call \"saved\" reports the first message the page sends: \"none\" before it, then \"ok cwd=\u003cthe conversation's saved working directory\u003e draft=\u003cwhether it is still a draft\u003e\". To \"send P and expect cwd C\": fill [data-testid=\"message-input\"] with P; call \"saved\", which must return exactly \"none\"; click [data-testid=\"send-button\"]; then call \"saved\" until it returns exactly \"ok cwd=C draft=false\". To \"check and send in C\": the directory control's text should contain C; press Escape; then send \"echo: new conversation directory\" and expect cwd C. Perform the steps in order. 1. Navigate to /c/{{ID}}. 2. Call \"break lookups\". 3. Start a new conversation. 4. The element with role \"alert\" should contain the text \"Directory lookup unavailable\". 5. The page must not have gone to /new: eval /\\/new$/.test(location.href) must give false. 6. Call \"fix lookups\". 7. Click the button named \"Dismiss\" inside the alert. 8. Start a new conversation. 9. Check and send in {{DIR}}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "call",
+      "value": "break lookups"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "New Conversation",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "role": "alert"
+    },
+    {
+      "action": "assert_text_contains",
+      "role": "alert",
+      "text": "Directory lookup unavailable"
+    },
+    {
+      "action": "eval",
+      "expression": "/\\/new$/.test(location.href)",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "fix lookups"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Dismiss",
+      "within": {
+        "role": "alert"
+      }
+    },
+    {
+      "action": "wait_hidden",
+      "role": "alert"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "New Conversation",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      },
+      "role": "button",
+      "name": "Directory",
+      "text": "{{DIR}}"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: new conversation directory"
+    },
+    {
+      "action": "call",
+      "value": "saved",
+      "expect": "none"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "call",
+      "value": "saved",
+      "expect": "ok cwd={{DIR}} draft=false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:04:25.897709167Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 245786,
+    "output_tokens": 6071,
+    "estimated_cost_usd": 0.21361784999999997,
+    "mode": "generated"
+  }
+}

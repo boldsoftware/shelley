@@ -1,0 +1,39 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "/new with a prompt uses the main repository. {{REPO}} is a git repository with a worktree {{WORKTREE}}; conversation {{ID}} runs in the worktree. Call \"saved\" reports the first message the page sends: \"none\" before it, then \"ok cwd=\u003cthe conversation's saved working directory\u003e draft=\u003cwhether it is still a draft\u003e\". To \"send P and expect cwd C\": fill [data-testid=\"message-input\"] with P; call \"saved\", which must return exactly \"none\"; click [data-testid=\"send-button\"]; then call \"saved\" until it returns exactly \"ok cwd=C draft=false\". To \"check and send in C\": the directory control's text should contain C; press Escape; then send \"echo: new conversation directory\" and expect cwd C. Perform the steps in order. 1. Navigate to /c/{{ID}}. 2. Send \"/new echo: new conversation directory\" and expect cwd {{REPO}}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "/new echo: new conversation directory"
+    },
+    {
+      "action": "call",
+      "value": "saved",
+      "expect": "none"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "call",
+      "value": "saved",
+      "expect": "ok cwd={{REPO}} draft=false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:51:17.908355432Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6636,
+    "output_tokens": 334,
+    "estimated_cost_usd": 0.010183649999999999,
+    "mode": "generated"
+  }
+}
