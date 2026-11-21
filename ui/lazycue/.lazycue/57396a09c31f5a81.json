@@ -1,0 +1,111 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation at /c/{{SLUG}} is served as a replay (its live stream is cut off) that ends with a context nudge, the agent's compact_in_place tool call, its result and the in-place compaction event. \"The result\" is the [data-testid=\"message-inplacecompaction\"] element (the compaction event). Perform the steps in order. The compaction's table of contents entry navigates to its status at a 1280px-wide window. \"The TOC\" is the \".toc-popover\" element.\n1. Navigate to /c/{{SLUG}}.\n2. The result's data-message-id attribute is exactly \"{{RESULT_ID}}\".\n3. Click the button with role \"button\" and accessible name exactly \"Conversation table of contents\".\n4. The TOC has exactly 1 \".toc-entry-compaction\" element (\"the entry\"), and the entry's accessible name is exactly \"Compacted context\".\n5. The TOC has exactly 1 \".toc-entry-user\" element, and the TOC's text does not contain \"Context is 170k.\".\n6. Click the entry. The TOC becomes hidden, and the URL ends with \"#{{FRAGMENT}}\" (wait_url with that exact ending; nothing may follow it).\n7. The result's class list contains \"message-highlight\"; the result is in the viewport; the result has no \"open\" attribute.\n8. Reload the page. The result's class list contains \"message-highlight\" again, and the result is in the viewport.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-inplacecompaction\"]"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"message-inplacecompaction\"]",
+      "attribute": "data-message-id",
+      "value": "{{RESULT_ID}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Conversation table of contents",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".toc-popover .toc-entry-compaction",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": ".toc-popover .toc-entry-compaction",
+      "text": "Compacted context"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".toc-popover"
+      },
+      "role": "button",
+      "name": "Compacted context",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": ".toc-popover .toc-entry-user",
+      "count": 1
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".toc-popover",
+      "text": "Context is 170k."
+    },
+    {
+      "action": "click",
+      "selector": ".toc-entry-compaction"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".toc-popover"
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/{{SLUG}}#{{FRAGMENT}}"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-inplacecompaction\"]')?.classList.contains('message-highlight')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[data-testid=\"message-inplacecompaction\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"message-inplacecompaction\"][open]",
+      "count": 0
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-inplacecompaction\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-inplacecompaction\"]')?.classList.contains('message-highlight')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[data-testid=\"message-inplacecompaction\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:16:09.26452153Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 82838,
+    "output_tokens": 2503,
+    "estimated_cost_usd": 0.08395485,
+    "mode": "generated"
+  }
+}

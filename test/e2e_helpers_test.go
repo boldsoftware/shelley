@@ -178,3 +178,37 @@ const inputFilesJS = `window.setInputFiles = (selector, files) => {
 func pixel5Desktop(width, height int) lazycue.Device {
 	return lazycue.Device{Width: width, Height: height, Scale: lazycue.Pixel5.Scale}
 }
+
+// conversationBody is the server's GET /api/conversation/{id} response,
+// decoded generically so a test can change it before serving it with
+// serveConversation.
+func (s *shelley) conversationBody(id string) map[string]any {
+	var body map[string]any
+	s.api("GET", "/api/conversation/"+id, nil, &body)
+	return body
+}
+
+// messagesOf is the messages of a conversationBody body.
+func messagesOf(body map[string]any) []map[string]any {
+	var ms []map[string]any
+	list, _ := body["messages"].([]any)
+	for _, m := range list {
+		ms = append(ms, m.(map[string]any))
+	}
+	return ms
+}
+
+// serveConversation answers the page's full loads of conversation id (GET
+// /api/conversation/{id} without a query) with body, as Playwright's
+// page.route("**/api/conversation/<id>") did; incremental fetches
+// (?last_sequence_id=...) and other conversations reach the server. body
+// must not change once served.
+func (s *shelley) serveConversation(id string, body any) {
+	s.route("GET /api/conversation/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("id") != id || r.URL.RawQuery != "" {
+			s.pass.ServeHTTP(w, r)
+			return
+		}
+		writeJSON(w, body)
+	})
+}

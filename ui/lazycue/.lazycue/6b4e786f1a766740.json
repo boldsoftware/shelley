@@ -1,0 +1,56 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation at /c/{{SLUG}} is served as a replay (its live stream is cut off) that ends with a context nudge, the agent's compact_in_place tool call, its result and the in-place compaction event. \"The result\" is the [data-testid=\"message-inplacecompaction\"] element (the compaction event). Perform the steps in order. The compaction event handles trims without summaries on a phone. The compaction only trimmed one tool output (#7).\n1. Navigate to /c/{{SLUG}}.\n2. The status ('[data-testid=\"message-inplacecompaction\"] > summary') has exactly the text \"Compacted context · 1 tool output\".\n3. Click the status. The result then contains no \"details\" element (count 0).\n4. The result contains no element with role \"table\" (count 0).\n5. The result's \".msg-compaction-ids\" is visible and has exactly the text \"#7\".\n6. Neither the page nor the compaction result overflows horizontally. The page clips its own overflow (html has overflow hidden), so check the result too: in one eval with expect \"true\", with R the [data-testid=\"message-inplacecompaction\"] element, document.documentElement.scrollWidth <= window.innerWidth && R.scrollWidth <= R.clientWidth && R.getBoundingClientRect().right <= window.innerWidth.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"message-inplacecompaction\"] > summary",
+      "text": "Compacted context · 1 tool output"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-inplacecompaction\"] > summary"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"message-inplacecompaction\"] details",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid=\"message-inplacecompaction\"]"
+      },
+      "role": "table",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"message-inplacecompaction\"] .msg-compaction-ids"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"message-inplacecompaction\"] .msg-compaction-ids",
+      "text": "#7"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const r = document.querySelector('[data-testid=\"message-inplacecompaction\"]'); return document.documentElement.scrollWidth <= window.innerWidth && r.scrollWidth <= r.clientWidth && r.getBoundingClientRect().right <= window.innerWidth; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:08:47.112818161Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 20246,
+    "output_tokens": 528,
+    "estimated_cost_usd": 0.019635,
+    "mode": "generated"
+  }
+}

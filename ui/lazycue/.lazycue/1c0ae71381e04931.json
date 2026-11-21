@@ -1,0 +1,205 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation at /c/{{SLUG}} is served as a replay (its live stream is cut off) that ends with a context nudge, the agent's compact_in_place tool call, its result and the in-place compaction event. \"The result\" is the [data-testid=\"message-inplacecompaction\"] element (the compaction event). Perform the steps in order. Compaction notices open their index and audit table directly. \"The nudge\" is the [data-testid=\"message-context-nudge\"] element and \"the notice\" is its direct child summary element (\":scope > summary\", i.e. selector '[data-testid=\"message-context-nudge\"] > summary'); \"the index\" is the nudge's \".msg-context-nudge-index\". \"The status\" is the result's direct child summary ('[data-testid=\"message-inplacecompaction\"] > summary'); \"the table\" is the element inside the result with role \"table\" and accessible name \"Compacted messages\"; \"the bookkeeping\" is the element inside the result whose text contains \"Hid 1 context nudge and 1 compaction call from the agent.\".\n1. Navigate to /c/{{SLUG}}.\n2. The notice has exactly the text \"📏 Compaction threshold reached · 170k tokens\", and the index is hidden.\n3. Click the notice at x=5, y=10 from its top-left corner (the row's empty left edge, not its text or chevron). The index becomes visible, and its text is exactly this (three lines; compare the raw textContent in an eval with expect): \"## Index\\n#4–#12  earlier exploration\\n#15–#20  implementation\" (with real newlines and two spaces after each range).\n4. Focus the notice (in an eval: .focus()) and press Enter. The index becomes hidden.\n5. \"The tool\" is the \".tool\" element whose text contains \"Compacted: 2 collapsed, 2 trimmed\": it is visible, and its \".tool-details\" is hidden.\n6. The status has exactly the text \"Compacted context · 2 groups, 2 tool outputs\", and the table is hidden.\n7. Click the status at x=5, y=10 from its top-left corner. The table becomes visible.\n8. The table's column headers (role \"columnheader\" inside the table) have exactly the texts \"Messages\", \"Summary\", in order. The table's thead is visible. The first \"tbody tr\" of the table has computed display exactly \"table-row\". The table has exactly 2 \"tbody tr\" elements.\n9. The result contains no \"details\" element (count 0).\n10. The table's first \".msg-compaction-summary-text\" is visible, and its raw textContent is exactly \"Kept the decisions and current work.\\nOriginal messages are still visible.\" (with a real newline; check in an eval with expect). The table's second \".msg-compaction-summary-text\" is visible.\n11. The result has the attribute \"open\" with the value \"\" (it is present and empty).\n12. The result's \".msg-compaction-ids\" is visible and has exactly the text \"#7, #18\".\n13. The bookkeeping is visible.\n14. Focus the status (in an eval: .focus()) and press Enter. The table becomes hidden, the result's \".msg-compaction-ids\" becomes hidden, and the bookkeeping becomes hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-context-nudge\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"message-context-nudge\"] > summary",
+      "text": "📏 Compaction threshold reached · 170k tokens"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"message-context-nudge\"] .msg-context-nudge-index"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-context-nudge\"] > summary",
+      "x": 5,
+      "y": 10
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-context-nudge\"] .msg-context-nudge-index"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"message-context-nudge\"] .msg-context-nudge-index",
+      "text": "## Index\n#4–#12  earlier exploration\n#15–#20  implementation"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-context-nudge\"] > summary').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"message-context-nudge\"] .msg-context-nudge-index"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".tool",
+      "has_text": "Compacted: 2 collapsed, 2 trimmed"
+    },
+    {
+      "action": "assert_not_visible",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Compacted: 2 collapsed, 2 trimmed"
+      },
+      "selector": ".tool-details"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"message-inplacecompaction\"] > summary",
+      "text": "Compacted context · 2 groups, 2 tool outputs"
+    },
+    {
+      "action": "assert_not_visible",
+      "within": {
+        "selector": "[data-testid=\"message-inplacecompaction\"]"
+      },
+      "role": "table",
+      "name": "Compacted messages"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-inplacecompaction\"] > summary",
+      "x": 5,
+      "y": 10
+    },
+    {
+      "action": "wait_visible",
+      "within": {
+        "selector": "[data-testid=\"message-inplacecompaction\"]"
+      },
+      "role": "table",
+      "name": "Compacted messages"
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "role": "table",
+        "name": "Compacted messages"
+      },
+      "role": "columnheader",
+      "texts": [
+        "Messages",
+        "Summary"
+      ]
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "role": "table",
+        "name": "Compacted messages"
+      },
+      "selector": "thead"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('table[aria-label=\"Compacted messages\"] tbody tr')).display",
+      "expect": "table-row"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "role": "table",
+        "name": "Compacted messages"
+      },
+      "selector": "tbody tr",
+      "count": 2
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"message-inplacecompaction\"] details",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "role": "table",
+        "name": "Compacted messages"
+      },
+      "selector": ".msg-compaction-summary-text"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "role": "table",
+        "name": "Compacted messages"
+      },
+      "selector": ".msg-compaction-summary-text",
+      "text": "Kept the decisions and current work.\nOriginal messages are still visible."
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"message-inplacecompaction\"] tbody tr:nth-child(2) .msg-compaction-summary-text"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"message-inplacecompaction\"]",
+      "attribute": "open",
+      "value": ""
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"message-inplacecompaction\"] .msg-compaction-ids"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"message-inplacecompaction\"] .msg-compaction-ids",
+      "text": "#7, #18"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"message-inplacecompaction\"] .msg-compaction-event-body p",
+      "has_text": "Hid 1 context nudge and 1 compaction call from the agent."
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-inplacecompaction\"] > summary').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_hidden",
+      "within": {
+        "selector": "[data-testid=\"message-inplacecompaction\"]"
+      },
+      "role": "table",
+      "name": "Compacted messages"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"message-inplacecompaction\"] .msg-compaction-ids"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"message-inplacecompaction\"] .msg-compaction-event-body p",
+      "has_text": "Hid 1 context nudge and 1 compaction call from the agent."
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:04:24.169027995Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 247733,
+    "output_tokens": 8188,
+    "estimated_cost_usd": 0.24980370000000002,
+    "mode": "generated"
+  }
+}

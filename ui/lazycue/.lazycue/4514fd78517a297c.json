@@ -1,0 +1,88 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation at /c/{{SLUG}} is served as a replay (its live stream is cut off) that ends with a context nudge, the agent's compact_in_place tool call, its result and the in-place compaction event. \"The result\" is the [data-testid=\"message-inplacecompaction\"] element (the compaction event). Perform the steps in order. The compaction event handles singular counts and long summaries on a phone. The compaction has one group, whose summary is \"long-summary-\" repeated 200 times, and one trimmed tool output (#7). \"The table\" is the result's \".msg-compaction-table\"; \"the cells\" are the \"td\" elements of the table's first \"tbody tr\".\n1. Navigate to /c/{{SLUG}}.\n2. The status ('[data-testid=\"message-inplacecompaction\"] > summary') has exactly the text \"Compacted context · 1 group, 1 tool output\".\n3. Click the status. The result then contains no \"details\" element (count 0).\n4. The table's thead has computed clip-path exactly \"inset(50%)\" (visually hidden), and the table's column headers (role \"columnheader\" inside the table) have exactly the texts \"Messages\", \"Summary\", in order.\n5. The first and second cells each have computed display exactly \"block\".\n6. In one eval with expect \"true\", using getBoundingClientRect() of the first cell (header) and the second cell (content): content.y >= header.y + header.height, content.x === header.x and content.width === header.width (the cells stack).\n7. The result's \".msg-compaction-summary-text\" is visible, and its text is exactly \"long-summary-\" repeated 200 times (compare with an eval that has expect \"true\": textContent === 'long-summary-'.repeat(200)).\n8. The result's \".msg-compaction-ids\" is visible and has exactly the text \"#7\".\n9. Neither the page nor the compaction result overflows horizontally. The page clips its own overflow (html has overflow hidden), so check the result too: in one eval with expect \"true\", with R the [data-testid=\"message-inplacecompaction\"] element, document.documentElement.scrollWidth <= window.innerWidth && R.scrollWidth <= R.clientWidth && R.getBoundingClientRect().right <= window.innerWidth.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"message-inplacecompaction\"] > summary",
+      "text": "Compacted context · 1 group, 1 tool output"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-inplacecompaction\"] > summary"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"message-inplacecompaction\"] details",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=\"message-inplacecompaction\"] .msg-compaction-table thead')).clipPath",
+      "expect": "inset(50%)"
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "selector": "[data-testid=\"message-inplacecompaction\"] .msg-compaction-table"
+      },
+      "role": "columnheader",
+      "texts": [
+        "Messages",
+        "Summary"
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=\"message-inplacecompaction\"] .msg-compaction-table tbody tr td:nth-child(1)')).display",
+      "expect": "block"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=\"message-inplacecompaction\"] .msg-compaction-table tbody tr td:nth-child(2)')).display",
+      "expect": "block"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const tds = document.querySelectorAll('[data-testid=\"message-inplacecompaction\"] .msg-compaction-table tbody tr td'); const header = tds[0].getBoundingClientRect(); const content = tds[1].getBoundingClientRect(); return String(content.y >= header.y + header.height && content.x === header.x && content.width === header.width); })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"message-inplacecompaction\"] .msg-compaction-summary-text"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-inplacecompaction\"] .msg-compaction-summary-text').textContent === 'long-summary-'.repeat(200)",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"message-inplacecompaction\"] .msg-compaction-ids"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"message-inplacecompaction\"] .msg-compaction-ids",
+      "text": "#7"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const r = document.querySelector('[data-testid=\"message-inplacecompaction\"]'); return document.documentElement.scrollWidth <= window.innerWidth && r.scrollWidth <= r.clientWidth && r.getBoundingClientRect().right <= window.innerWidth; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:10:10.465593204Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 83513,
+    "output_tokens": 3339,
+    "estimated_cost_usd": 0.0996747,
+    "mode": "generated"
+  }
+}
