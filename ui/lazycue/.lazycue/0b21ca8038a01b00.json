@@ -1,0 +1,119 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "View options sizes rows: short is the title, medium adds the preview. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"tagged\" (tagged, in a directory, with a commit) and \"draft\" (a draft). \"The extra lines\" of the tagged row are its elements matching \".conversation-tags, .conversation-meta, .conversation-git\". A row's height is its getBoundingClientRect().height. The \"Row size\" group is the [role=\"group\"] labelled \"Row size\" in the View options menu. To \"reload\" the page: eval \"window.__beforeReload = true; location.reload()\" (no expect), then poll eval \"window.__beforeReload === undefined \u0026\u0026 document.readyState === 'complete'\" expecting true. Perform the numbered steps in order, each fully. A button \"X\" is the element with role button (a \u003cbutton\u003e) whose accessible name (aria-label, else its text) is exactly X; \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /new. 2. Full rows are the default, with every line: the tagged row's \".conversation-preview\" text is exactly \"Preview\" and it has exactly 3 extra lines. 3. Record the tagged row's height in window.__fullHeight. 4. Click the button \"View options\". 5. The Row size group's button \"Full\" has aria-pressed \"true\". 6. Click the group's button \"Medium\". 7. The tagged row's preview text is exactly \"Preview\" and it has no extra lines (count 0). 8. A draft's delete moves up to its title line: the draft row's button \"Delete\" is visible. 9. The tagged row's height is less than window.__fullHeight; record it in window.__mediumHeight. 10. The menu stays open to compare sizes: click the group's button \"Short\". 11. The tagged row has no \".conversation-preview\", its \".conversation-title\" text is exactly \"tagged\", and the draft row's button \"Delete\" is visible. 12. The tagged row's height is less than window.__mediumHeight. 13. The choice is kept across reloads: reload. 14. The tagged row's \".conversation-title\" is visible and it has no \".conversation-preview\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id='tagged'] .conversation-preview",
+      "text": "Preview"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='tagged'] .conversation-tags, [data-conversation-id='tagged'] .conversation-meta, [data-conversation-id='tagged'] .conversation-git",
+      "count": 3
+    },
+    {
+      "action": "eval",
+      "expression": "window.__fullHeight = document.querySelector('[data-conversation-id=\"tagged\"]').getBoundingClientRect().height"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='View options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='group']",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='row-size-full']",
+      "attribute": "aria-pressed",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='row-size-medium']"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id='tagged'] .conversation-preview",
+      "text": "Preview"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='tagged'] .conversation-tags, [data-conversation-id='tagged'] .conversation-meta, [data-conversation-id='tagged'] .conversation-git",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-id='draft'] button[aria-label='Delete']"
+    },
+    {
+      "action": "eval",
+      "expression": "const h = document.querySelector('[data-conversation-id=\"tagged\"]').getBoundingClientRect().height; window.__mediumHeight = h; h \u003c window.__fullHeight",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='row-size-short']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='tagged'] .conversation-preview",
+      "count": 0
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id='tagged'] .conversation-title",
+      "text": "tagged"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-id='draft'] button[aria-label='Delete']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-conversation-id=\"tagged\"]').getBoundingClientRect().height \u003c window.__mediumHeight",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__beforeReload = true; location.reload()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__beforeReload === undefined \u0026\u0026 document.readyState === 'complete'",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id='tagged'] .conversation-title",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='tagged'] .conversation-preview",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:49:59.207011588Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 182968,
+    "output_tokens": 6181,
+    "estimated_cost_usd": 0.190605,
+    "mode": "generated"
+  }
+}

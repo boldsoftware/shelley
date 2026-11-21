@@ -1,0 +1,150 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The mobile drawer keeps form fields, editable content, status hooks, and scroll regions out of drawer swipes. The phone's screen is 393x851. The page has synthetic touch gestures, run with eval: \"window.__drawerSwipe(selector, x1, y1, x2, y2)\" puts one finger down at viewport point x1,y1 on the first element matching selector, moves it to x2,y2 and lifts it; \"window.__drawerDrag(selector, points, ending, secondFinger, modalAtEnd)\" puts a finger down at the first [x, y] of points and moves it through the rest (with a second finger beside it when secondFinger is true), then ends with ending (\"touchend\" or \"touchcancel\"); when modalAtEnd is true a modal (\".command-palette-overlay\" with aria-modal) appears just before the release and goes after it. __drawerDrag returns the computed styles ({className, transform, translate, opacity}) of every \".drawer, .backdrop, .toc-drawer, .toc-drawer-scrim\" element just before the release, and keeps them in window.__drawerDragStyles. Run each gesture with a single eval, without expect; wait for its target to exist first. \"Open\" means the drawer (\".drawer\") has the class \"open\"; \"closed\" that it does not. The test harness has already stubbed the server's conversation list to one conversation, \"first\", and cut off its live update stream; there is nothing to set up or check about that. Eval \"window.__drawerAddFields()\" adds to the main content an input, a textarea, a status hook (\".status-hook-item\"), a contenteditable, and horizontally scrollable regions (\".horizontal-test \u003e div\"), code (\".code-scroll code\") and table (\".table-scroll td\"). Perform the numbered steps in order, each fully. A button \"X\" is the element with role button (a \u003cbutton\u003e) whose accessible name (aria-label, else its text) is exactly X; \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /new. 2. Swipe \".main-content\" from 180,300 to 256,304. 3. The drawer should be open. 4. Swipe \".backdrop\" from 350,300 to 150,304. 5. The drawer should be closed. 6. Eval \"window.__drawerAddFields()\". 7. For each of the selectors \"input\", \"textarea\", \".status-hook-item\", \"[contenteditable=\\\"true\\\"]\", \".horizontal-test \u003e div\", \".code-scroll code\" and \".table-scroll td\", in turn: swipe the first element it matches from 180,300 to 256,304, then check that the drawer is closed.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".main-content",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerSwipe('.main-content', 180, 300, 256, 304)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".backdrop",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerSwipe('.backdrop', 350, 300, 150, 304)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerAddFields()"
+    },
+    {
+      "action": "eval",
+      "expression": "!!document.querySelector('input')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerSwipe('input', 180, 300, 256, 304)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "!!document.querySelector('textarea')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerSwipe('textarea', 180, 300, 256, 304)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "!!document.querySelector('.status-hook-item')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerSwipe('.status-hook-item', 180, 300, 256, 304)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "!!document.querySelector('[contenteditable=\"true\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerSwipe('[contenteditable=\"true\"]', 180, 300, 256, 304)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "!!document.querySelector('.horizontal-test \u003e div')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerSwipe('.horizontal-test \u003e div', 180, 300, 256, 304)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "!!document.querySelector('.code-scroll code')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerSwipe('.code-scroll code', 180, 300, 256, 304)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "!!document.querySelector('.table-scroll td')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__drawerSwipe('.table-scroll td', 180, 300, 256, 304)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:52:13.880158968Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 46715,
+    "output_tokens": 3540,
+    "estimated_cost_usd": 0.089982,
+    "mode": "generated"
+  }
+}

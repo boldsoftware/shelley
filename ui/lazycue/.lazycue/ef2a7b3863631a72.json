@@ -1,0 +1,202 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Token query editing completes tokens, copies, deletes and places the caret. The browser's requests carry the header X-ExeDev-Email: me@example.com, so the current user is me@example.com. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"mine\" (written in by me@example.com and other@example.com; tagged alpha, \"in progress\" and alpine), \"other\" (other@example.com) and \"alpine\" (third@example.com; tagged alpine). \"The tag panel\" is data-testid \"tag-filter-panel\"; its entries are [data-tag=\"\u003ctag\u003e\"]. \"The user panel\" is data-testid \"user-filter-panel\". \"The token T\" (the token whose text contains T) is the element [data-query-raw=\"T\"] inside the editor (for example [data-testid=\"conversation-query-editor\"] [data-query-raw=\"tag:alpha\"]); \"tag tokens\" are [data-testid=\"conversation-query-editor\"] [data-conversation-query-token=\"tag\"]. \"Click the token T\" means click the \".conversation-query-token-value\" inside the token T. \"Press the clear button\" means click the \".drawer-search-clear\" button (never clear with the keyboard here). The clipboard may be read with eval \"navigator.clipboard.readText()\". Type with the type action (key by key) and press keys with press_key, both into the focused element. The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), eval document.execCommand('insertText', false, X), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Perform the numbered steps in order, each fully. A button \"X\" is the element with role button (a \u003cbutton\u003e) whose accessible name (aria-label, else its text) is exactly X; \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. A button \"X\" is button[aria-label=\"X\"] when one exists (as for \"Open conversations\", \"Search conversations...\", \"Search tasks...\", \"View options\", \"Show chapters\", \"Archive\", \"Restore\" and \"Delete\"); otherwise it is the button whose visible text is exactly X, picked with has_text X (a substring match, so make sure no other button's text contains X), as for \"Ask Shelley\", \"View Archived\" and \"Back to conversations\". 1. Navigate to /new. 2. Click the button \"Search conversations...\". 3. Eval \"document.querySelector('.drawer').style.width = '600px'\". 4. The editor's contenteditable attribute is \"true\" and its autocapitalize is \"none\"; it holds exactly one \"p\" element; the token user:me@example.com is visible. 5. Typing a structured cue opens autocomplete, and clicking replaces that exact partial with a token and one ordinary trailing space: click the token user:me@example.com, then type \"tag:al\". 6. The tag panel and its entry [data-tag=\"alpha\"] should be visible. 7. Click [data-tag=\"alpha\"] in the tag panel. 8. The query should be \"user:me@example.com tag:alpha \" and the token tag:alpha visible. 9. A second typed cue creates a second, independent token: type \"tag:alpi\". 10. The tag panel's [data-tag=\"alpine\"] should be visible; click it. 11. The query should be \"user:me@example.com tag:alpha tag:alpine \" and there are exactly 2 tag tokens. 12. Free text after tokens stays outside them: type \"notes\". 13. The query should be \"user:me@example.com tag:alpha tag:alpine notes\". 14. Press Escape. 15. The query should be \"user:me@example.com tag:alpha tag:alpine \". 16. Copying copies the serialized query, not the delete buttons: eval the editor's focus(), press \"a\" with modifiers \"Control\", then press \"c\" with modifiers \"Control\". 17. The clipboard should come to hold exactly \"user:me@example.com tag:alpha tag:alpine \". 18. Press ArrowRight. 19. The delete button removes one token and its separator: click the button \"Remove tag:alpine\" inside the token tag:alpine. 20. The query should be \"user:me@example.com tag:alpha \" and there is exactly 1 tag token. 21. Re-add it: click the token tag:alpha, type \"tag:alpi\", and click the tag panel's [data-tag=\"alpine\"]. 22. A click on a token's body puts the caret after its separator: click the token tag:alpine, then type \"Z\". 23. The query should be \"user:me@example.com tag:alpha tag:alpine Z\". 24. Press Backspace. 25. The query should be \"user:me@example.com tag:alpha tag:alpine \".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Search conversations...']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').style.width = '600px'"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "contenteditable",
+      "value": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "autocapitalize",
+      "value": "none"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-query-editor'] p",
+      "count": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-query-editor'] [data-query-raw='user:me@example.com']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-query-editor'] [data-query-raw='user:me@example.com'] .conversation-query-token-value"
+    },
+    {
+      "action": "type",
+      "value": "tag:al"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-filter-panel']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-filter-panel'] [data-tag='alpha']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='tag-filter-panel'] [data-tag='alpha']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "user:me@example.com tag:alpha "
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-query-editor'] [data-query-raw='tag:alpha']"
+    },
+    {
+      "action": "type",
+      "value": "tag:alpi"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='tag-filter-panel'] [data-tag='alpine']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='tag-filter-panel'] [data-tag='alpine']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "user:me@example.com tag:alpha tag:alpine "
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-query-editor'] [data-conversation-query-token='tag']",
+      "count": 2
+    },
+    {
+      "action": "type",
+      "value": "notes"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "user:me@example.com tag:alpha tag:alpine notes"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "user:me@example.com tag:alpha tag:alpine "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "c",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "navigator.clipboard.readText()",
+      "expect": "user:me@example.com tag:alpha tag:alpine "
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowRight"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-query-editor'] [data-query-raw='tag:alpine'] button[aria-label='Remove tag:alpine']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "user:me@example.com tag:alpha "
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-query-editor'] [data-conversation-query-token='tag']",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-query-editor'] [data-query-raw='tag:alpha'] .conversation-query-token-value"
+    },
+    {
+      "action": "type",
+      "value": "tag:alpi"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='tag-filter-panel'] [data-tag='alpine']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "user:me@example.com tag:alpha tag:alpine "
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-query-editor'] [data-query-raw='tag:alpine'] .conversation-query-token-value"
+    },
+    {
+      "action": "type",
+      "value": "Z"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "user:me@example.com tag:alpha tag:alpine Z"
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "user:me@example.com tag:alpha tag:alpine "
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:39:09.705502112Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14206,
+    "output_tokens": 2891,
+    "estimated_cost_usd": 0.06156945,
+    "mode": "generated"
+  }
+}

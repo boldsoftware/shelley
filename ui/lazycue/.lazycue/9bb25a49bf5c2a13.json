@@ -1,0 +1,96 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Group by participants buckets whole participant sets, current user first. The browser's requests carry the header X-ExeDev-Email: adam@poyo.co, so the current user is adam@poyo.co. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"zed-pair\" (written in by zed@example.com and yan@example.com), \"mine\" (adam@poyo.co), \"shared\" (aaaa@bbb.com and adam@poyo.co), \"shared-again\" (ADAM@POYO.CO and aaaa@bbb.com: the same set in another order and case), \"alice-pair\" (alice@example.com and bob@example.com) and \"none\" (nobody). The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), eval document.execCommand('insertText', false, X), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Perform the numbered steps in order, each fully. A button \"X\" is the element with role button (a \u003cbutton\u003e) whose accessible name (aria-label, else its text) is exactly X; \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. A button \"X\" is button[aria-label=\"X\"] when one exists (as for \"Open conversations\", \"Search conversations...\", \"Search tasks...\", \"View options\", \"Show chapters\", \"Archive\", \"Restore\" and \"Delete\"); otherwise it is the button whose visible text is exactly X, picked with has_text X (a substring match, so make sure no other button's text contains X), as for \"Ask Shelley\", \"View Archived\" and \"Back to conversations\". 1. Navigate to /new. 2. [data-conversation-id=\"mine\"] is visible. 3. Drop the seeded current-user filter so every group is on screen: click the button \"Search conversations...\"; the query should be \"user:adam@poyo.co \"; clear the query. 4. [data-conversation-id=\"none\"] should be visible. 5. Click the button \"View options\", then the button \"Participants\". 6. The trimmed texts of the \".conversation-group-label\" elements should be exactly [\"adam@poyo.co\",\"aaaa@bbb.com, adam@poyo.co\",\"alice@example.com, bob@example.com\",\"yan@example.com, zed@example.com\",\"Unattributed\"]. 7. Exactly one \".conversation-group\" contains [data-conversation-id=\"shared\"]; that group contains exactly one [data-conversation-id=\"shared-again\"], and its \".conversation-group-label\" has the title attribute exactly \"aaaa@bbb.com, adam@poyo.co\". 8. There is exactly one [data-conversation-id=\"shared\"] in the page.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id='mine']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Search conversations...']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "user:adam@poyo.co "
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": ""
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id='none']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='View options']"
+    },
+    {
+      "action": "click",
+      "selector": "button",
+      "has_text": "Participants"
+    },
+    {
+      "action": "wait_text",
+      "text": "Unattributed",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.conversation-group-label')).map(el =\u003e el.textContent.trim()).join('|||')",
+      "expect": "adam@poyo.co|||aaaa@bbb.com, adam@poyo.co|||alice@example.com, bob@example.com|||yan@example.com, zed@example.com|||Unattributed"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".conversation-group [data-conversation-id='shared']",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const groups = document.querySelectorAll('.conversation-group'); for (const g of groups) { if (g.querySelector('[data-conversation-id=\"shared\"]')) { return g.querySelectorAll('[data-conversation-id=\"shared-again\"]').length; } } return 0; })()",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const groups = document.querySelectorAll('.conversation-group'); for (const g of groups) { if (g.querySelector('[data-conversation-id=\"shared\"]')) { return g.querySelector('.conversation-group-label').getAttribute('title'); } } return null; })()",
+      "expect": "aaaa@bbb.com, adam@poyo.co"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='shared']",
+      "count": 1
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:12:36.102906665Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 12027,
+    "output_tokens": 1508,
+    "estimated_cost_usd": 0.0352338,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "An exactly typed tag or user outranks more popular superstrings. The browser's requests carry the header X-ExeDev-Email: me@example.com, so the current user is me@example.com. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"exact\" (written in by me@example.com and other@example.com, tagged alpha) and \"more-1\", \"more-2\" and \"more-3\" (each written in by me@example.com and other@example.com.au, tagged alpha-more). \"The tag panel\" is data-testid \"tag-filter-panel\" and \"the user panel\" data-testid \"user-filter-panel\"; their options are their [role=\"option\"] elements. The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), eval document.execCommand('insertText', false, X), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Perform the numbered steps in order, each fully. A button \"X\" is the element with role button (a \u003cbutton\u003e) whose accessible name (aria-label, else its text) is exactly X; \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. A button \"X\" is button[aria-label=\"X\"] when one exists (as for \"Open conversations\", \"Search conversations...\", \"Search tasks...\", \"View options\", \"Show chapters\", \"Archive\", \"Restore\" and \"Delete\"); otherwise it is the button whose visible text is exactly X, picked with has_text X (a substring match, so make sure no other button's text contains X), as for \"Ask Shelley\", \"View Archived\" and \"Back to conversations\". 1. Navigate to /new. 2. Click the button \"Search conversations...\". 3. The query should be \"user:me@example.com \". 4. Click the \".conversation-query-token-value\" inside the token user:me@example.com, then type \"tag:alph\" key by key. 5. The tag panel's first option should have data-tag \"alpha-more\" (it has three conversations to alpha's one). 6. Type \"a\". 7. The tag panel's first option should have data-tag \"alpha\", and its [aria-selected=\"true\"] element has data-tag \"alpha\". 8. Press Space. 9. The query should be \"user:me@example.com tag:alpha \" and the token tag:alpha visible. 10. The same goes for emails, committed with Enter: set the query to \"user:me@example.com \". 11. Click the button \"Add user filter\". 12. The query should be \"user:me@example.com user:\". 13. The user panel's first option's trimmed text should match /^other@example\\.com\\.au\\s*3$/. 14. Type \"other@example.com\" key by key. 15. The user panel should have exactly 2 options, the first one's trimmed text matching /^other@example\\.com\\s*1$/. 16. Press Enter. 17. The query should be \"user:me@example.com user:other@example.com \".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Search conversations...']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='conversation-query-editor']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "user:me@example.com "
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-query-editor'] [data-conversation-query-token='user'] .conversation-query-token-value"
+    },
+    {
+      "action": "type",
+      "value": "tag:alph"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='tag-filter-panel']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"tag-filter-panel\"] [role=\"option\"]').getAttribute('data-tag')",
+      "expect": "alpha-more"
+    },
+    {
+      "action": "type",
+      "value": "a"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"tag-filter-panel\"] [role=\"option\"]').getAttribute('data-tag')",
+      "expect": "alpha"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"tag-filter-panel\"] [aria-selected=\"true\"]').getAttribute('data-tag')",
+      "expect": "alpha"
+    },
+    {
+      "action": "press_key",
+      "key": "Space"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "user:me@example.com tag:alpha "
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-query-editor'] [data-conversation-query-token='tag']",
+      "has_text": "tag:alpha"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.execCommand('insertText', false, 'user:me@example.com ')"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "user:me@example.com "
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Add user filter']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "user:me@example.com user:"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='user-filter-panel']"
+    },
+    {
+      "action": "eval",
+      "expression": "/^other@example\\.com\\.au\\s*3$/.test(document.querySelector('[data-testid=\"user-filter-panel\"] [role=\"option\"]').textContent.trim())",
+      "expect": "true"
+    },
+    {
+      "action": "type",
+      "value": "other@example.com"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"user-filter-panel\"] [role=\"option\"]').length",
+      "expect": "2"
+    },
+    {
+      "action": "eval",
+      "expression": "/^other@example\\.com\\s*1$/.test(document.querySelector('[data-testid=\"user-filter-panel\"] [role=\"option\"]').textContent.trim())",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "user:me@example.com user:other@example.com "
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:14:46.640811672Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 53358,
+    "output_tokens": 4564,
+    "estimated_cost_usd": 0.1134318,
+    "mode": "generated"
+  }
+}

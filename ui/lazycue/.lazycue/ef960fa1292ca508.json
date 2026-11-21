@@ -1,0 +1,112 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Row text is not selectable but rename and tag inputs are. A conversation exists, row [data-conversation-id=\"{{ID}}\"] (\"the row\"). The context menu is data-testid \"conversation-context-menu\" and its items are [role=\"menuitem\"]. \"Select all text of input I\" means what Playwright's selectText does: eval I.select() then I.focus(). Perform the numbered steps in order, each fully. A button \"X\" is the element with role button (a \u003cbutton\u003e) whose accessible name (aria-label, else its text) is exactly X; \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /new. 2. The computed user-select of the row's \".conversation-title\" is exactly \"none\", and so is that of its \".conversation-preview\". 3. Right-click the row (click, button \"right\") and click the context menu's item \"Rename\". 4. The row's \".drawer-rename-input\" has computed user-select exactly \"text\". 5. Select all its text; then eval document.activeElement.selectionEnd - document.activeElement.selectionStart must be greater than 0 (return the comparison, expecting true). 6. Press Escape. 7. Right-click the row and click the context menu's item \"Edit tags\". 8. The row's \".conversation-tag-inline-input\" has computed user-select exactly \"text\". 9. Fill it with \"selectable\". 10. Select all its text; then eval document.activeElement.selectionEnd - document.activeElement.selectionStart must be exactly 10.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id=\"{{ID}}\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('[data-conversation-id=\"{{ID}}\"] .conversation-title')).userSelect",
+      "expect": "none"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('[data-conversation-id=\"{{ID}}\"] .conversation-preview')).userSelect",
+      "expect": "none"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{ID}}\"]",
+      "button": "right"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='conversation-context-menu']",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-context-menu'] [role='menuitem']",
+      "has_text": "Rename"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id=\"{{ID}}\"] .drawer-rename-input",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('[data-conversation-id=\"{{ID}}\"] .drawer-rename-input')).userSelect",
+      "expect": "text"
+    },
+    {
+      "action": "eval",
+      "expression": "var inp1 = document.querySelector('[data-conversation-id=\"{{ID}}\"] .drawer-rename-input'); inp1.select(); inp1.focus(); true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement.selectionEnd - document.activeElement.selectionStart \u003e 0",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{ID}}\"]",
+      "button": "right"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='conversation-context-menu']",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-context-menu'] [role='menuitem']",
+      "has_text": "Edit tags"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id=\"{{ID}}\"] .conversation-tag-inline-input",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.getComputedStyle(document.querySelector('[data-conversation-id=\"{{ID}}\"] .conversation-tag-inline-input')).userSelect",
+      "expect": "text"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-conversation-id=\"{{ID}}\"] .conversation-tag-inline-input",
+      "value": "selectable"
+    },
+    {
+      "action": "eval",
+      "expression": "var inp2 = document.querySelector('[data-conversation-id=\"{{ID}}\"] .conversation-tag-inline-input'); inp2.select(); inp2.focus(); true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement.selectionEnd - document.activeElement.selectionStart",
+      "expect": "10"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:27:43.729367652Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 93919,
+    "output_tokens": 3656,
+    "estimated_cost_usd": 0.1093494,
+    "mode": "generated"
+  }
+}

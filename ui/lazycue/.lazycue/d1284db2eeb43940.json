@@ -1,0 +1,192 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Matching slug text is highlighted in drawer and command-palette searches. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"Pelican-project-pelican\" and \"message-only\", both tagged birds; searches answer with the list, and message-only's search snippet is \"A pelican by the bay\" with \"pelican\" marked. \"The title\" is \"[data-conversation-id=\\\"Pelican-project-pelican\\\"] .conversation-title\" and \"the other title\" is \"[data-conversation-id=\\\"message-only\\\"] .conversation-title\". The texts of marks are read with eval JSON.stringify of their trimmed textContents, in order. The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), eval document.execCommand('insertText', false, X), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Perform the numbered steps in order, each fully. A button \"X\" is the element with role button (a \u003cbutton\u003e) whose accessible name (aria-label, else its text) is exactly X; \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /new. 2. The title's text is exactly \"Pelican-project-pelican\" and it contains no \"mark\". 3. Click the button \"Search conversations...\". 4. Set the query to \"PELICAN tag:birds \". 5. The title's marks are exactly [\"Pelican\",\"pelican\"] and its text is still exactly \"Pelican-project-pelican\"; the other title has no \"mark\"; the \".conversation-snippet mark\" elements are exactly [\"pelican\"]. 6. Set the query to \"project\". 7. The title's marks are exactly [\"project\"]. 8. Clear the query. 9. The title has no \"mark\". 10. Press \"k\" with modifiers \"Control\" to open the command palette. 11. Fill \".command-palette-input\" with \"PELICAN\". 12. In the palette, the \".command-palette-item-title\" whose text contains \"Pelican-project-pelican\" has marks exactly [\"Pelican\",\"pelican\"] and text exactly \"Pelican-project-pelican\"; the \".command-palette-item-title\" containing \"message-only\" has no \"mark\". 13. Fill the palette input with \"conversation\". 14. Of the \".command-palette-item\" elements that contain a \".command-palette-item-badge\" (actions), the first is visible, and none of them contains a \"mark\". 15. Fill the palette input with \"\" (empty). 16. No \".command-palette-item-title\" containing \"Pelican-project-pelican\" contains a \"mark\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id=\"Pelican-project-pelican\"] .conversation-title",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id=\"Pelican-project-pelican\"] .conversation-title",
+      "text": "Pelican-project-pelican"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id=\"Pelican-project-pelican\"] .conversation-title mark",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Search conversations...\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"conversation-query-editor\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.execCommand('insertText', false, 'PELICAN tag:birds ')"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "PELICAN tag:birds "
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(Array.from(document.querySelectorAll('[data-conversation-id=\"Pelican-project-pelican\"] .conversation-title mark')).map(m =\u003e m.textContent.trim()))",
+      "expect": "[\"Pelican\",\"pelican\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id=\"Pelican-project-pelican\"] .conversation-title",
+      "text": "Pelican-project-pelican"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id=\"message-only\"] .conversation-title mark",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(Array.from(document.querySelectorAll('.conversation-snippet mark')).map(m =\u003e m.textContent.trim()))",
+      "expect": "[\"pelican\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.execCommand('insertText', false, 'project')"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "project"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(Array.from(document.querySelectorAll('[data-conversation-id=\"Pelican-project-pelican\"] .conversation-title mark')).map(m =\u003e m.textContent.trim()))",
+      "expect": "[\"project\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "Backspace"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id=\"Pelican-project-pelican\"] .conversation-title mark",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "PELICAN"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(Array.from(document.querySelectorAll('.command-palette-item-title')).filter(el =\u003e el.textContent.includes('Pelican-project-pelican')).flatMap(el =\u003e Array.from(el.querySelectorAll('mark')).map(m =\u003e m.textContent.trim())))",
+      "expect": "[\"Pelican\",\"pelican\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.command-palette-item-title')).find(el =\u003e el.textContent.includes('Pelican-project-pelican'))?.textContent.trim()",
+      "expect": "Pelican-project-pelican"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.command-palette-item-title')).find(el =\u003e el.textContent.includes('message-only'))?.querySelectorAll('mark').length ?? 0",
+      "expect": "0"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "conversation"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-item:has(.command-palette-item-badge)",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".command-palette-item:has(.command-palette-item-badge)"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-item:has(.command-palette-item-badge) mark",
+      "count": 0
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": ""
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.command-palette-item-title')).filter(el =\u003e el.textContent.includes('Pelican-project-pelican') \u0026\u0026 el.querySelectorAll('mark').length \u003e 0).length",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:40:14.018489604Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 92152,
+    "output_tokens": 7182,
+    "estimated_cost_usd": 0.17339939999999998,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Chapter search refreshes recorded chapters and surfaces index failures. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"chapter-hit\", and searches answer with it. The chapter index gives it one chapter, at first \"First idea\"; call \"rename-chapter\" renames it \"Changed direction\"; call \"fail-index\" makes the index answer HTTP 500 \"Index failed\", and call \"heal-index\" makes it answer again. \"The link\" is \".drawer .conversation-themes-list a\". To \"announce new chapters\", eval \"window.dispatchEvent(new CustomEvent('shelley-chapters-updated'))\". The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), eval document.execCommand('insertText', false, X), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Perform the numbered steps in order, each fully. A button \"X\" is the element with role button (a \u003cbutton\u003e) whose accessible name (aria-label, else its text) is exactly X; \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. A button \"X\" is button[aria-label=\"X\"] when one exists (as for \"Open conversations\", \"Search conversations...\", \"Search tasks...\", \"View options\", \"Show chapters\", \"Archive\", \"Restore\" and \"Delete\"); otherwise it is the button whose visible text is exactly X, picked with has_text X (a substring match, so make sure no other button's text contains X), as for \"Ask Shelley\", \"View Archived\" and \"Back to conversations\". 1. Navigate to /new. 2. Click the button \"Search conversations...\". 3. Click the button \"Show chapters\". 4. The link's text should be exactly \"First idea\". 5. Call \"rename-chapter\", then announce new chapters. 6. The link's text should become exactly \"Changed direction\". 7. Call \"fail-index\", then announce new chapters. 8. The element with role \"alert\" should contain the text \"Failed to load chapters\". 9. Call \"heal-index\". 10. Set the query to \"changed\". 11. The link's text should be exactly \"Changed direction\". 12. There should be no element with role \"alert\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Search conversations...']"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Show chapters']"
+    },
+    {
+      "action": "wait_text",
+      "text": "First idea",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer .conversation-themes-list a",
+      "text": "First idea"
+    },
+    {
+      "action": "call",
+      "value": "rename-chapter"
+    },
+    {
+      "action": "eval",
+      "expression": "window.dispatchEvent(new CustomEvent('shelley-chapters-updated'))"
+    },
+    {
+      "action": "wait_text",
+      "text": "Changed direction",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer .conversation-themes-list a",
+      "text": "Changed direction"
+    },
+    {
+      "action": "call",
+      "value": "fail-index"
+    },
+    {
+      "action": "eval",
+      "expression": "window.dispatchEvent(new CustomEvent('shelley-chapters-updated'))"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='alert']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='alert']",
+      "text": "Failed to load chapters"
+    },
+    {
+      "action": "call",
+      "value": "heal-index"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.execCommand('insertText', false, 'changed')"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "changed"
+    },
+    {
+      "action": "wait_text",
+      "text": "Changed direction",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer .conversation-themes-list a",
+      "text": "Changed direction"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role='alert']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:21:14.526445232Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 11599,
+    "output_tokens": 1198,
+    "estimated_cost_usd": 0.029437650000000003,
+    "mode": "generated"
+  }
+}

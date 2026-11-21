@@ -1,0 +1,130 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Closing search with toggle resets the query and all search filters. The browser's requests carry the header X-ExeDev-Email: me@example.com, so the current user is me@example.com. The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"mine\" (written in by me@example.com, tagged alpha, unread) and \"other\" (written in by other@example.com). \"The search toggle\" is the button \"Search conversations...\". The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), eval document.execCommand('insertText', false, X), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Perform the numbered steps in order, each fully. A button \"X\" is the element with role button (a \u003cbutton\u003e) whose accessible name (aria-label, else its text) is exactly X; \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. A button \"X\" is button[aria-label=\"X\"] when one exists (as for \"Open conversations\", \"Search conversations...\", \"Search tasks...\", \"View options\", \"Show chapters\", \"Archive\", \"Restore\" and \"Delete\"); otherwise it is the button whose visible text is exactly X, picked with has_text X (a substring match, so make sure no other button's text contains X), as for \"Ask Shelley\", \"View Archived\" and \"Back to conversations\". 1. Navigate to /new. 2. Click the search toggle. 3. Click the button \"Activity\". 4. Click the button \"1d+\" inside \".drawer-bulk-popover\". 5. [data-conversation-query-token=\"activity\"] should be visible. 6. Set the query to \"user:me@example.com tag:alpha is:unread needle\". 7. [data-conversation-id=\"other\"] is not visible. 8. Close search: click the search toggle again. 9. There should be no editor; the search toggle does not have the class \"search-toggle-active\"; [data-conversation-id=\"mine\"] and [data-conversation-id=\"other\"] are visible. 10. Click the search toggle. 11. The query is \"\". 12. There is no [data-conversation-query-token=\"activity\"]. 13. Data-testid \"unread-toggle\" has aria-pressed \"false\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Search conversations...']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='conversation-query-editor']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "button",
+      "has_text": "Activity"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer-bulk-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer-bulk-popover button",
+      "has_text": "1d+",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-bulk-popover button",
+      "has_text": "1d+"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-query-token='activity']",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.execCommand('insertText', false, 'user:me@example.com tag:alpha is:unread needle')"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": "user:me@example.com tag:alpha is:unread needle"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-conversation-id='other']"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Search conversations...']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-query-editor']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('button[aria-label=\"Search conversations...\"]').classList.contains('search-toggle-active')",
+      "expect": "false"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-conversation-id='mine']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-id='other']"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Search conversations...']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='conversation-query-editor']",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').dataset.queryValue",
+      "expect": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-query-token='activity']",
+      "count": 0
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='unread-toggle']",
+      "attribute": "aria-pressed",
+      "value": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:17:53.194908253Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 83941,
+    "output_tokens": 4307,
+    "estimated_cost_usd": 0.12056685,
+    "mode": "generated"
+  }
+}

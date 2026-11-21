@@ -1,0 +1,100 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Chapter controls stay aligned and compact at 1280px. The screen is already 1280x800 (do not resize it). The test harness has already stubbed the server's conversation list and cut off its live update stream, so there is nothing to set up, intercept or check about that (do not look at the API): the drawer (\".drawer\") shows the conversations the test names, as rows [data-conversation-id=\"\u003cid\u003e\"] whose title (\".conversation-title\") is their slug, which is their id (drafts have none), and whose preview is \"Preview\". The list is \"working-chapters\" (the agent is working), \"idle-chapters\", \"no-chapters\" and \"draft-no-chapters\" (a draft). The chapter index gives working-chapters the chapter \"Working topic\" and idle-chapters \"Idle topic\". \"The working row\" is [data-conversation-id=\"working-chapters\"]. Perform the numbered steps in order, each fully. A button \"X\" is the element with role button (a \u003cbutton\u003e) whose accessible name (aria-label, else its text) is exactly X; \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. A button \"X\" is button[aria-label=\"X\"] when one exists (as for \"Open conversations\", \"Search conversations...\", \"Search tasks...\", \"View options\", \"Show chapters\", \"Archive\", \"Restore\" and \"Delete\"); otherwise it is the button whose visible text is exactly X, picked with has_text X (a substring match, so make sure no other button's text contains X), as for \"Ask Shelley\", \"View Archived\" and \"Back to conversations\". 1. Navigate to /new. 3. Click the button \"Search conversations...\". 4. There should be exactly 2 buttons \"Show chapters\". 5. The no-chapters and draft-no-chapters rows have no \".drawer-chapters-toggle\". 6. The rows' times line up: eval (() =\u003e { const e = ['idle-chapters', 'no-chapters', 'draft-no-chapters'].map(id =\u003e { const r = document.querySelector('[data-conversation-id=\"' + id + '\"] .conversation-time').getBoundingClientRect(); return r.x + r.width; }); return Math.abs(e[1] - e[0]) \u003c 0.5 \u0026\u0026 Math.abs(e[2] - e[0]) \u003c 0.5; })() must be true. 7. The working row's button \"Show chapters\" has no aria-controls attribute. 8. Focus that button (eval its focus()), then eval \"document.addEventListener('keydown', event =\u003e { document.body.dataset.chapterKey = event.key; }, { once: true })\". 9. Press ArrowRight. 10. The body's data-chapter-key attribute should be exactly \"ArrowRight\". 11. The working row's indicator, chapters toggle and actions trigger sit 20px apart: eval (() =\u003e { const end = document.querySelector('[data-conversation-id=\"working-chapters\"] .drawer-row-end'); const center = (selector) =\u003e { const box = end.querySelector(selector).getBoundingClientRect(); return box.x + box.width / 2; }; const c = [center('.drawer-working-indicator'), center('.drawer-chapters-toggle'), center('.drawer-actions-trigger')]; return Math.abs(c[1] - c[0] - 20) \u003c 0.5 \u0026\u0026 Math.abs(c[2] - c[1] - 20) \u003c 0.5; })() must be true. 12. The working row's \".drawer-chapters-toggle\" getBoundingClientRect().x is within 0.5px of that of the idle-chapters row's \".drawer-chapters-toggle\". 13. Click the working row's button \"Show chapters\". 14. The working row's \".conversation-themes-list a\" is exactly one link, with text exactly \"Working topic\". 15. The idle-chapters row has no \".conversation-themes-list\". 16. The URL's path is still exactly /new (eval \"location.pathname\").",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Search conversations...']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "button[aria-label='Show chapters']",
+      "count": 2
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='no-chapters'] .drawer-chapters-toggle",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='draft-no-chapters'] .drawer-chapters-toggle",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const e = ['idle-chapters', 'no-chapters', 'draft-no-chapters'].map(id =\u003e { const r = document.querySelector('[data-conversation-id=\"' + id + '\"] .conversation-time').getBoundingClientRect(); return r.x + r.width; }); return Math.abs(e[1] - e[0]) \u003c 0.5 \u0026\u0026 Math.abs(e[2] - e[0]) \u003c 0.5; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='working-chapters'] button[aria-label='Show chapters'][aria-controls]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-conversation-id=\"working-chapters\"] button[aria-label=\"Show chapters\"]').focus()"
+    },
+    {
+      "action": "eval",
+      "expression": "document.addEventListener('keydown', event =\u003e { document.body.dataset.chapterKey = event.key; }, { once: true })"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowRight"
+    },
+    {
+      "action": "eval",
+      "expression": "document.body.dataset.chapterKey",
+      "expect": "ArrowRight"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const end = document.querySelector('[data-conversation-id=\"working-chapters\"] .drawer-row-end'); const center = (selector) =\u003e { const box = end.querySelector(selector).getBoundingClientRect(); return box.x + box.width / 2; }; const c = [center('.drawer-working-indicator'), center('.drawer-chapters-toggle'), center('.drawer-actions-trigger')]; return Math.abs(c[1] - c[0] - 20) \u003c 0.5 \u0026\u0026 Math.abs(c[2] - c[1] - 20) \u003c 0.5; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const w = document.querySelector('[data-conversation-id=\"working-chapters\"] .drawer-chapters-toggle').getBoundingClientRect().x; const i = document.querySelector('[data-conversation-id=\"idle-chapters\"] .drawer-chapters-toggle').getBoundingClientRect().x; return Math.abs(w - i) \u003c 0.5; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id='working-chapters'] button[aria-label='Show chapters']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='working-chapters'] .conversation-themes-list a",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id='working-chapters'] .conversation-themes-list a",
+      "text": "Working topic"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id='idle-chapters'] .conversation-themes-list",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "location.pathname",
+      "expect": "/new"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:22:09.605860139Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 12300,
+    "output_tokens": 1936,
+    "estimated_cost_usd": 0.0424533,
+    "mode": "generated"
+  }
+}

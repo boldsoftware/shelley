@@ -1,0 +1,252 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Right-clicking a conversation row opens its actions at the pointer. Two conversations exist, rows [data-conversation-id=\"{{FIRST}}\"] (\"the first row\") and [data-conversation-id=\"{{SECOND}}\"] (\"the second row\"); the second is at /c/{{SECOND_SLUG}}. Both are tagged {{TAG}}. The context menu is data-testid \"conversation-context-menu\"; its items are its [role=\"menuitem\"] elements. \"Fully in view\" means an IntersectionObserver (root null) on the element reports intersectionRatio 1: eval \"new Promise(r =\u003e { const o = new IntersectionObserver(([e]) =\u003e { o.disconnect(); r(e.intersectionRatio); }); o.observe(document.querySelector(SELECTOR)); })\" expecting 1. \"Right-click the row at its edge\" means click it with button \"right\" at x 4 and y half the row's height (probe the height first). The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), eval document.execCommand('insertText', false, X), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Perform the numbered steps in order, each fully. A button \"X\" is the element with role button (a \u003cbutton\u003e) whose accessible name (aria-label, else its text) is exactly X; \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. A button \"X\" is button[aria-label=\"X\"] when one exists (as for \"Open conversations\", \"Search conversations...\", \"Search tasks...\", \"View options\", \"Show chapters\", \"Archive\", \"Restore\" and \"Delete\"); otherwise it is the button whose visible text is exactly X, picked with has_text X (a substring match, so make sure no other button's text contains X), as for \"Ask Shelley\", \"View Archived\" and \"Back to conversations\". 1. Navigate to /new. 2. Wait until the page has loaded the workspace (the menu offers more once it has): poll eval \"performance.getEntriesByType('resource').some(e =\u003e new URL(e.name).pathname === '/api/workspace')\" expecting true. 3. Click the button \"Search conversations...\". 4. Set the query to \"tag:{{TAG}} \". 5. Exactly 2 \".conversation-item\" elements are visible (others may exist hidden, so count only rendered ones): poll eval \"[...document.querySelectorAll('.conversation-item')].filter(e =\u003e { const r = e.getBoundingClientRect(); return r.width \u003e 0 \u0026\u0026 r.height \u003e 0 \u0026\u0026 e.checkVisibility({visibilityProperty: true}); }).length\" expecting 2. 6. The first row and the second row are each fully in view. 7. Right-click the second row's \".conversation-preview\" 20px right of and 5px below its top-left corner (click, button \"right\", x 20, y 5). 8. The context menu is visible. 9. Its items' trimmed texts are exactly [\"Archive\",\"Rename\",\"Edit tags\"]. 10. The menu opened where the pointer was: its getBoundingClientRect() x is less than 4px from the preview's x + 20 and its y less than 4px from the preview's y + 5 (eval both rects now). 11. The second row has the class \"context-menu-target\". 12. The URL's path is not /c/{{SECOND_SLUG}}: eval \"location.pathname !== '/c/{{SECOND_SLUG}}'\" is true. 13. Right-click the first row at its edge (the open menu may cover its middle). 14. There is exactly one context menu element; the first row has the class \"context-menu-target\" and the second row does not. 15. Press Escape. 16. There is no context menu element, and the first row has no \"context-menu-target\" class. 17. A right-click anywhere else closes it: right-click the first row (at its center), and the context menu is visible. 18. Right-click the message input (data-testid \"message-input\"). 19. There is no context menu element and the first row has no \"context-menu-target\" class. 20. Opening it closes any row's actions menu: click the second row's button \"Actions\" (its button[aria-label=\"Actions\"]). 21. The actions menu (data-testid \"conversation-actions-menu\") is visible. 22. Right-click the first row at its edge. 23. The context menu is visible and there is no element with data-testid \"conversation-actions-menu\". 24. Press Escape; there is no context menu element. 25. Archive acts on the row right-clicked: right-click the first row (center), then click the context menu's item \"Archive\". 26. There is no context menu element, no first row element at all, and the second row is visible. 27. Call \"archived\" expecting \"true\" (the server lists the first conversation as archived). 28. Rename keeps the native menu in its text field: right-click the second row (center) and click the context menu's item \"Rename\". 29. The second row's \".drawer-rename-input\" is focused (document.activeElement). 30. Right-click that input. 31. There is no context menu element. 32. Press Escape.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "eval",
+      "expression": "performance.getEntriesByType('resource').some(e =\u003e new URL(e.name).pathname === '/api/workspace')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Search conversations...']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "document.execCommand('insertText', false, 'tag:{{TAG}} ')"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"conversation-query-editor\"]').getAttribute('data-query-value')",
+      "expect": "tag:{{TAG}} "
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('.conversation-item')].filter(e =\u003e { const r = e.getBoundingClientRect(); return r.width \u003e 0 \u0026\u0026 r.height \u003e 0 \u0026\u0026 e.checkVisibility({visibilityProperty: true}); }).length",
+      "expect": "2"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(r =\u003e { const o = new IntersectionObserver(([e]) =\u003e { o.disconnect(); r(e.intersectionRatio); }); o.observe(document.querySelector('[data-conversation-id=\"{{FIRST}}\"]')); })",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(r =\u003e { const o = new IntersectionObserver(([e]) =\u003e { o.disconnect(); r(e.intersectionRatio); }); o.observe(document.querySelector('[data-conversation-id=\"{{SECOND}}\"]')); })",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{SECOND}}\"] .conversation-preview",
+      "button": "right",
+      "x": 20,
+      "y": 5
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-context-menu']"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('[data-testid=\"conversation-context-menu\"] [role=\"menuitem\"]')].map(e =\u003e e.textContent.trim()).join('|')",
+      "expect": "Archive|Rename|Edit tags"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const menu = document.querySelector('[data-testid=\"conversation-context-menu\"]').getBoundingClientRect(); const preview = document.querySelector('[data-conversation-id=\"{{SECOND}}\"] .conversation-preview').getBoundingClientRect(); return Math.abs(menu.x - (preview.x + 20)) \u003c 4 \u0026\u0026 Math.abs(menu.y - (preview.y + 5)) \u003c 4; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-conversation-id=\"{{SECOND}}\"]').classList.contains('context-menu-target')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "location.pathname !== '/c/{{SECOND_SLUG}}'",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{FIRST}}\"]",
+      "button": "right",
+      "x": 4,
+      "y": 63
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-context-menu']",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-conversation-id=\"{{FIRST}}\"]').classList.contains('context-menu-target')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-conversation-id=\"{{SECOND}}\"]').classList.contains('context-menu-target')",
+      "expect": "false"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-context-menu']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-conversation-id=\"{{FIRST}}\"]').classList.contains('context-menu-target')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{FIRST}}\"]",
+      "button": "right"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-context-menu']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']",
+      "button": "right"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-context-menu']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-conversation-id=\"{{FIRST}}\"]').classList.contains('context-menu-target')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{SECOND}}\"] button[aria-label='Actions']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-actions-menu']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{FIRST}}\"]",
+      "button": "right",
+      "x": 4,
+      "y": 63
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-context-menu']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-actions-menu']",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-context-menu']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{FIRST}}\"]",
+      "button": "right"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-context-menu']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-context-menu'] [role='menuitem']",
+      "has_text": "Archive"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-context-menu']",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id=\"{{FIRST}}\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-id=\"{{SECOND}}\"]"
+    },
+    {
+      "action": "call",
+      "value": "archived",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{SECOND}}\"]",
+      "button": "right"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='conversation-context-menu']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-context-menu'] [role='menuitem']",
+      "has_text": "Rename"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-conversation-id=\"{{SECOND}}\"] .drawer-rename-input')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{SECOND}}\"] .drawer-rename-input",
+      "button": "right"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-context-menu']",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:32:47.947977616Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 25599,
+    "output_tokens": 6008,
+    "estimated_cost_usd": 0.12205364999999999,
+    "mode": "generated"
+  }
+}
