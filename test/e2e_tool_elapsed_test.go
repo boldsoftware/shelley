@@ -22,7 +22,7 @@ func TestE2EToolElapsedRunningShowsLiveTime(t *testing.T) {
 11. Click the tool's ".bash-tool-header" again. Wait (with an eval that has "expect" "true") until the seconds are >= window.__initial + 8.
 12. Click the stop button (".status-stop-button"). Wait until the tool's data-testid is exactly "tool-call-completed" (allow 10s).
 13. The tool contains no elapsed-time element (count 0).
-14. Click the tool's ".bash-tool-header" (the completed card starts collapsed, so this expands it). The tool contains no ".bash-tool-time" element (count 0) and no elapsed-time element (count 0): a stopped run shows neither.`, func(s *shelley) {
+14. Click the tool's ".bash-tool-header" (the completed card starts collapsed, so this expands it) and wait until the tool's ".bash-tool-details" is visible, so the checks below look inside the expanded card. The tool contains no ".bash-tool-time" element (count 0) and no elapsed-time element (count 0): a stopped run shows neither.`, func(s *shelley) {
 		s.v("SLUG", s.conversation("hello", "").Slug)
 		s.clock(time.Time{})
 	})

@@ -185,7 +185,7 @@ func TestE2ECompactionEventsMobileSkips(t *testing.T) {
 2. The status ('[data-testid="message-inplacecompaction"] > summary') has exactly the text "Compaction skipped".
 3. Click the status. The result then contains no "details" element (count 0).
 4. The result contains no element with role "table" (count 0).
-5. An element inside the result whose text contains "Hid 1 context nudge from the agent." is visible.
+5. The innermost element inside the result whose text contains "Hid 1 context nudge from the agent." is visible ("*" with has_text, within the result): not the result itself, which stays visible through its summary even while closed.
 6. `+compactionNoOverflow, func(s *shelley) {
 		s.viewport(390, 844)
 		s.compactionReplay(map[string]any{"hidden_sequence_ids": []int{21}})

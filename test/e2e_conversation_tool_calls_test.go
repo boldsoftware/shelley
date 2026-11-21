@@ -22,8 +22,8 @@ func TestE2EConversationToolCallsAgentTextAndToolSeparate(t *testing.T) {
 1. Navigate to /new.
 2. Fill the message input ([data-testid="message-input"]) with "bash: pwd" and click the send button ([data-testid="send-button"]).
 3. Wait for the first [data-testid="tool-call-completed"] element to be visible (allow 30s).
-4. The agent's message is shown: an element whose text contains "I'll run the command: pwd" is visible.
-5. The tool result is shown separately as a coalesced tool call: the first [data-testid="tool-call-completed"] element is visible, and an element whose text contains "bash" is visible.`, nil)
+4. The agent's message is shown: the first element ("*" with has_text, nth 0) whose text contains "I'll run the command: pwd" is visible. Present text is not enough; it must be visible.
+5. The tool result is shown separately as a coalesced tool call: the first [data-testid="tool-call-completed"] element is visible, and the first element ("*" with has_text, nth 0) whose text contains "bash" is visible.`, nil)
 }
 
 func TestE2EConversationToolCallsSequential(t *testing.T) {
