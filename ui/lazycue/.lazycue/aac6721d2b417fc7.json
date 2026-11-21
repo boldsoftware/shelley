@@ -1,0 +1,121 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "output_html pages are views too. The agent has shown, in the conversation /c/{{SLUG}}, a page with output_html and the excalidraw library: \"the view\" is the frame \".output-iframe-tool iframe\". The page has #theme, #font and #libs, and the buttons #pick (sets the context for the model to \"The user picked blue\"), #send (asks to send \"echo: sent from the page\" as the user's message) and #save (asks to download colors.txt, holding \"blue\"). Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match. \"The consent bar\" is data-testid \"mcp-app-consent\", where the host asks the user's OK for what a view asks to do. To \"send T\": fill data-testid \"message-input\" with T and click data-testid \"send-button\". \"The agent says T\": the last \".message-agent\" whose text contains T should be visible (timeout 30s). Perform the steps in order. 1. Navigate to /c/{{SLUG}}. The view's #theme should have exactly the text \"theme light\". 2. Themed by default: eval, in the page, getComputedStyle(document.documentElement).getPropertyValue(\"--font-sans\").trim(), saving it as FONT: the view's #font should have exactly the text {{FONT}}. 3. Its libraries come to it, and only to it, like the host's messages: the view's #libs should have exactly the text \"excalidraw\". 4. Click the view's #pick. Send \"app context?\": the agent says \"The user picked blue\". 5. Click the view's #send, then the consent bar's button named \"Send\". The \".message-user\" whose text contains \"echo: sent from the page\" should be visible. 6. Click the view's #save. The consent bar should contain the text \"colors.txt (4 B)\", and no download should have begun yet. Click the consent bar's button named \"Save\": a download whose suggested file name is exactly \"colors.txt\" should begin. 7. Emulate prefers-color-scheme: dark. The view's #theme should have exactly the text \"theme dark\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "assert_text",
+      "frame": ".output-iframe-tool iframe",
+      "selector": "#theme",
+      "text": "theme light"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.documentElement).getPropertyValue('--font-sans').trim()",
+      "save": "FONT"
+    },
+    {
+      "action": "assert_text",
+      "frame": ".output-iframe-tool iframe",
+      "selector": "#font",
+      "text": "{{FONT}}"
+    },
+    {
+      "action": "assert_text",
+      "frame": ".output-iframe-tool iframe",
+      "selector": "#libs",
+      "text": "excalidraw"
+    },
+    {
+      "action": "click",
+      "frame": ".output-iframe-tool iframe",
+      "selector": "#pick"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=message-input]",
+      "value": "app context?"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=send-button]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-agent",
+      "has_text": "The user picked blue",
+      "timeout": "30s",
+      "nth": -1
+    },
+    {
+      "action": "click",
+      "frame": ".output-iframe-tool iframe",
+      "selector": "#send"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=mcp-app-consent]"
+      },
+      "role": "button",
+      "name": "Send",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-user",
+      "has_text": "echo: sent from the page",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "frame": ".output-iframe-tool iframe",
+      "selector": "#save"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=mcp-app-consent]",
+      "text": "colors.txt (4 B)"
+    },
+    {
+      "action": "assert_no_download"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=mcp-app-consent]"
+      },
+      "role": "button",
+      "name": "Save",
+      "exact": true
+    },
+    {
+      "action": "assert_download",
+      "value": "colors.txt"
+    },
+    {
+      "action": "emulate_media",
+      "value": "prefers-color-scheme: dark"
+    },
+    {
+      "action": "assert_text",
+      "frame": ".output-iframe-tool iframe",
+      "selector": "#theme",
+      "text": "theme dark",
+      "timeout": "15s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T10:13:32.602537597Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 56608,
+    "output_tokens": 2640,
+    "estimated_cost_usd": 0.0983118,
+    "mode": "generated"
+  }
+}
