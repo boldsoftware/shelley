@@ -1,0 +1,41 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Emoji sizes are consistent across all tools. The conversation at /c/{{SLUG}} ran the \"tool smorgasbord\": one call of nearly every tool. Perform the steps in order.\n1. Navigate to /c/{{SLUG}}. Wait (allow 30s) until there are at least 15 [data-testid=\"tool-call-completed\"] elements (an eval with expect). Then mount every card: dispatch a \"beforeprint\" Event on window (an eval without expect), and wait (allow 15s) until there is no \".tool-card-mount-placeholder\" element (count 0).\n2. Every tool card's emoji has the computed font-size 16px (1rem): an eval of JSON.stringify([...new Set([...document.querySelectorAll('.tool-emoji, .bash-tool-emoji, .patch-tool-emoji, .screenshot-tool-emoji')].map((el) =\u003e getComputedStyle(el).fontSize))]) must equal exactly [\"16px\"].",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"tool-call-completed\"]').length \u003e= 15 ? 'yes' : 'no'",
+      "expect": "yes",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.dispatchEvent(new Event('beforeprint'))"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool-card-mount-placeholder",
+      "count": 0,
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify([...new Set([...document.querySelectorAll('.tool-emoji, .bash-tool-emoji, .patch-tool-emoji, .screenshot-tool-emoji')].map((el) =\u003e getComputedStyle(el).fontSize))])",
+      "expect": "[\"16px\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:43:16.751622456Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14502,
+    "output_tokens": 669,
+    "estimated_cost_usd": 0.0186027,
+    "mode": "generated"
+  }
+}

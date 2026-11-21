@@ -1,0 +1,38 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The think tool's thought shows inline with its text. The conversation at /c/{{SLUG}} thought \"This is a long thought that should be truncated in the header display\" and then answered \"I've considered my approach.\". Perform the steps in order.\n1. Navigate to /c/{{SLUG}}.\n2. Wait until the page text contains \"I've considered my approach.\" (allow 15s).\n3. The first \".thinking-content\" element whose text contains \"This is a long thought\" is visible, and its text contains \"This is a long thought\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_text",
+      "text": "I've considered my approach.",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".thinking-content",
+      "has_text": "This is a long thought",
+      "nth": 0
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".thinking-content",
+      "has_text": "This is a long thought",
+      "nth": 0,
+      "text": "This is a long thought"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:39:46.060205204Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6936,
+    "output_tokens": 179,
+    "estimated_cost_usd": 0.00714135,
+    "mode": "hand-edited"
+  }
+}

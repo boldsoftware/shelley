@@ -1,0 +1,114 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The patch card collapses and expands without errors. The conversation at /c/{{SLUG}} applied a patch to test-patch-success.txt. The page keeps its uncaught errors in window.__pageErrors. \"The card\" is the first '.patch-tool[data-testid=\"tool-call-completed\"]' element whose text contains \"test-patch-success.txt\"; \"the header\" is its \".patch-tool-header\" and \"the details\" its \".patch-tool-details\". Perform the steps in order.\n1. Navigate to /c/{{SLUG}}. The card is visible (allow 15s).\n2. The card's \".patch-tool-toggle\" is visible.\n3. Click the header: the details become hidden.\n4. Click the header: the details become visible (allow 10s).\n5. Click the header: the details become hidden.\n6. Click the header: the details become visible (allow 10s).\n7. No Monaco model error occurred: an eval of window.__pageErrors.filter((m) =\u003e m.includes('model') \u0026\u0026 m.includes('already exists')).length with expect \"0\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+      "has_text": "test-patch-success.txt",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+        "has_text": "test-patch-success.txt",
+        "nth": 0
+      },
+      "selector": ".patch-tool-toggle"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+        "has_text": "test-patch-success.txt",
+        "nth": 0
+      },
+      "selector": ".patch-tool-header"
+    },
+    {
+      "action": "wait_hidden",
+      "within": {
+        "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+        "has_text": "test-patch-success.txt",
+        "nth": 0
+      },
+      "selector": ".patch-tool-details"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+        "has_text": "test-patch-success.txt",
+        "nth": 0
+      },
+      "selector": ".patch-tool-header"
+    },
+    {
+      "action": "wait_visible",
+      "within": {
+        "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+        "has_text": "test-patch-success.txt",
+        "nth": 0
+      },
+      "selector": ".patch-tool-details",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+        "has_text": "test-patch-success.txt",
+        "nth": 0
+      },
+      "selector": ".patch-tool-header"
+    },
+    {
+      "action": "wait_hidden",
+      "within": {
+        "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+        "has_text": "test-patch-success.txt",
+        "nth": 0
+      },
+      "selector": ".patch-tool-details"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+        "has_text": "test-patch-success.txt",
+        "nth": 0
+      },
+      "selector": ".patch-tool-header"
+    },
+    {
+      "action": "wait_visible",
+      "within": {
+        "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+        "has_text": "test-patch-success.txt",
+        "nth": 0
+      },
+      "selector": ".patch-tool-details",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__pageErrors.filter((m) =\u003e m.includes('model') \u0026\u0026 m.includes('already exists')).length",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:39:41.009449851Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 15171,
+    "output_tokens": 1726,
+    "estimated_cost_usd": 0.03684915,
+    "mode": "generated"
+  }
+}

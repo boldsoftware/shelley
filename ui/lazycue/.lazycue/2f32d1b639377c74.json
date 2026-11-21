@@ -1,0 +1,801 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Browser input errors are labeled, and keep the model's guidance visible. The conversation at /c/{{SLUG}} is served as a replay (its live stream is cut off) of 24 browser tool calls: 17 the backend rejected as invalid (listed below), 2 with actions this UI has no card for (\"brand_new_action\", which worked, and \"other_new_action\", which failed), one valid eval of \"document.title\", and one each of emulate_help, network_help, accessibility_help and profile_help. \"The invalid cards\" are the \".tool\" elements whose text contains \"Invalid browser call:\" (has_text); the Nth invalid call below renders the Nth invalid card (pick it with nth, as the spec's invalidCards.nth(i) did). \"The card for action A\" is the \".tool\" element that has a \".tool-command\" whose text contains \"browser (A)\" (a \"has\" filter).\nThe invalid calls, in order, with the label each card's \".tool-command\" shows, a text its expanded details contain, and for some the code its input shows (JSON-quoted here; the page shows the unquoted text):\n1. ID missing-action: label \"Invalid browser call: missing action · model asked to retry\"; text \"invalid browser call: \\\"action\\\" is required and must be a non-empty string. Choose an action from the browser schema and resend the call.\"\n2. ID empty-action: label \"Invalid browser call: missing action · model asked to retry\"; text \"invalid browser call: \\\"action\\\" is required.\"\n3. ID legacy-missing: label \"Invalid browser call: missing action\"; text \"unknown action: \\\"\\\"\"\n4. ID string-input: label \"Invalid browser call: input must be a JSON object · model asked to retry\"; text \"invalid browser call: arguments were sent as a quoted JSON string. Decoded arguments: {\\\"action\\\":\\\"eval\\\"}. Resend an unquoted JSON object with a non-empty string \\\"action\\\" and field types matching the browser schema.\"; code \"{\\\"action\\\":\\\"eval\\\"}\"\n5. ID malformed-input: label \"Invalid browser call: input must be a JSON object · model asked to retry\"; text \"invalid browser call: arguments were not valid JSON.\"; code \"{\\\"action\\\":\\\"eval\\\"\"\n6. ID null-input: label \"Invalid browser call: input must be a JSON object · model asked to retry\"; text \"invalid browser call: arguments were null.\"\n7. ID array-input: label \"Invalid browser call: input must be a JSON object · model asked to retry\"; text \"invalid browser call: arguments were a JSON array.\"\n8. ID number-action: label \"Invalid browser call: action must be a string · model asked to retry\"; text \"invalid browser call: \\\"action\\\" must be a string, got 42.\"\n9. ID null-action: label \"Invalid browser call: action must be a string · model asked to retry\"; text \"invalid browser call: \\\"action\\\" must be a string, got null.\"\n10. ID click: label \"Invalid browser call: unsupported action \\\"click\\\" · model asked to retry\"; text \"invalid browser call: unknown action \\\"click\\\". Choose an action from the browser schema and resend the call. All supported actions: navigate, eval, screenshot.\"\n11. ID emulate_bogus: label \"Invalid browser call: unsupported action \\\"emulate_bogus\\\" · model asked to retry\"; text \"invalid browser call: unknown action \\\"emulate_bogus\\\". Choose an action from the browser schema and resend the call. All supported actions: navigate, eval, screenshot.\"\n12. ID network_bogus: label \"Invalid browser call: unsupported action \\\"network_bogus\\\" · model asked to retry\"; text \"invalid browser call: unknown action \\\"network_bogus\\\". Choose an action from the browser schema and resend the call. All supported actions: navigate, eval, screenshot.\"\n13. ID accessibility_bogus: label \"Invalid browser call: unsupported action \\\"accessibility_bogus\\\" · model asked to retry\"; text \"invalid browser call: unknown action \\\"accessibility_bogus\\\". Choose an action from the browser schema and resend the call. All supported actions: navigate, eval, screenshot.\"\n14. ID profile_bogus: label \"Invalid browser call: unsupported action \\\"profile_bogus\\\" · model asked to retry\"; text \"invalid browser call: unknown action \\\"profile_bogus\\\". Choose an action from the browser schema and resend the call. All supported actions: navigate, eval, screenshot.\"\n15. ID width-type: label \"Invalid browser call: wrong field type for resize · model asked to retry\"; text \"invalid browser call: field \\\"width\\\" must be an integer, got a JSON string.\"\n16. ID await-type: label \"Invalid browser call: wrong field type for eval · model asked to retry\"; text \"invalid browser call: field \\\"await\\\" must be a boolean, got a JSON string.\"\n17. ID legacy-unknown: label \"Invalid browser call: unsupported action \\\"legacy_bogus\\\"\"; text \"unknown action: \\\"legacy_bogus\\\"\"\nPerform the steps in order.\n1. Navigate to /c/{{SLUG}}. There are exactly 24 [data-testid=\"tool-call-completed\"] elements (one per call).\n2. Mount every card: dispatch a \"beforeprint\" Event on window (an eval without expect), and wait (allow 15s) until there is no \".tool-card-mount-placeholder\" element (count 0).\n3. There are exactly 17 invalid cards, and no \".generic-tool-warning\" inside any of them (assert_count of \".tool:has(.generic-tool-warning)\" with has_text \"Invalid browser call:\" is 0).\n4. For each invalid call above, in order, on its invalid card: its \".tool-command\" text is exactly the label (assert_text); click its \".tool-header\"; its \".tool-details\" text then contains \"Output (Error):\" and contains the text; and if a code is listed, its first \".tool-code\" element's text is exactly the code (assert_text).\n5. The calls with no card of their own keep the bug-report warning: the card for action brand_new_action and the card for action other_new_action each have exactly 1 \".generic-tool-warning\" inside, and the page has exactly 2 \".generic-tool-warning\" elements.\n6. The valid eval's card, the \".tool\" element that has a \".tool-command\" whose text contains \"document.title\", has a \".tool-emoji\" whose text is exactly \"⚡\".\n7. Each browser family keeps its own card: for each of \"📱\", \"📡\", \"🌳\" and \"📊\", exactly 1 \".tool-emoji\" element's text contains it (assert_count with has_text).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"tool-call-completed\"]",
+      "count": 24,
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.dispatchEvent(new Event('beforeprint'))"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool-card-mount-placeholder",
+      "count": 0,
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool",
+      "has_text": "Invalid browser call:",
+      "count": 17
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:"
+      },
+      "selector": ".generic-tool-warning",
+      "count": 0
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 0
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: missing action · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 0
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 0
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 0
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: \"action\" is required and must be a non-empty string. Choose an action from the browser schema and resend the call."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 1
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: missing action · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 1
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 1
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 1
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: \"action\" is required."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 2
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: missing action"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 2
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 2
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 2
+      },
+      "selector": ".tool-details",
+      "text": "unknown action: \"\""
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 3
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: input must be a JSON object · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 3
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 3
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 3
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: arguments were sent as a quoted JSON string. Decoded arguments: {\"action\":\"eval\"}. Resend an unquoted JSON object with a non-empty string \"action\" and field types matching the browser schema."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 3
+      },
+      "selector": ".tool-code",
+      "nth": 0,
+      "text": "{\"action\":\"eval\"}"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 4
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: input must be a JSON object · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 4
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 4
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 4
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: arguments were not valid JSON."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 4
+      },
+      "selector": ".tool-code",
+      "nth": 0,
+      "text": "{\"action\":\"eval\""
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 5
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: input must be a JSON object · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 5
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 5
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 5
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: arguments were null."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 6
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: input must be a JSON object · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 6
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 6
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 6
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: arguments were a JSON array."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 7
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: action must be a string · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 7
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 7
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 7
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: \"action\" must be a string, got 42."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 8
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: action must be a string · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 8
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 8
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 8
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: \"action\" must be a string, got null."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 9
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: unsupported action \"click\" · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 9
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 9
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 9
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: unknown action \"click\". Choose an action from the browser schema and resend the call. All supported actions: navigate, eval, screenshot."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 10
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: unsupported action \"emulate_bogus\" · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 10
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 10
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 10
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: unknown action \"emulate_bogus\". Choose an action from the browser schema and resend the call. All supported actions: navigate, eval, screenshot."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 11
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: unsupported action \"network_bogus\" · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 11
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 11
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 11
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: unknown action \"network_bogus\". Choose an action from the browser schema and resend the call. All supported actions: navigate, eval, screenshot."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 12
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: unsupported action \"accessibility_bogus\" · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 12
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 12
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 12
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: unknown action \"accessibility_bogus\". Choose an action from the browser schema and resend the call. All supported actions: navigate, eval, screenshot."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 13
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: unsupported action \"profile_bogus\" · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 13
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 13
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 13
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: unknown action \"profile_bogus\". Choose an action from the browser schema and resend the call. All supported actions: navigate, eval, screenshot."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 14
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: wrong field type for resize · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 14
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 14
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 14
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: field \"width\" must be an integer, got a JSON string."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 15
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: wrong field type for eval · model asked to retry"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 15
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 15
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 15
+      },
+      "selector": ".tool-details",
+      "text": "invalid browser call: field \"await\" must be a boolean, got a JSON string."
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 16
+      },
+      "selector": ".tool-command",
+      "text": "Invalid browser call: unsupported action \"legacy_bogus\""
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 16
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 16
+      },
+      "selector": ".tool-details",
+      "text": "Output (Error):"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".tool",
+        "has_text": "Invalid browser call:",
+        "nth": 16
+      },
+      "selector": ".tool-details",
+      "text": "unknown action: \"legacy_bogus\""
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".tool",
+        "has": {
+          "selector": ".tool-command",
+          "has_text": "browser (brand_new_action)"
+        }
+      },
+      "selector": ".generic-tool-warning",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".tool",
+        "has": {
+          "selector": ".tool-command",
+          "has_text": "browser (other_new_action)"
+        }
+      },
+      "selector": ".generic-tool-warning",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": ".generic-tool-warning",
+      "count": 2
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".tool",
+        "has": {
+          "selector": ".tool-command",
+          "has_text": "document.title"
+        }
+      },
+      "selector": ".tool-emoji",
+      "text": "⚡"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool-emoji",
+      "has_text": "📱",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool-emoji",
+      "has_text": "📡",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool-emoji",
+      "has_text": "🌳",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool-emoji",
+      "has_text": "📊",
+      "count": 1
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T08:30:10Z",
+    "hostname": "phil-dev",
+    "model": "hand-written",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_cost_usd": 0,
+    "mode": "hand-written"
+  }
+}

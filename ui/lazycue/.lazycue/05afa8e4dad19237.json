@@ -1,0 +1,311 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Audio transcription has its own card, and generic fallbacks identify themselves. The conversation at /c/{{SLUG}} is served as a replay (its live stream is cut off) of four tool calls: two audio transcriptions, one of an unknown tool \"custom_tool_missing_ui_&_#_%_雪_with_a_very_long_name\" and one of an unknown browser action. Names used below:\n- \"the transcription\" is the \".audio-transcription-tool\" element whose text contains \"planning-session.webm\"; \"the failed transcription\" is the \".audio-transcription-tool\" element whose text contains \"broken-recording.webm\".\n- \"The raw summary\" is the \".tool-result-summary\" element (the unknown tool's generic card); \"the raw details\" is the <details> element around it ('details:has(.tool-result-summary)'); \"the raw warning\" is the raw summary's \"a.generic-tool-warning\".\n- \"The browser card\" is the \".tool\" element whose text contains \"browser (future_action_&_#_%_雪_without_a_dedicated_component_name)\"; \"the browser warning\" is its \"a.generic-tool-warning\".\nGitHub (https://github.com) is stubbed, so links to it open in a new tab without leaving this machine. Perform the steps in order.\n1. Navigate to /c/{{SLUG}}. There are exactly 2 \".audio-transcription-tool\" elements.\n2. The transcription is visible and its data-testid is exactly \"tool-call-completed\". Its text contains \"Audio transcription\", \"planning-session.webm\", \"gpt-transcribe\" and \"5.6s\", and does not contain \"duration_ms\" or \"We should ship the polished transcription card this week.\".\n3. The transcription's \".tool-header\" does not overflow: its scrollWidth <= clientWidth (an eval with expect \"true\").\n4. Click the transcription's \".tool-header\". Its text then contains \"We should ship the polished transcription card this week.\", \"1,234 prompt characters\", \"whisper-1\" and \"planning-session.webm.transcript-timestamps.json\", and the transcription itself does not overflow (scrollWidth <= clientWidth, an eval with expect \"true\").\n5. The failed transcription's text contains \"failed\". Click its \".tool-header\". Its text then contains \"Error:\" and \"The recording could not be transcribed.\", and does not contain \"Transcript:\".\n6. Neither the raw summary nor the browser card's \".tool-header\" overflows (scrollWidth <= clientWidth for each, an eval with expect \"true\").\n7. Check each warning link: the raw warning names the tool \"custom_tool_missing_ui_&_#_%_雪_with_a_very_long_name\" and the browser warning names \"browser (future_action_&_#_%_雪_without_a_dedicated_component_name)\". For each, with N its name: its aria-label is exactly \"GENERIC TOOL RESULT (Please report a bug) — missing UI for N (opens in new tab)\", its target is exactly \"_blank\", its rel is exactly \"noopener noreferrer\", and its href is a URL whose origin + pathname is exactly \"https://github.com/boldsoftware/shelley/issues/new\", whose \"labels\" search parameter is exactly \"bug\", whose \"title\" parameter is exactly \"Missing tool UI: N\", and whose \"body\" parameter contains \"**Tool:** `N`\" (N in backticks). Check the href with one eval per link that parses it with new URL() and returns these four facts joined by \"|\" (the last as true/false), with the exact expect.\n8. The raw details has no \"open\" attribute. Click the raw warning: a new tab opens (the popup); close it. The raw details still has no \"open\" attribute.\n9. Focus the raw warning (an eval calling .focus()) and press Space. The raw details still has no \"open\" attribute.\n10. Click the browser warning: a new tab opens; close it. The browser card's \".tool-details\" is hidden (the click did not expand the card).\n11. Exactly 2 elements have the whole text \"GENERIC TOOL RESULT (Please report a bug)\" (count, in an eval, the elements whose trimmed textContent equals it and none of whose children's does), and both are visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".audio-transcription-tool",
+      "nth": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".audio-transcription-tool",
+      "count": 2
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".audio-transcription-tool",
+      "has_text": "planning-session.webm"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".audio-transcription-tool",
+      "has_text": "planning-session.webm",
+      "attribute": "data-testid",
+      "value": "tool-call-completed"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "planning-session.webm",
+      "text": "Audio transcription"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "planning-session.webm",
+      "text": "gpt-transcribe"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "planning-session.webm",
+      "text": "5.6s"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "planning-session.webm",
+      "text": "duration_ms"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "planning-session.webm",
+      "text": "We should ship the polished transcription card this week."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const els = document.querySelectorAll('.audio-transcription-tool'); for (const e of els) { if (e.textContent.includes('planning-session.webm')) { const h = e.querySelector('.tool-header'); return String(h.scrollWidth <= h.clientWidth); } } return 'not found'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".audio-transcription-tool",
+        "has_text": "planning-session.webm"
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "planning-session.webm",
+      "text": "We should ship the polished transcription card this week."
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "planning-session.webm",
+      "text": "1,234 prompt characters"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "planning-session.webm",
+      "text": "whisper-1"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "planning-session.webm",
+      "text": "planning-session.webm.transcript-timestamps.json"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const els = document.querySelectorAll('.audio-transcription-tool'); for (const e of els) { if (e.textContent.includes('planning-session.webm')) { return String(e.scrollWidth <= e.clientWidth); } } return 'not found'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "broken-recording.webm",
+      "text": "failed"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".audio-transcription-tool",
+        "has_text": "broken-recording.webm"
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "broken-recording.webm",
+      "text": "Error:"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "broken-recording.webm",
+      "text": "The recording could not be transcribed."
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".audio-transcription-tool",
+      "has_text": "broken-recording.webm",
+      "text": "Transcript:"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('.tool-result-summary'); return String(el.scrollWidth <= el.clientWidth); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const all = document.querySelectorAll('.tool'); for (const e of all) { if (e.textContent.includes('browser (future_action_&_#_%_雪_without_a_dedicated_component_name)')) { const h = e.querySelector('.tool-header'); return String(h.scrollWidth <= h.clientWidth); } } return 'not found'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".tool-result-summary"
+      },
+      "selector": "a.generic-tool-warning",
+      "attribute": "aria-label",
+      "value": "GENERIC TOOL RESULT (Please report a bug) — missing UI for custom_tool_missing_ui_&_#_%_雪_with_a_very_long_name (opens in new tab)"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".tool-result-summary"
+      },
+      "selector": "a.generic-tool-warning",
+      "attribute": "target",
+      "value": "_blank"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".tool-result-summary"
+      },
+      "selector": "a.generic-tool-warning",
+      "attribute": "rel",
+      "value": "noopener noreferrer"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const summary = document.querySelector('.tool-result-summary'); const a = summary.querySelector('a.generic-tool-warning'); const N = 'custom_tool_missing_ui_&_#_%_雪_with_a_very_long_name'; const u = new URL(a.href); return [u.origin + u.pathname, u.searchParams.get('labels'), u.searchParams.get('title'), String(u.searchParams.get('body').includes('**Tool:** `' + N + '`'))].join('|'); })()",
+      "expect": "https://github.com/boldsoftware/shelley/issues/new|bug|Missing tool UI: custom_tool_missing_ui_&_#_%_雪_with_a_very_long_name|true"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".tool",
+        "has_text": "browser (future_action_&_#_%_雪_without_a_dedicated_component_name)"
+      },
+      "selector": "a.generic-tool-warning",
+      "attribute": "aria-label",
+      "value": "GENERIC TOOL RESULT (Please report a bug) — missing UI for browser (future_action_&_#_%_雪_without_a_dedicated_component_name) (opens in new tab)"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".tool",
+        "has_text": "browser (future_action_&_#_%_雪_without_a_dedicated_component_name)"
+      },
+      "selector": "a.generic-tool-warning",
+      "attribute": "target",
+      "value": "_blank"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": ".tool",
+        "has_text": "browser (future_action_&_#_%_雪_without_a_dedicated_component_name)"
+      },
+      "selector": "a.generic-tool-warning",
+      "attribute": "rel",
+      "value": "noopener noreferrer"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const all = document.querySelectorAll('.tool'); for (const e of all) { if (e.textContent.includes('future_action_&_#_%_雪_without_a_dedicated_component_name')) { const a = e.querySelector('a.generic-tool-warning'); const N = 'browser (future_action_&_#_%_雪_without_a_dedicated_component_name)'; const u = new URL(a.href); return [u.origin + u.pathname, u.searchParams.get('labels'), u.searchParams.get('title'), String(u.searchParams.get('body').includes('**Tool:** `' + N + '`'))].join('|'); } } return 'not found'; })()",
+      "expect": "https://github.com/boldsoftware/shelley/issues/new|bug|Missing tool UI: browser (future_action_&_#_%_雪_without_a_dedicated_component_name)|true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "details:has(.tool-result-summary)",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": "details:has(.tool-result-summary)[open]",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "details:has(.tool-result-summary) .tool-result-summary a.generic-tool-warning"
+    },
+    {
+      "action": "wait_url",
+      "tab": "popup",
+      "text": "github.com"
+    },
+    {
+      "action": "close_tab",
+      "tab": "popup"
+    },
+    {
+      "action": "assert_count",
+      "selector": "details:has(.tool-result-summary)[open]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('details:has(.tool-result-summary) a.generic-tool-warning').focus()"
+    },
+    {
+      "action": "press_key",
+      "selector": "details:has(.tool-result-summary) a.generic-tool-warning",
+      "key": "Space"
+    },
+    {
+      "action": "assert_count",
+      "selector": "details:has(.tool-result-summary)[open]",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has_text": "browser (future_action_&_#_%_雪_without_a_dedicated_component_name)"
+      },
+      "selector": "a.generic-tool-warning"
+    },
+    {
+      "action": "wait_url",
+      "tab": "popup",
+      "text": "github.com"
+    },
+    {
+      "action": "close_tab",
+      "tab": "popup"
+    },
+    {
+      "action": "assert_not_visible",
+      "within": {
+        "selector": ".tool",
+        "has_text": "browser (future_action_&_#_%_雪_without_a_dedicated_component_name)"
+      },
+      "selector": ".tool-details"
+    },
+    {
+      "action": "assert_count",
+      "selector": "*",
+      "has_text": "GENERIC TOOL RESULT (Please report a bug)",
+      "exact": true,
+      "count": 2
+    },
+    {
+      "action": "assert_visible",
+      "selector": "*",
+      "has_text": "GENERIC TOOL RESULT (Please report a bug)",
+      "exact": true,
+      "nth": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "*",
+      "has_text": "GENERIC TOOL RESULT (Please report a bug)",
+      "exact": true,
+      "nth": -1
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:46:10.3811097Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 446275,
+    "output_tokens": 13250,
+    "estimated_cost_usd": 0.41056304999999993,
+    "mode": "hand-edited"
+  }
+}

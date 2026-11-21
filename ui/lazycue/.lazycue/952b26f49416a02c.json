@@ -1,0 +1,72 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The browser navigate card shows the URL in its header. The conversation at /c/{{SLUG}} ran the \"tool smorgasbord\", including a browser navigate to https://example.com. Perform the steps in order.\n1. Navigate to /c/{{SLUG}}. Wait (allow 30s) until there are at least 15 [data-testid=\"tool-call-completed\"] elements (an eval with expect). Then mount every card: dispatch a \"beforeprint\" Event on window (an eval without expect), and wait (allow 15s) until there is no \".tool-card-mount-placeholder\" element (count 0).\n2. \"The navigate card\" is the first \".tool\" element that has a \".tool-command\" whose text contains \"https://example.com\". Its text contains \"https://example.com\".\n3. Click the navigate card's \".tool-header\". Expanding it shows the URL section: a \".tool-code\" element inside the navigate card whose text contains \"https://example.com\" is visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"tool-call-completed\"]').length >= 15",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.dispatchEvent(new Event('beforeprint'))"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".tool-card-mount-placeholder",
+      "count": 0,
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".tool",
+      "has": {
+        "selector": ".tool-command",
+        "has_text": "https://example.com"
+      },
+      "nth": 0,
+      "text": "https://example.com"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".tool",
+        "has": {
+          "selector": ".tool-command",
+          "has_text": "https://example.com"
+        },
+        "nth": 0
+      },
+      "selector": ".tool-header"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".tool",
+        "has": {
+          "selector": ".tool-command",
+          "has_text": "https://example.com"
+        },
+        "nth": 0
+      },
+      "selector": ".tool-code",
+      "has_text": "https://example.com",
+      "nth": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:42:09.268524052Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 91444,
+    "output_tokens": 2454,
+    "estimated_cost_usd": 0.08231985,
+    "mode": "hand-edited"
+  }
+}

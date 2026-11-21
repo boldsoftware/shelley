@@ -1,0 +1,47 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The generic tool audit stays inside its card on a 360px-wide phone. The page defines window.__auditHTML, the markup of a generic tool card. Perform the steps in order.\n1. Navigate to /new and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Replace the page with the card: in an eval, set document.body.innerHTML = window.__auditHTML.\n3. The card (\".tool-result-details\") and the warning (\".generic-tool-warning\") are visible.\n4. The summary (\".tool-result-summary\") does not overflow: its scrollWidth \u003c= clientWidth (an eval with expect \"true\").\n5. Neither the status (\".tool-result-status\") nor the warning sticks out of the summary: each one's getBoundingClientRect().right \u003c= the summary's getBoundingClientRect().right (one eval with expect \"true\").",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.body.innerHTML = window.__auditHTML"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".tool-result-details"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".generic-tool-warning"
+    },
+    {
+      "action": "eval",
+      "expression": "String(document.querySelector('.tool-result-summary').scrollWidth \u003c= document.querySelector('.tool-result-summary').clientWidth)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var summary = document.querySelector('.tool-result-summary').getBoundingClientRect(); var status = document.querySelector('.tool-result-status').getBoundingClientRect(); var warning = document.querySelector('.generic-tool-warning').getBoundingClientRect(); return String(status.right \u003c= summary.right \u0026\u0026 warning.right \u003c= summary.right); })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:40:36.45394127Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 53954,
+    "output_tokens": 983,
+    "estimated_cost_usd": 0.04711335,
+    "mode": "generated"
+  }
+}
