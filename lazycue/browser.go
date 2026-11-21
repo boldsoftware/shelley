@@ -724,6 +724,10 @@ func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) 
 	if step.Nth != nil && (step.Action == ActionAssertCount || step.Action == ActionAssertTexts) {
 		return "", mistake{fmt.Errorf("nth picks one element; %s looks at all the matches", step.Action)}
 	}
+	if (step.Action == ActionWaitText || step.Action == ActionWaitTextGone) && (step.Selector != "" || step.Role != "") {
+		instead := map[string]string{ActionWaitText: ActionAssertTextContains, ActionWaitTextGone: ActionAssertTextNotContains}[step.Action]
+		return "", mistake{fmt.Errorf("%s looks at the whole page; use %s on the element", step.Action, instead)}
+	}
 	if step.Frame != "" && step.Selector == "" && step.Role == "" && step.Action != ActionEval && step.Action != ActionWaitText && step.Action != ActionWaitTextGone {
 		return "", mistake{errors.New("a frame scopes a step's selector or role, or an eval, wait_text or wait_text_gone")}
 	}
@@ -1823,7 +1827,8 @@ func elementString(ctx context.Context, step Step, expr string) (string, error) 
 
 // visibleJS is an expression for whether the element a step picks out is
 // visible: rendered with a box of some size and not visibility: hidden, as
-// Playwright has it. Opacity does not count.
+// Playwright has it, or, with display: contents and so no box, holding
+// something visible. Opacity does not count.
 func visibleJS(step Step) string {
 	return fmt.Sprintf(`(function(el) {
 		`+isVisibleJS+`
@@ -1840,6 +1845,19 @@ const isDisabledJS = `function(el) {
 
 // isVisibleJS declares isVisible(el), the test visibleJS describes.
 const isVisibleJS = `function isVisible(el) {
+	if (getComputedStyle(el).display === 'contents') {
+		// It has no box of its own, so it is visible when a child is.
+		for (let c = el.firstChild; c; c = c.nextSibling) {
+			if (c.nodeType === Node.ELEMENT_NODE && isVisible(c)) return true;
+			if (c.nodeType === Node.TEXT_NODE) {
+				const range = document.createRange();
+				range.selectNode(c);
+				const r = range.getBoundingClientRect();
+				if (r.width > 0 && r.height > 0) return true;
+			}
+		}
+		return false;
+	}
 	const r = el.getBoundingClientRect();
 	return r.width > 0 && r.height > 0 && el.checkVisibility({visibilityProperty: true, checkVisibilityCSS: true});
 }`

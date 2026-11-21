@@ -117,7 +117,8 @@ func TestEvalAwaitsPromisesAndRendersJSON(t *testing.T) {
 }
 
 // Visible means a box of some size, as Playwright has it; position: fixed
-// elements, whose offsetParent is null, are visible too.
+// elements, whose offsetParent is null, are visible too, and a display:
+// contents element, which has no box, is when a child is.
 func TestVisibility(t *testing.T) {
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
@@ -126,6 +127,9 @@ func TestVisibility(t *testing.T) {
 <div id="hidden" style="visibility: hidden; height: 10px"></div>
 <div style="display: none"><div id="inside" style="height: 10px"></div></div>
 <div id="clear" style="opacity: 0; height: 10px"></div>
+<div id="contents" style="display: contents"><span style="display: contents"><button>Go</button></span></div>
+<div id="text" style="display: contents">Words</div>
+<div id="none" style="display: contents"> <span></span> </div>
 </body></html>`)}
 	runSteps(t, br, env,
 		Step{Action: ActionNavigate, URL: "/"},
@@ -135,6 +139,9 @@ func TestVisibility(t *testing.T) {
 		Step{Action: ActionAssertNotVisible, Selector: "#empty"},
 		Step{Action: ActionAssertNotVisible, Selector: "#hidden"},
 		Step{Action: ActionAssertNotVisible, Selector: "#inside"},
+		Step{Action: ActionAssertVisible, Selector: "#contents"},
+		Step{Action: ActionAssertVisible, Selector: "#text"},
+		Step{Action: ActionAssertNotVisible, Selector: "#none"},
 		Step{Action: ActionWaitHidden, Selector: "#missing"},
 	)
 	failSteps(t, br, env, Step{Action: ActionWaitHidden, Selector: "#fixed", Timeout: "300ms"})
@@ -1224,6 +1231,9 @@ func TestListAndTextAssertions(t *testing.T) {
 		{Step{Action: ActionAssertTextNotContains, Selector: "#p", Text: "there"}, `assert_text_not_contains: "there" found in "hello there"`},
 		{Step{Action: ActionAssertTextNotContains, Selector: "#q", Text: "there"}, `no element matches #q`},
 		{Step{Action: ActionAssertText, Selector: "li", Text: "On e"}, `assert_text: expected "On e", got " One "`},
+		// wait_text looks at the whole page, not at an element.
+		{Step{Action: ActionWaitText, Selector: "#p", Text: "hello"}, "wait_text looks at the whole page; use assert_text_contains on the element"},
+		{Step{Action: ActionWaitTextGone, Role: "button", Text: "x"}, "wait_text_gone looks at the whole page; use assert_text_not_contains on the element"},
 	} {
 		c.step.Timeout = "300ms"
 		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
