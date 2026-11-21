@@ -1,0 +1,299 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A built-in profile is restored only after confirmation, without changing a live conversation's settings. The built-in profile \"Default\" has been customized (it now differs from its built-in settings, voice prompt included), a profile \"E2E restore\" exists, and the conversation /c/{{SLUG}} uses \"Default\". Call \"Default\" returns \"edited\" while the stored Default profile is the customized one, \"built-in\" once it equals the built-in one again (otherwise its JSON); call \"default profile\" returns \"unchanged\" while the default profile is the one it was at the start; call \"conversation settings\" returns \"unchanged\" while the conversation's settings are what they were at the start; call \"restore answer\" returns \"ok\" once the server answered the page's restore of Default with success (\"none\" before one, otherwise the status). The screen is a 1280x800 desktop window. Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match, \"whose name contains X\" a substring one. \"The panel\" is \".model-picker-panel\". To \"open the knob\": click \".model-picker-inline .p-select-label\"; the panel should be visible. To \"edit tools\": click the button whose name contains \"Edit\" inside the panel's data-testid \"model-picker-tools\"; the panel should be hidden. \"The pills\" are data-testid \"model-picker-profiles\"; \"the profile X\" is the radio (role \"radio\") named X inside them. To \"edit profiles\": click the button whose name contains \"Edit\" inside the pills. \"The section\" is data-testid \"model-picker-auto-compaction\"; \"the section's X\" is the radio named X inside it, and \"the nudge\" is its select (role \"combobox\"). \"The dialog\" is the element with role \"dialog\". \"The X tool\" is the dialog's radiogroup with aria-label X ('[role=radiogroup][aria-label=\"X\"]'). \"The auto compaction row\" is the dialog's data-testid \"auto-compaction\". To \"apply\": click the dialog's button whose name contains \"Apply to this conversation\"; the dialog should be hidden. \"The markers\" are the data-testid \"message-modelchange\" elements. \"Changed\" is the panel's data-testid \"model-picker-profile-changed\". To \"save as new\" a name N: click changed's button whose name contains \"Save as new…\", fill changed's textbox named \"New profile name\" with N and press Enter in it. A \"row\" X is the dialog's data-testid \"profile-row\" containing the text X. \"The row\" is the dialog's data-testid \"profile-row\" whose \".profiles-item-name\" has exactly the text \"Default\"; \"restore\" is its button named \"Restore defaults\", and \"confirm\" its button named \"Restore “Default”\". To \"open the profiles\": open the knob, then edit profiles. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and open the profiles. 2. The row \"E2E restore\" must have no button whose name contains \"Restore defaults\" (count 0). 3. Restore should be enabled; click it. The row should contain the text \"voice prompt\". Call \"Default\": it must return \"edited\". 4. Click the row's button named \"Cancel\": there should be no confirm (count 0). 5. Click restore again, then the dialog's button whose name contains \"Close modal\". Open the profiles again: there should be no confirm (count 0). 6. Click restore, then confirm. Call \"restore answer\" until it returns \"ok\". Restore should be disabled. 7. Call \"Default\": it must return \"built-in\"; call \"default profile\": \"unchanged\"; call \"conversation settings\": \"unchanged\". 8. Click the dialog's button whose name contains \"Close modal\" and open the knob: changed should contain the text \"Differs from Default\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-inline"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-inline .p-select-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='model-picker-profiles']"
+      },
+      "role": "button",
+      "name": "Edit"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has_text": "E2E restore"
+      },
+      "role": "button",
+      "name": "Restore defaults",
+      "count": 0
+    },
+    {
+      "action": "assert_enabled",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has": {
+          "selector": ".profiles-item-name",
+          "has_text": "Default",
+          "exact": true
+        }
+      },
+      "role": "button",
+      "name": "Restore defaults",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has": {
+          "selector": ".profiles-item-name",
+          "has_text": "Default",
+          "exact": true
+        }
+      },
+      "role": "button",
+      "name": "Restore defaults",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='profile-row']",
+      "text": "voice prompt",
+      "has": {
+        "selector": ".profiles-item-name",
+        "has_text": "Default",
+        "exact": true
+      }
+    },
+    {
+      "action": "call",
+      "value": "Default",
+      "expect": "edited"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has": {
+          "selector": ".profiles-item-name",
+          "has_text": "Default",
+          "exact": true
+        }
+      },
+      "role": "button",
+      "name": "Cancel",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has": {
+          "selector": ".profiles-item-name",
+          "has_text": "Default",
+          "exact": true
+        }
+      },
+      "role": "button",
+      "name": "Restore “Default”",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has": {
+          "selector": ".profiles-item-name",
+          "has_text": "Default",
+          "exact": true
+        }
+      },
+      "role": "button",
+      "name": "Restore defaults",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='profile-row']",
+      "text": "voice prompt",
+      "has": {
+        "selector": ".profiles-item-name",
+        "has_text": "Default",
+        "exact": true
+      }
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close modal",
+      "within": {
+        "role": "dialog"
+      }
+    },
+    {
+      "action": "wait_hidden",
+      "role": "dialog"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-inline .p-select-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='model-picker-profiles']"
+      },
+      "role": "button",
+      "name": "Edit"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has": {
+          "selector": ".profiles-item-name",
+          "has_text": "Default",
+          "exact": true
+        }
+      },
+      "role": "button",
+      "name": "Restore “Default”",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has": {
+          "selector": ".profiles-item-name",
+          "has_text": "Default",
+          "exact": true
+        }
+      },
+      "role": "button",
+      "name": "Restore defaults",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='profile-row']",
+      "text": "voice prompt",
+      "has": {
+        "selector": ".profiles-item-name",
+        "has_text": "Default",
+        "exact": true
+      }
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has": {
+          "selector": ".profiles-item-name",
+          "has_text": "Default",
+          "exact": true
+        }
+      },
+      "role": "button",
+      "name": "Restore “Default”",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "restore answer",
+      "expect": "ok",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_disabled",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has": {
+          "selector": ".profiles-item-name",
+          "has_text": "Default",
+          "exact": true
+        }
+      },
+      "role": "button",
+      "name": "Restore defaults",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "Default",
+      "expect": "built-in"
+    },
+    {
+      "action": "call",
+      "value": "default profile",
+      "expect": "unchanged"
+    },
+    {
+      "action": "call",
+      "value": "conversation settings",
+      "expect": "unchanged"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close modal",
+      "within": {
+        "role": "dialog"
+      }
+    },
+    {
+      "action": "wait_hidden",
+      "role": "dialog"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-inline .p-select-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='model-picker-profile-changed']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='model-picker-profile-changed']",
+      "text": "Differs from Default"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:02:24.523185609Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 82593,
+    "output_tokens": 4305,
+    "estimated_cost_usd": 0.13087455,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The pre-installed Assistant profile starts a text chat with auto compaction. To \"open the model picker\": wait for \".header\" to be visible; when the window is narrower than 768px, the picker is in the overflow menu: if \".chat-overflow-popover\" is not visible, click the button with aria-label exactly \"More options\", then click the visible \".model-picker.p-select\" inside \".chat-overflow-popover\"; on a wider window, click the visible \".model-picker.p-select\" inside \".status-bar\". The element clicked is \"the picker\"; its panel is \".model-picker-panel\". The screen is a 1280x800 desktop window. Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match, \"whose name contains X\" a substring one. \"The panel\" is \".model-picker-panel\". To \"open the knob\": click \".model-picker-inline .p-select-label\"; the panel should be visible. To \"edit tools\": click the button whose name contains \"Edit\" inside the panel's data-testid \"model-picker-tools\"; the panel should be hidden. \"The pills\" are data-testid \"model-picker-profiles\"; \"the profile X\" is the radio (role \"radio\") named X inside them. To \"edit profiles\": click the button whose name contains \"Edit\" inside the pills. \"The section\" is data-testid \"model-picker-auto-compaction\"; \"the section's X\" is the radio named X inside it, and \"the nudge\" is its select (role \"combobox\"). \"The dialog\" is the element with role \"dialog\". \"The X tool\" is the dialog's radiogroup with aria-label X ('[role=radiogroup][aria-label=\"X\"]'). \"The auto compaction row\" is the dialog's data-testid \"auto-compaction\". To \"apply\": click the dialog's button whose name contains \"Apply to this conversation\"; the dialog should be hidden. \"The markers\" are the data-testid \"message-modelchange\" elements. \"Changed\" is the panel's data-testid \"model-picker-profile-changed\". To \"save as new\" a name N: click changed's button whose name contains \"Save as new…\", fill changed's textbox named \"New profile name\" with N and press Enter in it. A \"row\" X is the dialog's data-testid \"profile-row\" containing the text X. Perform the steps in order. 1. Navigate to /new and open the model picker. 2. The profile \"Default\" should have aria-checked=\"true\". 3. Click the profile \"Assistant\", then edit tools. 4. The auto compaction row's radio named \"On\" (in its radiogroup named \"Auto compaction\") should have aria-checked=\"true\", and the row's select (role \"combobox\") the value exactly \"130000\". The message_user tool's radio named \"On\" should have aria-checked=\"true\". 5. Click the dialog's button whose name contains \"Close modal\". 6. Fill data-testid \"message-input\" with 'message_user: {\"text\":\"Hey! What can I help with?\",\"end_turn\":true}' and click data-testid \"send-button\". 7. data-testid \"message-user-text\" should have exactly the text \"Hey! What can I help with?\". 8. \".messages-container\" must not contain the text \"edit predictable.go\" (the reply did not use tools).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "click",
+      "selector": ".status-bar .model-picker.p-select",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[data-testid=\"model-picker-profiles\"]"
+      },
+      "role": "radio",
+      "name": "Default",
+      "exact": true,
+      "attribute": "aria-checked",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"model-picker-profiles\"]",
+      "role": "radio",
+      "name": "Assistant",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"model-picker-tools\"]"
+      },
+      "role": "button",
+      "name": "Edit tools"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=\"dialog\"]"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[data-testid=\"auto-compaction\"] [role=\"radiogroup\"][aria-label=\"Auto compaction\"]"
+      },
+      "role": "radio",
+      "attribute": "aria-checked",
+      "value": "true",
+      "name": "On",
+      "exact": true
+    },
+    {
+      "action": "assert_value",
+      "within": {
+        "selector": "[data-testid=\"auto-compaction\"]"
+      },
+      "role": "combobox",
+      "value": "130000"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[role=\"radiogroup\"][aria-label=\"message_user\"]"
+      },
+      "role": "radio",
+      "attribute": "aria-checked",
+      "value": "true",
+      "name": "On",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[role=\"dialog\"]"
+      },
+      "role": "button",
+      "name": "Close modal"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[role=\"dialog\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "message_user: {\"text\":\"Hey! What can I help with?\",\"end_turn\":true}"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"message-user-text\"]",
+      "text": "Hey! What can I help with?"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".messages-container",
+      "text": "edit predictable.go"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:29:29.109046607Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 321600,
+    "output_tokens": 8053,
+    "estimated_cost_usd": 0.28146645,
+    "mode": "generated"
+  }
+}

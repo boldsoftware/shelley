@@ -1,0 +1,148 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A quick second pick of auto compaction undoes the first, even when the first's change is held on its way. Call \"hold\" makes the server hold the next settings change the page sends (a POST of the conversation's settings) until call \"release\", as a slow network would; call \"posts\" returns how many of the settings changes sent since the last \"hold\" the server has finished answering. Call \"mark\" notes the moment; call \"next post\" returns the JSON body of the first settings change sent after the mark (\"none\" before one). Call \"tool overrides\" returns the tool overrides in the conversation's options as JSON ({} when unset); call \"nudge tokens\" returns their compact_nudge_tokens (0 when unset). The screen is a 1280x800 desktop window. Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match, \"whose name contains X\" a substring one. \"The panel\" is \".model-picker-panel\". To \"open the knob\": click \".model-picker-inline .p-select-label\"; the panel should be visible. To \"edit tools\": click the button whose name contains \"Edit\" inside the panel's data-testid \"model-picker-tools\"; the panel should be hidden. \"The pills\" are data-testid \"model-picker-profiles\"; \"the profile X\" is the radio (role \"radio\") named X inside them. To \"edit profiles\": click the button whose name contains \"Edit\" inside the pills. \"The section\" is data-testid \"model-picker-auto-compaction\"; \"the section's X\" is the radio named X inside it, and \"the nudge\" is its select (role \"combobox\"). \"The dialog\" is the element with role \"dialog\". \"The X tool\" is the dialog's radiogroup with aria-label X ('[role=radiogroup][aria-label=\"X\"]'). \"The auto compaction row\" is the dialog's data-testid \"auto-compaction\". To \"apply\": click the dialog's button whose name contains \"Apply to this conversation\"; the dialog should be hidden. \"The markers\" are the data-testid \"message-modelchange\" elements. \"Changed\" is the panel's data-testid \"model-picker-profile-changed\". To \"save as new\" a name N: click changed's button whose name contains \"Save as new…\", fill changed's textbox named \"New profile name\" with N and press Enter in it. A \"row\" X is the dialog's data-testid \"profile-row\" containing the text X. Perform the steps in order. 1. Navigate to /c/{{SLUG}} and open the knob. 2. Call \"hold\". Select \"250000\" in the nudge, then \"200000\" (fill it with each value). Call \"release\", then call \"posts\" until it returns \"2\". Call \"nudge tokens\" until it returns \"0\". The nudge should have the value exactly \"200000\". 3. Call \"hold\". Click the section's \"Off\", then the section's \"On\". Call \"release\", then call \"posts\" until it returns \"2\". Call \"tool overrides\" until it returns {}. The section's \"On\" should have aria-checked=\"true\". 4. The choice in effect changes nothing: call \"mark\", click the section's \"On\", then select \"300000\" in the nudge. Call \"next post\" until it returns {\"compact_nudge_tokens\":300000}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-inline .p-select-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "call",
+      "value": "hold"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"model-picker-auto-compaction\"] select",
+      "value": "250000"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"model-picker-auto-compaction\"] select",
+      "value": "200000"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "call",
+      "value": "posts",
+      "expect": "2",
+      "timeout": "5s"
+    },
+    {
+      "action": "call",
+      "value": "nudge tokens",
+      "expect": "0",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"model-picker-auto-compaction\"] select",
+      "value": "200000"
+    },
+    {
+      "action": "call",
+      "value": "hold"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"model-picker-auto-compaction\"]",
+        "role": "radiogroup",
+        "name": "Auto compaction",
+        "exact": true
+      },
+      "role": "radio",
+      "name": "Off",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"model-picker-auto-compaction\"]",
+        "role": "radiogroup",
+        "name": "Auto compaction",
+        "exact": true
+      },
+      "role": "radio",
+      "name": "On",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "call",
+      "value": "posts",
+      "expect": "2",
+      "timeout": "5s"
+    },
+    {
+      "action": "call",
+      "value": "tool overrides",
+      "expect": "{}",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[data-testid=\"model-picker-auto-compaction\"]",
+        "role": "radiogroup",
+        "name": "Auto compaction",
+        "exact": true
+      },
+      "role": "radio",
+      "name": "On",
+      "exact": true,
+      "attribute": "aria-checked",
+      "value": "true"
+    },
+    {
+      "action": "call",
+      "value": "mark"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"model-picker-auto-compaction\"]",
+        "role": "radiogroup",
+        "name": "Auto compaction",
+        "exact": true
+      },
+      "role": "radio",
+      "name": "On",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"model-picker-auto-compaction\"] select",
+      "value": "300000"
+    },
+    {
+      "action": "call",
+      "value": "next post",
+      "expect": "{\"compact_nudge_tokens\":300000}",
+      "timeout": "5s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:36:12.099860417Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 122289,
+    "output_tokens": 3748,
+    "estimated_cost_usd": 0.126342,
+    "mode": "generated"
+  }
+}

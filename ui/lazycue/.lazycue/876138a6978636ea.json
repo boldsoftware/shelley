@@ -1,0 +1,329 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Changed settings are saved as a profile, which is edited and switched. Call \"last system prompt\" returns \"ok\" when the conversation's last system message's text is \"Be brief in \" followed by an absolute path and \".\\n\" (otherwise that text, JSON-encoded). The screen is a 1280x800 desktop window. Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match, \"whose name contains X\" a substring one. \"The panel\" is \".model-picker-panel\". To \"open the knob\": click \".model-picker-inline .p-select-label\"; the panel should be visible. To \"edit tools\": click the button whose name contains \"Edit\" inside the panel's data-testid \"model-picker-tools\"; the panel should be hidden. \"The pills\" are data-testid \"model-picker-profiles\"; \"the profile X\" is the radio (role \"radio\") named X inside them. To \"edit profiles\": click the button whose name contains \"Edit\" inside the pills. \"The section\" is data-testid \"model-picker-auto-compaction\"; \"the section's X\" is the radio named X inside it, and \"the nudge\" is its select (role \"combobox\"). \"The dialog\" is the element with role \"dialog\". \"The X tool\" is the dialog's radiogroup with aria-label X ('[role=radiogroup][aria-label=\"X\"]'). \"The auto compaction row\" is the dialog's data-testid \"auto-compaction\". To \"apply\": click the dialog's button whose name contains \"Apply to this conversation\"; the dialog should be hidden. \"The markers\" are the data-testid \"message-modelchange\" elements. \"Changed\" is the panel's data-testid \"model-picker-profile-changed\". To \"save as new\" a name N: click changed's button whose name contains \"Save as new…\", fill changed's textbox named \"New profile name\" with N and press Enter in it. A \"row\" X is the dialog's data-testid \"profile-row\" containing the text X. \"The prompt\" is the dialog's textbox named \"System prompt template\"; \"save\" is the dialog's button whose name contains \"Save\". Perform the steps in order. 1. Navigate to /c/{{SLUG}}, open the knob and edit tools. Click the browser tool's radio whose name contains \"Off\", then apply. The last marker should have the attribute aria-label exactly \"Tools turned off: browser.\". 2. The picker says what changed and offers to keep it: open the knob. The panel's data-testid \"model-picker-tools\" should contain the text \"browser off\", and changed the text \"Differs from Default: browser off\". 3. Save as new \"E2E profile\". The last marker should have the attribute aria-label exactly \"Profile changed to E2E profile.\"; changed should be hidden; the profile \"E2E profile\" should have aria-checked=\"true\". 4. Edit profiles, then click the button whose name contains \"Edit\" in the row \"E2E profile\". The dialog's \".modal-title\" should have exactly the text \"Profile: E2E profile\". 5. Click the dialog's radio whose name contains \"Custom\". Fill the prompt with \"Be brief in {{.WorkingDir}}.\" (those braces are text to type, not a placeholder). The prompt's accessible description (the text of the elements its aria-describedby names) should become exactly \"Line 1: unknown variable .WorkingDir\", and save should be disabled. 6. Fill the prompt with \"Be brief in {{.WorkingDirectory}}.\": save should be enabled. Click save: the dialog's \".modal-title\" should have exactly the text \"Profiles\". Press Escape: the dialog should be hidden. 7. The conversation still has the old prompt; Revert takes the profile's: open the knob. Changed should contain the text \"Differs from E2E profile: system prompt\". Click changed's button whose name contains \"Revert\". The last marker should have the attribute aria-label exactly \"System prompt changed.\"; changed should be hidden; the panel should be visible; the profile \"E2E profile\" should have keyboard focus; the last marker should contain the text \"new system prompt\". 8. Call \"last system prompt\": it must return \"ok\". There should be exactly 1 \".system-prompt-view\" inside data-testid \"generation-context\". 9. Click the profile \"Default\". The last marker should have the attribute aria-label exactly \"Profile changed to Default; tools turned on: browser; system prompt changed.\", and there should still be exactly 1 \".system-prompt-view\" inside data-testid \"generation-context\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-inline .p-select-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='model-picker-tools']"
+      },
+      "role": "button",
+      "name": "Edit"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog"
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "radiogroup",
+        "name": "browser",
+        "exact": true
+      },
+      "role": "radio",
+      "name": "Off"
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "dialog"
+      },
+      "role": "button",
+      "name": "Apply to this conversation"
+    },
+    {
+      "action": "wait_hidden",
+      "role": "dialog"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='message-modelchange']",
+      "nth": -1,
+      "attribute": "aria-label",
+      "value": "Tools turned off: browser.",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-inline .p-select-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".model-picker-panel [data-testid='model-picker-tools']",
+      "text": "browser off"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".model-picker-panel [data-testid='model-picker-profile-changed']",
+      "text": "Differs from Default: browser off"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".model-picker-panel [data-testid='model-picker-profile-changed']"
+      },
+      "role": "button",
+      "name": "Save as new…"
+    },
+    {
+      "action": "fill",
+      "within": {
+        "selector": ".model-picker-panel [data-testid='model-picker-profile-changed']"
+      },
+      "role": "textbox",
+      "name": "New profile name",
+      "exact": true,
+      "value": "E2E profile"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='message-modelchange']",
+      "nth": -1,
+      "attribute": "aria-label",
+      "value": "Profile changed to E2E profile.",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".model-picker-panel [data-testid='model-picker-profile-changed']"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[data-testid='model-picker-profiles']"
+      },
+      "role": "radio",
+      "name": "E2E profile",
+      "exact": true,
+      "attribute": "aria-checked",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='model-picker-profiles']"
+      },
+      "role": "button",
+      "name": "Edit"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has_text": "E2E profile"
+      },
+      "role": "button",
+      "name": "Edit",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "role": "dialog"
+      },
+      "selector": ".modal-title",
+      "text": "Profile: E2E profile"
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "dialog"
+      },
+      "role": "radio",
+      "name": "Custom",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "dialog"
+      },
+      "role": "textbox",
+      "name": "System prompt template",
+      "exact": true,
+      "value": "Be brief in {{.WorkingDir}}."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const t = document.querySelector('[role=dialog] textarea[aria-label=\"System prompt template\"]'); return (t.getAttribute('aria-describedby') || '').split(/\\s+/).filter(Boolean).map((id) => document.getElementById(id)?.textContent.trim() ?? '').join(' '); })()",
+      "expect": "Line 1: unknown variable .WorkingDir"
+    },
+    {
+      "action": "assert_disabled",
+      "within": {
+        "role": "dialog"
+      },
+      "role": "button",
+      "name": "Save",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "within": {
+        "role": "dialog"
+      },
+      "role": "textbox",
+      "name": "System prompt template",
+      "exact": true,
+      "value": "Be brief in {{.WorkingDirectory}}."
+    },
+    {
+      "action": "assert_enabled",
+      "within": {
+        "role": "dialog"
+      },
+      "role": "button",
+      "name": "Save",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "dialog"
+      },
+      "role": "button",
+      "name": "Save",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "role": "dialog"
+      },
+      "selector": ".modal-title",
+      "text": "Profiles"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "role": "dialog"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-inline .p-select-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".model-picker-panel [data-testid='model-picker-profile-changed']",
+      "text": "Differs from E2E profile: system prompt"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".model-picker-panel [data-testid='model-picker-profile-changed']"
+      },
+      "role": "button",
+      "name": "Revert"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='message-modelchange']",
+      "nth": -1,
+      "attribute": "aria-label",
+      "value": "System prompt changed.",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".model-picker-panel [data-testid='model-picker-profile-changed']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "assert_focused",
+      "within": {
+        "selector": "[data-testid='model-picker-profiles']"
+      },
+      "role": "radio",
+      "name": "E2E profile",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='message-modelchange']",
+      "nth": -1,
+      "text": "new system prompt"
+    },
+    {
+      "action": "call",
+      "value": "last system prompt",
+      "expect": "ok",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='generation-context'] .system-prompt-view",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='model-picker-profiles']"
+      },
+      "role": "radio",
+      "name": "Default",
+      "exact": true
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='message-modelchange']",
+      "nth": -1,
+      "attribute": "aria-label",
+      "value": "Profile changed to Default; tools turned on: browser; system prompt changed.",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='generation-context'] .system-prompt-view",
+      "count": 1
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:10:58.662198Z",
+    "hostname": "phil-dev",
+    "model": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_cost_usd": 0,
+    "mode": "hand-written"
+  }
+}

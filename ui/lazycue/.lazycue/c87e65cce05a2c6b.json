@@ -1,0 +1,116 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The profile menu's keyboard selection stays visible as it scrolls. The screen is a 1280x800 desktop window. There are ten profiles, \"Scroll-0\" to \"Scroll-9\". \"The input\" is data-testid \"message-input\"; \"the menu\" is data-testid \"profile-menu\"; \"the selection\" is the menu's element with role \"option\" and aria-selected=\"true\". \"The selection is in view\" means the selection's bounding box lies within that of its closest [role=\"listbox\"] ancestor (top \u003e= the listbox's top and bottom \u003c= its bottom), checked with an eval re-run until it holds. Perform the steps in order. 1. Navigate to /new. Fill the input with \"+Scroll\". 2. The menu should hold exactly 10 elements with role \"option\", and it must scroll: its scrollHeight must be greater than its clientHeight. 3. With the input focused, press ArrowDown 9 times. The selection should contain the text \"Scroll-9\", and the selection should be in view. 4. Press ArrowDown once more: the selection should contain \"Scroll-0\" and be in view. 5. Press Enter: the input should have the value exactly \"+Scroll-0 \" (with a trailing space).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "+Scroll"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='profile-menu']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='profile-menu'] [role='option']",
+      "count": 10
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const m = document.querySelector('[data-testid=\"profile-menu\"]'); return m.scrollHeight \u003e m.clientHeight; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='profile-menu'] [role='option'][aria-selected='true']",
+      "text": "Scroll-9"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const sel = document.querySelector('[data-testid=\"profile-menu\"] [role=\"option\"][aria-selected=\"true\"]'); const lb = sel.closest('[role=\"listbox\"]'); const selR = sel.getBoundingClientRect(); const lbR = lb.getBoundingClientRect(); return selR.top \u003e= lbR.top \u0026\u0026 selR.bottom \u003c= lbR.bottom; })()",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='profile-menu'] [role='option'][aria-selected='true']",
+      "text": "Scroll-0"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const sel = document.querySelector('[data-testid=\"profile-menu\"] [role=\"option\"][aria-selected=\"true\"]'); const lb = sel.closest('[role=\"listbox\"]'); const selR = sel.getBoundingClientRect(); const lbR = lb.getBoundingClientRect(); return selR.top \u003e= lbR.top \u0026\u0026 selR.bottom \u003c= lbR.bottom; })()",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "+Scroll-0 "
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:28:17.518752486Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 43981,
+    "output_tokens": 1979,
+    "estimated_cost_usd": 0.06142199999999999,
+    "mode": "generated"
+  }
+}

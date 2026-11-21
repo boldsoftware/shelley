@@ -1,0 +1,119 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A profile's voice prompt is generated, edited and kept. The profile \"E2E voice\" has the model predictable and the system prompt \"You are Ahab, a terse pirate.\" Call \"generate input\" returns the JSON body of the page's request to generate a voice prompt (\"none\" before one); call \"stored voice prompt\" returns the profile's stored voice prompt, JSON-encoded; call \"save settings elsewhere\" saves settings into the profile through the API, as another page would (model predictable, system prompt \"You are Ahab.\"). The screen is a 1280x800 desktop window. Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match, \"whose name contains X\" a substring one. \"The panel\" is \".model-picker-panel\". To \"open the knob\": click \".model-picker-inline .p-select-label\"; the panel should be visible. To \"edit tools\": click the button whose name contains \"Edit\" inside the panel's data-testid \"model-picker-tools\"; the panel should be hidden. \"The pills\" are data-testid \"model-picker-profiles\"; \"the profile X\" is the radio (role \"radio\") named X inside them. To \"edit profiles\": click the button whose name contains \"Edit\" inside the pills. \"The section\" is data-testid \"model-picker-auto-compaction\"; \"the section's X\" is the radio named X inside it, and \"the nudge\" is its select (role \"combobox\"). \"The dialog\" is the element with role \"dialog\". \"The X tool\" is the dialog's radiogroup with aria-label X ('[role=radiogroup][aria-label=\"X\"]'). \"The auto compaction row\" is the dialog's data-testid \"auto-compaction\". To \"apply\": click the dialog's button whose name contains \"Apply to this conversation\"; the dialog should be hidden. \"The markers\" are the data-testid \"message-modelchange\" elements. \"Changed\" is the panel's data-testid \"model-picker-profile-changed\". To \"save as new\" a name N: click changed's button whose name contains \"Save as new…\", fill changed's textbox named \"New profile name\" with N and press Enter in it. A \"row\" X is the dialog's data-testid \"profile-row\" containing the text X. \"The voice prompt\" is the dialog's textbox named \"Voice prompt\". Perform the steps in order. 1. Navigate to /c/{{SLUG}}, open the knob and edit profiles. Click the button whose name contains \"Edit\" in the row \"E2E voice\". 2. The voice prompt should have the value \"\" (empty). 3. Generating asks the server, from the profile's model and system prompt, and fills the editor; nothing is saved until Save: click the dialog's button whose name contains \"Generate from system prompt\". Call \"generate input\" until it returns {\"model\":\"predictable\",\"system_prompt\":\"You are Ahab, a terse pirate.\"}. The voice prompt's value should become non-empty. Call \"stored voice prompt\": it must return \"\\\"\\\"\". 4. Fill the voice prompt with \"You are Ahab. Speak like a pirate, briefly.\" and click the dialog's button whose name contains \"Save\". The dialog's \".modal-title\" should have exactly the text \"Profiles\". Call \"stored voice prompt\" until it returns \"\\\"You are Ahab. Speak like a pirate, briefly.\\\"\". 5. Saving settings into the profile elsewhere keeps its voice prompt: call \"save settings elsewhere\", then call \"stored voice prompt\": it must still return \"\\\"You are Ahab. Speak like a pirate, briefly.\\\"\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".model-picker-inline .p-select-label"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='model-picker-profiles']"
+      },
+      "role": "button",
+      "name": "Edit"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='profile-row']",
+        "has_text": "E2E voice"
+      },
+      "role": "button",
+      "name": "Edit"
+    },
+    {
+      "action": "wait_visible",
+      "role": "textbox",
+      "name": "Voice prompt"
+    },
+    {
+      "action": "assert_value",
+      "role": "textbox",
+      "name": "Voice prompt",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Generate from system prompt",
+      "within": {
+        "role": "dialog"
+      }
+    },
+    {
+      "action": "call",
+      "value": "generate input",
+      "expect": "{\"model\":\"predictable\",\"system_prompt\":\"You are Ahab, a terse pirate.\"}"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#profiles-voice').value.length > 0 ? 'non-empty' : ''",
+      "expect": "non-empty"
+    },
+    {
+      "action": "call",
+      "value": "stored voice prompt",
+      "expect": "\"\""
+    },
+    {
+      "action": "fill",
+      "role": "textbox",
+      "name": "Voice prompt",
+      "within": {
+        "role": "dialog"
+      },
+      "value": "You are Ahab. Speak like a pirate, briefly."
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save",
+      "within": {
+        "role": "dialog"
+      }
+    },
+    {
+      "action": "assert_text",
+      "selector": "[role='dialog'] .modal-title",
+      "text": "Profiles"
+    },
+    {
+      "action": "call",
+      "value": "stored voice prompt",
+      "expect": "\"You are Ahab. Speak like a pirate, briefly.\""
+    },
+    {
+      "action": "call",
+      "value": "save settings elsewhere"
+    },
+    {
+      "action": "call",
+      "value": "stored voice prompt",
+      "expect": "\"You are Ahab. Speak like a pirate, briefly.\""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:29:42.745328509Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 80091,
+    "output_tokens": 2384,
+    "estimated_cost_usd": 0.0873288,
+    "mode": "generated"
+  }
+}
