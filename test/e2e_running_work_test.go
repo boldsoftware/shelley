@@ -68,7 +68,7 @@ func (s *shelley) stopWork(conversations ...string) {
 }
 
 // fakeAgent is a subagent of parent, made from parent's snapshot entry.
-func fakeAgent(parent map[string]any, fields map[string]any) map[string]any {
+func fakeAgent(parent, fields map[string]any) map[string]any {
 	agent := map[string]any{}
 	for k, v := range parent {
 		agent[k] = v
