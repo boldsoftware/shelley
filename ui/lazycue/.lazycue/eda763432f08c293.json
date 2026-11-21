@@ -1,0 +1,73 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "a first message sent before the draft is saved leaves the next new conversation empty. The viewport is 1280x720. The page has helpers, from an init script, used in evals: __ncHeld(name), __ncStreamed(name), __ncComposerRows(name), __ncActiveIsHeld(name), __ncHeldRows(name), __ncNoteNext(id) and __ncRecordFrames(); evals that call them return strings, and those taking a name are async: write them as given. \"The active row\" is \".drawer .conversation-item.active\"; any check of the active row (or of something in it) starts by checking that there is exactly one (assert_count 1), as the old test's locator was strict. \"The placeholder\" is \".drawer [data-conversation-id='composer']\". \"The row of \u003cid\u003e\" is \".drawer .conversation-item[data-conversation-id='\u003cid\u003e']\". A row's \"preview\" is its \".conversation-preview\" and its \"title\" its \".conversation-title\". \"The input\" is data-testid \"message-input\", and \"the Send button\" data-testid \"send-button\". To \"open a new conversation\": navigate to /new, wait up to 30s for the input to be visible, and check that the active row's data-conversation-id is exactly \"composer\". To \"start a new conversation from the header\": click {\"selector\": \".header\", \"role\": \"button\", \"name\": \"New Conversation\", \"exact\": true} if it is visible (it is at this size); only if it is not, click the button \"More options\" and then {\"selector\": \".chat-overflow-popover\", \"role\": \"button\", \"name\": \"New Conversation\", \"exact\": true}. \"The Delete button of the active row\" is {\"selector\": \".drawer .conversation-item.active\", \"role\": \"button\", \"name\": \"Delete\", \"exact\": true}. To \"delete row R\" (R a selector): click {\"selector\": R, \"role\": \"button\", \"name\": \"Delete\", \"exact\": true}, then click {\"selector\": R + \" .drawer-delete-confirm\", \"role\": \"button\", \"name\": \"Delete\"}. \"It opened the noted row\" means: assert_count 1 of the active row; eval with expect \"true\" of String(document.querySelector(\".drawer .conversation-item.active\")?.getAttribute(\"data-conversation-id\") === window.__ncNext); the URL contains \"/c/\" (assert_url with text). Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Open a new conversation. 2. Fill the input with \"{{MESSAGE}}\". 3. Click the Send button. 4. The URL contains \"/c/\" (assert_url with text). 5. The input's value is exactly \"\" (assert_value). 6. Start a new conversation from the header. 7. The input's value is exactly \"\". 8. Reload the page (reload action). 9. The input's value is exactly \"\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item.active",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer .conversation-item.active')?.getAttribute('data-conversation-id')",
+      "expect": "composer"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "{{MESSAGE}}"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "assert_url",
+      "text": "/c/"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "selector": ".header",
+      "role": "button",
+      "name": "New Conversation",
+      "exact": true
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:56:14.39395569Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 14638,
+    "output_tokens": 854,
+    "estimated_cost_usd": 0.024468300000000002,
+    "mode": "generated"
+  }
+}

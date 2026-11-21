@@ -1,0 +1,234 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "deleting the draft being composed opens its neighbor. Conversation {{NEIGHBOR}} exists. Requests to /api/conversations/draft are held before the server sees them until call \"save-draft\"; call \"draft-requested\" says whether a POST to it arrived, and the conversation the first one made is the held \"draft\". The viewport is 1280x720. The page has helpers, from an init script, used in evals: __ncHeld(name), __ncStreamed(name), __ncComposerRows(name), __ncActiveIsHeld(name), __ncHeldRows(name), __ncNoteNext(id) and __ncRecordFrames(); evals that call them return strings, and those taking a name are async: write them as given. \"The active row\" is \".drawer .conversation-item.active\"; any check of the active row (or of something in it) starts by checking that there is exactly one (assert_count 1), as the old test's locator was strict. \"The placeholder\" is \".drawer [data-conversation-id='composer']\". \"The row of \u003cid\u003e\" is \".drawer .conversation-item[data-conversation-id='\u003cid\u003e']\". A row's \"preview\" is its \".conversation-preview\" and its \"title\" its \".conversation-title\". \"The input\" is data-testid \"message-input\", and \"the Send button\" data-testid \"send-button\". To \"open a new conversation\": navigate to /new, wait up to 30s for the input to be visible, and check that the active row's data-conversation-id is exactly \"composer\". To \"start a new conversation from the header\": click {\"selector\": \".header\", \"role\": \"button\", \"name\": \"New Conversation\", \"exact\": true} if it is visible (it is at this size); only if it is not, click the button \"More options\" and then {\"selector\": \".chat-overflow-popover\", \"role\": \"button\", \"name\": \"New Conversation\", \"exact\": true}. \"The Delete button of the active row\" is {\"selector\": \".drawer .conversation-item.active\", \"role\": \"button\", \"name\": \"Delete\", \"exact\": true}. To \"delete row R\" (R a selector): click {\"selector\": R, \"role\": \"button\", \"name\": \"Delete\", \"exact\": true}, then click {\"selector\": R + \" .drawer-delete-confirm\", \"role\": \"button\", \"name\": \"Delete\"}. \"It opened the noted row\" means: assert_count 1 of the active row; eval with expect \"true\" of String(document.querySelector(\".drawer .conversation-item.active\")?.getAttribute(\"data-conversation-id\") === window.__ncNext); the URL contains \"/c/\" (assert_url with text). Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Open a new conversation. 2. Unused, the placeholder goes at once: eval with expect \"true\" of __ncNoteNext(\"composer\"). 3. Delete row \".drawer .conversation-item[data-conversation-id='composer']\". 4. There is no placeholder row: assert_count 0 of \".drawer .conversation-item[data-conversation-id='composer']\". 5. It opened the noted row. 6. Start a new conversation from the header. 7. The Delete button of the active row is visible (after checking there is one active row). 8. Fill the input with \"never mind\". 9. The active row's preview reads exactly \"never mind\". 10. There is no Delete button in the active row: assert_count 0 of {\"selector\": \".drawer .conversation-item.active\", \"role\": \"button\", \"name\": \"Delete\", \"exact\": true}. 11. Call \"draft-requested\" with expect \"true\". 12. Fill the input with \"\". 13. The active row's preview reads exactly \"\". 14. There is no Delete button in the active row (as in step 10). 15. Fill the input with \"never mind\". 16. Call \"save-draft\". 17. The active row is the draft's: eval with expect \"true\" of __ncActiveIsHeld(\"draft\"). 18. Note the row to open: eval with expect \"true\" of (async () =\u003e window.__ncNoteNext(await window.__ncHeld(\"draft\")))(). 19. Delete row \".drawer .conversation-item.active\" (the draft's). 20. The draft's row is gone: eval with expect \"0\" of __ncHeldRows(\"draft\"). 21. It opened the noted row. 22. The input shows the noted conversation's own draft: eval with expect \"true\" of (async () =\u003e { const c = (await (await fetch(\"/api/conversation/\" + window.__ncNext)).json()).conversation; return String(document.querySelector(\"[data-testid='message-input']\").value === c.draft); })(). 23. The draft is gone from the server: eval with expect \"404\" of (async () =\u003e String((await fetch(\"/api/conversation/\" + await window.__ncHeld(\"draft\"))).status))(). 24. Start a new conversation from the header. 25. The input's value is exactly \"\" (assert_value).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item.active",
+      "count": 1
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".drawer .conversation-item.active",
+      "attribute": "data-conversation-id",
+      "value": "composer"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__ncNoteNext('composer')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer .conversation-item[data-conversation-id='composer']",
+      "role": "button",
+      "name": "Delete",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".drawer .conversation-item[data-conversation-id='composer'] .drawer-delete-confirm",
+      "role": "button",
+      "name": "Delete"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item[data-conversation-id='composer']",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item.active",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "String(document.querySelector('.drawer .conversation-item.active')?.getAttribute('data-conversation-id') === window.__ncNext)",
+      "expect": "true"
+    },
+    {
+      "action": "assert_url",
+      "text": "/c/"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "click",
+      "selector": ".header",
+      "role": "button",
+      "name": "New Conversation",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item.active",
+      "count": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".drawer .conversation-item.active",
+      "role": "button",
+      "name": "Delete",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "never mind"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item.active",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer .conversation-item.active .conversation-preview",
+      "text": "never mind"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item.active",
+      "count": 0,
+      "role": "button",
+      "name": "Delete",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "draft-requested",
+      "expect": "true"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item.active",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": ".drawer .conversation-item.active .conversation-preview",
+      "text": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item.active",
+      "count": 0,
+      "role": "button",
+      "name": "Delete",
+      "exact": true
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "never mind"
+    },
+    {
+      "action": "call",
+      "value": "save-draft"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__ncActiveIsHeld('draft')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e window.__ncNoteNext(await window.__ncHeld('draft')))()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer .conversation-item.active",
+      "role": "button",
+      "name": "Delete",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".drawer .conversation-item.active .drawer-delete-confirm",
+      "role": "button",
+      "name": "Delete"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__ncHeldRows('draft')",
+      "expect": "0"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer .conversation-item.active",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "String(document.querySelector('.drawer .conversation-item.active')?.getAttribute('data-conversation-id') === window.__ncNext)",
+      "expect": "true"
+    },
+    {
+      "action": "assert_url",
+      "text": "/c/"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const c = (await (await fetch('/api/conversation/' + window.__ncNext)).json()).conversation; return String(document.querySelector(\"[data-testid='message-input']\").value === c.draft); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e String((await fetch('/api/conversation/' + await window.__ncHeld('draft'))).status))()",
+      "expect": "404"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "click",
+      "selector": ".header",
+      "role": "button",
+      "name": "New Conversation",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:58:05.161267718Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 17179,
+    "output_tokens": 2876,
+    "estimated_cost_usd": 0.06259515,
+    "mode": "generated"
+  }
+}
