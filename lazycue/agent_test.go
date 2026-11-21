@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -194,20 +195,55 @@ func TestCacheConversationMarksOnlyTheLastBlock(t *testing.T) {
 func TestGitCommandHidesPaths(t *testing.T) {
 	hidden := []string{"/e2e"}
 	cache := "/tmp/e2e/cache.json"
+	for cmd, want := range map[string]string{
+		"git show HEAD:../ui/e2e/x.spec.ts": "/e2e is off limits",
+		"git grep -n foo -- ..":             ".. leaves this directory",
+		"git grep foo ../x":                 "../x leaves this directory",
+		"git ls-files :/":                   ":/ leaves this directory",
+		"git show HEAD:shelley/x.js":        "HEAD:./<path>",
+		"git log --oneline -- " + cache:     "",
+		"git log --oneline HEAD~2..HEAD":    "",
+		`git grep -n "Message..." -- vue/`:  "",
+		"git grep -n http:// -- vue/":       "",
+		"git show HEAD:./agent.go":          "",
+		"git diff HEAD -- -x ../y":          "../y leaves", // -x is a path after --
+	} {
+		if got := fenceGit(mustSplit(t, cmd)[1:], hidden, cache); want == "" && got != "" || !strings.Contains(got, want) {
+			t.Errorf("%s: %q, want %q", cmd, got, want)
+		}
+	}
 	if got := executeGitCommand(".", hidden, cache, "git show HEAD:../ui/e2e/x.spec.ts"); !strings.Contains(got, "/e2e is off limits") {
 		t.Errorf("hidden path: %s", got)
 	}
-	if got := executeGitCommand(".", hidden, cache, "git rev-parse --is-inside-work-tree"); strings.Contains(got, "off limits") {
-		t.Errorf("other command: %s", got)
-	}
-	if got := executeGitCommand(".", hidden, cache, "git rev-parse --is-inside-work-tree"); got == "true" {
-		// In a checkout: what a search turns up in hidden paths is dropped.
+	if out, _ := gitExec(".", "rev-parse", "--is-inside-work-tree"); out == "true" {
+		// In a checkout: what a command turns up in hidden paths is
+		// dropped, and a grep without matches says so.
 		got := executeGitCommand(".", []string{"_test.go"}, "", "git ls-files")
 		if strings.Contains(got, "_test.go") || !strings.Contains(got, "agent.go") {
 			t.Errorf("ls-files with hidden tests: %s", got)
 		}
+		if got := executeGitCommand(".", nil, "", `git grep -c "no such text, \"really\""`); got != "(no matches)" {
+			t.Errorf("grep without matches: %s", got)
+		}
 	}
-	if got := executeGitCommand(".", hidden, cache, "git log --oneline -- "+cache); strings.Contains(got, "off limits") {
-		t.Errorf("the cache file's history: %s", got)
+}
+
+func TestSplitArgs(t *testing.T) {
+	got := mustSplit(t, `git grep -n "a \"b\"" 'c d' e\ f`)
+	want := []string{"git", "grep", "-n", `a "b"`, "c d", "e f"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q, want %q", got, want)
 	}
+	if _, err := splitArgs(`git grep "open`); err == nil {
+		t.Error("unterminated quote: no error")
+	}
+}
+
+func mustSplit(t *testing.T, s string) []string {
+	t.Helper()
+	args, err := splitArgs(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return args
 }

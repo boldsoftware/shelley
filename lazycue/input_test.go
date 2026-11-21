@@ -158,6 +158,8 @@ func TestHasText(t *testing.T) {
 		Step{Action: ActionAssertText, Selector: "div", HasText: "Inner", Text: "Inner"},
 		Step{Action: ActionAssertVisible, Selector: "*", HasText: "Inner"},
 		Step{Action: ActionAssertCount, Selector: "*", HasText: "Inner", Count: 1},
+		Step{Action: ActionAssertCount, Selector: "*", HasText: "app", Count: 0},
+		Step{Action: ActionAssertNotVisible, Selector: "*", HasText: "app"},
 		Step{Action: ActionAssertCount, Selector: "*", HasText: "Archive", Count: 2},
 		Step{Action: ActionClick, Selector: "button", HasText: "that"},
 		Step{Action: ActionAssertTitle, Text: "Archive that"},

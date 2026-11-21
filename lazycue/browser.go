@@ -992,8 +992,8 @@ func findAllJS(step Step) string {
 		const all = Array.from(document.querySelectorAll(sel));
 		if (hasText === '') return all;
 		const norm = s => s.replace(/\s+/g, ' ').trim();
-		// Text a user can see: not the title, scripts or styles.
-		const matches = all.filter(el => !el.closest('head, script, style, noscript, template') && norm(el.textContent).includes(norm(hasText)));
+		// Text a user can see: in the body, not in scripts or styles.
+		const matches = all.filter(el => document.body.contains(el) && !el.closest('script, style, noscript, template') && norm(el.textContent).includes(norm(hasText)));
 		// Keep the innermost: an element holding a match holds its text
 		// too, and "*" would otherwise pick <html>.
 		const outer = new Set();

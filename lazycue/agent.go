@@ -212,7 +212,6 @@ Available DSL actions:
 - assert_attribute: {"action": "assert_attribute", "selector": "...", "attribute": "...", "value": "..."} - Assert an attribute is present with this value; it fails when the attribute is absent, even for value "". To check that an attribute is present or absent, use assert_count with an attribute selector, e.g. {"action": "assert_count", "selector": "details:not([open])", "count": 1}. For disabled state use assert_enabled / assert_disabled.
 - assert_value: {"action": "assert_value", "selector": "...", "value": "..."} - Assert the current value of an input, textarea or select (the DOM property, which typing changes; not the value attribute).
 - assert_enabled / assert_disabled: {"action": "assert_enabled", "selector": "..."} - Assert a control is enabled or disabled: disabled means a disabled form control (or one in a disabled fieldset) or inside aria-disabled="true".
-- Dialogs close by themselves: a page may always be left despite a beforeunload handler, and alert, confirm and prompt are cancelled (confirm returns false).
 - assert_focused: {"action": "assert_focused", "selector": "..."} - Assert the element has keyboard focus. For a custom element with a shadow root, focus anywhere inside it counts.
 - wait_url: {"action": "wait_url", "text": "...", "timeout": "10s"} (substring) or {"action": "wait_url", "value": "..."} (exact) - Wait for the browser URL to match. Its exact "value" may be a whole URL or just the path, query and hash.
 - assert_url: {"action": "assert_url", "value": "..."} or {"action": "assert_url", "text": "..."} for contains - Assert the URL; an exact "value" must be the whole URL.
@@ -221,7 +220,7 @@ Available DSL actions:
 - sleep: {"action": "sleep", "timeout": "1s"}
 - close_tab: {"action": "close_tab", "tab": "B"} - Close a tab opened by an earlier step, as a user would.
 
-Every assert_* and wait_* step retries until it holds or its timeout (default 15s) passes, so they wait for the app on their own; don't add sleeps or eval polls before them.
+Every assert_* and wait_* step retries until it holds or its timeout (default 15s) passes, so they wait for the app on their own; don't add sleeps or eval polls before them. Dialogs close by themselves: a page may always be left despite a beforeunload handler, and alert, confirm and prompt are cancelled (confirm returns false).
 
 Visible means rendered with a box of some size and not visibility: hidden; opacity does not matter. Selectors are CSS and match the first element. Any step with a selector may add "has_text": "..." to keep only the elements whose text contains it (whitespace collapsed), e.g. {"action": "click", "selector": "button", "has_text": "Archive"}; prefer it to eval for picking an element by its text. Of nested matches only the innermost counts, so {"selector": "*", "has_text": "Saved"} is the element that holds the text itself, not <html>. The browser emulates a Pixel 5 phone (393x727, touch screen) that prefers reduced motion and may use the clipboard, unless the test launched it otherwise.
 
@@ -864,69 +863,141 @@ func gitExec(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func executeGitCommand(repoRoot string, hidden []string, cacheFile, command string) (result string) {
-	normalized := strings.TrimSpace(command)
-	if !strings.HasPrefix(normalized, "git ") {
+func executeGitCommand(repoRoot string, hidden []string, cacheFile, command string) string {
+	args, err := splitArgs(strings.TrimSpace(command))
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+	if len(args) < 2 || args[0] != "git" {
 		return "Error: Only git commands are allowed"
 	}
-	// The heal prompt asks for the cache file's history.
-	unhidden := normalized
-	if cacheFile != "" {
-		unhidden = strings.ReplaceAll(unhidden, cacheFile, "")
-	}
-	for _, h := range hidden {
-		if strings.Contains(unhidden, h) {
-			return fmt.Sprintf("Error: %s is off limits; follow the description and look at the live page instead.", h)
-		}
-	}
-	defer func() {
-		// Drop what a search turned up in hidden paths anyway.
-		if len(hidden) == 0 || cacheFile != "" && strings.Contains(normalized, cacheFile) {
-			return
-		}
-		lines := strings.Split(result, "\n")
-		lines = slices.DeleteFunc(lines, func(l string) bool {
-			return slices.ContainsFunc(hidden, func(h string) bool { return strings.Contains(l, h) })
-		})
-		result = strings.Join(lines, "\n")
-	}()
-
 	allowedSubcommands := []string{"grep", "ls-files", "show", "log", "diff", "cat-file", "rev-parse", "for-each-ref"}
-	parts := strings.Fields(normalized)
-	if len(parts) < 2 {
-		return "Error: Invalid git command"
-	}
-	subcommand := parts[1]
-
-	allowed := false
-	for _, a := range allowedSubcommands {
-		if subcommand == a {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
+	if !slices.Contains(allowedSubcommands, args[1]) {
 		return fmt.Sprintf("Error: Only these git subcommands are allowed: %s", strings.Join(allowedSubcommands, ", "))
 	}
+	args = args[1:]
+	if len(hidden) > 0 {
+		if msg := fenceGit(args, hidden, cacheFile); msg != "" {
+			return "Error: " + msg
+		}
+	}
 
-	// Execute the command (strip "git " prefix and pass args).
-	args := parts[1:]
 	out, err := gitExec(repoRoot, args...)
+	var ee *exec.ExitError
+	if args[0] == "grep" && errors.As(err, &ee) && ee.ExitCode() == 1 {
+		return "(no matches)"
+	}
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
-
+	if len(hidden) > 0 && !slices.Contains(args, cacheFile) {
+		// Drop what a command turned up in hidden paths anyway.
+		lines := slices.DeleteFunc(strings.Split(out, "\n"), func(l string) bool { return hiddenIn(l, hidden) != "" })
+		out = strings.Join(lines, "\n")
+	}
 	if out == "" {
 		return "(empty output)"
 	}
-
-	// Truncate long output.
 	const maxLen = 8000
 	if len(out) > maxLen {
 		return out[:maxLen] + fmt.Sprintf("\n... (truncated, %d total chars)", len(out))
 	}
-
 	return out
+}
+
+// fenceGit keeps a git command (args after "git") away from hidden paths
+// and in its directory, where other tests are not, and says why it may
+// not run, or returns "". The cache file is fine.
+func fenceGit(args, hidden []string, cacheFile string) string {
+	sub, pattern := args[0], args[0] == "grep"
+	for i, a := range args[1:] {
+		if a == cacheFile {
+			continue
+		}
+		if h := hiddenIn(a, hidden); h != "" {
+			return h + " is off limits; follow the description and look at the live page instead."
+		}
+		if a == "--" || strings.HasPrefix(a, "-") && !slices.Contains(args[1:i+1], "--") {
+			continue
+		}
+		if pattern {
+			pattern = false // grep's first operand
+			continue
+		}
+		path := a
+		if sub == "show" || sub == "cat-file" {
+			rev, tree, ok := strings.Cut(a, ":")
+			if ok && rev != "" && !strings.HasPrefix(tree, "./") {
+				return a + " is relative to the repository root; write " + rev + ":./<path> for a path in this directory."
+			}
+			path = tree
+		}
+		if strings.HasPrefix(path, "..") || strings.Contains(path, "/..") || strings.HasPrefix(path, ":") || strings.HasPrefix(path, "/") {
+			return a + " leaves this directory; use paths inside it."
+		}
+	}
+	return ""
+}
+
+// hiddenIn returns the first of hidden that s contains, or "".
+func hiddenIn(s string, hidden []string) string {
+	for _, h := range hidden {
+		if strings.Contains(s, h) {
+			return h
+		}
+	}
+	return ""
+}
+
+// splitArgs splits a command line as a shell would for simple quoting:
+// single quotes keep everything, double quotes keep all but backslash
+// escapes of " and \.
+func splitArgs(s string) ([]string, error) {
+	var args []string
+	var cur strings.Builder
+	inArg := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == ' ' || c == '\t' || c == '\n':
+			if inArg {
+				args = append(args, cur.String())
+				cur.Reset()
+				inArg = false
+			}
+		case c == '\'':
+			end := strings.IndexByte(s[i+1:], '\'')
+			if end < 0 {
+				return nil, errors.New("unterminated ' in command")
+			}
+			cur.WriteString(s[i+1 : i+1+end])
+			i += end + 1
+			inArg = true
+		case c == '"':
+			i++
+			for ; i < len(s) && s[i] != '"'; i++ {
+				if s[i] == '\\' && i+1 < len(s) && (s[i+1] == '"' || s[i+1] == '\\') {
+					i++
+				}
+				cur.WriteByte(s[i])
+			}
+			if i >= len(s) {
+				return nil, errors.New("unterminated \" in command")
+			}
+			inArg = true
+		case c == '\\' && i+1 < len(s):
+			i++
+			cur.WriteByte(s[i])
+			inArg = true
+		default:
+			cur.WriteByte(c)
+			inArg = true
+		}
+	}
+	if inArg {
+		args = append(args, cur.String())
+	}
+	return args, nil
 }
 
 // callAnthropic issues an LLM request, retrying transient failures (network
