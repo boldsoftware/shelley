@@ -753,7 +753,7 @@ func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) 
 		defer cancel()
 		return expectResult(ctx, step, timeout, func() (string, error) {
 			var result any
-			if err := chromedp.Run(runCtx, evalIn(step.Frame, evalJS(step.Expression), &result)); err != nil {
+			if err := chromedp.Run(runCtx, evalStep(step.Frame, step.Expression, &result)); err != nil {
 				return "", err
 			}
 			return formatResult(result), nil
@@ -886,17 +886,51 @@ func evaluate(world cdpruntime.ExecutionContextID, expression string, res any) c
 	})
 }
 
-// evalJS is an eval step's expression run through an indirect eval, as
-// Playwright runs it: it may be statements, the last one's value the
-// result, and its top-level const and let are its own, so that it can run
-// again, as polling and retries run it. Code from strings the page's CSP
-// bars is allowed while DevTools evaluates.
-func evalJS(expression string) string {
+// evalStep evaluates an eval step's expression into res, waiting for a
+// promise it gives to settle, in the page or in the document of the iframe
+// the CSS selector frame matches. Like Playwright's, it runs in the frame's
+// own world, which has the globals of the frame's scripts, and through an
+// indirect eval: it may be statements, the last one's value the result,
+// and its top-level const and let are its own, so that it can run again,
+// as polling and retries run it. Code from strings the page's CSP bars is
+// allowed while DevTools evaluates.
+func evalStep(frame, expression string, res *any) chromedp.Action {
 	quoted, err := json.Marshal(expression)
 	if err != nil {
 		panic(err) // a string always marshals
 	}
-	return "(0, eval)(" + string(quoted) + ")"
+	js := "(0, eval)(" + string(quoted) + ")"
+	if frame == "" {
+		return evaluate(0, js, res)
+	}
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		node, err := frameNode(ctx, frame)
+		if err != nil {
+			return err
+		}
+		if node.ContentDocument == nil {
+			return fmt.Errorf("frame %s has no document", frame)
+		}
+		const group = "lazycue-eval"
+		defer cdpruntime.ReleaseObjectGroup(group).Do(ctx) //nolint:errcheck // the page may be gone
+		// Without a context, a node resolves in its frame's own world.
+		doc, err := dom.ResolveNode().WithBackendNodeID(node.ContentDocument.BackendNodeID).WithObjectGroup(group).Do(ctx)
+		if err != nil {
+			return err
+		}
+		v, exc, err := cdpruntime.CallFunctionOn("function() { return " + js + "; }").WithObjectID(doc.ObjectID).WithAwaitPromise(true).WithReturnByValue(true).Do(ctx)
+		if err != nil {
+			return err
+		}
+		if exc != nil {
+			return exc
+		}
+		*res = nil // undefined, or a value JSON cannot hold, such as NaN
+		if v.Value == nil {
+			return nil
+		}
+		return json.Unmarshal(v.Value, res)
+	})
 }
 
 // evalIn is evaluate in the document of the iframe the CSS selector frame
@@ -920,26 +954,35 @@ func frameWorld(ctx context.Context, frame string) (cdpruntime.ExecutionContextI
 	if frame == "" {
 		return 0, nil
 	}
+	node, err := frameNode(ctx, frame)
+	if err != nil {
+		return 0, err
+	}
+	return page.CreateIsolatedWorld(node.FrameID).WithWorldName("lazycue").Do(ctx)
+}
+
+// frameNode is the iframe the CSS selector frame matches in the page.
+func frameNode(ctx context.Context, frame string) (*cdp.Node, error) {
 	const group = "lazycue-frame"
 	defer cdpruntime.ReleaseObjectGroup(group).Do(ctx) //nolint:errcheck // the page may be gone
 	el, exc, err := cdpruntime.Evaluate(frameJS(frame)).WithObjectGroup(group).Do(ctx)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if exc != nil {
-		return 0, exc
+		return nil, exc
 	}
 	if el.ObjectID == "" {
-		return 0, fmt.Errorf("no iframe matches %s", frame)
+		return nil, fmt.Errorf("no iframe matches %s", frame)
 	}
 	node, err := dom.DescribeNode().WithObjectID(el.ObjectID).Do(ctx)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if node.FrameID == "" {
-		return 0, fmt.Errorf("%s is a <%s>, not an iframe", frame, strings.ToLower(node.NodeName))
+		return nil, fmt.Errorf("%s is a <%s>, not an iframe", frame, strings.ToLower(node.NodeName))
 	}
-	return page.CreateIsolatedWorld(node.FrameID).WithWorldName("lazycue").Do(ctx)
+	return node, nil
 }
 
 func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, baseURL string, step Step) error {

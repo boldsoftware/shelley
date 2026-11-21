@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"html"
 	"net/http"
 	"os"
 	"strings"
@@ -631,6 +632,35 @@ func TestFrames(t *testing.T) {
 // Whether Chrome renders a cross-origin frame, so that its roles can be
 // read and its elements wait for frames, is whether the frame intersects
 // the viewport through every scroller around it.
+// A frame's eval runs in the frame's own world, as Playwright's do, so it
+// sees the globals the frame's scripts define and waits for their promises.
+func TestFrameEvalSeesTheFramesGlobals(t *testing.T) {
+	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
+		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
+	}
+	page := func(name string) string {
+		return `<!doctype html><body><p>` + name + `</p><script>window.tell = () => new Promise(done => setTimeout(() => done('told ' + document.querySelector('p').textContent), 50));</script></body>`
+	}
+	br, err := NewBrowser(context.Background(), Launch{Hosts: map[string]http.Handler{"https://other.test": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(page("cross")))
+	})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(br.Close)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><body>
+<iframe id="same" srcdoc="`+html.EscapeString(page("same"))+`"></iframe>
+<iframe id="cross" src="https://other.test/"></iframe>
+<script>window.tell = () => 'told main';</script>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: `tell()`, Expect: ptr("told main")},
+		Step{Action: ActionEval, Frame: "#same", Expression: `tell()`, Expect: ptr("told same")},
+		Step{Action: ActionEval, Frame: "#cross", Expression: `const t = tell(); t`, Expect: ptr("told cross")},
+	)
+}
+
 func TestCrossOriginFrameInView(t *testing.T) {
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
