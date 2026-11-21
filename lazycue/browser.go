@@ -15,8 +15,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/chromedp/cdproto/accessibility"
 	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/heapprofiler"
 	"github.com/chromedp/cdproto/input"
@@ -273,16 +275,11 @@ func substitute(step Step, vars map[string]string) (Step, error) {
 		step.Steps = steps
 	}
 	var missing []string
-	fields := []*string{
-		&step.URL, &step.Selector, &step.HasText, &step.Value, &step.Text,
-		&step.Expression, &step.Attribute, &step.Key, &step.Points,
-	}
 	if step.Expect != nil {
 		expect := *step.Expect
 		step.Expect = &expect
-		fields = append(fields, step.Expect)
 	}
-	for _, f := range fields {
+	for _, f := range stringFields(&step) {
 		*f = placeholder.ReplaceAllStringFunc(*f, func(m string) string {
 			name := m[2 : len(m)-2]
 			v, ok := vars[name]
@@ -296,6 +293,18 @@ func substitute(step Step, vars map[string]string) (Step, error) {
 		return step, fmt.Errorf("no value for %s", strings.Join(missing, ", "))
 	}
 	return step, nil
+}
+
+// stringFields lists a step's string fields, where placeholders may be.
+func stringFields(s *Step) []*string {
+	fields := []*string{
+		&s.URL, &s.Selector, &s.Role, &s.Name, &s.HasText, &s.Value, &s.Text,
+		&s.Expression, &s.Attribute, &s.Key, &s.Points,
+	}
+	if s.Expect != nil {
+		fields = append(fields, s.Expect)
+	}
+	return fields
 }
 
 // tabCtx returns the chromedp context of the tab a step acts on. Only navigate
@@ -516,6 +525,12 @@ func (b *Browser) executeStep(ctx context.Context, env *Env, step Step) (string,
 
 // run runs a step whose placeholders have been substituted.
 func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) {
+	if _, ok := axRoles[step.Role]; step.Role != "" && !ok {
+		return "", fmt.Errorf("unknown role %q; use an ARIA role such as button, link, textbox, checkbox, img or dialog", step.Role)
+	}
+	if step.Name != "" && step.Role == "" {
+		return "", errors.New("a name needs a role")
+	}
 	if step.Action == ActionRetry {
 		return "", b.retry(ctx, env, step)
 	}
@@ -707,12 +722,6 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 	case ActionGoBack, ActionGoForward:
 		return b.goHistory(ctx, tabCtx, timeout, step)
 
-	case ActionWaitVisible:
-		return b.pollJS(ctx, tabCtx, timeout, visibleJS(step))
-
-	case ActionWaitHidden:
-		return b.pollJS(ctx, tabCtx, timeout, "!"+visibleJS(step))
-
 	case ActionWaitText:
 		return b.pollJS(ctx, tabCtx, timeout, fmt.Sprintf(
 			`(document.body.textContent || '').includes(%q)`, step.Text,
@@ -725,7 +734,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 
 	case ActionFill:
 		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
-			return chromedp.Run(runCtx, chromedp.Evaluate(fmt.Sprintf(fillJS, findJS(step), describe(step), step.Value), nil))
+			return evalFind(runCtx, step, fmt.Sprintf(fillJS, findJS(step), describe(step), step.Value), nil)
 		})
 
 	case ActionClick, ActionHover:
@@ -893,26 +902,18 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		_, err := b.screenshot(tabCtx)
 		return err
 
-	case ActionAssertVisible:
+	case ActionWaitVisible, ActionAssertVisible, ActionWaitHidden, ActionAssertNotVisible:
+		want := step.Action == ActionWaitVisible || step.Action == ActionAssertVisible
 		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
 			var visible bool
-			if err := chromedp.Run(runCtx, chromedp.Evaluate(visibleJS(step), &visible)); err != nil {
+			if err := evalFind(runCtx, step, visibleJS(step), &visible); err != nil {
 				return err
 			}
-			if !visible {
-				return fmt.Errorf("assert_visible: %s not visible", describe(step))
+			if visible && !want {
+				return fmt.Errorf("%s: %s is visible", step.Action, describe(step))
 			}
-			return nil
-		})
-
-	case ActionAssertNotVisible:
-		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
-			var visible bool
-			if err := chromedp.Run(runCtx, chromedp.Evaluate(visibleJS(step), &visible)); err != nil {
-				return err
-			}
-			if visible {
-				return fmt.Errorf("assert_not_visible: %s is visible", describe(step))
+			if !visible && want {
+				return fmt.Errorf("%s: %s is not visible", step.Action, describe(step))
 			}
 			return nil
 		})
@@ -1040,7 +1041,7 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 	case ActionAssertCount:
 		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
 			var count int
-			if err := chromedp.Run(runCtx, chromedp.Evaluate(findAllJS(step)+".length", &count)); err != nil {
+			if err := evalFind(runCtx, step, findAllJS(step)+".length", &count); err != nil {
 				return fmt.Errorf("assert_count: %w", err)
 			}
 			if count != step.Count {
@@ -1059,27 +1060,129 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 	}
 }
 
-// findAllJS is an expression for the elements a step's selector and has_text
-// match, in document order. With has_text, an element that holds another
-// match does not count, as with Playwright's getByText.
+// findAllJS is an expression for the elements a step picks out, in document
+// order: those its selector matches or, with a role, those locate found
+// inside what its selector matches; then those whose text has has_text
+// (with a selector alone, an element that holds another match does not
+// count, as with Playwright's getByText); then, with visible, the visible
+// ones. Evaluate it with evalFind.
 func findAllJS(step Step) string {
-	return fmt.Sprintf(`(function(sel, hasText) {
-		const all = Array.from(document.querySelectorAll(sel));
-		if (hasText === '') return all;
+	return fmt.Sprintf(`(function(sel, role, hasText, exact, visible) {
+		`+isVisibleJS+`
 		const norm = s => s.replace(/\s+/g, ' ').trim();
-		// Text a user can see: in the body, not in scripts or styles.
-		const matches = all.filter(el => document.body.contains(el) && !el.closest('script, style, noscript, template') && norm(el.textContent).includes(norm(hasText)));
-		// Keep the innermost: an element holding a match holds its text
-		// too, and "*" would otherwise pick <html>.
-		const outer = new Set();
-		const set = new Set(matches);
-		for (const el of matches) {
-			for (let p = el.parentElement; p && !outer.has(p); p = p.parentElement) {
-				if (set.has(p)) outer.add(p);
+		const has = el => exact ? norm(el.textContent) === norm(hasText) : norm(el.textContent).includes(norm(hasText));
+		let all;
+		if (role) {
+			all = window.__lazycueRole;
+			if (sel) {
+				const scopes = new Set(document.querySelectorAll(sel));
+				all = all.filter(el => {
+					for (let p = el.parentNode || el.host; p; p = p.parentNode || p.host) {
+						if (scopes.has(p)) return true;
+					}
+					return false;
+				});
+			}
+			if (hasText !== '') all = all.filter(has);
+		} else {
+			all = Array.from(document.querySelectorAll(sel));
+			if (hasText !== '') {
+				// Text a user can see: in the body, not in scripts or styles.
+				const matches = all.filter(el => document.body.contains(el) && !el.closest('script, style, noscript, template') && has(el));
+				// Keep the innermost: an element holding a match holds its
+				// text too, and "*" would otherwise pick <html>.
+				const outer = new Set();
+				const set = new Set(matches);
+				for (const el of matches) {
+					for (let p = el.parentElement; p && !outer.has(p); p = p.parentElement) {
+						if (set.has(p)) outer.add(p);
+					}
+				}
+				all = matches.filter(el => !outer.has(el));
 			}
 		}
-		return matches.filter(el => !outer.has(el));
-	})(%q, %q)`, step.Selector, step.HasText)
+		return visible ? all.filter(isVisible) : all;
+	})(%q, %t, %q, %t, %t)`, step.Selector, step.Role != "", step.HasText, step.Exact, step.Visible)
+}
+
+// evalFind evaluates expr, which uses findAllJS or findJS, once locate has
+// found the elements of step's role.
+func evalFind(ctx context.Context, step Step, expr string, res any) error {
+	return chromedp.Run(ctx, locate(step), evaluate(expr, res))
+}
+
+// axRoles maps the ARIA roles a step may name to the names Chrome's
+// accessibility tree has for them.
+var axRoles = func() map[string]string {
+	m := map[string]string{"img": "image"}
+	for _, r := range strings.Fields(`alert alertdialog application article banner blockquote button caption cell
+		checkbox code columnheader combobox complementary contentinfo definition deletion dialog document
+		emphasis feed figure form generic grid gridcell group heading insertion link list listbox listitem
+		log main marquee math meter menu menubar menuitem menuitemcheckbox menuitemradio navigation note
+		option paragraph progressbar radio radiogroup region row rowgroup rowheader scrollbar search
+		searchbox separator slider spinbutton status strong subscript superscript switch tab table tablist
+		tabpanel term textbox time timer toolbar tooltip tree treegrid treeitem`) {
+		m[r] = r
+	}
+	return m
+}()
+
+// locate finds the elements of a step's role and name, as Chrome computes
+// them for its accessibility tree, and puts them into window.__lazycueRole
+// for findAllJS, in document order. Elements hidden from the tree
+// (display: none, visibility: hidden, aria-hidden) have none. Steps without a
+// role need nothing.
+func locate(step Step) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		if step.Role == "" {
+			return nil
+		}
+		const group = "lazycue-role"
+		defer cdpruntime.ReleaseObjectGroup(group).Do(ctx) //nolint:errcheck // the page may be gone
+		doc, exc, err := cdpruntime.Evaluate("document").WithObjectGroup(group).Do(ctx)
+		if err != nil {
+			return err
+		}
+		if exc != nil {
+			return exc
+		}
+		nodes, err := accessibility.QueryAXTree().WithObjectID(doc.ObjectID).WithRole(axRoles[step.Role]).Do(ctx)
+		if err != nil {
+			return fmt.Errorf("query the accessibility tree: %w", err)
+		}
+		want := strings.Join(strings.Fields(step.Name), " ")
+		var args []*cdpruntime.CallArgument
+		for _, n := range nodes {
+			if n.Ignored || n.BackendDOMNodeID == 0 {
+				continue
+			}
+			if want != "" {
+				var name string
+				if n.Name != nil {
+					_ = json.Unmarshal(n.Name.Value, &name) // not a string: no name
+				}
+				name = strings.Join(strings.Fields(name), " ")
+				if step.Exact && name != want || !step.Exact && !strings.Contains(strings.ToLower(name), strings.ToLower(want)) {
+					continue
+				}
+			}
+			el, err := dom.ResolveNode().WithBackendNodeID(n.BackendDOMNodeID).WithObjectGroup(group).Do(ctx)
+			if err != nil {
+				return err
+			}
+			args = append(args, &cdpruntime.CallArgument{ObjectID: el.ObjectID})
+		}
+		_, exc, err = cdpruntime.CallFunctionOn(`function(...els) {
+			window.__lazycueRole = els.sort((a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+		}`).WithObjectID(doc.ObjectID).WithArguments(args).Do(ctx)
+		if err != nil {
+			return err
+		}
+		if exc != nil {
+			return exc
+		}
+		return nil
+	})
 }
 
 // findJS is an expression for the first element findAllJS has, or undefined.
@@ -1087,22 +1190,14 @@ func findJS(step Step) string {
 	return findAllJS(step) + "[0]"
 }
 
-// describe names what a step's selector and has_text pick out, for errors.
-func describe(step Step) string {
-	if step.HasText == "" {
-		return step.Selector
-	}
-	return fmt.Sprintf("%s with text %q", step.Selector, step.HasText)
-}
-
 // elementString evaluates expr, a string-valued expression of el, on the
 // element step picks out.
 func elementString(ctx context.Context, step Step, expr string) (string, error) {
 	var got string
-	err := chromedp.Run(ctx, evaluate(fmt.Sprintf(`(function(el) {
+	err := evalFind(ctx, step, fmt.Sprintf(`(function(el) {
 		if (!el) throw new Error(%q);
 		return %s;
-	})(%s)`, "no element matches "+describe(step), expr, findJS(step)), &got))
+	})(%s)`, "no element matches "+describe(step), expr, findJS(step)), &got)
 	return got, err
 }
 
@@ -1206,9 +1301,9 @@ func (b *Browser) atPoint(ctx, tabCtx context.Context, timeout time.Duration, st
 		defer cancel()
 		return chromedp.Run(runCtx, chromedp.ActionFunc(func(ctx context.Context) error { return f(ctx, x, y) }))
 	}
-	if step.Selector == "" {
+	if step.Selector == "" && step.Role == "" {
 		if step.X == nil {
-			return fmt.Errorf("%s: set a selector, or x and y", step.Action)
+			return fmt.Errorf("%s: set a selector or role, or x and y", step.Action)
 		}
 		return dispatch(*step.X, *step.Y)
 	}
@@ -1223,7 +1318,7 @@ func (b *Browser) atPoint(ctx, tabCtx context.Context, timeout time.Duration, st
 	}
 	err := b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {
 		target.Err = ""
-		if err := chromedp.Run(runCtx, evaluate(expr, &target)); err != nil {
+		if err := evalFind(runCtx, step, expr, &target); err != nil {
 			return err
 		}
 		if target.Err != "" {

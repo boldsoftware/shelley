@@ -171,6 +171,96 @@ func TestHasText(t *testing.T) {
 	}
 }
 
+// role and name pick elements as Playwright's getByRole does, from Chrome's
+// accessibility tree; exact and visible narrow any element step.
+func TestRoles(t *testing.T) {
+	br := newBrowserOrSkip(t)
+	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+<nav><button>Archive</button><a href="#all">Archive all</a></nav>
+<main>
+<button aria-label="Close dialog">X</button>
+<button>Save <span aria-hidden="true">!</span></button>
+<button>  Archive
+  this </button>
+<button style="display: none">Archive hidden</button>
+<div role="button" aria-hidden="true">Archive unseen</div>
+<button style="width: 0; height: 0; padding: 0; border: 0; overflow: hidden">Archive zero</button>
+<input type="checkbox" id="c"><label for="c">Dark mode</label>
+<input type="checkbox" role="switch" aria-label="Notify">
+<input type="search" placeholder="Find">
+<textarea aria-label="Message"></textarea>
+<select aria-label="Pick"><option value="a">A</option><option value="b">B</option></select>
+<img alt="Logo" width="10" height="10" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+<section aria-label="Results"><h2>Results</h2><ul><li>One</li><li>Two</li></ul></section>
+<div role="menu"><div role="menuitemcheckbox" aria-checked="true">Wrap lines</div></div>
+<x-card></x-card>
+</main>
+<script>
+customElements.define('x-card', class extends HTMLElement {
+  connectedCallback() { this.attachShadow({mode: 'open'}).innerHTML = '<button>Shadow</button>'; }
+});
+document.addEventListener('click', e => document.title = e.target.getAttribute('aria-label') || e.target.textContent);
+setTimeout(() => document.querySelector('main').insertAdjacentHTML('beforeend', '<button>Later</button>'), 300);
+</script>
+</body></html>`)}
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		// A name is a case-insensitive substring, whitespace collapsed, of
+		// an element's accessible name; hidden elements have none.
+		Step{Action: ActionAssertCount, Role: "button", Name: "archive", Count: 3},
+		Step{Action: ActionAssertCount, Role: "button", Name: "Archive", Exact: true, Count: 1},
+		Step{Action: ActionAssertCount, Role: "button", Name: "Archive this", Exact: true, Count: 1},
+		Step{Action: ActionAssertCount, Role: "button", Name: "archive", Visible: true, Count: 2},
+		Step{Action: ActionAssertCount, Role: "button", Name: "Save", Exact: true, Count: 1},
+		Step{Action: ActionAssertCount, Role: "link", Name: "Archive", Count: 1},
+		Step{Action: ActionAssertText, Role: "button", Name: "archive", Text: "Archive"},
+		// A selector scopes them: they must be inside what it matches.
+		Step{Action: ActionAssertCount, Selector: "nav", Role: "button", Count: 1},
+		Step{Action: ActionAssertCount, Selector: "main", Role: "button", Name: "Archive", Count: 2},
+		Step{Action: ActionAssertCount, Selector: "section", Role: "listitem", Count: 2},
+		Step{Action: ActionAssertCount, Selector: "button", Role: "button", Count: 0},
+		// has_text filters them, without keeping only the innermost.
+		Step{Action: ActionAssertCount, Role: "button", HasText: "this", Count: 1},
+		Step{Action: ActionAssertCount, Role: "region", HasText: "One", Count: 1},
+		Step{Action: ActionAssertCount, Role: "button", HasText: "Archive this", Exact: true, Count: 1},
+		Step{Action: ActionAssertCount, Role: "button", HasText: "archive this", Exact: true, Count: 0},
+		Step{Action: ActionAssertCount, Selector: "button", HasText: "Archive", Exact: true, Count: 1},
+		Step{Action: ActionAssertCount, Selector: "button", HasText: "Archive", Count: 4},
+		Step{Action: ActionAssertCount, Selector: "button", HasText: "Archive", Visible: true, Count: 2},
+		Step{Action: ActionAssertCount, Role: "button", Name: "shadow", Count: 1},
+		Step{Action: ActionClick, Role: "button", Name: "close"},
+		Step{Action: ActionAssertTitle, Text: "Close dialog"},
+		Step{Action: ActionClick, Role: "checkbox", Name: "Dark mode"},
+		Step{Action: ActionEval, Expression: "String(document.getElementById('c').checked)", Expect: ptr("true")},
+		Step{Action: ActionAssertVisible, Role: "switch", Name: "Notify"},
+		Step{Action: ActionFill, Role: "searchbox", Name: "Find", Value: "x"},
+		Step{Action: ActionAssertValue, Role: "searchbox", Value: "x"},
+		Step{Action: ActionFill, Role: "textbox", Name: "message", Value: "hi"},
+		Step{Action: ActionAssertFocused, Role: "textbox", Name: "Message"},
+		Step{Action: ActionFill, Role: "combobox", Name: "Pick", Value: "b"},
+		Step{Action: ActionAssertValue, Role: "combobox", Value: "b"},
+		Step{Action: ActionAssertVisible, Role: "img", Name: "Logo"},
+		Step{Action: ActionAssertAttribute, Role: "menuitemcheckbox", Name: "wrap", Attribute: "aria-checked", Value: "true"},
+		Step{Action: ActionAssertNotVisible, Role: "button", Name: "Archive hidden"},
+		Step{Action: ActionWaitVisible, Role: "button", Name: "Later"},
+	)
+	for _, c := range []struct {
+		step Step
+		err  string
+	}{
+		{Step{Action: ActionClick, Role: "button", Name: "Delete"}, `no element matches button "Delete"`},
+		{Step{Action: ActionAssertCount, Selector: "nav", Role: "button", Name: "Archive", Count: 2}, `expected 2 of button "Archive" in nav, got 1`},
+		{Step{Action: ActionAssertVisible, Role: "button", Name: "zero"}, `button "zero" is not visible`},
+		{Step{Action: ActionClick, Role: "image"}, `unknown role "image"`},
+		{Step{Action: ActionClick, Selector: "button", Name: "Archive"}, "a name needs a role"},
+	} {
+		c.step.Timeout = "300ms"
+		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
+		}
+	}
+}
+
 func TestFormStateAssertions(t *testing.T) {
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>

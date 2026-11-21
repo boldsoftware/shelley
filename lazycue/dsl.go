@@ -13,7 +13,15 @@ type Step struct {
 	Selector string `json:"selector,omitempty"`
 	// HasText narrows a selector to the elements whose text contains it,
 	// whitespace collapsed.
-	HasText    string  `json:"has_text,omitempty"`
+	HasText string `json:"has_text,omitempty"`
+	// Role and Name pick elements by ARIA role and accessible name, as
+	// Playwright's getByRole, inside what Selector matches when set.
+	Role string `json:"role,omitempty"`
+	Name string `json:"name,omitempty"`
+	// Exact makes Name and HasText match the whole text, case-sensitively.
+	Exact bool `json:"exact,omitempty"`
+	// Visible keeps only the visible matches.
+	Visible    bool    `json:"visible,omitempty"`
 	Value      string  `json:"value,omitempty"`
 	Text       string  `json:"text,omitempty"`
 	Timeout    string  `json:"timeout,omitempty"`
@@ -126,15 +134,15 @@ func stepSummary(s Step) string {
 		}
 		return "navigate " + s.URL
 	case ActionWaitVisible, ActionWaitHidden, ActionAssertVisible, ActionAssertNotVisible:
-		return s.Action + " " + picked(s)
+		return s.Action + " " + describe(s)
 	case ActionWaitText, ActionWaitTextGone:
 		return s.Action + " " + truncateArg(s.Text, 40)
 	case ActionFill:
-		return "fill " + picked(s) + " " + truncateArg(s.Value, 30)
+		return "fill " + describe(s) + " " + truncateArg(s.Value, 30)
 	case ActionClick:
-		return "click " + picked(s) + pointSuffix(s)
+		return "click " + describe(s) + pointSuffix(s)
 	case ActionHover:
-		return "hover " + picked(s) + pointSuffix(s)
+		return "hover " + describe(s) + pointSuffix(s)
 	case ActionMouseDown, ActionMouseUp:
 		if s.Button != "" {
 			return s.Action + " " + s.Button
@@ -147,9 +155,9 @@ func stepSummary(s Step) string {
 		return "wheel"
 	case ActionTouch:
 		if s.Points != "" {
-			return "touch " + s.Value + " " + picked(s) + " at " + s.Points + countSuffix(s)
+			return "touch " + s.Value + " " + describe(s) + " at " + s.Points + countSuffix(s)
 		}
-		return "touch " + s.Value + " " + picked(s) + pointSuffix(s)
+		return "touch " + s.Value + " " + describe(s) + pointSuffix(s)
 	case ActionType, ActionInsertText:
 		return s.Action + " " + truncateArg(s.Value, 30)
 	case ActionCall:
@@ -187,15 +195,15 @@ func stepSummary(s Step) string {
 		}
 		return "eval " + expr
 	case ActionAssertText:
-		return "assert_text " + picked(s) + " " + truncateArg(s.Text, 30)
+		return "assert_text " + describe(s) + " " + truncateArg(s.Text, 30)
 	case ActionAssertTextContains:
-		return "assert_text_contains " + picked(s) + " " + truncateArg(s.Text, 30)
+		return "assert_text_contains " + describe(s) + " " + truncateArg(s.Text, 30)
 	case ActionAssertAttribute:
-		return "assert_attribute " + picked(s) + " " + s.Attribute + "=" + truncateArg(s.Value, 20)
+		return "assert_attribute " + describe(s) + " " + s.Attribute + "=" + truncateArg(s.Value, 20)
 	case ActionAssertValue:
-		return "assert_value " + picked(s) + " " + truncateArg(s.Value, 30)
+		return "assert_value " + describe(s) + " " + truncateArg(s.Value, 30)
 	case ActionAssertEnabled, ActionAssertDisabled, ActionAssertFocused:
-		return s.Action + " " + picked(s)
+		return s.Action + " " + describe(s)
 	case ActionWaitURL:
 		if s.Value != "" {
 			return s.Action + " " + s.Value
@@ -209,7 +217,7 @@ func stepSummary(s Step) string {
 	case ActionAssertTitle:
 		return "assert_title " + truncateArg(s.Text, 30)
 	case ActionAssertCount:
-		return fmt.Sprintf("assert_count %s %d", picked(s), s.Count)
+		return fmt.Sprintf("assert_count %s %d", describe(s), s.Count)
 	case ActionSleep:
 		return "sleep " + s.Timeout
 	case ActionRetry:
@@ -223,12 +231,26 @@ func stepSummary(s Step) string {
 	}
 }
 
-// picked is the summary of what a step's selector and has_text pick out.
-func picked(s Step) string {
-	if s.HasText == "" {
-		return s.Selector
+// describe names what a step's selector, role, name, has_text and visible
+// pick out, e.g. `button "Archive" in nav`.
+func describe(s Step) string {
+	d := s.Selector
+	if s.Role != "" {
+		d = s.Role
+		if s.Name != "" {
+			d += fmt.Sprintf(" %q", s.Name)
+		}
+		if s.Selector != "" {
+			d += " in " + s.Selector
+		}
 	}
-	return s.Selector + "[" + truncateArg(s.HasText, 20) + "]"
+	if s.HasText != "" {
+		d += fmt.Sprintf(" with text %q", s.HasText)
+	}
+	if s.Visible {
+		d = "visible " + d
+	}
+	return d
 }
 
 // pointSuffix describes a pointer step's offset, button, click count and

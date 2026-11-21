@@ -135,6 +135,9 @@ func TestStepSummary(t *testing.T) {
 		{Step{Action: "wait_url", Value: "/c/abc"}, "wait_url /c/abc"},
 		{Step{Action: "wait_url", Text: "/c/"}, "wait_url ~/c/"},
 		{Step{Action: "sleep", Timeout: "1s"}, "sleep 1s"},
+		{Step{Action: "click", Selector: "button", HasText: "Archive"}, `click button with text "Archive"`},
+		{Step{Action: "click", Role: "button", Name: "Archive"}, `click button "Archive"`},
+		{Step{Action: "assert_count", Selector: "nav", Role: "link", HasText: "x", Visible: true, Count: 2}, `assert_count visible link in nav with text "x" 2`},
 	}
 	for _, tt := range tests {
 		got := StepSummary(tt.step)

@@ -230,6 +230,8 @@ Every assert_* and wait_* step retries until it holds or its timeout (default 15
 
 Visible means rendered with a box of some size and not visibility: hidden; opacity does not matter. Selectors are CSS and match the first element. Any step with a selector may add "has_text": "..." to keep only the elements whose text contains it (whitespace collapsed), e.g. {"action": "click", "selector": "button", "has_text": "Archive"}; prefer it to eval for picking an element by its text. Of nested matches only the innermost counts, so {"selector": "*", "has_text": "Saved"} is the element that holds the text itself, not <html>. The browser emulates a Pixel 5 phone (393x727, touch screen) that prefers reduced motion and may use the clipboard, unless the test launched it otherwise.
 
+ROLES: like Playwright's getByRole, any step that takes a selector may instead pick elements by "role" and accessible "name": {"action": "click", "role": "button", "name": "Archive"}. Prefer them to CSS for controls, dialogs, menus and headings. The role is an ARIA role, explicit or implicit: button, link, textbox (<input>, <textarea>), searchbox (<input type=search>), checkbox, radio, switch, combobox (<select>), listbox, option, menu, menuitem, menuitemcheckbox, menuitemradio, tab, tablist, tabpanel, dialog, alertdialog, heading, img, list, listitem, region (<section> with a label), navigation, main, group, toolbar, tooltip, status, alert, progressbar, slider, table, row, cell, … The name is what a screen reader announces (aria-label, aria-labelledby, a <label>, alt, placeholder, or the text inside), matched as a case-insensitive substring with whitespace collapsed. Elements hidden from screen readers (display: none, visibility: hidden, aria-hidden) never match. With a "selector" too, only role matches inside an element it matches count, e.g. {"selector": "[role=dialog]", "role": "button", "name": "Save"}; "has_text" further keeps those whose text contains it. Two more fields narrow any element step: "exact": true matches the whole name and has_text, case-sensitively; "visible": true keeps only visible matches, e.g. {"selector": "button", "has_text": "Copy", "visible": true}.
+
 TABS: any step may add "tab": "<name>" to act in another tab of the same browser profile — like a user with two tabs open, the tabs share localStorage, cookies and IndexedDB but have their own windows. The tab the browser started with has no name: steps without "tab" act in it, and a description's "this tab", "the first tab" or "tab A" means it, so never give it a name (a navigate with a new name opens ANOTHER tab). A navigate step with a not-yet-open tab name opens that tab; {"action": "navigate", "tab": "B"} with no url opens it on the page the first tab is currently on (use this for a URL the app assigned, like a conversation's /c/<slug>). When a description says "in tab B" or "another tab", use this rather than iframes or window.open.
 
 WORKFLOW:
@@ -416,8 +418,8 @@ func inlinedVar(steps []Step, runs ...map[string]string) string {
 				continue
 			}
 			for _, s := range withNested(steps) {
-				for _, f := range []string{s.URL, s.Selector, s.HasText, s.Value, s.Text, s.Expression, deref(s.Expect), s.Attribute, s.Key, s.Points} {
-					if strings.Contains(f, v) {
+				for _, f := range stringFields(&s) {
+					if strings.Contains(*f, v) {
 						return name
 					}
 				}
@@ -1169,12 +1171,4 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
-}
-
-// deref is what p points to, or "" when it is nil.
-func deref(p *string) string {
-	if p == nil {
-		return ""
-	}
-	return *p
 }
