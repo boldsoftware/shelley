@@ -1,0 +1,143 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A REST catch-up retires a streamed answer before the next send. The test answers the page's /api/stream2 EventSources itself, connection after connection, and sends them only what the call steps say, for the conversation /c/{{SLUG}} that was started with \"Hello\". \"Mark the conversation C on connection N with hash H\" means: run the call step named C; then wait until window.__previewPatch === H (eval with expect \"true\"); then eval await window.__frames() (two animation frames). 1. Navigate to /c/{{SLUG}}. 2. The element with data-testid \"message-input\" should be visible (allow 30s). 3. \".messages-container\" should contain \"Hello! I'm Shelley, your AI assistant.\" (allow 15s). 4. Call \"connections\" (the number of stream connections the page opened); it must return \"1\" (expect, which polls). 5. Call \"answer\" (allow 30s): it sends \"echo: answer lost on reconnect\" through the API and waits for the reply \"answer lost on reconnect\", which the page's stream does not get. 6. Mark the conversation \"working on 1\" with hash \"preview-working-1\". 7. Call \"delta\": connection 1 gets the reply's text as a stream delta. 8. \".streaming-message\" should contain \"answer lost on reconnect\". 9. Mark the conversation \"idle on 1\" with hash \"preview-idle-1\". 10. \".streaming-message\" should be hidden. 11. Call \"end\": it ends connection 1, and the page reconnects. 12. Call \"connections\"; it must return \"2\" (expect, allow 30s). 13. Call \"catch-up\" (whether the page has sent GET /api/conversation/\u003cid\u003e?last_sequence_id=... since the end); it must return \"seen\" (expect, allow 30s). 14. The first element matching '.messages-container [data-testid=\"message\"]:not(.message-user)' whose text contains \"answer lost on reconnect\" (has_text) should be visible (allow 15s): the stored reply row. 15. \".streaming-message\" should be hidden. 16. Fill the \"message-input\" element with \"echo: next turn\" and click the element with data-testid \"send-button\". 17. Call \"chat started\"; it must return \"true\" (expect, allow 15s): the server has the send, whose response the test holds. 18. Mark the conversation \"working on 2\" with hash \"preview-working-2\". 19. \".streaming-message\" must be hidden (assert_hidden). 20. Call \"release\" (the held response goes on).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".messages-container",
+      "text": "Hello! I'm Shelley, your AI assistant.",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "connections",
+      "expect": "1"
+    },
+    {
+      "action": "call",
+      "value": "answer",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "working on 1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__previewPatch === 'preview-working-1'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await window.__frames(); })()"
+    },
+    {
+      "action": "call",
+      "value": "delta"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".streaming-message",
+      "has_text": "answer lost on reconnect",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "idle on 1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__previewPatch === 'preview-idle-1'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await window.__frames(); })()"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".streaming-message"
+    },
+    {
+      "action": "call",
+      "value": "end"
+    },
+    {
+      "action": "call",
+      "value": "connections",
+      "expect": "2",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "catch-up",
+      "expect": "seen",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container [data-testid='message']:not(.message-user)",
+      "has_text": "answer lost on reconnect",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".streaming-message"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: next turn"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "call",
+      "value": "chat started",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "working on 2"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__previewPatch === 'preview-working-2'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await window.__frames(); })()"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".streaming-message"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:43:50.292080196Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 625240,
+    "output_tokens": 10379,
+    "estimated_cost_usd": 0.45853425,
+    "mode": "generated"
+  }
+}
