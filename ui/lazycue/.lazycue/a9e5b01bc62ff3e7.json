@@ -1,0 +1,105 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "window.selectTextIn(selector, text) selects the first occurrence of text inside the first element matching selector, as a user's selection would; call it in an eval. \"The comment button\" is the element with data-testid \"message-selection-comment-btn\". To check the message input's value exactly, eval JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value) and compare it with the JSON string given. Tapping Comment on a touch screen injects a blockquote into the composer. Perform the steps in order. 1. Navigate to /c/basil. 2. The first commentable message ('[data-testid=\"message\"][data-commentable=\"true\"]') should contain \"water the basil before noon\". 3. Eval window.selectTextIn('[data-testid=\"message\"][data-commentable=\"true\"]', 'water the basil'). 4. The comment button should become visible, and it must be inside the viewport (its bounding rect intersects the window's innerWidth x innerHeight). 5. Tap it with a real touch held across frames: a touch step \"start\" on the comment button; then an eval that waits two animation frames, new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r))); then a touch step \"end\". 6. The message input's value should become exactly \"\u003e water the basil\\n\\n\" (JSON), the message input must be the focused element (document.activeElement), and the comment button should become hidden. 7. Eval window.selectTextIn('[data-testid=\"message\"][data-commentable=\"true\"]', 'before noon'); the comment button should become visible. 8. Tap it: touch \"start\" on the comment button immediately followed by touch \"end\". 9. The message input's value should become exactly \"\u003e water the basil\\n\\n\u003e before noon\\n\\n\" (JSON), and the comment button should become hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/basil"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"][data-commentable=\"true\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"message\"][data-commentable=\"true\"]",
+      "text": "water the basil before noon"
+    },
+    {
+      "action": "eval",
+      "expression": "window.selectTextIn('[data-testid=\"message\"][data-commentable=\"true\"]', 'water the basil')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const el = document.querySelector('[data-testid=\"message-selection-comment-btn\"]'); const rect = el.getBoundingClientRect(); return rect.width \u003e 0 \u0026\u0026 rect.height \u003e 0 \u0026\u0026 rect.left \u003c window.innerWidth \u0026\u0026 rect.top \u003c window.innerHeight \u0026\u0026 rect.right \u003e 0 \u0026\u0026 rect.bottom \u003e 0; })()",
+      "expect": "true"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r)))"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "\"\u003e water the basil\\n\\n\""
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.selectTextIn('[data-testid=\"message\"][data-commentable=\"true\"]', 'before noon')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "\"\u003e water the basil\\n\\n\u003e before noon\\n\\n\""
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:06:27.326092215Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 10288,
+    "output_tokens": 1614,
+    "estimated_cost_usd": 0.0345978,
+    "mode": "generated"
+  }
+}

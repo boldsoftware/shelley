@@ -1,0 +1,95 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "window.selectTextIn(selector, text) selects the first occurrence of text inside the first element matching selector, as a user's selection would; call it in an eval. \"The comment button\" is the element with data-testid \"message-selection-comment-btn\". To check the message input's value exactly, eval JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value) and compare it with the JSON string given. On a desktop with a mouse, clicking Comment injects a blockquote into the composer, while a press that is released outside the button does nothing. Perform the steps in order. 1. Navigate to /c/mint. 2. The first commentable message ('[data-testid=\"message\"][data-commentable=\"true\"]') should contain \"prune the mint\". 3. Eval window.selectTextIn('[data-testid=\"message\"][data-commentable=\"true\"]', 'prune the mint'). 4. The comment button should become visible. 5. Press the mouse on the comment button and release it outside: hover the comment button (its center), mouse_down, then move the pointer (a hover step with no selector, \"count\" 5) to the viewport point 80px right of and 80px below the button's bottom-right corner (read the button's getBoundingClientRect() with an eval first; the layout is fixed), then mouse_up. 6. The message input's value must still be exactly \"\" (JSON), and the comment button must still be visible. 7. Click the comment button. 8. The message input's value should become exactly \"\u003e prune the mint\\n\\n\" (JSON), the message input must be the focused element (document.activeElement), and the comment button should become hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 800,
+      "scale": 1,
+      "mobile": false,
+      "touch": false
+    },
+    {
+      "action": "navigate",
+      "url": "/c/mint"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"][data-commentable=\"true\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"message\"][data-commentable=\"true\"]",
+      "text": "prune the mint"
+    },
+    {
+      "action": "eval",
+      "expression": "window.selectTextIn('[data-testid=\"message\"][data-commentable=\"true\"]', 'prune the mint')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-selection-comment-btn\"]').getBoundingClientRect())"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]"
+    },
+    {
+      "action": "mouse_down"
+    },
+    {
+      "action": "hover",
+      "x": 507,
+      "y": 358,
+      "count": 5
+    },
+    {
+      "action": "mouse_up"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "\"\""
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "\"\u003e prune the mint\\n\\n\""
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:07:00.904532373Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 20795,
+    "output_tokens": 1927,
+    "estimated_cost_usd": 0.044472,
+    "mode": "generated"
+  }
+}

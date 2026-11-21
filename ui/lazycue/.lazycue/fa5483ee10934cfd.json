@@ -1,0 +1,42 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "window.selectTextIn(selector, text) selects the first occurrence of text inside the first element matching selector, as a user's selection would; call it in an eval. \"The comment button\" is the element with data-testid \"message-selection-comment-btn\". To check the message input's value exactly, eval JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value) and compare it with the JSON string given. Selecting text in the user's own message does not offer Comment. Perform the steps in order. 1. Navigate to /c/reply. 2. The first message that is not commentable ('[data-testid=\"message\"]:not([data-commentable=\"true\"])') should contain \"echo: reply text here\". 3. Eval window.selectTextIn('[data-testid=\"message\"]:not([data-commentable=\"true\"])', 'reply text here'). 4. Give the page's selectionchange handling a turn: eval new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r))). 5. The comment button must then be hidden (or absent).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/reply"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]:not([data-commentable=\"true\"])",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"message\"]:not([data-commentable=\"true\"])",
+      "text": "echo: reply text here"
+    },
+    {
+      "action": "eval",
+      "expression": "window.selectTextIn('[data-testid=\"message\"]:not([data-commentable=\"true\"])', 'reply text here')"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r)))"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"message-selection-comment-btn\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:06:56.741917209Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 24914,
+    "output_tokens": 973,
+    "estimated_cost_usd": 0.0290406,
+    "mode": "generated"
+  }
+}
