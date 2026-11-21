@@ -128,6 +128,7 @@ func TestProviderModelAdmission(t *testing.T) {
 		{"https://api.groq.com/openai/v1", "llama-3.1-8b-instant", true},
 		{"https://api.mistral.ai/v1", "pixtral-12b", true},
 		{"https://api.together.ai/v1", "essentialai/Rnj-1-Instruct", true},
+		{"https://gemini.int.exe.xyz/v1beta", "gemini-3-flash-preview", true},
 		{"https://gateway.example/v1", "claude-sonnet-5-5", true},
 		{"https://gateway.example/v1", "unrecognized-embedding", false},
 	} {
