@@ -15002,6 +15002,10 @@ kbd {
     > * {
     opacity: 0;
     transition: opacity 0.15s;
+    /* Faded out, it still sits over what took its place, in its own
+       stacking context (opacity below 1 makes one), and would take the
+       pointer from a button at full opacity, which has none. */
+    pointer-events: none;
   }
 }
 

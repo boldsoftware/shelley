@@ -513,6 +513,23 @@ func TestE2EDrawerChapterControlsLeaveRoom(t *testing.T) {
 	})
 }
 
+// drawerDeleteSettled waits for the archived row's Delete button to finish
+// its hover fade, then says whether the pointer still rests on it: it is
+// hovered and is (or holds) the element at its center.
+const drawerDeleteSettled = `new Promise((resolve) => { const del = document.querySelector('[data-conversation-id="archived-delete"] .drawer-actions-top button[aria-label="Delete"]'); const check = () => { if (del.getAnimations().length) return requestAnimationFrame(check); const r = del.getBoundingClientRect(); resolve(del.matches(':hover') && del.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2))); }; check(); })`
+
+// With motion allowed, Delete fades in to full opacity on hover, and the
+// row's time, faded out in the same place, must not take the pointer from
+// it then.
+func TestE2EDrawerWorkspaceDeleteKeepsThePointer(t *testing.T) {
+	drawerTest(t, `A workspace row's Delete button keeps the pointer once its hover fade has finished, with motion allowed. The server has the workspace feature on. `+drawerStubbed+`The list is "active"; the archived list is "archived-delete" ("the row"). "The actions" are the row's ".drawer-actions-top". `+drawerSteps+drawerDirect+`1. Navigate to /new. 2. Click the button "Search tasks...". 3. Click data-testid "archived-toggle". 4. Hover the row. 5. Hover the actions' button "Delete". 6. Eval `+drawerDeleteSettled+` with expect "true". 7. Click the actions' button "Delete". 8. The actions' ".drawer-delete-confirm" is visible.`, func(s *shelley) {
+		s.media("prefers-reduced-motion", "no-preference")
+		s.flag("workspace", true)
+		s.stubDrawerList(drawerConversation("active", false))
+		s.route("GET /api/conversations/archived", drawerAnswer([]drawerConv{drawerConversation("archived-delete", false).with("archived", true)}))
+	})
+}
+
 func TestE2EDrawerChapterSearchArchiveView(t *testing.T) {
 	drawerTest(t, `Chapter search respects the current archive view. `+drawerStubbed+`The list is "active-chapter-hit"; the archived list is "archived-chapter-hit"; searches find nothing. The chapter index gives both the chapter "Needle". Titles are checked with assert_texts on ".drawer .conversation-title". `+drawerQuery+drawerSteps+drawerDirect+`1. Navigate to /new. 2. Click the button "Search conversations...". 3. Set the query to "needle". 4. The titles should be exactly ["active-chapter-hit"]. 5. Click the button "View Archived". 6. The titles should be exactly ["archived-chapter-hit"]. 7. Click the button "Back to conversations". 8. The titles should be exactly ["active-chapter-hit"].`, func(s *shelley) {
 		l := s.stubDrawerList(drawerConversation("active-chapter-hit", false))
