@@ -803,6 +803,59 @@ func TestConversationFollowsProfile(t *testing.T) {
 	}
 }
 
+// An idle conversation takes its profile's edits at its next turn, not
+// before: the queue drain that runs after a turn ends, with nothing queued,
+// leaves its settings alone. A queued message is a turn, so it follows.
+func TestIdleDrainKeepsSettingsUntilNextTurn(t *testing.T) {
+	t.Parallel()
+	e := newProfileEnv(t)
+	e.want(201, "POST", "/api/profiles", `{"name":"P","model":"model-a","system_prompt":"Version one."}`)
+	var created struct {
+		ConversationID string `json:"conversation_id"`
+	}
+	if err := json.Unmarshal([]byte(e.want(201, "POST", "/api/conversations/new", `{"message":"hello","conversation_options":{"profile":"P"}}`)), &created); err != nil {
+		t.Fatal(err)
+	}
+	id := created.ConversationID
+	e.waitTurn(id, 0)
+	manager, err := e.srv.getOrCreateConversationManager(t.Context(), id, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := e.database.GetConversationByID(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e.want(200, "PUT", "/api/profiles/P", `{"model":"model-b","system_prompt":"Version two."}`)
+	// As a drain that the turn's end started late would.
+	<-manager.drainPendingMessages()
+	after, err := e.database.GetConversationByID(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.ConversationOptions != before.ConversationOptions || *after.Model != *before.Model {
+		t.Fatalf("idle drain followed the profile: before %s %s, after %s %s", *before.Model, before.ConversationOptions, *after.Model, after.ConversationOptions)
+	}
+
+	n := len(listMessages(t, e.database, id))
+	if _, err := e.database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{
+		ID: "q", Llm: []byte(`{"Role":0,"Content":[{"Type":2,"Text":"echo: queued"}]}`),
+		CreatedAt: time.Now(), Model: "model-a",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	<-manager.drainPendingMessages()
+	e.waitTurn(id, n)
+	conv, err := e.database.GetConversationByID(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(systemText(e.lastTurnRequest())); got != "Version two." || *conv.Model != "model-b" {
+		t.Fatalf("queued turn didn't follow: system %q, model %s", got, *conv.Model)
+	}
+}
+
 // A client may send back a profile as listed, with its read-only fields, as
 // long as it doesn't try to change them that way.
 func TestProfileRoundTrip(t *testing.T) {

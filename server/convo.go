@@ -1744,7 +1744,18 @@ func (cm *ConversationManager) takeProfileEdits(ctx context.Context) (llm.Servic
 // drainPendingMessagesOwned performs one drain pass. The caller owns draining.
 func (cm *ConversationManager) drainPendingMessagesOwned() {
 	ctx := context.Background()
-	// feedQueued reads the model the conversation follows to.
+	// Only a turn takes profile edits, so an idle conversation keeps its
+	// settings: follow only for a message to feed. feedQueued reads the
+	// model the conversation follows to. Whatever is queued from here on
+	// wakes a drain, which follows then.
+	queued, err := cm.feedableQueue(ctx)
+	if err != nil {
+		cm.logger.Error("Failed to read queued messages", "error", err)
+		return
+	}
+	if len(queued) == 0 {
+		return
+	}
 	if _, _, err := cm.takeProfileEdits(ctx); err != nil {
 		cm.logger.Error("Failed to follow profile", "error", err)
 	}
@@ -1764,17 +1775,10 @@ func (cm *ConversationManager) drainPendingMessagesOwned() {
 		if held {
 			return
 		}
-		queued, err := cm.db.GetQueuedMessages(ctx, cm.conversationID)
+		queued, err = cm.feedableQueue(ctx)
 		if err != nil {
 			cm.logger.Error("Failed to read queued messages", "error", err)
 			return
-		}
-		// A transcription that is not ready yet blocks everything behind it,
-		// preserving FIFO order.
-		if i := slices.IndexFunc(queued, func(qm db.QueuedMessage) bool {
-			return qm.Kind == db.QueuedMessageKindTranscription && qm.State != db.QueuedMessageStateReady
-		}); i >= 0 {
-			queued = queued[:i]
 		}
 		if len(queued) == 0 {
 			return
@@ -1793,6 +1797,22 @@ func (cm *ConversationManager) drainPendingMessagesOwned() {
 			return
 		}
 	}
+}
+
+// feedableQueue returns the queued items that can be fed now. A
+// transcription that is not ready yet blocks everything behind it, preserving
+// FIFO order.
+func (cm *ConversationManager) feedableQueue(ctx context.Context) ([]db.QueuedMessage, error) {
+	queued, err := cm.db.GetQueuedMessages(ctx, cm.conversationID)
+	if err != nil {
+		return nil, err
+	}
+	if i := slices.IndexFunc(queued, func(qm db.QueuedMessage) bool {
+		return qm.Kind == db.QueuedMessageKindTranscription && qm.State != db.QueuedMessageStateReady
+	}); i >= 0 {
+		queued = queued[:i]
+	}
+	return queued, nil
 }
 
 // markUndrainable records that nothing will drain the queue, so a turn end
