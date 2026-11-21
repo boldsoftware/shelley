@@ -1,0 +1,71 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Workspace mode pins the Assistant and always groups by project. The server runs in workspace mode, and the page's localStorage has \"shelley-group-by\" set to \"none\" (a grouping chosen outside workspace mode). On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. Perform the steps in order. 1. Navigate to /. 2. \"h1.header-title\" should have exactly the text \"Assistant\". 3. Click the button named exactly \"Open tasks\". 4. The element with data-testid \"assistant-row\" should be visible. 5. There must be exactly 0 elements with data-testid \"nav-tab-dev\". 6. The region (role \"region\") named exactly \"Self\" should be visible. 7. Click the button named \"View options\". 8. The group (role \"group\") named \"Row size\" should be visible. 9. There must be exactly 0 buttons named \"No grouping\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley-group-by', 'none')"
+    },
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('h1.header-title')?.textContent",
+      "expect": "Assistant"
+    },
+    {
+      "action": "assert_text",
+      "selector": "h1.header-title",
+      "text": "Assistant"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open tasks']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='assistant-row']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='nav-tab-dev']",
+      "count": 0
+    },
+    {
+      "action": "wait_visible",
+      "selector": "section[aria-label='Self']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='View options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='group'][aria-labelledby='drawer-row-size-heading']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "button[aria-label='No grouping']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:35:28.896017877Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 235203,
+    "output_tokens": 6393,
+    "estimated_cost_usd": 0.22308839999999996,
+    "mode": "generated"
+  }
+}
