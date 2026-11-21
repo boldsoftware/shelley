@@ -73,6 +73,17 @@ func TestE2EReducedMotionStopStaysStatic(t *testing.T) {
 	})
 }
 
+// Under reduce a style change applies at once, not through a near-zero
+// transition: PrimeVue sets an overlay's min-width and measures it straight
+// away, and a transition still running then put the model picker at the left
+// edge of the screen.
+func TestE2EReducedMotionStylesApplyAtOnce(t *testing.T) {
+	e2e(t, `A style change applies at once under reduced motion, with no transition left running. The page /reduced-motion/transition is a phone-width page with every stylesheet the server ships and a rule ".box { width: 50px; transition: width 1s; }". "The probe" is this eval, which builds a fresh box each time and so can run again safely: const b = document.body.appendChild(Object.assign(document.createElement('div'), { className: 'box' })); getComputedStyle(b).width; b.style.width = '77px'; const r = getComputedStyle(b).width + ' ' + b.getAnimations().length; b.remove(); r. 1. Navigate to /reduced-motion/transition. 2. `+reducedMotionLoaded+` 3. Run the probe: it must return exactly "77px 0" (the new width, and no transition). 4. The probe can tell: emulate prefers-reduced-motion: no-preference, and the probe must now return exactly "50px 1" (the old width, held by a running transition).`, func(s *shelley) {
+		s.viewport(390, 844)
+		s.reducedMotionPage("/reduced-motion/transition", `<style>.box { width: 50px; transition: width 1s; }</style>`)
+	})
+}
+
 // reducedMotionScan finds every selector the shipped stylesheets animate
 // forever, and those of them the reduced-motion override freezes. It asks
 // the browser rather than parsing CSS: an earlier regex version of the spec

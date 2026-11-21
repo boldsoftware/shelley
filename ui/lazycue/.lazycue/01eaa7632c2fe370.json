@@ -1,0 +1,40 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A style change applies at once under reduced motion, with no transition left running. The page /reduced-motion/transition is a phone-width page with every stylesheet the server ships and a rule \".box { width: 50px; transition: width 1s; }\". \"The probe\" is this eval, which builds a fresh box each time and so can run again safely: const b = document.body.appendChild(Object.assign(document.createElement('div'), { className: 'box' })); getComputedStyle(b).width; b.style.width = '77px'; const r = getComputedStyle(b).width + ' ' + b.getAnimations().length; b.remove(); r. 1. Navigate to /reduced-motion/transition. 2. Eval [...document.querySelectorAll('link[rel=\"stylesheet\"]')].every((l) =\u003e l.sheet \u0026\u0026 l.sheet.cssRules.length \u003e 0): it must return true (allow 15s): every shipped stylesheet loaded. 3. Run the probe: it must return exactly \"77px 0\" (the new width, and no transition). 4. The probe can tell: emulate prefers-reduced-motion: no-preference, and the probe must now return exactly \"50px 1\" (the old width, held by a running transition).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/reduced-motion/transition"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('link[rel=\"stylesheet\"]')].every((l) =\u003e l.sheet \u0026\u0026 l.sheet.cssRules.length \u003e 0)",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "const b = document.body.appendChild(Object.assign(document.createElement('div'), { className: 'box' })); getComputedStyle(b).width; b.style.width = '77px'; const r = getComputedStyle(b).width + ' ' + b.getAnimations().length; b.remove(); r",
+      "expect": "77px 0"
+    },
+    {
+      "action": "emulate_media",
+      "value": "prefers-reduced-motion: no-preference"
+    },
+    {
+      "action": "eval",
+      "expression": "const b = document.body.appendChild(Object.assign(document.createElement('div'), { className: 'box' })); getComputedStyle(b).width; b.style.width = '77px'; const r = getComputedStyle(b).width + ' ' + b.getAnimations().length; b.remove(); r",
+      "expect": "50px 1"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T15:55:46.726657934Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 7512,
+    "output_tokens": 427,
+    "estimated_cost_usd": 0.0345735,
+    "mode": "generated"
+  }
+}

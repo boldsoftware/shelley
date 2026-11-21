@@ -18181,9 +18181,13 @@ kbd {
  * stops animating under reduce, whether by duration or iteration count. Add a
  * spinner, and the test tells you to add it here.
  *
- * Killing transitions is safe: nothing keys behaviour off transitionend, and
- * the one animationend listener (message highlight, ChatInterface) has a 2s
- * timeout fallback -- and a near-zero animation still fires the event, so it
+ * Transitions get no duration at all, not a near-zero one: a 0.01ms
+ * transition still holds the old value until the next frame, so code that
+ * sets a style and measures at once (PrimeVue's overlay alignment, for one)
+ * measured the old layout, and the model picker opened at the left edge.
+ * Killing them is safe: nothing keys behaviour off transitionend. Animations
+ * keep a near-zero duration so animationend still fires; the one listener
+ * (message highlight, ChatInterface) has a 2s timeout fallback anyway, so it
  * cannot latch. JS scrolls pass `behavior: "smooth"` explicitly, which wins
  * over the scroll-behavior below; that is deliberate, since those are direct
  * responses to a user action rather than ambient motion.
@@ -18194,7 +18198,7 @@ kbd {
   *::after {
     animation-duration: 0.01ms !important;
     animation-delay: 0ms !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 0s !important;
     transition-delay: 0ms !important;
     scroll-behavior: auto !important;
   }
