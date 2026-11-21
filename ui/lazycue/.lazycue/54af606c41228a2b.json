@@ -1,0 +1,121 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The test seeds two conversations: A at /c/catchup-a, whose reply reads \"Hello! I'm Shelley, your AI assistant.\", and B at /c/catchup-b, whose reply reads \"Well, hi there!\". A conversation \"shows\" a text when document.querySelector(\".messages-container\")?.textContent includes it (wait for that with an eval expecting true, allowing 15s; do not look elsewhere on the page, as the conversation list previews messages too). To \"select\" a conversation with slug X: click the button[aria-label=\"Open conversations\"]; wait for \".drawer.open\" to be visible (allow 5s); wait for the \".drawer.open .conversation-title\" whose text is exactly X to be visible (allow 15s) and click it; then wait for \".drawer.open\" to be hidden (allow 10s). Perform the steps in order. A reload preserves the cache: no spinner, and no backfill after the reload. Call \"track\" starts counting the browser's GETs of A's full-load endpoint (/api/conversation/\u003cA's id\u003e, any query) and call \"A loads\" returns how many there have been since, as a number.\n1. Navigate to /c/catchup-a; wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s); A shows \"Hello! I'm Shelley, your AI assistant.\".\n2. Reload the page; wait for the message input to be visible (allow 30s); A shows \"Hello! I'm Shelley, your AI assistant.\" (the IndexedDB cache rehydrates it).\n3. There must be exactly 0 \".spinner\" elements.\n4. Call \"track\".\n5. Select catchup-b; it shows \"Well, hi there!\".\n6. Select catchup-a; it shows \"Hello! I'm Shelley, your AI assistant.\".\n7. Call \"A loads\": it must return exactly \"0\": the B → A round trip after the reload must be served from the cache.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/catchup-a"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container')?.textContent.includes('Hello! I\\'m Shelley, your AI assistant.')",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container')?.textContent.includes('Hello! I\\'m Shelley, your AI assistant.')",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".spinner",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "track"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-b",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-b"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".drawer.open",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container')?.textContent.includes('Well, hi there!')",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-a",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-a"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".drawer.open",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container')?.textContent.includes('Hello! I\\'m Shelley, your AI assistant.')",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "A loads",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:10:49.688163622Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 32172,
+    "output_tokens": 1902,
+    "estimated_cost_usd": 0.0483711,
+    "mode": "generated"
+  }
+}

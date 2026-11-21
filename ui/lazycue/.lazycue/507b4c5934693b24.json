@@ -1,0 +1,150 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The test seeds two conversations: A at /c/catchup-a, whose reply reads \"Hello! I'm Shelley, your AI assistant.\", and B at /c/catchup-b, whose reply reads \"Well, hi there!\". A conversation \"shows\" a text when document.querySelector(\".messages-container\")?.textContent includes it (wait for that with an eval expecting true, allowing 15s; do not look elsewhere on the page, as the conversation list previews messages too). To \"select\" a conversation with slug X: click the button[aria-label=\"Open conversations\"]; wait for \".drawer.open\" to be visible (allow 5s); wait for the \".drawer.open .conversation-title\" whose text is exactly X to be visible (allow 15s) and click it; then wait for \".drawer.open\" to be hidden (allow 10s). Perform the steps in order. Only one /api/stream2 EventSource exists, even after switching conversations. Call \"stream requests\" returns how many requests for /api/stream2 (any query) the browser has sent since the test began, as a number.\n1. Navigate to /c/catchup-a; wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s); A shows \"Hello! I'm Shelley, your AI assistant.\".\n2. Select catchup-b; it shows \"Well, hi there!\".\n3. Select catchup-a, then select catchup-b, then select catchup-a; it shows \"Hello! I'm Shelley, your AI assistant.\".\n4. Call \"stream requests\": it must return exactly \"1\". The stream is held open for the lifetime of the page; switching conversations must not reopen it.\n5. performance.getEntriesByType(\"resource\").filter((e) =\u003e e.name.includes(\"/api/stream2\")).length must be at most 1 (Resource Timing logs only completed responses, so an open EventSource may show 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/catchup-a"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container')?.textContent.includes(\"Hello! I'm Shelley, your AI assistant.\")",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-b",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-b"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".drawer.open",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container')?.textContent.includes('Well, hi there!')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-a",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-a"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".drawer.open",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-b",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-b"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".drawer.open",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-a",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer.open .conversation-title",
+      "has_text": "catchup-a"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".drawer.open",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container')?.textContent.includes(\"Hello! I'm Shelley, your AI assistant.\")",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "stream requests",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "performance.getEntriesByType('resource').filter((e) =\u003e e.name.includes('/api/stream2')).length \u003c= 1",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:15:26.421671934Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 76027,
+    "output_tokens": 2828,
+    "estimated_cost_usd": 0.09066629999999999,
+    "mode": "generated"
+  }
+}
