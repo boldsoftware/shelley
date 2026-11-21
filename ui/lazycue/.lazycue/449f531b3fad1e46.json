@@ -1,0 +1,73 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The diff viewer shows the commit message before the changed files load and keeps it selected. The conversation /c/{{SLUG}} runs in a git repository whose last commit, \"update story\", changed story.txt. The server's answers to the diff viewer's changed-files requests (GET /api/git/diffs/\u003ccommit\u003e/files?...) are held back until call \"release\"; call \"files-requested\" says whether one has arrived (\"true\" or \"false\"). Perform the steps in order. 1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input (data-testid \"message-input\") to be visible. 2. Open the Diffs tool: click the button with aria-label exactly \"Diffs\" in the header's workspace toolbar (\".chat-workspace-actions\"). 3. The overlay \".diff-viewer-overlay\" should be visible. 4. Call \"files-requested\" until it returns \"true\". 5. The first \"select.diff-viewer-select\" in the overlay (the file select) should come to have a value starting with \"commit-message:\". 6. The overlay's \".diff-viewer-editor .editor.modified .view-lines\" should contain the text \"update story\". 7. The file select must have exactly 0 options with value \"story.txt\" (option[value=\"story.txt\"]). 8. Call \"release\". 9. The file select should come to have exactly 1 option with value \"story.txt\". 10. The file select's value should still start with \"commit-message:\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions [aria-label='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "files-requested",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-viewer-overlay select.diff-viewer-select')?.value?.startsWith('commit-message:') ? 'yes' : 'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-viewer-overlay .diff-viewer-editor .editor.modified .view-lines')?.textContent?.replace(/\\s+/g, ' ').includes('update story') ? 'yes' : 'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay select.diff-viewer-select option[value='story.txt']",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.diff-viewer-overlay select.diff-viewer-select option[value=\"story.txt\"]').length",
+      "expect": "1"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay select.diff-viewer-select option[value='story.txt']",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-viewer-overlay select.diff-viewer-select')?.value?.startsWith('commit-message:') ? 'yes' : 'no'",
+      "expect": "yes"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:07:26.765349618Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 46919,
+    "output_tokens": 2651,
+    "estimated_cost_usd": 0.06967290000000001,
+    "mode": "generated"
+  }
+}
