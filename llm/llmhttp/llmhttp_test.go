@@ -443,3 +443,34 @@ func TestRequestTraceCapturesIDWhenIdleDisabled(t *testing.T) {
 		t.Errorf("UpstreamRequestID = %q, want req_nodeadline", trace.Value("upstream_request_id"))
 	}
 }
+
+func TestTransportAddsOpenRouterAttribution(t *testing.T) {
+	for _, tc := range []struct {
+		url  string
+		want bool
+	}{
+		{"https://openrouter.ai/api/v1/chat/completions", true},
+		{"https://openrouter.int.exe.xyz/v1/responses", true},
+		{"https://api.openai.com/v1/responses", false},
+	} {
+		var got http.Header
+		base := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			got = r.Header.Clone()
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ok")), Request: r}, nil
+		})}
+		req, _ := http.NewRequestWithContext(t.Context(), "GET", tc.url, nil)
+		resp, err := NewClient(base).Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		has := got.Get("HTTP-Referer") != "" && got.Get("X-OpenRouter-Title") == "Shelley" &&
+			got.Get("X-OpenRouter-Categories") == "cloud-agent"
+		if has != tc.want {
+			t.Errorf("%s: attribution headers = %v, want %v", tc.url, has, tc.want)
+		}
+		if !tc.want && (got.Get("HTTP-Referer") != "" || got.Get("X-OpenRouter-Title") != "" || got.Get("X-OpenRouter-Categories") != "") {
+			t.Errorf("%s: unexpected attribution headers", tc.url)
+		}
+	}
+}
