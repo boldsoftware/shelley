@@ -1407,7 +1407,7 @@ func pickJS(step Step, slot, scopes string) string {
 		`+isVisibleJS+`
 		`+deepAllJS+`
 		const norm = s => s.replace(/\s+/g, ' ').trim();
-		const has = el => exact ? norm(el.textContent) === norm(hasText) : norm(el.textContent).includes(norm(hasText));
+		const has = el => exact ? norm(el.textContent) === norm(hasText) : norm(el.textContent).toLowerCase().includes(norm(hasText).toLowerCase());
 		// Whether an element is inside one of els, shadow roots included.
 		const inside = els => {
 			const set = new Set(els);

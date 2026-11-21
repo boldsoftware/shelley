@@ -13,7 +13,7 @@ type Step struct {
 	URL      string `json:"url,omitempty"`
 	Selector string `json:"selector,omitempty"`
 	// HasText narrows a selector to the elements whose text contains it,
-	// whitespace collapsed.
+	// ignoring case, whitespace collapsed.
 	HasText string `json:"has_text,omitempty"`
 	// Role and Name pick elements by ARIA role and accessible name, as
 	// Playwright's getByRole, inside what Selector matches when set.
