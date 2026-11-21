@@ -30,9 +30,9 @@ import (
 type Options struct {
 	BaseURL string // Base URL of a long-running app under test; Setup replaces it
 	// Setup starts a fresh instance of the app under test. Run calls it for
-	// every attempt at a test (a cached run, each retry, the agent's session
-	// and the check of what the agent wrote), so a script never passes only
-	// because of what an earlier attempt left behind.
+	// every attempt at a test (a cached run, each retry, and each script the
+	// agent runs), so a script never passes only because of what an earlier
+	// attempt left behind.
 	Setup            func(ctx context.Context) (*Env, error)
 	CacheDir         string // Directory holding cache JSON files (default: ".lazycue")
 	Model            string // LLM model (default: "claude-sonnet-4-6")
@@ -125,10 +125,10 @@ func detectRepoRoot() string {
 
 // perTestBudget bounds the whole resolution of a single lazycue test: the
 // cached attempt and its retries, the wait for an agent slot, and the agent
-// (agentBudget). It
-// is kept under the `go test` package deadline (10m default) so that a single
-// stuck test fails cleanly via t.Fatal rather than letting the package time
-// out and panic, which would abort every other test in the package.
+// (agentBudget). It is kept under the `go test` package deadline (10m
+// default) so that a single stuck test fails cleanly via t.Fatal rather than
+// letting the package time out and panic, which would abort every other test
+// in the package.
 //
 // It is set comfortably above agentBudget rather than just above it: under
 // the flaky-long-wait conditions that trigger heals, the attempts before the
@@ -506,8 +506,9 @@ var errNoAgent = errors.New("no agent")
 // acquireAgent waits for an agent slot, failing with errNoAgent when the
 // process may start no more agents or the test runs out of time waiting.
 func acquireAgent(ctx context.Context) (release func(), err error) {
+	var n int64
 	for {
-		n := agentRunsLeft.Load()
+		n = agentRunsLeft.Load()
 		if n == 0 {
 			return nil, fmt.Errorf("%w: LAZYCUE_MAX_AGENT_RUNS agent runs used up", errNoAgent)
 		}
@@ -519,6 +520,9 @@ func acquireAgent(ctx context.Context) (release func(), err error) {
 	case agentSlots <- struct{}{}:
 		return func() { <-agentSlots }, nil
 	case <-ctx.Done():
+		if n > 0 {
+			agentRunsLeft.Add(1) // no agent ran
+		}
 		return nil, fmt.Errorf("%w: waiting for a slot: %w", errNoAgent, ctx.Err())
 	}
 }

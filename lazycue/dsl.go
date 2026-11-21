@@ -208,9 +208,13 @@ func picked(s Step) string {
 	return s.Selector + "[" + truncateArg(s.HasText, 20) + "]"
 }
 
-// pointSuffix describes a pointer step's offset, button and click count.
+// pointSuffix describes a pointer step's offset, button, click count and
+// modifiers.
 func pointSuffix(s Step) string {
 	var out string
+	if s.Modifiers != "" {
+		out += " with " + s.Modifiers
+	}
 	if s.X != nil && s.Y != nil {
 		out += fmt.Sprintf(" at %g,%g", *s.X, *s.Y)
 	}

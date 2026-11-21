@@ -193,7 +193,7 @@ Available DSL actions:
 - wheel: {"action": "wheel", "x": 0, "y": 300} - Turn the mouse wheel where the pointer is, scrolling by x,y pixels.
 - touch: {"action": "touch", "value": "start", "selector": "..."} - Touch screen: "value" is start (fingers down), move, end or cancel (all fingers up; no selector). Start and move put one finger where a click would land ("x"/"y" as for click), or several at "points": "10,10 60,10" (x,y offsets from the element's top-left corner, or the viewport's without a selector).
 - press_key: {"action": "press_key", "key": "Enter", "modifiers": "Shift"} - Press one key on the focused element. "key" is a KeyboardEvent.key name (Enter, Tab, Escape, Backspace, Delete, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown, F1-F12, Insert), "Space", or a single character. Optional modifiers: Shift, Control, Alt, Meta (combine with "+"). Focus the target first (click or fill it).
-- key_down / key_up: {"action": "key_down", "key": "Shift"} - Press a key and keep it held until key_up, as for press_key. A held Shift, Control, Alt or Meta modifies every later key and mouse step.
+- key_down / key_up: {"action": "key_down", "key": "Shift"} - Press a key and keep it held until key_up, as for press_key. A held Shift, Control, Alt or Meta modifies every later key and mouse step. A key_down of a key already held repeats it (KeyboardEvent.repeat), as holding a key does.
 - set_viewport: {"action": "set_viewport", "width": 1280, "height": 800, "scale": 1, "mobile": false, "touch": false} - Change the emulated device for the rest of the test; omitted fields keep their value. Whether the page sees a touch screen changes on the next navigate.
 - emulate_media: {"action": "emulate_media", "value": "prefers-color-scheme: dark"} - Override a CSS media feature for the rest of the test; "prefers-reduced-motion:" with no value drops the override.
 - screenshot: {"action": "screenshot"} - Take screenshot
@@ -660,8 +660,7 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 				}
 				if used {
 					if err := fresh(); err != nil {
-						toolResults = append(toolResults, makeToolResult(tu.ID, fmt.Sprintf("Not run: could not start a fresh app: %v", err)))
-						continue
+						return nil, err
 					}
 				}
 				used = true

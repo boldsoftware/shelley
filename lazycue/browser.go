@@ -125,6 +125,8 @@ type tabState struct {
 	buttons        int64
 	button         input.MouseButton
 	keys           input.Modifier
+	// The codes of the keys key_down holds.
+	held map[string]bool
 }
 
 // NewBrowser launches a headless Chrome instance whose tabs start out as
@@ -188,18 +190,12 @@ func setUpTab(launch Launch, st *tabState) chromedp.Action {
 				return fmt.Errorf("install init script: %w", err)
 			}
 		}
-		return resetTab(ctx, launch, st)
+		*st = tabState{media: launch.media()}
+		if err := setDevice(ctx, st, launch.device()); err != nil {
+			return err
+		}
+		return applyMedia(ctx, st)
 	})
-}
-
-// resetTab undoes what steps changed about a tab: its device and media, and
-// where the mouse is. The page itself stays loaded.
-func resetTab(ctx context.Context, launch Launch, st *tabState) error {
-	*st = tabState{media: launch.media()}
-	if err := setDevice(ctx, st, launch.device()); err != nil {
-		return err
-	}
-	return applyMedia(ctx, st)
 }
 
 // setDevice makes a tab emulate d.
@@ -347,13 +343,6 @@ func (b *Browser) closeTab(name string) error {
 	return err
 }
 
-// closeTabs closes every tab a script opened, leaving the first.
-func (b *Browser) closeTabs() {
-	for name := range b.tabs {
-		_ = b.closeTab(name)
-	}
-}
-
 // Close shuts down the browser and waits for the Chrome process to exit.
 //
 // We use chromedp.Cancel (which closes the browser gracefully and blocks until
@@ -431,18 +420,9 @@ func (b *Browser) screenshot(tabCtx context.Context) ([]byte, error) {
 // ExecuteSteps runs a sequence of DSL steps against the browser.
 // It stops on the first failure and returns results for all attempted steps.
 //
-// A script starts with only the first tab open, and with that tab's device
-// and media as a fresh browser has them. The generating agent runs several
-// scripts in one browser while it explores;
-// what one leaves behind must not let the next pass without setting it up
-// itself, as it will have to in the fresh browser of a cached run.
+// Every script, the agent's included, gets a browser of its own, so none
+// can pass because of what another left behind.
 func (b *Browser) ExecuteSteps(ctx context.Context, env *Env, steps []Step) ([]StepResult, error) {
-	b.closeTabs()
-	if err := chromedp.Run(b.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return resetTab(ctx, b.launch, b.first)
-	})); err != nil {
-		return nil, err
-	}
 	var results []StepResult
 	for i, step := range steps {
 		start := time.Now()
@@ -727,11 +707,17 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 		if step.Action == ActionKeyUp {
 			ev = up
 		}
+		// Pressing a key already held repeats it, as holding it would.
+		down.AutoRepeat = st.held[down.Code]
 		return runBounded(chromedp.ActionFunc(func(ctx context.Context) error {
 			if err := ev.Do(ctx); err != nil {
 				return err
 			}
 			st.keys = held
+			if st.held == nil {
+				st.held = map[string]bool{}
+			}
+			st.held[down.Code] = step.Action == ActionKeyDown
 			return nil
 		}))
 
@@ -955,19 +941,24 @@ func elementString(ctx context.Context, step Step, expr string) (string, error) 
 // Playwright has it. Opacity does not count.
 func visibleJS(step Step) string {
 	return fmt.Sprintf(`(function(el) {
-		if (!el) return false;
-		const r = el.getBoundingClientRect();
-		return r.width > 0 && r.height > 0 && el.checkVisibility({visibilityProperty: true, checkVisibilityCSS: true});
+		`+isVisibleJS+`
+		return !!el && isVisible(el);
 	})(%s)`, findJS(step))
 }
+
+// isVisibleJS declares isVisible(el), the test visibleJS describes.
+const isVisibleJS = `function isVisible(el) {
+	const r = el.getBoundingClientRect();
+	return r.width > 0 && r.height > 0 && el.checkVisibility({visibilityProperty: true, checkVisibilityCSS: true});
+}`
 
 // fillJS sets the value of an input, textarea, select or contenteditable
 // element the way typing would, so frameworks listening for input and change
 // events see it. Format with findJS, describe and the value.
 const fillJS = `(function(el, sel, value) {
+	` + isVisibleJS + `
 	if (!el) throw new Error('no element matches ' + sel);
-	const r = el.getBoundingClientRect();
-	if (!(r.width > 0 && r.height > 0 && el.checkVisibility({visibilityProperty: true, checkVisibilityCSS: true}))) throw new Error(sel + ' is not visible');
+	if (!isVisible(el)) throw new Error(sel + ' is not visible');
 	if (el.closest(':disabled')) throw new Error(sel + ' is disabled');
 	if (el.readOnly) throw new Error(sel + ' is read-only');
 	el.focus();
@@ -990,16 +981,17 @@ const fillJS = `(function(el, sel, value) {
 // targetJS finds where a pointer step lands on the element a selector
 // matches: dx,dy CSS pixels from its top-left corner, or else the center of
 // its first box (an inline element wrapped over two lines has two, and the
-// center of their bounding box may be on neither). Like Playwright, it first scrolls the element into view and
-// insists that it is visible, holding still, enabled (when the step needs
-// that) and not covered by another element at that point; the step polls
-// until it is. Format with findJS, describe, dx, dy and whether to check
-// enabled.
+// center of their bounding box may be on neither). Like Playwright, it
+// first scrolls the element into view and insists that it is visible,
+// holding still, enabled (when the step needs that) and not covered by
+// another element at that point; the step polls until it is. Format with
+// findJS, describe, dx, dy and whether to check enabled.
 const targetJS = `(async function(el, sel, dx, dy, checkEnabled) {
+	` + isVisibleJS + `
 	if (!el) return {err: 'no element matches ' + sel};
 	el.scrollIntoViewIfNeeded(true);
+	if (!isVisible(el)) return {err: sel + ' is not visible'};
 	const r = el.getBoundingClientRect();
-	if (!(r.width > 0 && r.height > 0 && el.checkVisibility({visibilityProperty: true, checkVisibilityCSS: true}))) return {err: sel + ' is not visible'};
 	await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
 	const r2 = el.getBoundingClientRect();
 	if (r2.x !== r.x || r2.y !== r.y || r2.width !== r.width || r2.height !== r.height) return {err: sel + ' is moving'};

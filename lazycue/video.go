@@ -12,12 +12,12 @@ import (
 )
 
 // videoCanvasW and videoCanvasH define the output frame size. The default
-// browser viewport is a 393x851 portrait (Pixel 5) rendered at 2.75x DPR
-// (1080x2340). 600x1300 keeps that ~0.4615 aspect ratio exactly, so native
-// screenshots fit with no letterboxing.
+// browser viewport is a 393x727 portrait (Pixel 5) rendered at 2.75x DPR.
+// 600x1110 keeps its aspect ratio, so native screenshots fit with no
+// letterboxing.
 const (
 	videoCanvasW = 600
-	videoCanvasH = 1300
+	videoCanvasH = 1110
 	videoBG      = "0x0d1117" // matches the HTML report background
 )
 
@@ -213,7 +213,7 @@ func titleChain(font, work, name, prompt string, pass bool, nSteps int) string {
 	foot := writeTextFile(work, "title-foot", statusText)
 
 	// The prompt band: everything between the name row and the footer.
-	const bandTop, bandBottom = 210, 1150
+	const bandTop, bandBottom = 210, videoCanvasH - 150
 	promptSize, promptWrap, promptSpacing := fitPromptText(prompt, bandBottom-bandTop)
 	body := writeTextFile(work, "title-body", wrapText(prompt, promptWrap))
 

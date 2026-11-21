@@ -8,12 +8,12 @@ import (
 	"testing"
 )
 
-// makeTestPNG writes a tiny solid-color PNG (393x851 portrait) via ffmpeg so we
+// makeTestPNG writes a tiny solid-color PNG (393x727 portrait) via ffmpeg so we
 // have a realistic screenshot input.
 func makeTestPNG(t *testing.T, path, color string) {
 	t.Helper()
 	cmd := exec.Command("ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-		"-f", "lavfi", "-i", "color=c="+color+":s=393x851:d=1",
+		"-f", "lavfi", "-i", "color=c="+color+":s=393x727:d=1",
 		"-frames:v", "1", path)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("make png: %v: %s", err, out)

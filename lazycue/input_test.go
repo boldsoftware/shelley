@@ -54,32 +54,6 @@ func TestDefaultDeviceIsAPixel5(t *testing.T) {
 	)
 }
 
-// set_viewport and emulate_media change a tab for the rest of the script;
-// the next script starts from the launch settings again.
-func TestEmulationResetsBetweenScripts(t *testing.T) {
-	br := newBrowserOrSkip(t)
-	env := &Env{BaseURL: serveHTML(t, blankPage)}
-	runSteps(t, br, env,
-		Step{Action: ActionSetViewport, Width: 1280, Height: 800, Scale: 1, Mobile: ptr(false), Touch: ptr(false)},
-		Step{Action: ActionEmulateMedia, Value: "prefers-color-scheme: dark"},
-		Step{Action: ActionEmulateMedia, Value: "prefers-reduced-motion:"},
-		Step{Action: ActionNavigate, URL: "/"},
-		Step{
-			Action: ActionEval, Expression: `[innerWidth, innerHeight, devicePixelRatio, 'ontouchstart' in window,
-			matchMedia('(prefers-color-scheme: dark)').matches, matchMedia('(prefers-reduced-motion: reduce)').matches].join(' ')`,
-			Expect: "1280 800 1 false true false",
-		},
-	)
-	runSteps(t, br, env,
-		Step{Action: ActionNavigate, URL: "/"},
-		Step{
-			Action: ActionEval, Expression: `[innerWidth, 'ontouchstart' in window, matchMedia('(prefers-color-scheme: dark)').matches,
-			matchMedia('(prefers-reduced-motion: reduce)').matches].join(' ')`,
-			Expect: "393 true false true",
-		},
-	)
-}
-
 func TestLaunchSettings(t *testing.T) {
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
@@ -364,6 +338,17 @@ func TestModifiers(t *testing.T) {
 		Step{Action: ActionKeyUp, Key: "Alt"},
 		Step{Action: ActionPressKey, Key: "b"},
 		Step{Action: ActionEval, Expression: `log.filter(e => !e.startsWith('click')).join(' ')`, Expect: "keydown:Alt:falsetrue mousemove::falsetrue keydown:a:falsetrue keyup:a:falsetrue keyup:Alt:falsefalse keydown:b:falsefalse keyup:b:falsefalse"},
+	)
+	// Pressing a held key again repeats it.
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: "repeats = []; document.addEventListener('keydown', e => repeats.push(e.key + ':' + e.ctrlKey + ':' + e.repeat))"},
+		Step{Action: ActionKeyDown, Key: "Control"},
+		Step{Action: ActionKeyDown, Key: "`"},
+		Step{Action: ActionKeyDown, Key: "`"},
+		Step{Action: ActionKeyUp, Key: "`"},
+		Step{Action: ActionKeyDown, Key: "`"},
+		Step{Action: ActionEval, Expression: "repeats.join(' ')", Expect: "Control:true:false `:true:false `:true:true `:true:false"},
 	)
 	if err := failSteps(t, br, env, Step{Action: ActionClick, Selector: "#b", Modifiers: "Hyper"}); !strings.Contains(err.Error(), `unknown modifier "Hyper"`) {
 		t.Errorf("bad modifier error = %v", err)

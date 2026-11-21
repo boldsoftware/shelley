@@ -488,16 +488,6 @@ func TestTabMustBeOpenedByNavigate(t *testing.T) {
 	}
 	waitForPageCount(t, br, 1)
 
-	if _, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{{Action: ActionNavigate, URL: url, Tab: "B"}}); err != nil {
-		t.Fatal(err)
-	}
-	waitForPageCount(t, br, 2)
-	_, err = br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{{Action: ActionAssertText, Selector: "#o", Text: "hi", Tab: "B"}})
-	if err == nil || !strings.Contains(err.Error(), `tab "B" is not open`) {
-		t.Fatalf("tab left open by the previous script: got %v", err)
-	}
-	waitForPageCount(t, br, 1)
-
 	if _, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{{Action: ActionCloseTab}}); err == nil {
 		t.Fatal("close_tab without a tab name must fail; the main tab stays open")
 	}
