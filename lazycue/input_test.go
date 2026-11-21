@@ -2,6 +2,7 @@ package lazycue
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -48,9 +49,9 @@ func TestDefaultDeviceIsAPixel5(t *testing.T) {
 		Step{
 			Action: ActionEval, Expression: `[innerWidth, innerHeight, devicePixelRatio, 'ontouchstart' in window, navigator.maxTouchPoints,
 			matchMedia('(pointer: coarse)').matches, matchMedia('(prefers-reduced-motion: reduce)').matches].join(' ')`,
-			Expect: "393 727 2.75 true 5 true true",
+			Expect: ptr("393 727 2.75 true 5 true true"),
 		},
-		Step{Action: ActionEval, Expression: `navigator.clipboard.writeText('copied').then(() => navigator.clipboard.readText())`, Expect: "copied"},
+		Step{Action: ActionEval, Expression: `navigator.clipboard.writeText('copied').then(() => navigator.clipboard.readText())`, Expect: ptr("copied")},
 	)
 }
 
@@ -73,7 +74,7 @@ func TestLaunchSettings(t *testing.T) {
 		{
 			Action: ActionEval, Expression: `[innerWidth, 'ontouchstart' in window, matchMedia('(prefers-color-scheme: dark)').matches,
 			matchMedia('(prefers-reduced-motion: reduce)').matches, Intl.DateTimeFormat().resolvedOptions().timeZone].join(' ')`,
-			Expect: "1024 false true false America/New_York",
+			Expect: ptr("1024 false true false America/New_York"),
 		},
 	}
 	runSteps(t, br, env, steps...)
@@ -89,12 +90,20 @@ func TestEvalAwaitsPromisesAndRendersJSON(t *testing.T) {
 	env := &Env{BaseURL: serveHTML(t, blankPage)}
 	results := runSteps(t, br, env,
 		Step{Action: ActionNavigate, URL: "/"},
-		Step{Action: ActionEval, Expression: `(async () => { await new Promise(r => setTimeout(r, 50)); return 'later'; })()`, Expect: "later"},
-		Step{Action: ActionEval, Expression: `fetch('/').then(r => r.status)`, Expect: "200"},
+		Step{Action: ActionEval, Expression: `(async () => { await new Promise(r => setTimeout(r, 50)); return 'later'; })()`, Expect: ptr("later")},
+		Step{Action: ActionEval, Expression: `fetch('/').then(r => r.status)`, Expect: ptr("200")},
 		Step{Action: ActionEval, Expression: `({a: [1, true, null]})`},
 	)
 	if got := results[3].Output; got != `{"a":[1,true,null]}` {
 		t.Errorf("object output = %s", got)
+	}
+	// An empty expectation still asserts.
+	var step Step
+	if err := json.Unmarshal([]byte(`{"action": "eval", "expression": "'x'", "expect": "", "timeout": "300ms"}`), &step); err != nil {
+		t.Fatal(err)
+	}
+	if err := failSteps(t, br, env, step); !strings.Contains(err.Error(), `expected "", got "x"`) {
+		t.Errorf("empty expect error = %v", err)
 	}
 }
 
@@ -163,20 +172,20 @@ func TestClick(t *testing.T) {
 	runSteps(t, br, env,
 		Step{Action: ActionNavigate, URL: "/"},
 		Step{Action: ActionClick, Selector: "#b", X: ptr(10.0), Y: ptr(5.0)},
-		Step{Action: ActionEval, Expression: `log.join(' ')`, Expect: "mousedown:b:0:1@10,5 mouseup:b:0:1@10,5 click:b:0:1@10,5"},
+		Step{Action: ActionEval, Expression: `log.join(' ')`, Expect: ptr("mousedown:b:0:1@10,5 mouseup:b:0:1@10,5 click:b:0:1@10,5")},
 		Step{Action: ActionEval, Expression: `log = []`},
 		Step{Action: ActionClick, Selector: "#b", Count: 2},
 		Step{
 			Action: ActionEval, Expression: `log.filter(e => e.startsWith('click') || e.startsWith('dblclick')).map(e => e.split('@')[0]).join(' ')`,
-			Expect: "click:b:0:1 click:b:0:2 dblclick:b:0:2",
+			Expect: ptr("click:b:0:1 click:b:0:2 dblclick:b:0:2"),
 		},
 		Step{Action: ActionEval, Expression: `log = []`},
 		Step{Action: ActionClick, Selector: "#b", Button: "right"},
-		Step{Action: ActionEval, Expression: `log.map(e => e.split('@')[0]).join(' ')`, Expect: "mousedown:b:2:1 contextmenu:b:2:0 mouseup:b:2:1"},
+		Step{Action: ActionEval, Expression: `log.map(e => e.split('@')[0]).join(' ')`, Expect: ptr("mousedown:b:2:1 contextmenu:b:2:0 mouseup:b:2:1")},
 		Step{Action: ActionEval, Expression: `log = []`},
 		// Without a selector, x,y is a point in the viewport.
 		Step{Action: ActionClick, X: ptr(50.0), Y: ptr(20.0)},
-		Step{Action: ActionEval, Expression: `log.at(-1)`, Expect: "click:b:0:1@50,20"},
+		Step{Action: ActionEval, Expression: `log.at(-1)`, Expect: ptr("click:b:0:1@50,20")},
 	)
 	if err := failSteps(t, br, env, Step{Action: ActionClick, Selector: "#off", Timeout: "300ms"}); !strings.Contains(err.Error(), "#off is disabled") {
 		t.Errorf("disabled click error = %v", err)
@@ -192,13 +201,13 @@ func TestClick(t *testing.T) {
 	runSteps(t, br, env,
 		Step{Action: ActionEval, Expression: `log = []; document.getElementById('cover').style.display = 'none'; document.body.insertAdjacentHTML('beforeend', '<p style="width: 200px; font: 16px monospace">aaaaaaaaaaaaaaaaaa <a id="wrap" href="#w">bbbbbbbbbb cccccccccccccccccc</a></p>')`},
 		Step{Action: ActionClick, Selector: "#wrap", Timeout: "1s"},
-		Step{Action: ActionEval, Expression: `location.hash + ' ' + log.at(-1).split('@')[0]`, Expect: "#w click:wrap:0:1"},
+		Step{Action: ActionEval, Expression: `location.hash + ' ' + log.at(-1).split('@')[0]`, Expect: ptr("#w click:wrap:0:1")},
 	)
 	// A click waits for the element to be uncovered.
 	runSteps(t, br, env,
 		Step{Action: ActionEval, Expression: `log = []; document.getElementById('cover').style.display = 'block'; setTimeout(() => document.getElementById('cover').style.display = 'none', 300)`},
 		Step{Action: ActionClick, Selector: "#b"},
-		Step{Action: ActionEval, Expression: `log.at(-1).split('@')[0]`, Expect: "click:b:0:1"},
+		Step{Action: ActionEval, Expression: `log.at(-1).split('@')[0]`, Expect: ptr("click:b:0:1")},
 	)
 }
 
@@ -222,12 +231,12 @@ document.addEventListener('dragover', e => e.preventDefault());
 		Step{Action: ActionMouseDown},
 		Step{Action: ActionHover, Selector: "#p", X: ptr(60.0), Y: ptr(10.0), Count: 5},
 		Step{Action: ActionMouseUp},
-		Step{Action: ActionEval, Expression: `getSelection().toString()`, Expect: "hello"},
+		Step{Action: ActionEval, Expression: `getSelection().toString()`, Expect: ptr("hello")},
 		Step{Action: ActionHover, Selector: "#d"},
 		Step{Action: ActionMouseDown},
 		Step{Action: ActionHover, Selector: "#t", Count: 5},
 		Step{Action: ActionMouseUp},
-		Step{Action: ActionEval, Expression: `log.join(' ')`, Expect: "dragstart:d drop:t"},
+		Step{Action: ActionEval, Expression: `log.join(' ')`, Expect: ptr("dragstart:d drop:t")},
 	)
 }
 
@@ -248,15 +257,15 @@ document.addEventListener('wheel', e => log.push('wheel:' + e.deltaY));
 		Step{Action: ActionMouseDown},
 		Step{Action: ActionHover, Selector: "#z", Count: 2},
 		Step{Action: ActionMouseUp},
-		Step{Action: ActionEval, Expression: `log.join(' ')`, Expect: "down:a drag:50 drag:75 up:z"},
+		Step{Action: ActionEval, Expression: `log.join(' ')`, Expect: ptr("down:a drag:50 drag:75 up:z")},
 		Step{Action: ActionWheel, X: ptr(0.0), Y: ptr(400.0)},
-		Step{Action: ActionEval, Expression: `log.at(-1).split(':')[0] + ' ' + scrollY`, Expect: "wheel 400"},
+		Step{Action: ActionEval, Expression: `log.at(-1).split(':')[0] + ' ' + scrollY`, Expect: ptr("wheel 400")},
 		// The page scrolls by CSS pixels whatever the device's scale.
 		Step{Action: ActionSetViewport, Width: 800, Height: 600, Scale: 2, Mobile: ptr(false), Touch: ptr(false)},
 		Step{Action: ActionNavigate, URL: "/"},
 		Step{Action: ActionHover, Selector: "#a"},
 		Step{Action: ActionWheel, X: ptr(0.0), Y: ptr(400.0)},
-		Step{Action: ActionEval, Expression: `scrollY`, Expect: "400"},
+		Step{Action: ActionEval, Expression: `scrollY`, Expect: ptr("400")},
 	)
 }
 
@@ -281,7 +290,7 @@ for (const type of ['touchstart', 'touchmove', 'touchend']) {
 		Step{
 			Action: ActionEval, Expression: `log.join(' ')`,
 			// Chrome fires an event per finger that lands or lifts.
-			Expect: "touchstart:1:30,30 touchmove:1:120,120 touchend:0: touchstart:1:30,30 touchstart:2:30,30;120,120 touchmove:2:40,40;130,130 touchend:1:130,130 touchend:0:",
+			Expect: ptr("touchstart:1:30,30 touchmove:1:120,120 touchend:0: touchstart:1:30,30 touchstart:2:30,30;120,120 touchmove:2:40,40;130,130 touchend:1:130,130 touchend:0:"),
 		},
 	)
 }
@@ -303,11 +312,11 @@ document.addEventListener('change', e => log.push('change:' + e.target.id));
 		Step{Action: ActionNavigate, URL: "/"},
 		Step{Action: ActionClick, Selector: "#t"},
 		Step{Action: ActionType, Value: "hi\nyo"},
-		Step{Action: ActionEval, Expression: `JSON.stringify(document.getElementById('t').value) + ' ' + log.join(' ')`, Expect: `"hi\nyo" h i Enter y o`},
+		Step{Action: ActionEval, Expression: `JSON.stringify(document.getElementById('t').value) + ' ' + log.join(' ')`, Expect: ptr(`"hi\nyo" h i Enter y o`)},
 		Step{Action: ActionFill, Selector: "#s", Value: "b"},
-		Step{Action: ActionEval, Expression: `document.getElementById('s').value + ' ' + log.at(-1)`, Expect: "b change:s"},
+		Step{Action: ActionEval, Expression: `document.getElementById('s').value + ' ' + log.at(-1)`, Expect: ptr("b change:s")},
 		Step{Action: ActionFill, Selector: "#ce", Value: "new"},
-		Step{Action: ActionEval, Expression: `document.getElementById('ce').textContent + ' ' + (document.activeElement.id)`, Expect: "new ce"},
+		Step{Action: ActionEval, Expression: `document.getElementById('ce').textContent + ' ' + (document.activeElement.id)`, Expect: ptr("new ce")},
 	)
 	if err := failSteps(t, br, env, Step{Action: ActionFill, Selector: "#off", Value: "x", Timeout: "300ms"}); !strings.Contains(err.Error(), "#off is disabled") {
 		t.Errorf("disabled fill error = %v", err)
@@ -330,14 +339,14 @@ func TestModifiers(t *testing.T) {
 		Step{Action: ActionEval, Expression: `for (const type of ['click', 'keydown', 'keyup', 'mousemove']) document.addEventListener(type, e => log.push(type + ':' + (e.key || '') + ':' + e.shiftKey + e.altKey))`},
 		Step{Action: ActionEval, Expression: `log = []`},
 		Step{Action: ActionClick, Selector: "#b", Modifiers: "Shift"},
-		Step{Action: ActionEval, Expression: `log.filter(e => e.startsWith('click::')).join(' ')`, Expect: "click::truefalse"},
+		Step{Action: ActionEval, Expression: `log.filter(e => e.startsWith('click::')).join(' ')`, Expect: ptr("click::truefalse")},
 		Step{Action: ActionEval, Expression: `log = []`},
 		Step{Action: ActionKeyDown, Key: "Alt"},
 		Step{Action: ActionHover, Selector: "#b", X: ptr(5.0), Y: ptr(5.0)},
 		Step{Action: ActionPressKey, Key: "a"},
 		Step{Action: ActionKeyUp, Key: "Alt"},
 		Step{Action: ActionPressKey, Key: "b"},
-		Step{Action: ActionEval, Expression: `log.filter(e => !e.startsWith('click')).join(' ')`, Expect: "keydown:Alt:falsetrue mousemove::falsetrue keydown:a:falsetrue keyup:a:falsetrue keyup:Alt:falsefalse keydown:b:falsefalse keyup:b:falsefalse"},
+		Step{Action: ActionEval, Expression: `log.filter(e => !e.startsWith('click')).join(' ')`, Expect: ptr("keydown:Alt:falsetrue mousemove::falsetrue keydown:a:falsetrue keyup:a:falsetrue keyup:Alt:falsefalse keydown:b:falsefalse keyup:b:falsefalse")},
 	)
 	// Pressing a held key again repeats it.
 	runSteps(t, br, env,
@@ -348,7 +357,7 @@ func TestModifiers(t *testing.T) {
 		Step{Action: ActionKeyDown, Key: "`"},
 		Step{Action: ActionKeyUp, Key: "`"},
 		Step{Action: ActionKeyDown, Key: "`"},
-		Step{Action: ActionEval, Expression: "repeats.join(' ')", Expect: "Control:true:false `:true:false `:true:true `:true:false"},
+		Step{Action: ActionEval, Expression: "repeats.join(' ')", Expect: ptr("Control:true:false `:true:false `:true:true `:true:false")},
 	)
 	if err := failSteps(t, br, env, Step{Action: ActionClick, Selector: "#b", Modifiers: "Hyper"}); !strings.Contains(err.Error(), `unknown modifier "Hyper"`) {
 		t.Errorf("bad modifier error = %v", err)
@@ -369,9 +378,9 @@ func TestPlaceholdersAndCalls(t *testing.T) {
 	runSteps(t, br, env,
 		Step{Action: ActionNavigate, URL: "/"},
 		Step{Action: ActionAssertText, Selector: "#{{ID}}", Text: "{{WORD}}"},
-		Step{Action: ActionEval, Expression: `document.getElementById('{{ID}}').textContent`, Expect: "{{WORD}}"},
+		Step{Action: ActionEval, Expression: `document.getElementById('{{ID}}').textContent`, Expect: ptr("{{WORD}}")},
 		// A call with an expectation polls until it holds.
-		Step{Action: ActionCall, Value: "count", Expect: "3"},
+		Step{Action: ActionCall, Value: "count", Expect: ptr("3")},
 	)
 	if err := failSteps(t, br, env, Step{Action: ActionAssertText, Selector: "#{{NOPE}}", Text: "x"}); !strings.Contains(err.Error(), "no value for {{NOPE}}") {
 		t.Errorf("missing placeholder error = %v", err)

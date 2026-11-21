@@ -130,7 +130,7 @@ func TestStepSummary(t *testing.T) {
 		{Step{Action: "press_key", Key: "Enter"}, "press_key Enter"},
 		{Step{Action: "screenshot"}, "screenshot"},
 		{Step{Action: "eval", Expression: "document.title"}, "eval document.title"},
-		{Step{Action: "eval", Expression: "1+1", Expect: "2"}, "eval 1+1 expect=2"},
+		{Step{Action: "eval", Expression: "1+1", Expect: ptr("2")}, "eval 1+1 expect=2"},
 		{Step{Action: "assert_count", Selector: "li", Count: 3}, "assert_count li 3"},
 		{Step{Action: "wait_url", Value: "/c/abc"}, "wait_url /c/abc"},
 		{Step{Action: "wait_url", Text: "/c/"}, "wait_url ~/c/"},

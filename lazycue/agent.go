@@ -197,7 +197,7 @@ Available DSL actions:
 - set_viewport: {"action": "set_viewport", "width": 1280, "height": 800, "scale": 1, "mobile": false, "touch": false} - Change the emulated device for the rest of the test; omitted fields keep their value. Whether the page sees a touch screen changes on the next navigate.
 - emulate_media: {"action": "emulate_media", "value": "prefers-color-scheme: dark"} - Override a CSS media feature for the rest of the test; "prefers-reduced-motion:" with no value drops the override.
 - screenshot: {"action": "screenshot"} - Take screenshot
-- eval: {"action": "eval", "expression": "...", "expect": "..."} - Evaluate JS, waiting for a promise it returns to settle (so fetch and async functions work). The result renders as a string: strings as they are, anything else as JSON (true, 3, {"a":1}). If "expect" is set, the expression is re-run until its result equals expect or the timeout passes, so it must have no side effects. The run_steps result echoes the value back to you ("=> <value>"), so use eval WITHOUT expect to probe page state (selectors, scrollHeight, classes, etc.) while developing the test.
+- eval: {"action": "eval", "expression": "...", "expect": "..."} - Evaluate JS, waiting for a promise it returns to settle (so fetch and async functions work). The result renders as a string: strings as they are, anything else as JSON (true, 3, {"a":1}). If "expect" is set (even to "", which expects an empty string), the expression is re-run until its result equals expect or the timeout passes, so it must have no side effects. The run_steps result echoes the value back to you ("=> <value>"), so use eval WITHOUT expect to probe page state (selectors, scrollHeight, classes, etc.) while developing the test.
 - call: {"action": "call", "value": "name", "expect": "..."} - Run a function the test provides on the host (the user prompt lists them), for what the page cannot do or see. It returns a string; "expect" re-runs it until the result equals expect, like eval.
 - assert_visible: {"action": "assert_visible", "selector": "..."} - Assert element is visible
 - assert_not_visible: {"action": "assert_not_visible", "selector": "..."} - Assert element is not visible
@@ -399,7 +399,7 @@ func inlinedVar(steps []Step, runs ...map[string]string) string {
 				continue
 			}
 			for _, s := range steps {
-				for _, f := range []string{s.URL, s.Selector, s.HasText, s.Value, s.Text, s.Expression, s.Expect, s.Attribute, s.Key, s.Points} {
+				for _, f := range []string{s.URL, s.Selector, s.HasText, s.Value, s.Text, s.Expression, deref(s.Expect), s.Attribute, s.Key, s.Points} {
 					if strings.Contains(f, v) {
 						return name
 					}
@@ -1041,4 +1041,12 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// deref is what p points to, or "" when it is nil.
+func deref(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }

@@ -234,10 +234,16 @@ var placeholder = regexp.MustCompile(`\{\{([A-Za-z0-9_]+)\}\}`)
 // type or look for.
 func substitute(step Step, vars map[string]string) (Step, error) {
 	var missing []string
-	for _, f := range []*string{
+	fields := []*string{
 		&step.URL, &step.Selector, &step.HasText, &step.Value, &step.Text,
-		&step.Expression, &step.Expect, &step.Attribute, &step.Key, &step.Points,
-	} {
+		&step.Expression, &step.Attribute, &step.Key, &step.Points,
+	}
+	if step.Expect != nil {
+		expect := *step.Expect
+		step.Expect = &expect
+		fields = append(fields, step.Expect)
+	}
+	for _, f := range fields {
 		*f = placeholder.ReplaceAllStringFunc(*f, func(m string) string {
 			name := m[2 : len(m)-2]
 			v, ok := vars[name]
@@ -503,9 +509,10 @@ func (b *Browser) executeStep(ctx context.Context, env *Env, step Step) (string,
 // spuriously fail the step (which would trigger a costly LLM heal). The probe
 // must therefore have no side effects.
 func expectResult(ctx context.Context, step Step, timeout time.Duration, probe func() (string, error)) (string, error) {
-	if step.Expect == "" {
+	if step.Expect == nil {
 		return probe()
 	}
+	want := *step.Expect
 	deadline := time.Now().Add(timeout)
 	// last is the latest result or error, kept over the error of a probe cut
 	// short by the deadline, which says nothing about the state.
@@ -513,7 +520,7 @@ func expectResult(ctx context.Context, step Step, timeout time.Duration, probe f
 	for {
 		got, err := probe()
 		switch {
-		case err == nil && got == step.Expect:
+		case err == nil && got == want:
 			return got, nil
 		case err == nil:
 			last = got
@@ -523,7 +530,7 @@ func expectResult(ctx context.Context, step Step, timeout time.Duration, probe f
 			last = "<error: " + err.Error() + ">"
 		}
 		if time.Now().After(deadline) {
-			return last, fmt.Errorf("%s: expected %q, got %q (after %s)", step.Action, step.Expect, last, timeout)
+			return last, fmt.Errorf("%s: expected %q, got %q (after %s)", step.Action, want, last, timeout)
 		}
 		select {
 		case <-ctx.Done():

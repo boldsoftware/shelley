@@ -250,7 +250,7 @@ document.addEventListener('keydown', function (e) {
 		{
 			Action:     ActionEval,
 			Expression: `window.log.join(' ')`,
-			Expect:     "Enter Tab Escape ArrowUp F5 Shift+Enter Control+a Alt+  x Shift+!",
+			Expect:     ptr("Enter Tab Escape ArrowUp F5 Shift+Enter Control+a Alt+  x Shift+!"),
 		},
 	}
 	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
@@ -285,7 +285,7 @@ b.addEventListener('click', function () { window.log.push('click'); });
 	steps := []Step{
 		{Action: ActionNavigate, URL: url},
 		{Action: ActionHover, Selector: "#b"},
-		{Action: ActionEval, Expression: `window.log.join(' ') + ' ' + document.getElementById('b').getBoundingClientRect().width`, Expect: "enter 30"},
+		{Action: ActionEval, Expression: `window.log.join(' ') + ' ' + document.getElementById('b').getBoundingClientRect().width`, Expect: ptr("enter 30")},
 	}
 	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 	if err != nil {
@@ -322,7 +322,7 @@ b.addEventListener('mousemove', function (e) {
 		{Action: ActionNavigate, URL: url},
 		{Action: ActionHover, Selector: "#b", X: &x2, Y: &y2},
 		{Action: ActionHover, Selector: "#b", X: &x26, Y: &y26},
-		{Action: ActionEval, Expression: `window.at.join(' ')`, Expect: "2,2 26,26"},
+		{Action: ActionEval, Expression: `window.at.join(' ')`, Expect: ptr("2,2 26,26")},
 	}
 	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 	if err != nil {
@@ -359,18 +359,18 @@ document.getElementById('t').addEventListener('keydown', function (e) {
 		{Action: ActionClick, Selector: "#t"},
 		{Action: ActionFill, Selector: "#t", Value: "abc"},
 		{Action: ActionPressKey, Key: "Enter"},
-		{Action: ActionEval, Expression: `window.enters + ':' + ` + value, Expect: `1:"abc"`},
+		{Action: ActionEval, Expression: `window.enters + ':' + ` + value, Expect: ptr(`1:"abc"`)},
 		{Action: ActionPressKey, Key: "Enter", Modifiers: "Shift"},
-		{Action: ActionEval, Expression: value, Expect: `"abc\n"`},
+		{Action: ActionEval, Expression: value, Expect: ptr(`"abc\n"`)},
 		{Action: ActionPressKey, Key: "Enter", Modifiers: "Control"},
 		{Action: ActionPressKey, Key: "Space", Modifiers: "Alt"},
 		{Action: ActionPressKey, Key: "Space", Modifiers: "Meta"},
 		{Action: ActionPressKey, Key: "d", Modifiers: "Control"},
-		{Action: ActionEval, Expression: value, Expect: `"abc\n"`},
+		{Action: ActionEval, Expression: value, Expect: ptr(`"abc\n"`)},
 		{Action: ActionPressKey, Key: "d"},
 		{Action: ActionPressKey, Key: "Space"},
 		{Action: ActionPressKey, Key: "E"},
-		{Action: ActionEval, Expression: value, Expect: `"abc\nd E"`},
+		{Action: ActionEval, Expression: value, Expect: ptr(`"abc\nd E"`)},
 	}
 	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 	if err != nil {
@@ -415,16 +415,16 @@ func TestTabsShareProfile(t *testing.T) {
 
 	steps := []Step{
 		{Action: ActionNavigate, URL: url + "/page?x=1"},
-		{Action: ActionEval, Expression: "window.__mine = 'main'; 'set'", Expect: "set"},
+		{Action: ActionEval, Expression: "window.__mine = 'main'; 'set'", Expect: ptr("set")},
 		// No URL: tab B opens on the first tab's current page.
 		{Action: ActionNavigate, Tab: "B"},
 		{Action: ActionAssertURL, Value: url + "/page?x=1", Tab: "B"},
-		{Action: ActionEval, Expression: "String(window.__mine)", Expect: "undefined", Tab: "B"},
-		{Action: ActionEval, Expression: "document.visibilityState", Expect: "visible", Tab: "B"},
-		{Action: ActionEval, Expression: "document.visibilityState", Expect: "visible"},
-		{Action: ActionEval, Expression: "localStorage.setItem('k', 'from B'); 'stored'", Expect: "stored", Tab: "B"},
+		{Action: ActionEval, Expression: "String(window.__mine)", Expect: ptr("undefined"), Tab: "B"},
+		{Action: ActionEval, Expression: "document.visibilityState", Expect: ptr("visible"), Tab: "B"},
+		{Action: ActionEval, Expression: "document.visibilityState", Expect: ptr("visible")},
+		{Action: ActionEval, Expression: "localStorage.setItem('k', 'from B'); 'stored'", Expect: ptr("stored"), Tab: "B"},
 		{Action: ActionAssertText, Selector: "#o", Text: "from B"},
-		{Action: ActionEval, Expression: "localStorage.getItem('k')", Expect: "from B"},
+		{Action: ActionEval, Expression: "localStorage.getItem('k')", Expect: ptr("from B")},
 	}
 	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)
 	if err != nil {
@@ -446,9 +446,9 @@ func TestTabsGetTheInitScript(t *testing.T) {
 	url := serveHTML(t, `<!doctype html><html><body></body></html>`)
 	if _, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, []Step{
 		{Action: ActionNavigate, URL: url},
-		{Action: ActionEval, Expression: "window.__init", Expect: "ran"},
+		{Action: ActionEval, Expression: "window.__init", Expect: ptr("ran")},
 		{Action: ActionNavigate, URL: url, Tab: "B"},
-		{Action: ActionEval, Expression: "window.__init", Expect: "ran", Tab: "B", Timeout: "3s"},
+		{Action: ActionEval, Expression: "window.__init", Expect: ptr("ran"), Tab: "B", Timeout: "3s"},
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -12,16 +12,16 @@ type Step struct {
 	Selector string `json:"selector,omitempty"`
 	// HasText narrows a selector to the elements whose text contains it,
 	// whitespace collapsed.
-	HasText    string `json:"has_text,omitempty"`
-	Value      string `json:"value,omitempty"`
-	Text       string `json:"text,omitempty"`
-	Timeout    string `json:"timeout,omitempty"`
-	Expression string `json:"expression,omitempty"`
-	Expect     string `json:"expect,omitempty"`
-	Attribute  string `json:"attribute,omitempty"`
-	Key        string `json:"key,omitempty"`
-	Modifiers  string `json:"modifiers,omitempty"`
-	Count      int    `json:"count,omitempty"`
+	HasText    string  `json:"has_text,omitempty"`
+	Value      string  `json:"value,omitempty"`
+	Text       string  `json:"text,omitempty"`
+	Timeout    string  `json:"timeout,omitempty"`
+	Expression string  `json:"expression,omitempty"`
+	Expect     *string `json:"expect,omitempty"` // set, even to "", makes eval and call assertions
+	Attribute  string  `json:"attribute,omitempty"`
+	Key        string  `json:"key,omitempty"`
+	Modifiers  string  `json:"modifiers,omitempty"`
+	Count      int     `json:"count,omitempty"`
 	// X and Y are a pointer step's offset in CSS pixels from the element's
 	// top-left corner (unset means its center), a point in the viewport
 	// without a selector, or a wheel step's scroll distances.
@@ -140,8 +140,8 @@ func stepSummary(s Step) string {
 	case ActionType:
 		return "type " + truncateArg(s.Value, 30)
 	case ActionCall:
-		if s.Expect != "" {
-			return "call " + s.Value + " expect=" + truncateArg(s.Expect, 30)
+		if s.Expect != nil {
+			return "call " + s.Value + " expect=" + truncateArg(*s.Expect, 30)
 		}
 		return "call " + s.Value
 	case ActionSetViewport:
@@ -169,8 +169,8 @@ func stepSummary(s Step) string {
 		return "screenshot"
 	case ActionEval:
 		expr := truncateArg(s.Expression, 40)
-		if s.Expect != "" {
-			return "eval " + expr + " expect=" + truncateArg(s.Expect, 20)
+		if s.Expect != nil {
+			return "eval " + expr + " expect=" + truncateArg(*s.Expect, 20)
 		}
 		return "eval " + expr
 	case ActionAssertText:
