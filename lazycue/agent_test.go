@@ -190,3 +190,13 @@ func TestCacheConversationMarksOnlyTheLastBlock(t *testing.T) {
 		t.Error("a string prompt should become a marked block")
 	}
 }
+
+func TestGitCommandHidesPaths(t *testing.T) {
+	hidden := []string{"e2e"}
+	if got := executeGitCommand(".", hidden, "git show HEAD:../ui/e2e/x.spec.ts"); !strings.Contains(got, "e2e is off limits") {
+		t.Errorf("hidden path: %s", got)
+	}
+	if got := executeGitCommand(".", hidden, "git rev-parse --is-inside-work-tree"); got != "true" {
+		t.Errorf("other command: %s", got)
+	}
+}

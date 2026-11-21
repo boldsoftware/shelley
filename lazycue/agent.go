@@ -40,6 +40,7 @@ type AgentConfig struct {
 	AnthropicBaseURL string
 	AnthropicAPIKey  string
 	RepoRoot         string
+	GitHidden        []string // see Options.GitHidden
 	Verbose          bool
 }
 
@@ -230,7 +231,7 @@ WORKFLOW:
 2. Steps wait up to 15s on their own; give a step a longer timeout only when the app needs more.
 3. Use the run_steps tool to test your DSL steps. Review the results and fix any failures.
 4. Use screenshot to see what the page looks like if you're unsure about selectors or page state.
-5. Use git_command sparingly (at most ` + strconv.Itoa(maxGitCommands) + ` calls) to look up the app's own source: selectors, data-testid attributes, labels. Placeholders, window helpers and calls a description names come from the test, not the app: try them with run_steps (eval) instead of searching for them, and don't read other tests or their cached scripts.
+5. Use git_command sparingly (at most ` + strconv.Itoa(maxGitCommands) + ` calls) to look up the app's own source: selectors, data-testid attributes, labels. Placeholders, window helpers and calls a description names come from the test, not the app: try them with run_steps (eval) instead of searching for them, and don't look for other tests or their cached scripts.
 6. Your FINAL call to run_steps must be the COMPLETE, passing test that exercises every part of the description. Submit it by setting "final": true on that run_steps call (exploratory probes must NOT set final). The harness caches exactly the steps from your final submission, so it must contain all the assertions — never submit a bare navigation/probe as final.
 7. Minimize the number of tool calls. Aim for 1-3 run_steps calls total.
 
@@ -757,7 +758,7 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 				gitCommands++
 				result := fmt.Sprintf("Error: git_command is limited to %d calls per run; work with run_steps and screenshot now.", maxGitCommands)
 				if gitCommands <= maxGitCommands {
-					result = executeGitCommand(cfg.RepoRoot, input.Command)
+					result = executeGitCommand(cfg.RepoRoot, cfg.GitHidden, input.Command)
 				}
 				toolResults = append(toolResults, makeToolResult(tu.ID, result))
 
@@ -862,10 +863,15 @@ func gitExec(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func executeGitCommand(repoRoot, command string) string {
+func executeGitCommand(repoRoot string, hidden []string, command string) string {
 	normalized := strings.TrimSpace(command)
 	if !strings.HasPrefix(normalized, "git ") {
 		return "Error: Only git commands are allowed"
+	}
+	for _, h := range hidden {
+		if strings.Contains(normalized, h) {
+			return fmt.Sprintf("Error: %s is off limits; follow the description and look at the live page instead.", h)
+		}
 	}
 
 	allowedSubcommands := []string{"grep", "ls-files", "show", "log", "diff", "cat-file", "rev-parse", "for-each-ref"}

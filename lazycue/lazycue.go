@@ -42,6 +42,10 @@ type Options struct {
 	ArtifactDir      string // If set, write per-step screenshots here and record their paths on StepResults
 	VideoDir         string // If set, render an MP4 per test (prompt title card + captioned screenshots) here, named <DescriptionHash>.mp4
 	RepoRoot         string // Repository root passed to the heal agent's git_command tool (default: `git rev-parse --show-toplevel` from the cwd, falling back to ".")
+	// GitHidden lists path fragments the agent's git_command refuses to
+	// mention: other tests, which it would copy instead of following its
+	// description.
+	GitHidden []string
 }
 
 // Env is one instance of the app under test.
@@ -304,6 +308,7 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 		cfg.AnthropicBaseURL = opts.AnthropicBaseURL
 		cfg.AnthropicAPIKey = opts.AnthropicAPIKey
 		cfg.RepoRoot = opts.RepoRoot
+		cfg.GitHidden = opts.GitHidden
 		cfg.Verbose = opts.Verbose
 		return RunAgent(ctx, &cfg)
 	}
