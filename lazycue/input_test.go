@@ -211,6 +211,24 @@ func TestClick(t *testing.T) {
 	)
 }
 
+// A page that fakes its clock, freezing requestAnimationFrame, can still be
+// clicked: the check that an element holds still uses the browser's frames.
+func TestClickWithFrozenFrames(t *testing.T) {
+	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
+		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
+	}
+	br, err := NewBrowser(context.Background(), Launch{InitScript: `window.requestAnimationFrame = () => 0;`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(br.Close)
+	runSteps(t, br, &Env{BaseURL: serveHTML(t, clickPage)},
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionClick, Selector: "#b", Timeout: "2s"},
+		Step{Action: ActionEval, Expression: `log.at(-1).split('@')[0]`, Expect: ptr("click:b:0:1")},
+	)
+}
+
 // A drag selects text natively and starts HTML drag and drop, which need
 // moves that name the held button.
 func TestNativeDrag(t *testing.T) {

@@ -185,6 +185,12 @@ func setUpTab(launch Launch, st *tabState) chromedp.Action {
 				return fmt.Errorf("set time zone: %w", err)
 			}
 		}
+		// Before any of the app's: keep the browser's own
+		// requestAnimationFrame, so steps can wait on frames even when the
+		// page fakes its clock.
+		if _, err := page.AddScriptToEvaluateOnNewDocument(`Object.defineProperty(window, '__lazycueRAF', {value: requestAnimationFrame.bind(window)})`).Do(ctx); err != nil {
+			return fmt.Errorf("install init script: %w", err)
+		}
 		if launch.InitScript != "" {
 			if _, err := page.AddScriptToEvaluateOnNewDocument(launch.InitScript).Do(ctx); err != nil {
 				return fmt.Errorf("install init script: %w", err)
@@ -999,7 +1005,8 @@ const targetJS = `(async function(el, sel, dx, dy, checkEnabled) {
 	el.scrollIntoViewIfNeeded(true);
 	if (!isVisible(el)) return {err: sel + ' is not visible'};
 	const r = el.getBoundingClientRect();
-	await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
+	const raf = window.__lazycueRAF || requestAnimationFrame;
+	await new Promise(done => raf(() => raf(done)));
 	const r2 = el.getBoundingClientRect();
 	if (r2.x !== r.x || r2.y !== r.y || r2.width !== r.width || r2.height !== r.height) return {err: sel + ' is moving'};
 	if (checkEnabled && (el.closest(':disabled') || el.closest('[aria-disabled="true"]'))) return {err: sel + ' is disabled'};
