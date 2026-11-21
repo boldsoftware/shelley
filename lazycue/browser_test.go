@@ -252,7 +252,7 @@ document.addEventListener('keydown', function (e) {
 		{
 			Action:     ActionEval,
 			Expression: `window.log.join(' ')`,
-			Expect:     ptr("Enter Tab Escape ArrowUp F5 Shift+Enter Control+a Alt+  x Shift+!"),
+			Expect:     ptr("Enter Tab Escape ArrowUp F5 Shift+Shift Shift+Enter Control+Control Control+a Alt+Alt Alt+  x Shift+!"),
 		},
 	}
 	results, err := br.ExecuteSteps(context.Background(), &Env{BaseURL: url}, steps)

@@ -1602,18 +1602,36 @@ var keyModifiers = map[string]input.Modifier{
 	"Cmd":     input.ModifierMeta,
 }
 
+// modifierKeys names the key of each modifier.
+var modifierKeys = map[input.Modifier]string{
+	input.ModifierShift: "Shift",
+	input.ModifierCtrl:  "Control",
+	input.ModifierAlt:   "Alt",
+	input.ModifierMeta:  "Meta",
+}
+
 // parseKeyModifiers parses a "modifiers" field such as "Shift" or
 // "Control+Alt".
 func parseKeyModifiers(modifiers string) (input.Modifier, error) {
+	list, err := keyModifierList(modifiers)
 	var mods input.Modifier
+	for _, m := range list {
+		mods |= m
+	}
+	return mods, err
+}
+
+// keyModifierList is parseKeyModifiers keeping the order of the modifiers.
+func keyModifierList(modifiers string) ([]input.Modifier, error) {
+	var list []input.Modifier
 	for _, name := range strings.FieldsFunc(modifiers, func(r rune) bool { return r == '+' || r == ',' || r == ' ' }) {
 		m, ok := keyModifiers[name]
 		if !ok {
-			return 0, fmt.Errorf("unknown modifier %q (use Shift, Control, Alt or Meta)", name)
+			return nil, fmt.Errorf("unknown modifier %q (use Shift, Control, Alt or Meta)", name)
 		}
-		mods |= m
+		list = append(list, m)
 	}
-	return mods, nil
+	return list, nil
 }
 
 // mouseButtons maps a step's button to the button and its bit in a
@@ -1776,21 +1794,44 @@ func (b *Browser) touch(ctx, tabCtx context.Context, st *tabState, timeout time.
 // for Enter: chromedp.KeyEvent would add a separate "char" event, which Chrome
 // turns into a newline even when the page preventDefault()ed the keydown, so
 // an app's Enter handler would fire AND a newline would land in the textarea.
-// Control/Alt/Meta chords carry no text, since they don't type.
+// Control/Alt/Meta chords carry no text, since they don't type. As with
+// Playwright's press("Control+Enter"), the modifiers not already held go down
+// first, in order, and up last, in reverse.
 func pressKey(key, modifiers string, held input.Modifier) (chromedp.Action, error) {
-	mods, err := parseKeyModifiers(modifiers)
+	list, err := keyModifierList(modifiers)
 	if err != nil {
 		return nil, err
 	}
-	down, up, err := keyEvents(key, held|mods)
-	if err != nil {
-		return nil, err
-	}
-	return chromedp.ActionFunc(func(ctx context.Context) error {
-		if err := down.Do(ctx); err != nil {
-			return err
+	var downs, ups []*input.DispatchKeyEventParams
+	mods := held
+	for _, m := range list {
+		if mods&m != 0 {
+			continue
 		}
-		return up.Do(ctx)
+		mods |= m
+		down, _, err := keyEvents(modifierKeys[m], mods)
+		if err != nil {
+			return nil, err
+		}
+		downs = append(downs, down)
+		_, up, err := keyEvents(modifierKeys[m], mods&^m)
+		if err != nil {
+			return nil, err
+		}
+		ups = append([]*input.DispatchKeyEventParams{up}, ups...)
+	}
+	down, up, err := keyEvents(key, mods)
+	if err != nil {
+		return nil, err
+	}
+	events := append(append(append(downs, down), up), ups...)
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		for _, ev := range events {
+			if err := ev.Do(ctx); err != nil {
+				return err
+			}
+		}
+		return nil
 	}), nil
 }
 

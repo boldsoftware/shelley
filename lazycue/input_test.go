@@ -590,7 +590,21 @@ func TestModifiers(t *testing.T) {
 		Step{Action: ActionPressKey, Key: "p", Modifiers: "Control"},
 		Step{Action: ActionPressKey, Key: "P", Modifiers: "Control"},
 		Step{Action: ActionPressKey, Key: "/", Modifiers: "Shift"},
-		Step{Action: ActionEval, Expression: "keys.join(' ')", Expect: ptr("K:KeyK:true:true p:KeyP:true:false P:KeyP:true:true ?:Slash:false:true")},
+		Step{Action: ActionEval, Expression: "keys.filter(k => !/^(Control|Shift):/.test(k)).join(' ')", Expect: ptr("K:KeyK:true:true p:KeyP:true:false P:KeyP:true:true ?:Slash:false:true")},
+	)
+	// A press_key's modifiers go down before its key and up after it, in
+	// reverse, as with Playwright's press("Control+Alt+Enter"); those
+	// key_down holds stay held.
+	runSteps(t, br, env,
+		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionEval, Expression: "keys = []; for (const type of ['keydown', 'keyup']) document.addEventListener(type, e => keys.push(type.slice(3) + ':' + e.key + ':' + e.ctrlKey + e.altKey))"},
+		Step{Action: ActionPressKey, Key: "Enter", Modifiers: "Control+Alt"},
+		Step{Action: ActionEval, Expression: "keys.join(' ')", Expect: ptr("down:Control:truefalse down:Alt:truetrue down:Enter:truetrue up:Enter:truetrue up:Alt:truefalse up:Control:falsefalse")},
+		Step{Action: ActionEval, Expression: "keys = []"},
+		Step{Action: ActionKeyDown, Key: "Alt"},
+		Step{Action: ActionPressKey, Key: "Enter", Modifiers: "Alt"},
+		Step{Action: ActionKeyUp, Key: "Alt"},
+		Step{Action: ActionEval, Expression: "keys.join(' ')", Expect: ptr("down:Alt:falsetrue down:Enter:falsetrue up:Enter:falsetrue up:Alt:falsefalse")},
 	)
 	if err := failSteps(t, br, env, Step{Action: ActionClick, Selector: "#b", Modifiers: "Hyper"}); !strings.Contains(err.Error(), `unknown modifier "Hyper"`) {
 		t.Errorf("bad modifier error = %v", err)
