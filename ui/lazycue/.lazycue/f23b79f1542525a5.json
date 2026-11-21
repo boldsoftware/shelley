@@ -1,0 +1,86 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Plain typing is not recorded after the palette consumes Escape. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". To \"open the recording palette\", every time a step says so: press_key \"k\" with modifier \"Control\", wait for the command palette input (\".command-palette-input\") to be visible, and fill it with \"Record audio\" (all three, every time). \"The palette item X\" is the command palette item whose title is exactly X; select it with '.command-palette-item[data-test-title=\"X\"]' (the page keeps that attribute equal to the item's title, so \"Record audio\" does not match \"Record audio and screen\"). The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. The voice button should be enabled.\n2. Open the recording palette.\n3. Press \"m\" with modifier \"Control\", then press Escape.\n4. No \".command-palette-input\" and no [data-testid=\"file-completion-menu\"] may exist (both counts 0).\n5. Focus the message input (eval its focus()) and press \"a\".\n6. The message input should have the value \"a\", and no recording panel may exist (count 0).\n7. window.__recordingMock.microphoneRequests and window.__recordingMock.displayRequests must both be 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio"
+    },
+    {
+      "action": "press_key",
+      "key": "m",
+      "modifiers": "Control"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-input",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='file-completion-menu']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "a"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.microphoneRequests",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.displayRequests",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:32:07.384728672Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 5092,
+    "output_tokens": 470,
+    "estimated_cost_usd": 0.01203645,
+    "mode": "generated"
+  }
+}

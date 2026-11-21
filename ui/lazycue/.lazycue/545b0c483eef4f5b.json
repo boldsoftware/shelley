@@ -1,0 +1,72 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Transcription cards use the queued-message cancel and retry RPCs. The test seeded a conversation at /c/{{SLUG}} whose server data reports two queued transcriptions: one still working on /tmp/shelley-uploads/working.webm with the context \"Keep working draft\", and one of /tmp/shelley-uploads/failed.webm that failed with \"transcription unavailable\", with the context \"Keep failed draft\". The live event stream is cut off. Requests to cancel or retry a queued message (POST /api/conversation/\u003cid\u003e/cancel-queued?queued_id=\u003cid\u003e and .../retry-queued?queued_id=\u003cid\u003e) succeed without effect. Calls \"stopRequest\", \"retryRequest\" and \"cancelRequest\" return the method of the first request whose URL contains \"/cancel-queued?queued_id=q-working\", \"/retry-queued?queued_id=q-failed\" and \"/cancel-queued?queued_id=q-failed\" respectively (\"none\" before there is one). The message input is [data-testid=\"message-input\"]. Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input to be visible.\n2. Click [data-testid=\"transcription-stop-button\"]. Call \"stopRequest\" should return \"POST\". The message input should have the value \"Keep working draft\".\n3. Fill the message input with \"\" (empty it).\n4. Click [data-testid=\"transcription-retry-button\"]. Call \"retryRequest\" should return \"POST\". The message input should have the value \"\" (empty).\n5. Click [data-testid=\"transcription-cancel-button\"]. Call \"cancelRequest\" should return \"POST\". The message input should have the value \"Keep failed draft\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='transcription-stop-button']"
+    },
+    {
+      "action": "call",
+      "value": "stopRequest",
+      "expect": "POST"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Keep working draft"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='transcription-retry-button']"
+    },
+    {
+      "action": "call",
+      "value": "retryRequest",
+      "expect": "POST"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='transcription-cancel-button']"
+    },
+    {
+      "action": "call",
+      "value": "cancelRequest",
+      "expect": "POST"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Keep failed draft"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:01:29.806340796Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 21572,
+    "output_tokens": 1092,
+    "estimated_cost_usd": 0.0305103,
+    "mode": "generated"
+  }
+}

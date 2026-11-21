@@ -1,0 +1,153 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On Macs, recording uses Command shortcuts and the palette shows matching hints. navigator.platform is \"MacIntel\", so the record-audio shortcut is press_key \"M\" with modifiers \"Meta+Shift\" and the record-screen shortcut press_key \"M\" with modifiers \"Meta+Alt+Shift\". The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". \"The palette item X\" is the command palette item whose title is exactly X; select it with '.command-palette-item[data-test-title=\"X\"]' (the page keeps that attribute equal to the item's title). The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. The voice button should be enabled.\n2. Press \"k\" with modifier \"Meta\". The command palette input (\".command-palette-input\") should become visible; fill it with \"Record audio\".\n3. The \"kbd\" of the palette item \"Record audio\" should have the text exactly \"⌘⇧M\", and the \"kbd\" of the palette item \"Record audio and screen\" the text exactly \"⌘⌥⇧M\".\n4. Press Escape in the palette input.\n5. Press the record-audio shortcut. The recording panel should get data-mode \"microphone\" and the recording state should become \"recording\". Click the cancel button; the voice button should be enabled.\n6. Press the record-screen shortcut. The recording panel should get data-mode \"screen\" and the recording state should become \"recording\". Click the cancel button; the voice button should be enabled.\n7. window.__recordingMock.recorderStarts must be 2 and window.__recordingMock.synchronousDisplayRequests must be 1.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='voice-button']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Meta"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-item[data-test-title='Record audio']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".command-palette-item[data-test-title='Record audio'] kbd",
+      "text": "⌘⇧M"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".command-palette-item[data-test-title='Record audio and screen'] kbd",
+      "text": "⌘⌥⇧M"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Meta+Shift"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='recording-panel']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='recording-panel']",
+      "attribute": "data-mode",
+      "value": "microphone"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".recording-status",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "recording"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-cancel-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='voice-button']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Meta+Alt+Shift"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='recording-panel']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='recording-panel']",
+      "attribute": "data-mode",
+      "value": "screen"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".recording-status",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "recording"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-cancel-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='voice-button']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.recorderStarts",
+      "expect": "2"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.synchronousDisplayRequests",
+      "expect": "1"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:17:01.375721603Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 22851,
+    "output_tokens": 2078,
+    "estimated_cost_usd": 0.048664799999999994,
+    "mode": "generated"
+  }
+}

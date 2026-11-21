@@ -1,0 +1,72 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Recording palette actions are hidden in an archived conversation. The test seeded and archived a conversation {{ARCHIVED}}. To \"open the recording palette\", every time a step says so: press_key \"k\" with modifier \"Control\", wait for the command palette input (\".command-palette-input\") to be visible, and fill it with \"Record audio\" (all three, every time). \"The palette item X\" is the command palette item whose title is exactly X; select it with '.command-palette-item[data-test-title=\"X\"]' (the page keeps that attribute equal to the item's title, so \"Record audio\" does not match \"Record audio and screen\"). The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new and wait up to 30s for the message input to be visible.\n2. If the button with aria-label \"Open conversations\" is visible, click it.\n3. Click the button \"View Archived\", then click \".conversation-item[data-conversation-id=\\\"{{ARCHIVED}}\\\"]\".\n4. The message input should become hidden.\n5. Open the recording palette. There must be no palette item \"Record audio\" and no palette item \"Record audio and screen\" (both counts 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "button[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "click",
+      "selector": "button",
+      "has_text": "View Archived"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{ARCHIVED}}\"]"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-item[data-test-title=\"Record audio\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-item[data-test-title=\"Record audio and screen\"]",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:25:29.297764396Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 24620,
+    "output_tokens": 1031,
+    "estimated_cost_usd": 0.03480495,
+    "mode": "generated"
+  }
+}

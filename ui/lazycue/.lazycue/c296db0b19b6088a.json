@@ -1,0 +1,101 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Discarding retained audio while its destination is pending submits nothing later. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". The server's answer to the browser's draft creation is held back until call \"releaseDraft\"; call \"draftCreated\" says (\"true\" or \"false\") whether the server has created it and, once it has, sets {{DRAFT}} to its conversation ID. Recording uploads succeed with the path /tmp/shelley-uploads/discard-pending.webm, and call \"uploads\" counts them. Message submissions are accepted without being sent on, and call \"chats\" counts them. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. Fill the message input with \"Keep the composer after discarding audio.\". Click the voice button.\n2. Call \"draftCreated\" until it returns \"true\".\n3. The recording state should become \"recording\". Click the stop button.\n4. Call \"uploads\" should return \"1\".\n5. The cancel button's accessible name (its aria-label) should be exactly \"Discard recording\", and it should be enabled. Click it.\n6. No recording panel should remain (count 0), and the message input should have the value \"Keep the composer after discarding audio.\".\n7. Call \"releaseDraft\". The URL should come to end with \"/c/{{DRAFT}}\".\n8. The message input should still have the value \"Keep the composer after discarding audio.\".\n9. Call \"chats\" must return \"0\", and window.__recordingMock.stoppedTracks must be 1.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep the composer after discarding audio."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "call",
+      "value": "draftCreated",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.recording-status')?.getAttribute('data-state')",
+      "expect": "recording"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-stop-button\"]"
+    },
+    {
+      "action": "call",
+      "value": "uploads",
+      "expect": "1"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"recording-cancel-button\"]",
+      "attribute": "aria-label",
+      "value": "Discard recording"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"recording-cancel-button\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-cancel-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep the composer after discarding audio."
+    },
+    {
+      "action": "call",
+      "value": "releaseDraft"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/{{DRAFT}}",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep the composer after discarding audio."
+    },
+    {
+      "action": "call",
+      "value": "chats",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.stoppedTracks",
+      "expect": "1"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:56:33.207191638Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 42275,
+    "output_tokens": 1711,
+    "estimated_cost_usd": 0.0508374,
+    "mode": "generated"
+  }
+}

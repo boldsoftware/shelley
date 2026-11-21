@@ -1,0 +1,129 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Retained screen metadata is retried after draft failure. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". The recording shortcuts are press_key \"M\" on whatever has focus, with modifiers \"Control+Shift\" for \"the record-audio shortcut\" and \"Control+Alt+Shift\" for \"the record-screen shortcut\". Press them on whatever has focus: do not click or focus anything for them. To \"paste file F\": eval window.__pasteFile(F), passing contents C and type T as further arguments only when the step names them, which pastes such a file into the message input; then wait until exactly one \".message-attachment-ready\" exists. The browser's first draft creation is held back until call \"releaseDraft\", then fails with \"draft unavailable\"; later ones reach the server. Recording uploads (POST /api/upload/raw) are either the video or, with a filename ending in \".json\", its metadata. Videos succeed with the path /tmp/shelley-uploads/saved-screen.webm. The first metadata upload is held back until call \"releaseMetadata\", then fails with \"metadata unavailable\"; call \"metadataStarted\" says (\"true\" or \"false\") whether it has arrived. Later metadata uploads succeed with the path /tmp/shelley-uploads/saved-screen.webm.json. Message submissions are accepted without being sent on, and call \"chats\" counts them. Call \"requests\" reports, as JSON, how many videos and metadata were uploaded, whether the second metadata upload's body is the same as the first's (\"sameMetadata\"), and how many submissions and draft creations there were. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. Fill the message input with \"Keep this screen recording context.\". Paste file \"screen-context.txt\".\n2. Press the record-screen shortcut. The recording state should become \"recording\".\n3. Click the stop button.\n4. Call \"metadataStarted\" until it returns \"true\".\n4a. Call \"releaseDraft\". The recording state should become \"stopping\", and \".status-error\" should contain \"draft unavailable\".\n5. Call \"releaseMetadata\".\n6. \".status-error\" should contain \"Retry with /transcription /tmp/shelley-uploads/saved-screen.webm\" and also \"metadata unavailable\", and [data-testid=\"recording-retained\"] should be visible.\n7. window.__recordingMock.stoppedTracks should become 4, and call \"chats\" must return \"0\".\n8. Click the retry button. No recording panel should remain (count 0).\n9. Call \"requests\" must return exactly {\"videos\":1,\"metadata\":2,\"sameMetadata\":true,\"chats\":1,\"drafts\":2}.\n10. window.__recordingMock.recorderStarts must be 1, the message input should have the value \"\" (empty), and no \".message-attachment-ready\" may exist (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep this screen recording context."
+    },
+    {
+      "action": "eval",
+      "expression": "window.__pasteFile('screen-context.txt')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-attachment-ready",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 1
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Alt+Shift"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.recording-status')?.getAttribute('data-state')",
+      "expect": "recording"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-stop-button\"]"
+    },
+    {
+      "action": "call",
+      "value": "metadataStarted",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "releaseDraft"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.recording-status')?.getAttribute('data-state')",
+      "expect": "stopping"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".status-error",
+      "text": "draft unavailable"
+    },
+    {
+      "action": "call",
+      "value": "releaseMetadata"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".status-error",
+      "text": "Retry with /transcription /tmp/shelley-uploads/saved-screen.webm"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".status-error",
+      "text": "metadata unavailable"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"recording-retained\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.stoppedTracks",
+      "expect": "4"
+    },
+    {
+      "action": "call",
+      "value": "chats",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-retry-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "requests",
+      "expect": "{\"videos\":1,\"metadata\":2,\"sameMetadata\":true,\"chats\":1,\"drafts\":2}"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.recorderStarts",
+      "expect": "1"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:58:38.575215396Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 30539,
+    "output_tokens": 1951,
+    "estimated_cost_usd": 0.0505662,
+    "mode": "generated"
+  }
+}

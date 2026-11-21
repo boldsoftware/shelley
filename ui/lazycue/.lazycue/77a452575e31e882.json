@@ -1,0 +1,169 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The mobile table of contents survives opening and cancelling the recorder. The test seeded a conversation at /c/{{SLUG}}. \"The TOC button\" is 'button[aria-label=\"Conversation table of contents\"]', which stays in the page while hidden; check whether it is visible or hidden with wait_visible and wait_hidden on that selector, and click it with a click step (a real click, not an eval). The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /c/{{SLUG}}. The TOC button should become visible.\n2. Mark it: eval \"document.querySelector('button[aria-label=\\\"Conversation table of contents\\\"]').dataset.mountIdentity = 'original'\".\nThen do steps 3 to 10 twice, as two rounds:\n3. Click the voice button.\n4. [data-testid=\"recording-inline\"] should be visible and the message input hidden.\n5. The TOC button should be hidden and still have data-mount-identity \"original\".\n6. Click the cancel button. No recording panel should remain (count 0).\n7. The message input should be visible and focused (it is document.activeElement).\n8. The TOC button should be visible and still have data-mount-identity \"original\".\n9. Click the TOC button: \".toc-popover\" should become visible.\n10. Press Escape: \".toc-popover\" should become hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label=\"Conversation table of contents\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('button[aria-label=\"Conversation table of contents\"]').dataset.mountIdentity = 'original'"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-inline\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "button[aria-label=\"Conversation table of contents\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('button[aria-label=\"Conversation table of contents\"]').dataset.mountIdentity",
+      "expect": "original"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-cancel-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label=\"Conversation table of contents\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('button[aria-label=\"Conversation table of contents\"]').dataset.mountIdentity",
+      "expect": "original"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Conversation table of contents\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".toc-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-inline\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "button[aria-label=\"Conversation table of contents\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('button[aria-label=\"Conversation table of contents\"]').dataset.mountIdentity",
+      "expect": "original"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-cancel-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label=\"Conversation table of contents\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('button[aria-label=\"Conversation table of contents\"]').dataset.mountIdentity",
+      "expect": "original"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Conversation table of contents\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".toc-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".toc-popover",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:53:28.139327044Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 62375,
+    "output_tokens": 4132,
+    "estimated_cost_usd": 0.1184349,
+    "mode": "generated"
+  }
+}

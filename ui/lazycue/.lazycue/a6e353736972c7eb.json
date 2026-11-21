@@ -1,0 +1,109 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The microphone recording is kept after destination failure until the user cancels. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". To \"paste file F\": eval window.__pasteFile(F), passing contents C and type T as further arguments only when the step names them, which pastes such a file into the message input; then wait until exactly one \".message-attachment-ready\" exists. The browser's draft creations are held back until call \"releaseDraft\", then fail with \"draft unavailable\". The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. Fill the message input with \"Keep this after the failed draft.\". Paste file \"keep.txt\".\n2. Click the voice button. The recording state should become \"recording\".\n3. Call \"releaseDraft\".\n4. [data-testid=\"recording-error\"] should come to contain \"draft unavailable\", and the recording state should be \"recording\".\n5. window.__recordingMock.stoppedTracks must be 0.\n6. Click the cancel button.\n7. The message input should have the value \"Keep this after the failed draft.\" and be enabled, and exactly one \".message-attachment-ready\" should exist.\n8. window.__recordingMock.stoppedTracks should become 1, and window.__recordingMock.recorderStarts must be 1.\n9. The voice button should be enabled.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep this after the failed draft."
+    },
+    {
+      "action": "eval",
+      "expression": "window.__pasteFile('keep.txt')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-attachment-ready",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.recording-status')?.getAttribute('data-state')",
+      "expect": "recording"
+    },
+    {
+      "action": "call",
+      "value": "releaseDraft"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-error\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"recording-error\"]",
+      "text": "draft unavailable"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.recording-status')?.getAttribute('data-state')",
+      "expect": "recording"
+    },
+    {
+      "action": "eval",
+      "expression": "String(window.__recordingMock.stoppedTracks)",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-cancel-button\"]"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep this after the failed draft."
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "String(window.__recordingMock.stoppedTracks)",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "String(window.__recordingMock.recorderStarts)",
+      "expect": "1"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"voice-button\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:58:02.710636172Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28135,
+    "output_tokens": 1692,
+    "estimated_cost_usd": 0.0436623,
+    "mode": "generated"
+  }
+}

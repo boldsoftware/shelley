@@ -1,0 +1,91 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Hovering the record button offers Voice \u0026 Screen with a single screen request. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". \"The record menu\" is [data-testid=\"record-menu\"]. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. No record menu may exist (count 0).\n2. Hover the voice button. The record menu should become visible.\n3. Exactly 2 buttons ('[data-testid=\"record-menu\"] button') should be in it. The first's accessible name (its aria-label) should be exactly \"Voice\", and the last's exactly \"Voice \u0026 Screen\".\nMoving away closes it.\n4. Hover [data-testid=\"attach-button\"]. No record menu should remain (count 0).\n5. Hover the voice button, then click the record menu's button \"Voice \u0026 Screen\" ('[data-testid=\"record-menu\"] button[aria-label=\"Voice \u0026 Screen\"]').\n6. The recording panel should get data-mode \"screen\", and [data-testid=\"recording-status\"] should have the text exactly \"Recording screen + microphone…\".\n7. Eval \"JSON.stringify((m =\u003e ({display: m.displayRequests, synchronous: m.synchronousDisplayRequests, microphone: m.microphoneRequests}))(window.__recordingMock))\" must return exactly {\"display\":1,\"synchronous\":1,\"microphone\":1}.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"record-menu\"]",
+      "count": 0
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"record-menu\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"record-menu\"] button",
+      "count": 2
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"record-menu\"] button:first-child",
+      "attribute": "aria-label",
+      "value": "Voice"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"record-menu\"] button:last-child",
+      "attribute": "aria-label",
+      "value": "Voice \u0026 Screen"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid=\"attach-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"record-menu\"]",
+      "count": 0
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"record-menu\"] button[aria-label=\"Voice \u0026 Screen\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"record-menu\"] button[aria-label=\"Voice \u0026 Screen\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-panel\"]"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "attribute": "data-mode",
+      "value": "screen"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"recording-status\"]",
+      "text": "Recording screen + microphone…"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify((m =\u003e ({display: m.displayRequests, synchronous: m.synchronousDisplayRequests, microphone: m.microphoneRequests}))(window.__recordingMock))",
+      "expect": "{\"display\":1,\"synchronous\":1,\"microphone\":1}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:25:58.735469365Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 11182,
+    "output_tokens": 1238,
+    "estimated_cost_usd": 0.028742999999999998,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Missing transcription is explained instead of recording. The server has no transcription available. window.__recordingMock.microphoneRequests counts the microphone captures the page requested. The recording shortcuts are press_key \"M\" on whatever has focus, with modifiers \"Control+Shift\" for \"the record-audio shortcut\" and \"Control+Alt+Shift\" for \"the record-screen shortcut\". Press them on whatever has focus: do not click or focus anything for them. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new and click the voice button.\n2. \".status-error\" should contain \"Set OPENAI_API_KEY\", and no recording panel may exist (count 0).\n3. Press the record-audio shortcut. No recording panel may exist (count 0).\n4. window.__recordingMock.microphoneRequests must be 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".status-error",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".status-error",
+      "text": "Set OPENAI_API_KEY"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.microphoneRequests",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:00:06.42825615Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 86034,
+    "output_tokens": 1677,
+    "estimated_cost_usd": 0.07369440000000001,
+    "mode": "generated"
+  }
+}

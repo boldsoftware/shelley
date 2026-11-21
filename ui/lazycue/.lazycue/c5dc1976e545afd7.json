@@ -1,0 +1,83 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A failed raw upload is retried using the retained audio bytes. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". The first recording upload (POST /api/upload/raw) fails with \"upload unavailable\"; later ones succeed with the path /tmp/shelley-uploads/retried-upload.webm. Call \"uploads\" reports them as \"\u003ccount\u003e \u003csame|different\u003e\": \"same\" when every upload's bytes equal the first's. Message submissions are accepted without being sent on, and call \"chats\" counts them. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new and click the voice button. The recording state should become \"recording\".\n2. Click the stop button. [data-testid=\"recording-retained\"] should become visible, and [data-testid=\"recording-error\"] should contain \"upload unavailable\".\n3. Call \"chats\" must return \"0\", and window.__recordingMock.stoppedTracks should become 1.\n4. Click the retry button. No recording panel should remain (count 0).\n5. Call \"uploads\" must return \"2 same\", call \"chats\" must return \"1\", and window.__recordingMock.recorderStarts must be 1.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".recording-status[data-state=\"recording\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "recording"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-stop-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-retained\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"recording-error\"]",
+      "text": "upload unavailable"
+    },
+    {
+      "action": "call",
+      "value": "chats",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.stoppedTracks",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-retry-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "uploads",
+      "expect": "2 same"
+    },
+    {
+      "action": "call",
+      "value": "chats",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.recorderStarts",
+      "expect": "1"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:57:38.72871454Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 107396,
+    "output_tokens": 2421,
+    "estimated_cost_usd": 0.10134660000000001,
+    "mode": "generated"
+  }
+}

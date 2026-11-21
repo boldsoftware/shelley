@@ -1,0 +1,157 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Recording does not start behind another dialog. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". The recording shortcuts are press_key \"M\" on whatever has focus, with modifiers \"Control+Shift\" for \"the record-audio shortcut\" and \"Control+Alt+Shift\" for \"the record-screen shortcut\". Press them on whatever has focus: do not click or focus anything for them. To \"open the recording palette\", every time a step says so: press_key \"k\" with modifier \"Control\", wait for the command palette input (\".command-palette-input\") to be visible, and fill it with \"Record audio\" (all three, every time). \"The palette item X\" is the command palette item whose title is exactly X; select it with '.command-palette-item[data-test-title=\"X\"]' (the page keeps that attribute equal to the item's title, so \"Record audio\" does not match \"Record audio and screen\"). \"The dialog\" is the one visible element with role \"dialog\"; there must be exactly one. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. The voice button should be enabled.\n2. Open the recording palette, then fill its input with \"Notification Settings\" and click the element whose text is exactly \"Notification Settings\".\n3. The dialog should be visible.\n4. Press the record-audio shortcut, then the record-screen shortcut.\nCmd-K can also open above an existing modal: neither its shortcuts nor its action rows may start an inaccessible recorder behind that modal.\n5. Open the recording palette. Press the record-audio shortcut. The palette input should still be visible. Fill it with \"Record audio\" and press Enter in it. The dialog should be visible, and no recording panel may exist (count 0).\n6. Open the recording palette. Press the record-screen shortcut. The palette input should still be visible. Fill it with \"Record audio and screen\" and press Enter in it. The dialog should be visible, and no recording panel may exist (count 0).\n7. window.__recordingMock.microphoneRequests and window.__recordingMock.displayRequests must both be 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Notification Settings"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item",
+      "has_text": "Notification Settings"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog']"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Alt+Shift"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Alt+Shift"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio and screen"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role='dialog']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.microphoneRequests",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.displayRequests",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:31:14.963994214Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 23987,
+    "output_tokens": 1892,
+    "estimated_cost_usd": 0.046284599999999995,
+    "mode": "generated"
+  }
+}

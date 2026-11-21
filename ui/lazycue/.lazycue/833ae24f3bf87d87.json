@@ -1,0 +1,232 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Microphone recording starts inline and submits only the transcription command. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". To \"paste file F\": eval window.__pasteFile(F), passing contents C and type T as further arguments only when the step names them, which pastes such a file into the message input; then wait until exactly one \".message-attachment-ready\" exists. Setting window.__recordingMock.meterPeak changes the fake microphone's level (it starts at 4). The page runs on a fake clock that steps drive with window.__clock: pauseAt(ms), runFor(ms) and resume(). Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/recording.webm; call \"upload\" describes the last one as \"\u003cmethod\u003e \u003cfilename with every digit replaced by #\u003e \u003cits first 4 bytes in hex\u003e \u003cthe rest of its bytes as text\u003e\". Message submissions (POST /api/conversation/\u003cid\u003e/chat) are recorded and held back until call \"releaseAcceptance\", then accepted; call \"transcriptionRequested\" says (\"true\" or \"false\") whether one has arrived, and call \"chats\" lists them as JSON: each one's message (with any \"[/tmp/shelley-uploads/\u003cname\u003e.png]\" reference rewritten to \"[/tmp/shelley-uploads/*.png]\"), its model, and whether its body has a transcription_context property. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. Fill the message input with \"Keep this note with the recording.\".\n2. Paste file \"context.png\" with contents \"image\" and type \"image/png\".\n3. [data-testid=\"voice-video-icon\"] should be visible.\n4. Save the message input's height: eval \"window.__composerHeight = document.querySelector('[data-testid=\\\"message-input\\\"]').getBoundingClientRect().height\".\n5. Pause the clock a second from now: eval \"window.__clock.pauseAt(Date.now() + 1000)\".\n6. Click the voice button (a click step on its selector, not an eval).\n7. The recording panel should be visible. Its height (getBoundingClientRect().height) must be at most 46 and less than window.__composerHeight.\n8. No dialog named \"Record media\" may exist: eval \"[...document.querySelectorAll('[role=dialog], dialog')].filter(d =\u003e d.getAttribute('aria-label') === 'Record media').length\" must be 0.\n9. The message input should be hidden, and window.__recordingMock.recorderStarts should become 1.\n10. [data-testid=\"recording-status\"] should have the text exactly \"Recording…\", the recording state should be \"preroll\", and [data-testid=\"recording-waveform\"] should have the class \"recording-waveform-preroll\".\n11. Run the clock 99ms (eval \"window.__clock.runFor(99)\"). The recording state must still be \"preroll\".\n12. Run the clock 1ms more (eval \"window.__clock.runFor(1)\"). The recording state should become \"recording\".\n13. Resume the clock: eval \"window.__clock.resume()\".\n14. [data-testid=\"recording-status\"] should have the text exactly \"Recording…\", [data-testid=\"recording-preserved-text\"] the text exactly \"Keep this note with the recording.\", and [data-testid=\"recording-waveform\"] should be visible.\n15. Save the waveform bars' heights: eval \"window.__bars = [...document.querySelectorAll('.recording-waveform-bar')].map(b =\u003e getComputedStyle(b).height)\". They must not all be equal: eval \"new Set(window.__bars).size \u003e 1\" must be true.\n16. Raise the level: eval \"window.__recordingMock.meterPeak = 48\".\n17. The tallest bar should grow to more than twice the tallest saved height: eval \"Math.max(...[...document.querySelectorAll('.recording-waveform-bar')].map(b =\u003e parseFloat(getComputedStyle(b).height))) \u003e 2 * Math.max(...window.__bars.map(parseFloat))\" should become true.\n18. window.__recordingMock.microphoneRequests should become 1.\n19. Click the stop button (a click step on its selector; the clock runs again, so this works). Call \"transcriptionRequested\" until it returns \"true\".\n20. The recording state should be \"stopping\", and the cancel button should be disabled.\n21. Call \"releaseAcceptance\". No recording panel should remain (count 0).\n22. The message input should be visible, enabled and focused (it is document.activeElement). Fill it with \"I can keep typing while the server transcribes.\".\n23. Call \"chats\" must return exactly [{\"message\":\"/transcription /tmp/shelley-uploads/recording.webm\\nKeep this note with the recording. [/tmp/shelley-uploads/*.png]\",\"model\":\"predictable\",\"transcription_context\":false}].\n24. No [data-testid=\"message-attachments\"] and no [data-testid=\"transcription-task\"] may exist (both counts 0), and the message input should have the value \"I can keep typing while the server transcribes.\".\n25. Call \"upload\" must return exactly \"POST rec-########-######.webm 1a45dfa3 firstsecondlast\".\n26. window.__recordingMock.stoppedTracks must be greater than 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep this note with the recording."
+    },
+    {
+      "action": "eval",
+      "expression": "window.__pasteFile('context.png', 'image', 'image/png')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-attachment-ready",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('.message-attachment-ready')].length",
+      "expect": "1"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"voice-video-icon\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__composerHeight = document.querySelector('[data-testid=\"message-input\"]').getBoundingClientRect().height"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.pauseAt(Date.now() + 1000)"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"recording-panel\"]').getBoundingClientRect().height \u003c= 46",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"recording-panel\"]').getBoundingClientRect().height \u003c window.__composerHeight",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('[role=dialog], dialog')].filter(d =\u003e d.getAttribute('aria-label') === 'Record media').length",
+      "expect": "0"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.recorderStarts",
+      "expect": "1"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"recording-status\"]",
+      "text": "Recording…"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.recording-status').getAttribute('data-state')",
+      "expect": "preroll"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"recording-waveform\"].recording-waveform-preroll"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(99)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.recording-status').getAttribute('data-state')",
+      "expect": "preroll"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(1)"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.recording-status').getAttribute('data-state')",
+      "expect": "recording"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.resume()"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"recording-status\"]",
+      "text": "Recording…"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"recording-preserved-text\"]",
+      "text": "Keep this note with the recording."
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"recording-waveform\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__bars = [...document.querySelectorAll('.recording-waveform-bar')].map(b =\u003e getComputedStyle(b).height)"
+    },
+    {
+      "action": "eval",
+      "expression": "new Set(window.__bars).size \u003e 1",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.meterPeak = 48"
+    },
+    {
+      "action": "eval",
+      "expression": "Math.max(...[...document.querySelectorAll('.recording-waveform-bar')].map(b =\u003e parseFloat(getComputedStyle(b).height))) \u003e 2 * Math.max(...window.__bars.map(parseFloat))",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.microphoneRequests",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-stop-button\"]"
+    },
+    {
+      "action": "call",
+      "value": "transcriptionRequested",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.recording-status').getAttribute('data-state')",
+      "expect": "stopping"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "[data-testid=\"recording-cancel-button\"]"
+    },
+    {
+      "action": "call",
+      "value": "releaseAcceptance"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]') === document.activeElement",
+      "expect": "true"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "I can keep typing while the server transcribes."
+    },
+    {
+      "action": "call",
+      "value": "chats",
+      "expect": "[{\"message\":\"/transcription /tmp/shelley-uploads/recording.webm\\nKeep this note with the recording. [/tmp/shelley-uploads/*.png]\",\"model\":\"predictable\",\"transcription_context\":false}]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"message-attachments\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"transcription-task\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "I can keep typing while the server transcribes."
+    },
+    {
+      "action": "call",
+      "value": "upload",
+      "expect": "POST rec-########-######.webm 1a45dfa3 firstsecondlast"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.stoppedTracks \u003e 0",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:17:38.084119812Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 41798,
+    "output_tokens": 3760,
+    "estimated_cost_usd": 0.08811959999999999,
+    "mode": "generated"
+  }
+}

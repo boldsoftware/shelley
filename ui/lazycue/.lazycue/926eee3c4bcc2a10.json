@@ -1,0 +1,81 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The recording controls fit in a narrow desktop composer. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new and wait up to 30s for the message input to be visible. Fill it with \"Keep this long note with the recording so the status has to truncate.\".\n2. Click the voice button. The recording state should become \"recording\".\n3. Eval \"(() =\u003e { const b = s =\u003e { const r = document.querySelector(s).getBoundingClientRect(); return {left: r.x, right: r.x + r.width, width: r.width}; }; const panel = b('.recording-panel'), main = b('.recording-panel-main'), waveform = b('[data-testid=\\\"recording-waveform\\\"]'), preserved = b('[data-testid=\\\"recording-preserved-text\\\"]'), timer = b('[data-testid=\\\"recording-timer\\\"]'), screen = b('[data-testid=\\\"recording-screen-button\\\"]'), cancel = b('[data-testid=\\\"recording-cancel-button\\\"]'); return {waveformInPanel: waveform.left \u003e panel.left, waveformBeforeText: waveform.right \u003c= preserved.left, textWide: preserved.width \u003e 40, textBeforeTimer: preserved.right \u003c= timer.left, timerWide: timer.width \u003e 30, timerInMain: timer.right \u003c= main.right, mainBeforeScreen: main.right \u003c= screen.left, cancelInPanel: cancel.right \u003c panel.right}; })()\" must return exactly {\"waveformInPanel\":true,\"waveformBeforeText\":true,\"textWide\":true,\"textBeforeTimer\":true,\"timerWide\":true,\"timerInMain\":true,\"mainBeforeScreen\":true,\"cancelInPanel\":true}.\nThe secondary action goes icon-only before the primary ones do.\n4. '[data-testid=\"recording-screen-button\"] .recording-action-label' should be hidden; '[data-testid=\"recording-stop-button\"] .recording-action-label' and '[data-testid=\"recording-cancel-button\"] .recording-action-label' should be visible.\n5. Click the cancel button. The message input should have the value \"Keep this long note with the recording so the status has to truncate.\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep this long note with the recording so the status has to truncate."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.recording-status').getAttribute('data-state')",
+      "expect": "recording"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "recording"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const b = s =\u003e { const r = document.querySelector(s).getBoundingClientRect(); return {left: r.x, right: r.x + r.width, width: r.width}; }; const panel = b('.recording-panel'), main = b('.recording-panel-main'), waveform = b('[data-testid=\"recording-waveform\"]'), preserved = b('[data-testid=\"recording-preserved-text\"]'), timer = b('[data-testid=\"recording-timer\"]'), screen = b('[data-testid=\"recording-screen-button\"]'), cancel = b('[data-testid=\"recording-cancel-button\"]'); return {waveformInPanel: waveform.left \u003e panel.left, waveformBeforeText: waveform.right \u003c= preserved.left, textWide: preserved.width \u003e 40, textBeforeTimer: preserved.right \u003c= timer.left, timerWide: timer.width \u003e 30, timerInMain: timer.right \u003c= main.right, mainBeforeScreen: main.right \u003c= screen.left, cancelInPanel: cancel.right \u003c panel.right}; })()",
+      "expect": "{\"cancelInPanel\":true,\"mainBeforeScreen\":true,\"textBeforeTimer\":true,\"textWide\":true,\"timerInMain\":true,\"timerWide\":true,\"waveformBeforeText\":true,\"waveformInPanel\":true}"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"recording-screen-button\"] .recording-action-label"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"recording-stop-button\"] .recording-action-label"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"recording-cancel-button\"] .recording-action-label"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-cancel-button\"]"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep this long note with the recording so the status has to truncate."
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:01:08.875188359Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 171952,
+    "output_tokens": 6636,
+    "estimated_cost_usd": 0.1984668,
+    "mode": "generated"
+  }
+}

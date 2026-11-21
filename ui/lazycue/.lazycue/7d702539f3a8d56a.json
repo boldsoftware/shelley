@@ -1,0 +1,90 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Explicit transcription command waits for its delayed new-conversation draft without following later navigation. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. To \"select conversation X from the drawer\": if the button with aria-label \"Open conversations\" is visible, click it; then wait for \".conversation-item[data-conversation-id=\\\"X\\\"]\" to be visible, click it, and wait until it has the class \"active\". The server's answer to the browser's draft creation (POST /api/conversations/draft) is held back until call \"releaseDraft\"; call \"draftCreated\" says (\"true\" or \"false\") whether the server has created the draft and, once it has, sets {{DRAFT}} to its conversation ID; call \"draftAnswered\" says whether the browser has received the answer. Message submissions (POST /api/conversation/\u003cid\u003e/chat) are accepted without being sent on; call \"chats\" counts them, and call \"submissions\" lists them as JSON, each with its URL path and message. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. Fill the message input with two lines, \"/transcription /tmp/shelley-uploads/existing-recording.webm\" and \"Keep this context with it.\", separated by a newline.\n2. Call \"draftCreated\" until it returns \"true\".\n3. Click [data-testid=\"send-button\"].\n4. Select conversation {{VIEWED}} from the drawer. The URL should end with \"/c/{{VIEWED_SLUG}}\".\n5. Call \"releaseDraft\". Call \"chats\" should return \"1\".\n6. Call \"submissions\" must return exactly [{\"path\":\"/api/conversation/{{DRAFT}}/chat\",\"message\":\"/transcription /tmp/shelley-uploads/existing-recording.webm\\nKeep this context with it.\"}].\n7. The URL should still end with \"/c/{{VIEWED_SLUG}}\".\n8. Eval \"localStorage.getItem('shelley-draft:{{DRAFT}}') === null\" should become true.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "/transcription /tmp/shelley-uploads/existing-recording.webm\nKeep this context with it."
+    },
+    {
+      "action": "call",
+      "value": "draftCreated",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[aria-label=\"Open conversations\"]') !== null \u0026\u0026 document.querySelector('[aria-label=\"Open conversations\"]').offsetParent !== null ? 'visible' : 'hidden'",
+      "expect": "visible"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{VIEWED}}\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{VIEWED}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{VIEWED}}\"]')?.classList.contains('active') ? 'active' : 'not-active'",
+      "expect": "active"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/{{VIEWED_SLUG}}",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "releaseDraft"
+    },
+    {
+      "action": "call",
+      "value": "chats",
+      "expect": "1"
+    },
+    {
+      "action": "call",
+      "value": "submissions",
+      "expect": "[{\"path\":\"/api/conversation/{{DRAFT}}/chat\",\"message\":\"/transcription /tmp/shelley-uploads/existing-recording.webm\\nKeep this context with it.\"}]"
+    },
+    {
+      "action": "assert_url",
+      "text": "/c/{{VIEWED_SLUG}}"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley-draft:{{DRAFT}}') === null",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:07:03.754275392Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 34868,
+    "output_tokens": 1747,
+    "estimated_cost_usd": 0.0473724,
+    "mode": "generated"
+  }
+}

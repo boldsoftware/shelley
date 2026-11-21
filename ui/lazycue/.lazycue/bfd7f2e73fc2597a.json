@@ -1,0 +1,82 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "An upload that finishes after draft failure is retained. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". The browser's draft creations are held back until call \"releaseDraft\", then fail with \"draft unavailable\". Recording uploads (POST /api/upload/raw) are held back until call \"releaseUpload\", then succeed with the path /tmp/shelley-uploads/late-upload.webm; call \"uploadStarted\" says (\"true\" or \"false\") whether one has arrived. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new and click the voice button. The recording state should become \"recording\".\n2. Click the stop button. Call \"uploadStarted\" until it returns \"true\".\n3. Call \"releaseDraft\". The recording state should be \"stopping\", and \".status-error\" should contain \"draft unavailable\".\n4. Call \"releaseUpload\". \".status-error\" should come to contain \"Retry with /transcription /tmp/shelley-uploads/late-upload.webm\", and [data-testid=\"recording-retained\"] should be visible.\n5. Click the cancel button. The voice button should be enabled.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='voice-button']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".recording-status[data-state='recording']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-stop-button']"
+    },
+    {
+      "action": "call",
+      "value": "uploadStarted",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "releaseDraft"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".recording-status[data-state='stopping']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".status-error",
+      "text": "draft unavailable"
+    },
+    {
+      "action": "call",
+      "value": "releaseUpload"
+    },
+    {
+      "action": "wait_text",
+      "text": "Retry with /transcription /tmp/shelley-uploads/late-upload.webm",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".status-error",
+      "text": "Retry with /transcription /tmp/shelley-uploads/late-upload.webm"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='recording-retained']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-cancel-button']"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='voice-button']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:58:07.252971924Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28172,
+    "output_tokens": 1417,
+    "estimated_cost_usd": 0.03901365,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Cancelling an active inline recording uploads nothing and restores the composer. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". Recording uploads (POST /api/upload/raw) are counted by call \"uploads\". The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new and click the voice button. [data-testid=\"recording-status\"] should have the text exactly \"Recording…\".\n2. Click the cancel button. No recording panel should remain (count 0).\n3. Call \"uploads\" must return \"0\", and the message input should have the value \"\" (empty).\n4. window.__recordingMock.stoppedTracks must be greater than 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='voice-button']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='recording-status']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='recording-status']",
+      "text": "Recording…"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-cancel-button']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "uploads",
+      "expect": "0"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.stoppedTracks \u003e 0 ? 'yes' : 'no'",
+      "expect": "yes"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:00:49.53190406Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 26808,
+    "output_tokens": 1109,
+    "estimated_cost_usd": 0.032373299999999994,
+    "mode": "generated"
+  }
+}

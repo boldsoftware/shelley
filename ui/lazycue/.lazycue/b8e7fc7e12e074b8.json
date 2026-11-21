@@ -1,0 +1,95 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Recording palette actions are hidden while an attachment uploads. The test seeded a conversation at /c/{{SLUG}}. Attachment uploads (POST /api/upload) are held back until call \"releaseUpload\". To \"open the recording palette\", every time a step says so: press_key \"k\" with modifier \"Control\", wait for the command palette input (\".command-palette-input\") to be visible, and fill it with \"Record audio\" (all three, every time). \"The palette item X\" is the command palette item whose title is exactly X; select it with '.command-palette-item[data-test-title=\"X\"]' (the page keeps that attribute equal to the item's title, so \"Record audio\" does not match \"Record audio and screen\"). The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input to be visible.\n2. Drop a file on the composer: eval window.__dropFile(\"pending.txt\", \"pending\").\n3. Exactly one \".message-attachment-uploading\" should exist.\n4. Open the recording palette. There must be no palette item \"Record audio\" and no palette item \"Record audio and screen\" (both counts 0). Press Escape.\n5. Call \"releaseUpload\". Exactly one \".message-attachment-ready\" should come to exist.\n6. Open the recording palette. The palette items \"Record audio\" and \"Record audio and screen\" should both be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__dropFile('pending.txt', 'pending')"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-uploading",
+      "count": 1
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-item[data-test-title=\"Record audio\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-item[data-test-title=\"Record audio and screen\"]",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "call",
+      "value": "releaseUpload"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 1
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".command-palette-item[data-test-title=\"Record audio\"]"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".command-palette-item[data-test-title=\"Record audio and screen\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:31:47.625695604Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 5053,
+    "output_tokens": 704,
+    "estimated_cost_usd": 0.015400200000000001,
+    "mode": "generated"
+  }
+}

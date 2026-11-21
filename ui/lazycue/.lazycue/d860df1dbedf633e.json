@@ -1,0 +1,137 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Discarding while floating saves a trailing source edit without touching the viewed draft. The test seeded a draft conversation {{ORIGINAL}} with the draft text \"Original saved draft before the final edit.\", and another draft conversation {{VIEWED}} with the draft text \"Keep the viewed saved draft.\". The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". To \"select conversation X from the drawer\": if the button with aria-label \"Open conversations\" is visible, click it; then wait for \".conversation-item[data-conversation-id=\\\"X\\\"]\" to be visible, click it, and wait until it has the class \"active\". The recorder \"floats\" while the recording panel is inside a [data-testid=\"recording-floating\"] element: count '[data-testid=\"recording-floating\"] [data-testid=\"recording-panel\"]' (1 when floating, 0 when not). Call \"savedDrafts\" returns, as JSON, the drafts the server has saved for [{{ORIGINAL}}, {{VIEWED}}]. Recording uploads are counted by call \"uploads\". The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /c/{{ORIGINAL}}. The message input should have the value \"Original saved draft before the final edit.\" (wait up to 30s).\nLeave the edit inside the autosave debounce, then switch immediately. The trailing save must retain the source id instead of reading the newly viewed draft from mutable composer mirrors.\n2. Fill the message input with \"Keep the original saved draft's final edit.\", then immediately click the voice button and select conversation {{VIEWED}} from the drawer.\n3. The message input should have the value \"Keep the viewed saved draft.\", and the recorder should float.\n4. Call \"savedDrafts\" should return exactly [\"Keep the original saved draft's final edit.\",\"Keep the viewed saved draft.\"].\n5. Click the cancel button. No recording panel should remain (count 0), and the message input should have the value \"Keep the viewed saved draft.\".\n6. Select conversation {{ORIGINAL}} from the drawer. The message input should have the value \"Keep the original saved draft's final edit.\".\n7. Select conversation {{VIEWED}} from the drawer. The message input should have the value \"Keep the viewed saved draft.\".\n8. Call \"uploads\" must return \"0\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ORIGINAL}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Original saved draft before the final edit."
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Keep the original saved draft's final edit."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{VIEWED}}']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{VIEWED}}']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{VIEWED}}\"]').classList.contains('active') ? 'active' : 'not active'",
+      "expect": "active"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Keep the viewed saved draft."
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='recording-floating'] [data-testid='recording-panel']",
+      "count": 1
+    },
+    {
+      "action": "call",
+      "value": "savedDrafts",
+      "expect": "[\"Keep the original saved draft's final edit.\",\"Keep the viewed saved draft.\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-cancel-button']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Keep the viewed saved draft."
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ORIGINAL}}']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{ORIGINAL}}']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{ORIGINAL}}\"]').classList.contains('active') ? 'active' : 'not active'",
+      "expect": "active"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Keep the original saved draft's final edit."
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{VIEWED}}']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{VIEWED}}']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{VIEWED}}\"]').classList.contains('active') ? 'active' : 'not active'",
+      "expect": "active"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Keep the viewed saved draft."
+    },
+    {
+      "action": "call",
+      "value": "uploads",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:05:59.731805082Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 149389,
+    "output_tokens": 4266,
+    "estimated_cost_usd": 0.15073904999999999,
+    "mode": "generated"
+  }
+}

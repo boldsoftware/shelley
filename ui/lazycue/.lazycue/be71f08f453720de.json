@@ -1,0 +1,143 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The record-screen shortcut requests the screen in its own turn, before a delayed draft, and blocks duplicates. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". The recording shortcuts are press_key \"M\" on whatever has focus, with modifiers \"Control+Shift\" for \"the record-audio shortcut\" and \"Control+Alt+Shift\" for \"the record-screen shortcut\". Press them on whatever has focus: do not click or focus anything for them. To \"open the recording palette\", every time a step says so: press_key \"k\" with modifier \"Control\", wait for the command palette input (\".command-palette-input\") to be visible, and fill it with \"Record audio\" (all three, every time). \"The palette item X\" is the command palette item whose title is exactly X; select it with '.command-palette-item[data-test-title=\"X\"]' (the page keeps that attribute equal to the item's title, so \"Record audio\" does not match \"Record audio and screen\"). The server's answers to the browser's draft creations (POST /api/conversations/draft) are held back until call \"releaseDraft\"; call \"draftStarted\" says (\"true\" or \"false\") whether the server has created the draft, and call \"draftRequests\" counts the draft creations the browser sent. window.__displayRequestsAtDraft is what window.__recordingMock.displayRequests was when the page sent its draft creation. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new and wait up to 30s for the message input to be visible.\n2. Press the record-screen shortcut.\n3. Call \"draftStarted\" until it returns \"true\".\n4. window.__displayRequestsAtDraft must be 1, and window.__recordingMock.displayRequests and window.__recordingMock.synchronousDisplayRequests must both be 1.\n5. The recording panel should get data-mode \"screen\".\n6. Eval \"(m =\u003e ({microphone: m.microphoneRequests, starts: m.recorderStarts}))(window.__recordingMock)\" should become exactly {\"microphone\":1,\"starts\":1}.\n7. Open the recording palette. There must be no palette item \"Record audio\" and no palette item \"Record audio and screen\" (both counts 0). Press Escape.\n8. Press the record-audio shortcut, then the record-screen shortcut.\n9. Call \"draftRequests\" must return \"1\", and window.__recordingMock.displayRequests must still be 1.\n10. Call \"releaseDraft\".\n11. The recording panel should have data-mode \"screen\", and eval \"(m =\u003e ({display: m.displayRequests, microphone: m.microphoneRequests, starts: m.recorderStarts}))(window.__recordingMock)\" should become exactly {\"display\":1,\"microphone\":1,\"starts\":1}.\n12. Press the record-audio shortcut, then the record-screen shortcut. The same eval must still return exactly {\"display\":1,\"microphone\":1,\"starts\":1}.\n13. Click the cancel button.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Alt+Shift"
+    },
+    {
+      "action": "call",
+      "value": "draftStarted",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__displayRequestsAtDraft",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.displayRequests",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.synchronousDisplayRequests",
+      "expect": "1"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "attribute": "data-mode",
+      "value": "screen"
+    },
+    {
+      "action": "eval",
+      "expression": "(m =\u003e ({microphone: m.microphoneRequests, starts: m.recorderStarts}))(window.__recordingMock)",
+      "expect": "{\"microphone\":1,\"starts\":1}"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-item[data-test-title=\"Record audio\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-item[data-test-title=\"Record audio and screen\"]",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Alt+Shift"
+    },
+    {
+      "action": "call",
+      "value": "draftRequests",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.displayRequests",
+      "expect": "1"
+    },
+    {
+      "action": "call",
+      "value": "releaseDraft"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "attribute": "data-mode",
+      "value": "screen"
+    },
+    {
+      "action": "eval",
+      "expression": "(m =\u003e ({display: m.displayRequests, microphone: m.microphoneRequests, starts: m.recorderStarts}))(window.__recordingMock)",
+      "expect": "{\"display\":1,\"microphone\":1,\"starts\":1}"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Shift"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Alt+Shift"
+    },
+    {
+      "action": "eval",
+      "expression": "(m =\u003e ({display: m.displayRequests, microphone: m.microphoneRequests, starts: m.recorderStarts}))(window.__recordingMock)",
+      "expect": "{\"display\":1,\"microphone\":1,\"starts\":1}"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-cancel-button\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:31:55.900661723Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 25787,
+    "output_tokens": 2321,
+    "estimated_cost_usd": 0.05561595000000001,
+    "mode": "generated"
+  }
+}

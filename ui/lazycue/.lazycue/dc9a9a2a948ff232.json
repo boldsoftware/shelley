@@ -1,0 +1,88 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The recorder lifetime is used when screen sharing ends during pre-roll. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". window.__recordingMock.endDisplay() ends the screen share as the browser's \"Stop sharing\" would. The page runs on a fake clock that is already paused when the page loads, at window.__captureStartedAt (epoch milliseconds); steps drive it with window.__clock.runFor(ms) and window.__clock.setFixedTime(ms). Click buttons with click steps on their selectors, never with an eval. Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/preroll.webm.json for filenames ending in \".json\" and /tmp/shelley-uploads/preroll.webm otherwise; call \"metadataDuration\" returns the duration_ms of the last metadata (\".json\") upload's JSON body (\"none\" before there is one). Message submissions are accepted without being sent on. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. The voice button should be visible; click it.\n2. The recording state should become \"preroll\".\n3. Run the clock 100ms (eval \"window.__clock.runFor(100)\"). The recording state should become \"recording\".\n4. Click [data-testid=\"recording-screen-button\"]. The recording state should become \"preroll\".\n5. Fix the time 1100ms after the capture started: eval \"window.__clock.setFixedTime(window.__captureStartedAt + 1100)\".\n6. End the screen share: eval \"window.__recordingMock.endDisplay()\".\n7. No recording panel should remain (count 0).\n8. Call \"metadataDuration\" must return \"1000\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='voice-button']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".recording-status[data-state='preroll']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "preroll"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(100)"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".recording-status[data-state='recording']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "recording"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-screen-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".recording-status[data-state='preroll']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "preroll"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.setFixedTime(window.__captureStartedAt + 1100)"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.endDisplay()"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "metadataDuration",
+      "expect": "1000"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:01:58.661505769Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28044,
+    "output_tokens": 1359,
+    "estimated_cost_usd": 0.037705050000000004,
+    "mode": "generated"
+  }
+}

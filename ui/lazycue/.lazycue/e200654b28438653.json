@@ -1,0 +1,66 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Audio recording stays available without screen capture. The browser can record audio but cannot capture the screen. The page runs on a fake clock that steps drive with window.__clock.runFor(ms). To \"open the recording palette\", every time a step says so: press_key \"k\" with modifier \"Control\", wait for the command palette input (\".command-palette-input\") to be visible, and fill it with \"Record audio\" (all three, every time). \"The palette item X\" is the command palette item whose title is exactly X; select it with '.command-palette-item[data-test-title=\"X\"]' (the page keeps that attribute equal to the item's title, so \"Record audio\" does not match \"Record audio and screen\"). The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. [data-testid=\"voice-microphone-icon\"] should be visible, and no [data-testid=\"voice-video-icon\"] may exist (count 0).\n2. Hover the voice button. Run the clock 1000ms (eval \"window.__clock.runFor(1000)\").\n3. No [data-testid=\"record-menu\"] may exist (count 0).\n4. Open the recording palette. The palette item \"Record audio\" should be visible, and there must be no palette item \"Record audio and screen\" (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='voice-microphone-icon']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='voice-video-icon']",
+      "count": 0
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__clock.runFor(1000)"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='record-menu']",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Record audio"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".command-palette-item[data-test-title='Record audio']"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-item[data-test-title='Record audio and screen']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:25:25.963727811Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 4985,
+    "output_tokens": 482,
+    "estimated_cost_usd": 0.011815200000000001,
+    "mode": "generated"
+  }
+}

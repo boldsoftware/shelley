@@ -1,0 +1,133 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Discarding a failed floating recording releases orphaned previews without touching the viewed composer. The test seeded a separate draft conversation {{VIEWED}} with the draft text \"Keep the viewed draft.\". The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". window.__recordingMock.revokedPreviews lists the object URLs the page revoked. To \"paste file F\": eval window.__pasteFile(F), passing contents C and type T as further arguments only when the step names them, which pastes such a file into the message input; then wait until exactly one \".message-attachment-ready\" exists. To \"select conversation X from the drawer\": if the button with aria-label \"Open conversations\" is visible, click it; then wait for \".conversation-item[data-conversation-id=\\\"X\\\"]\" to be visible, click it, and wait until it has the class \"active\". Draft creations fail with \"draft unavailable\". Attachment uploads (POST /api/upload) answer with the path /tmp/shelley-uploads/attachment.png, and recording uploads with /tmp/shelley-uploads/discarded.webm. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. Paste file \"source.png\" with contents \"image\" and type \"image/png\".\n2. Save the preview: eval \"window.__preview = document.querySelector('.message-attachment-thumb').getAttribute('src')\".\n3. Click the voice button. [data-testid=\"recording-error\"] should come to contain \"draft unavailable\", and the recording state should be \"recording\".\n4. Select conversation {{VIEWED}} from the drawer. Paste file \"viewed.txt\".\n5. Click the stop button. [data-testid=\"recording-retained\"] should become visible.\n6. Eval \"JSON.stringify(window.__recordingMock.revokedPreviews)\" must return \"[]\".\n7. Click the cancel button. No recording panel should remain (count 0).\n8. Eval \"JSON.stringify(window.__recordingMock.revokedPreviews) === JSON.stringify([window.__preview])\" must be true.\n9. The message input should have the value \"Keep the viewed draft.\", and \".message-attachment-ready\" should contain \"viewed.txt\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__pasteFile('source.png', 'image', 'image/png')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-attachment-ready",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.message-attachment-ready').length",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__preview = document.querySelector('.message-attachment-thumb').getAttribute('src'); window.__preview"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-error\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"recording-error\"]",
+      "text": "draft unavailable"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "recording"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{VIEWED}}\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{VIEWED}}\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{VIEWED}}\"].active",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__pasteFile('viewed.txt')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-attachment-ready",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.message-attachment-ready').length",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-stop-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-retained\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__recordingMock.revokedPreviews)",
+      "expect": "[]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-cancel-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(window.__recordingMock.revokedPreviews) === JSON.stringify([window.__preview])",
+      "expect": "true"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep the viewed draft."
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-attachment-ready",
+      "text": "viewed.txt"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:56:20.29279548Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 57894,
+    "output_tokens": 3111,
+    "estimated_cost_usd": 0.08831445000000002,
+    "mode": "generated"
+  }
+}

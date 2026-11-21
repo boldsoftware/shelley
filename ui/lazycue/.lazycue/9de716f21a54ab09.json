@@ -1,0 +1,106 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The composer is preserved after a rejected chooser, and screen capture is retried in a click turn. The test seeded a conversation at /c/{{SLUG}}. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". Setting window.__recordingMock.displayError to a message makes screen capture fail with it; \"\" makes it succeed. The recording shortcuts are press_key \"M\" on whatever has focus, with modifiers \"Control+Shift\" for \"the record-audio shortcut\" and \"Control+Alt+Shift\" for \"the record-screen shortcut\". Press them on whatever has focus: do not click or focus anything for them. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. Read the counts with eval \"(m =\u003e ({display: m.displayRequests, synchronousDisplay: m.synchronousDisplayRequests, microphone: m.microphoneRequests, starts: m.recorderStarts}))(window.__recordingMock)\".\n1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input to be visible. Fill it with \"Keep this draft through screen failures.\".\n2. Eval \"window.__recordingMock.displayError = 'Screen sharing was cancelled'\".\n3. Press the record-screen shortcut.\n4. [data-testid=\"recording-error\"] should have the text exactly \"Screen sharing was cancelled\", the recording panel should have data-mode \"screen\", and [data-testid=\"recording-preserved-text\"] should have the text exactly \"Keep this draft through screen failures.\".\n5. The counts must be exactly {\"display\":1,\"synchronousDisplay\":1,\"microphone\":0,\"starts\":0}.\n6. Eval \"window.__recordingMock.displayError = ''\".\n7. Click the retry button. [data-testid=\"recording-status\"] should have the text exactly \"Recording screen + microphone…\".\n8. The counts must be exactly {\"display\":2,\"synchronousDisplay\":2,\"microphone\":1,\"starts\":1}.\n9. Click the cancel button. The message input should have the value \"Keep this draft through screen failures.\" and be enabled.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Keep this draft through screen failures."
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.displayError = 'Screen sharing was cancelled'"
+    },
+    {
+      "action": "press_key",
+      "key": "M",
+      "modifiers": "Control+Alt+Shift"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='recording-error']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='recording-error']",
+      "text": "Screen sharing was cancelled"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='recording-panel']",
+      "attribute": "data-mode",
+      "value": "screen"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='recording-preserved-text']",
+      "text": "Keep this draft through screen failures."
+    },
+    {
+      "action": "eval",
+      "expression": "(m =\u003e JSON.stringify({display: m.displayRequests, synchronousDisplay: m.synchronousDisplayRequests, microphone: m.microphoneRequests, starts: m.recorderStarts}) === JSON.stringify({display:1,synchronousDisplay:1,microphone:0,starts:0}))(window.__recordingMock)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.displayError = ''"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-retry-button']"
+    },
+    {
+      "action": "wait_text",
+      "text": "Recording screen + microphone…",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='recording-status']",
+      "text": "Recording screen + microphone…"
+    },
+    {
+      "action": "eval",
+      "expression": "(m =\u003e JSON.stringify({display: m.displayRequests, synchronousDisplay: m.synchronousDisplayRequests, microphone: m.microphoneRequests, starts: m.recorderStarts}) === JSON.stringify({display:2,synchronousDisplay:2,microphone:1,starts:1}))(window.__recordingMock)",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-cancel-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Keep this draft through screen failures."
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='message-input']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:56:00.289105233Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 47126,
+    "output_tokens": 3623,
+    "estimated_cost_usd": 0.0880107,
+    "mode": "generated"
+  }
+}

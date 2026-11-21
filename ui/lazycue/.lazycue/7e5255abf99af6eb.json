@@ -1,0 +1,224 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A failed recording destination is retried after navigation without recapturing or changing its context. The test seeded a separate draft conversation {{VIEWED}} with the draft text \"A separate draft.\". The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". To \"paste file F\": eval window.__pasteFile(F), passing contents C and type T as further arguments only when the step names them, which pastes such a file into the message input; then wait until exactly one \".message-attachment-ready\" exists. To \"select conversation X from the drawer\": if the button with aria-label \"Open conversations\" is visible, click it; then wait for \".conversation-item[data-conversation-id=\\\"X\\\"]\" to be visible, click it, and wait until it has the class \"active\". To \"start a new conversation from the header\": if the button in \".header\" whose accessible name is exactly \"New Conversation\" is visible, click it; otherwise click the button \"More options\" and then the button \"New Conversation\" in \".chat-overflow-popover\". Click with click steps, not evals. Draft creations (POST /api/conversations/draft) whose \"draft\" is \"A newer new-conversation composer.\" reach the server, but the server's answer is held back until call \"releaseNewerDraft\"; call \"newerDraftStarted\" says (\"true\" or \"false\") whether the server has created that draft. Of the other draft creations, the first is held back until call \"releaseFirstDraft\" and then fails with \"draft unavailable\", the second fails with \"retry still unavailable\", and later ones reach the server. Call \"drafts\" reports those other draft creations as \"\u003ccount\u003e \u003csame|different\u003e\": \"same\" when every request body equals the first's. Call \"source\" says (\"true\" or \"false\") whether one of them reached the server, and once it has, sets {{SOURCE}} to the conversation it created. Attachment uploads (POST /api/upload) answer with the path /tmp/shelley-uploads/original-context.txt. Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/retained.webm, and call \"uploads\" counts them. Message submissions are accepted without being sent on; call \"submissions\" lists them as JSON, each with its URL path, message and model. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. Fill the message input with \"Original recording context.\". Paste file \"original-context.txt\".\n2. Click the voice button. The recording state should become \"recording\".\n3. Call \"releaseFirstDraft\". [data-testid=\"recording-error\"] should come to contain \"draft unavailable\", and the recording state should still be \"recording\".\n4. window.__recordingMock.stoppedTracks must be 0.\n5. Click the stop button. [data-testid=\"recording-retained\"] should become visible.\n6. Call \"drafts\" must return \"1 same\", call \"uploads\" must return \"1\", and call \"submissions\" must return exactly [].\n7. window.__recordingMock.stoppedTracks should become 1.\n8. Select conversation {{VIEWED}} from the drawer. Fill the message input with \"Leave this different composer alone.\".\n9. Click the retry button twice in a single eval: \"(b =\u003e { b.click(); b.click(); return 'clicked'; })(document.querySelector('[data-testid=\\\"recording-retry-button\\\"]'))\".\n10. [data-testid=\"recording-error\"] should come to contain \"retry still unavailable\", and [data-testid=\"recording-retained\"] should be visible.\n11. Call \"drafts\" must return \"2 same\", call \"submissions\" must return exactly [], and the message input should have the value \"Leave this different composer alone.\".\n12. Start a new conversation from the header. Fill the message input with \"A newer new-conversation composer.\".\n13. Call \"newerDraftStarted\" until it returns \"true\".\n14. Click the retry button. No recording panel should remain (count 0).\n15. Call \"drafts\" must return \"3 same\". Call \"source\" must return \"true\".\n16. Call \"submissions\" must return exactly [{\"path\":\"/api/conversation/{{SOURCE}}/chat\",\"message\":\"/transcription /tmp/shelley-uploads/retained.webm\\nOriginal recording context. [/tmp/shelley-uploads/original-context.txt]\",\"model\":\"predictable\"}].\n17. Call \"uploads\" must return \"1\", window.__recordingMock.recorderStarts must be 1, and window.__recordingMock.microphoneRequests must be 1.\n18. The URL should end with \"/new\", and the message input should have the value \"A newer new-conversation composer.\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Original recording context."
+    },
+    {
+      "action": "eval",
+      "expression": "window.__pasteFile('original-context.txt')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-attachment-ready"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "recording"
+    },
+    {
+      "action": "call",
+      "value": "releaseFirstDraft"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"recording-error\"]",
+      "text": "draft unavailable"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "recording"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.stoppedTracks",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-stop-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-retained\"]"
+    },
+    {
+      "action": "call",
+      "value": "drafts",
+      "expect": "1 same"
+    },
+    {
+      "action": "call",
+      "value": "uploads",
+      "expect": "1"
+    },
+    {
+      "action": "call",
+      "value": "submissions",
+      "expect": "[]"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.stoppedTracks",
+      "expect": "1"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{VIEWED}}\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{VIEWED}}\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{VIEWED}}\"].active"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Leave this different composer alone."
+    },
+    {
+      "action": "eval",
+      "expression": "(b =\u003e { b.click(); b.click(); return 'clicked'; })(document.querySelector('[data-testid=\"recording-retry-button\"]'))",
+      "expect": "clicked"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"recording-error\"]",
+      "text": "retry still unavailable"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"recording-retained\"]"
+    },
+    {
+      "action": "call",
+      "value": "drafts",
+      "expect": "2 same"
+    },
+    {
+      "action": "call",
+      "value": "submissions",
+      "expect": "[]"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Leave this different composer alone."
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header button[aria-label=\"New Conversation\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".header button[aria-label=\"New Conversation\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "A newer new-conversation composer."
+    },
+    {
+      "action": "call",
+      "value": "newerDraftStarted",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-retry-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "drafts",
+      "expect": "3 same"
+    },
+    {
+      "action": "call",
+      "value": "source",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "submissions",
+      "expect": "[{\"path\":\"/api/conversation/{{SOURCE}}/chat\",\"message\":\"/transcription /tmp/shelley-uploads/retained.webm\\nOriginal recording context. [/tmp/shelley-uploads/original-context.txt]\",\"model\":\"predictable\"}]"
+    },
+    {
+      "action": "call",
+      "value": "uploads",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.recorderStarts",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.microphoneRequests",
+      "expect": "1"
+    },
+    {
+      "action": "assert_url",
+      "text": "/new"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "A newer new-conversation composer."
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:33:05.435815238Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 27500,
+    "output_tokens": 2979,
+    "estimated_cost_usd": 0.06890475000000001,
+    "mode": "generated"
+  }
+}

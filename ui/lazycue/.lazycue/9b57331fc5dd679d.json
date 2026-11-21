@@ -1,0 +1,154 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "One live recorder is kept when switching from an existing conversation and returning. The test seeded the conversation at /c/{{ORIGINAL}}, and another conversation {{OTHER}} at /c/{{OTHER_SLUG}}. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". To \"select conversation X from the drawer\": if the button with aria-label \"Open conversations\" is visible, click it; then wait for \".conversation-item[data-conversation-id=\\\"X\\\"]\" to be visible, click it, and wait until it has the class \"active\". The recorder \"floats\" while the recording panel is inside a [data-testid=\"recording-floating\"] element: count '[data-testid=\"recording-floating\"] [data-testid=\"recording-panel\"]' (1 when floating, 0 when not). Recording uploads are counted by call \"uploads\". \"The recorder counts\" are what eval \"(m => ({starts: m.recorderStarts, stops: m.recorderStops}))(window.__recordingMock)\" returns. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /c/{{ORIGINAL}} and wait up to 30s for the message input to be visible. Fill it with \"Preserve the conversation recording context.\".\n2. Click the voice button. The recording panel should be visible. Mark it: eval \"document.querySelector('[data-testid=\\\"recording-panel\\\"]').setAttribute('data-instance-marker', 'original')\".\n3. window.__recordingMock.recorderStarts should become 1.\n4. Select conversation {{OTHER}} from the drawer. The URL should end with \"/c/{{OTHER_SLUG}}\".\n5. Exactly one recording panel should exist (count 1), and it should still have data-instance-marker \"original\", the recorder should float, [data-testid=\"recording-return-button\"] should be visible, and the voice button should be disabled.\n6. The recorder counts must be exactly {\"starts\":1,\"stops\":0}.\n7. Click [data-testid=\"recording-return-button\"]. The URL should end with \"/c/{{ORIGINAL}}\".\n8. Exactly one recording panel should exist (count 1), and it should still have data-instance-marker \"original\", the recorder should not float, and no [data-testid=\"recording-return-button\"] may exist (count 0).\n9. The recorder counts must be exactly {\"starts\":1,\"stops\":0}.\n10. [data-testid=\"recording-preserved-text\"] should have the text exactly \"Preserve the conversation recording context.\".\n11. Click the cancel button. No recording panel should remain (count 0).\n12. Call \"uploads\" must return \"0\", and window.__recordingMock.recorderStops must be 1.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ORIGINAL}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Preserve the conversation recording context."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-panel\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"recording-panel\"]').setAttribute('data-instance-marker', 'original')"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.recorderStarts",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{OTHER}}\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{OTHER}}\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{OTHER}}\"].active"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/{{OTHER_SLUG}}"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 1
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "attribute": "data-instance-marker",
+      "value": "original"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-floating\"] [data-testid=\"recording-panel\"]",
+      "count": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"recording-return-button\"]"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "(m => ({starts: m.recorderStarts, stops: m.recorderStops}))(window.__recordingMock)",
+      "expect": "{\"starts\":1,\"stops\":0}"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-return-button\"]"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/{{ORIGINAL}}"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 1
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "attribute": "data-instance-marker",
+      "value": "original"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-floating\"] [data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-return-button\"]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(m => ({starts: m.recorderStarts, stops: m.recorderStops}))(window.__recordingMock)",
+      "expect": "{\"starts\":1,\"stops\":0}"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"recording-preserved-text\"]",
+      "text": "Preserve the conversation recording context."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-cancel-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"recording-panel\"]",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "uploads",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__recordingMock.recorderStops",
+      "expect": "1"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:29:54.049839815Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 25217,
+    "output_tokens": 2375,
+    "estimated_cost_usd": 0.0557823,
+    "mode": "generated"
+  }
+}

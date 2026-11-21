@@ -1,0 +1,148 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Early-stop attachments are kept when navigating after Stop and the submission fails. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". To \"paste file F\": eval window.__pasteFile(F), passing contents C and type T as further arguments only when the step names them, which pastes such a file into the message input; then wait until exactly one \".message-attachment-ready\" exists. To \"select conversation X from the drawer\": if the button with aria-label \"Open conversations\" is visible, click it; then wait for \".conversation-item[data-conversation-id=\\\"X\\\"]\" to be visible, click it, and wait until it has the class \"active\". The test seeded a separate draft conversation with ID {{VIEWED}} and the draft text \"A separately viewed draft.\". The server's answer to the browser's own draft creation is held back until call \"releaseDraft\"; call \"draftCreated\" says (\"true\" or \"false\") whether the server has created it and, once it has, sets {{DRAFT}} to its conversation ID. Recording uploads succeed, and every message submission (POST /api/conversation/\u003cid\u003e/chat) fails with \"acceptance unavailable\". The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new. Fill the message input with \"Keep this text and attachment after the failed send.\".\n2. Paste file \"keep.txt\".\n3. Click the voice button.\n4. Call \"draftCreated\" until it returns \"true\".\n5. The recording state should become \"recording\".\n6. Click the stop button; the recording state should become \"stopping\".\n7. Select conversation {{VIEWED}} from the drawer.\n8. The message input should have the value \"A separately viewed draft.\", and no \".message-attachment-ready\" should exist (count 0).\n9. Call \"releaseDraft\".\n10. [data-testid=\"recording-retained\"] should become visible, and \".status-error\" should contain \"acceptance unavailable\".\n11. Select conversation {{DRAFT}} from the drawer.\n12. Click the cancel button.\n13. The message input should have the value \"Keep this text and attachment after the failed send.\", and exactly one \".message-attachment-ready\" should exist, containing the text \"keep.txt\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep this text and attachment after the failed send."
+    },
+    {
+      "action": "eval",
+      "expression": "window.__pasteFile('keep.txt')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-attachment-ready",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"voice-button\"]"
+    },
+    {
+      "action": "call",
+      "value": "draftCreated",
+      "expect": "true"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "recording"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-stop-button\"]"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".recording-status",
+      "attribute": "data-state",
+      "value": "stopping"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{VIEWED}}\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{VIEWED}}\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{VIEWED}}\"].active",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "A separately viewed draft."
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "releaseDraft"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"recording-retained\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".status-error",
+      "text": "acceptance unavailable"
+    },
+    {
+      "action": "call",
+      "value": "draftCreated",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Open conversations\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{DRAFT}}\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{DRAFT}}\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{DRAFT}}\"].active",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"recording-cancel-button\"]"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Keep this text and attachment after the failed send."
+    },
+    {
+      "action": "assert_count",
+      "selector": ".message-attachment-ready",
+      "count": 1
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-attachment-ready",
+      "text": "keep.txt"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:16:27.847687349Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 37171,
+    "output_tokens": 2310,
+    "estimated_cost_usd": 0.05990654999999999,
+    "mode": "generated"
+  }
+}

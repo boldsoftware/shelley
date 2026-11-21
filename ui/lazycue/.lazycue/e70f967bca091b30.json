@@ -1,0 +1,96 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A Return clicked before the delayed draft resolves does not navigate after cancel. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. The page fakes the microphone, screen capture and MediaRecorder, and window.__recordingMock counts what the page asked for (read it with eval, e.g. \"window.__recordingMock.recorderStarts\"): displayRequests (screen captures requested), synchronousDisplayRequests (those requested inside a click or keydown handler), microphoneRequests, audioSources, recorderStarts, recorderStops and stoppedTracks (media tracks stopped). \"The recording state\" is the data-state attribute of \".recording-status\". To \"select conversation X from the drawer\": if the button with aria-label \"Open conversations\" is visible, click it; then wait for \".conversation-item[data-conversation-id=\\\"X\\\"]\" to be visible, click it, and wait until it has the class \"active\". The recorder \"floats\" while the recording panel is inside a [data-testid=\"recording-floating\"] element: count '[data-testid=\"recording-floating\"] [data-testid=\"recording-panel\"]' (1 when floating, 0 when not). The server's answer to the browser's draft creation is held back until call \"releaseDraft\"; call \"draftCreated\" says (\"true\" or \"false\") whether the server has created the draft, and call \"draftAnswered\" whether the browser has received the answer. The message input is [data-testid=\"message-input\"], the voice button [data-testid=\"voice-button\"], the recording panel [data-testid=\"recording-panel\"], and its stop, cancel and retry buttons [data-testid=\"recording-stop-button\"], [data-testid=\"recording-cancel-button\"] and [data-testid=\"recording-retry-button\"]. When a step says an element should contain or have some text, assert that on that element, not with a page-wide wait_text. Perform the steps in order. \n1. Navigate to /new and click the voice button.\n2. Call \"draftCreated\" until it returns \"true\".\n3. Select conversation {{VIEWED}} from the drawer. The recorder should float.\n4. Click [data-testid=\"recording-return-button\"], then click the cancel button. No recording panel should remain (count 0).\n5. Call \"releaseDraft\", then call \"draftAnswered\" until it returns \"true\".\n6. The URL should end with \"/c/{{VIEWED_SLUG}}\".\n7. The voice button should be enabled, and the URL must still end with \"/c/{{VIEWED_SLUG}}\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='voice-button']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='recording-panel']",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "draftCreated",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Open conversations']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{VIEWED}}']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{VIEWED}}']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{VIEWED}}'].active",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='recording-floating'] [data-testid='recording-panel']",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-return-button']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='recording-cancel-button']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "releaseDraft"
+    },
+    {
+      "action": "call",
+      "value": "draftAnswered",
+      "expect": "true"
+    },
+    {
+      "action": "assert_url",
+      "text": "/c/{{VIEWED_SLUG}}"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='voice-button']"
+    },
+    {
+      "action": "assert_url",
+      "text": "/c/{{VIEWED_SLUG}}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:13:23.620694732Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 112411,
+    "output_tokens": 2955,
+    "estimated_cost_usd": 0.10834875,
+    "mode": "generated"
+  }
+}
