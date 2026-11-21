@@ -255,7 +255,7 @@ func TestE2EChatToolbarGitGraphDirectOnDesktop(t *testing.T) {
 // was skipped elsewhere, so this one has the page say it runs on exe.dev, as
 // the server would there.
 func TestE2EChatToolbarManageOnExeDev(t *testing.T) {
-	e2e(t, `On exe.dev, "Manage on exe.dev" opens this VM's management page. 1. Navigate to /new. 2. Click the button named exactly "More options". 3. The button named exactly "Manage on exe.dev" in ".chat-overflow-popover" should be visible. 4. Click that button. 5. A popup opens (tab "popup"): its URL should come to be exactly "https://exe.dev/vm/myvm", and it should show the heading (role heading) named "VM management". 6. ".chat-overflow-popover" should be hidden (or absent). 7. Close tab "popup".`, func(s *shelley) {
+	e2e(t, `On exe.dev, "Manage on exe.dev" opens this VM's management page. 1. Navigate to /new. 2. Click the button named exactly "More options". 3. The button named exactly "Manage on exe.dev" in ".chat-overflow-popover" should be visible, and there must be no button named exactly "Back to exe.dev" in it (count 0). 4. Click that button. 5. A popup opens (tab "popup"): its URL should come to be exactly "https://exe.dev/vm/myvm", and it should show the heading (role heading) named "VM management". 6. ".chat-overflow-popover" should be hidden (or absent). 7. Close tab "popup".`, func(s *shelley) {
 		s.patchInit(map[string]any{
 			"is_exe_dev": true,
 			"hostname":   "myvm.exe.xyz",

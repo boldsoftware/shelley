@@ -191,9 +191,7 @@ func TestE2ESkillsPickerMCPTools(t *testing.T) {
 		skillsPickerMCP(s)
 		c := skillsPicker(s)
 		skillsPickerChat(s, c, func(message string, skills []string) string {
-			if skills == nil {
-				skills = []string{}
-			}
+			// Missing or null skills report null, not [].
 			// Keys in this order.
 			return `{"skills":` + mustJSON(skills) + `,"requests web.search":` +
 				mustJSON(strings.HasPrefix(message, "echo: find sources\n\nUse the MCP tool \"web.search\"")) + `}`

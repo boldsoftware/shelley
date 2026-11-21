@@ -1,11 +1,11 @@
 {
   "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
-  "description": "\"Send X\" means: fill the message input (data-testid \"message-input\") with X, click the send button (data-testid \"send-button\"), and wait (up to 30s) until the message input's value is exactly \"\". A \"reader\" is a BTW thread shown inline, [data-testid=\"btw-inline\"]; \"the reader for X\" is the one containing the text X. Inside a reader: its answers are \".btw-inline-answer\", its expand/collapse toggle is \".btw-inline-label\", its body is \".btw-inline-body\", its follow-up box is \"[data-btw-follow-up]\", and its action buttons are found by their text (\"Summarize to input\", \"Dismiss\", \"Cancel\") or label (button[aria-label=\"Submit follow up\"]); its \"Open subagent\" link is the a.btw-inline-open-subagent. \"The Stop button\" is button[aria-label=\"Stop\"]. \"The reader for X has completed N turns\" means: eval window.btwCompleted(X, N) with expect \"true\" (it checks the reader's child conversation on the server); then the reader's \"Summarize to input\" button should be visible (up to 30s), and its follow-up box should be enabled. Cancelling a BTW reader's work leaves the parent alone, and a reader started after /clear is restored after a reload. Perform the steps in order. 1. Navigate to /c/btw-cancel and wait (up to 30s) for the message input to be visible. 2. Send \"/btw {{CHILD_BARRIER}}\" (its bash command blocks until cancelled). 3. Click the \"Cancel\" button of the reader for \"read release\". That reader should come to contain \"Cancelled\" (up to 30s), and there must be no Stop button (count 0). 4. Send \"echo: parent still works\". The last element containing \"parent still works\" should become visible (up to 30s). 5. Send \"/clear\". Exactly one \".generation-divider\" should appear (up to 30s). 6. Send \"/btw echo: after clear\". The reader for \"echo: after clear\" should have exactly one answer, which should come to contain \"after clear\" (up to 30s). 7. Reload the page. The reader for \"echo: after clear\"'s answer should again contain \"after clear\" (up to 30s).",
+  "description": "\"Send X\" means: fill the message input (data-testid \"message-input\") with X, click the send button (data-testid \"send-button\"), and wait (up to 30s) until the message input's value is exactly \"\". A \"reader\" is a BTW thread shown inline, [data-testid=\"btw-inline\"]; \"the reader for X\" is the one containing the text X. Inside a reader: its answers are \".btw-inline-answer\", its expand/collapse toggle is \".btw-inline-label\", its body is \".btw-inline-body\", its follow-up box is \"[data-btw-follow-up]\", and its action buttons are found by their text (\"Summarize to input\", \"Dismiss\", \"Cancel\") or label (button[aria-label=\"Submit follow up\"]); its \"Open subagent\" link is the a.btw-inline-open-subagent. \"The Stop button\" is button[aria-label=\"Stop\"]. \"The reader for X has completed N turns\" means: eval window.btwCompleted(X, N) with expect \"true\" (it checks the reader's child conversation on the server); then the reader's \"Summarize to input\" button should be visible (up to 30s), and its follow-up box should be enabled. Cancelling a BTW reader's work leaves the parent alone, and a reader started after /clear is restored after a reload. Perform the steps in order. 1. Navigate to /c/side-cancel and wait (up to 30s) for the message input to be visible. 2. Send \"/btw {{CHILD_BARRIER}}\" (its bash command blocks until cancelled). 3. Click the \"Cancel\" button of the reader for \"read release\". That reader should come to contain \"Cancelled\" (up to 30s), and there must be no Stop button (count 0). 4. Send \"echo: parent still works\". The last element containing \"parent still works\" should become visible (up to 30s). 5. Send \"/clear\". Exactly one \".generation-divider\" should appear (up to 30s). 6. Send \"/btw echo: after clear\". The reader for \"echo: after clear\" should have an answer that comes to contain \"after clear\" (up to 30s), and exactly one answer (count 1). 7. Reload the page. The reader for \"echo: after clear\"'s answer should again contain \"after clear\" (up to 30s), and it should again have exactly one answer.",
   "version": 1,
   "steps": [
     {
       "action": "navigate",
-      "url": "/c/btw-cancel"
+      "url": "/c/side-cancel"
     },
     {
       "action": "wait_visible",
@@ -35,7 +35,10 @@
     },
     {
       "action": "click",
-      "selector": "[data-testid='btw-inline']",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "read release"
+      },
       "role": "button",
       "name": "Cancel"
     },
@@ -129,6 +132,15 @@
       "timeout": "30s"
     },
     {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: after clear"
+      },
+      "selector": ".btw-inline-answer",
+      "count": 1
+    },
+    {
       "action": "reload"
     },
     {
@@ -146,6 +158,15 @@
       "selector": ".btw-inline-answer",
       "text": "after clear",
       "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[data-testid='btw-inline']",
+        "has_text": "echo: after clear"
+      },
+      "selector": ".btw-inline-answer",
+      "count": 1
     }
   ],
   "metadata": {
