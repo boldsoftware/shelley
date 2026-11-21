@@ -1,0 +1,133 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The test seeds a conversation at /c/{{SLUG}} whose first message is \"echo message 0\". To \"open the conversation\", navigate to /c/{{SLUG}} and wait for the message input to be visible (allow 30s). To \"add message N\", send \"echo message N\" and wait until a [data-testid=\"message\"] element containing the text \"echo message N\" is visible (allow 30s). A touch cancelled during a mouse click does not keep that click from being a click: a click that shrinks the list at the bottom does not stop auto-follow. The page provides window.__addCollapsible(): it inserts a 400px block, with a \"Collapse\" button ([data-testid=\"collapse-test\"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap. Clicking the button removes the block.\n1. Open the conversation.\n2. Enough content that the list actually scrolls: add message 1 and wait until the agent-thinking indicator ([data-testid=\"agent-thinking\"]) is hidden (allow 30s); then add message 2 and wait until the agent-thinking indicator ([data-testid=\"agent-thinking\"]) is hidden (allow 30s); then add message 3 and wait until the agent-thinking indicator ([data-testid=\"agent-thinking\"]) is hidden (allow 30s).\n3. Wait until Math.abs(gap) \u003c= 1 is true. The button must not be visible (allow 5s).\n4. Eval Math.abs(await window.__addCollapsible()) \u003c= 1 expecting true.\n5. In one async eval without expect, on the container: dispatch new Event(\"touchstart\", {bubbles: true}); await new Promise((resolve) =\u003e setTimeout(resolve, 400)), so the touch is no longer a recent gesture; dispatch new PointerEvent(\"pointerdown\", {pointerId: 1, pointerType: \"mouse\", bubbles: true}); dispatch new Event(\"touchcancel\", {bubbles: true}); dispatch new PointerEvent(\"pointerup\", {pointerId: 1, pointerType: \"mouse\", bubbles: true}); call document.querySelector('[data-testid=\"collapse-test\"]').click(); await two animation frames; store in window.__buttonNow whether the button is visible (it exists, its getBoundingClientRect() has non-zero width and height, and its computed visibility is not \"hidden\").\n6. Check that window.__buttonNow is false.\n7. Send \"echo after cancel\" and wait until a [data-testid=\"message\"] element containing \"echo after cancel\" is visible (allow 30s).\n8. Still following: wait until Math.abs(gap) \u003c= 1 is true (allow 10s), and the button must not be visible (allow 5s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo message 1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "echo message 1",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo message 2"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "echo message 2",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo message 3"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "echo message 3",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "Math.abs(document.querySelector('.messages-container').scrollHeight - document.querySelector('.messages-container').clientHeight - document.querySelector('.messages-container').scrollTop) \u003c= 1",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const gap = await window.__addCollapsible(); return Math.abs(gap) \u003c= 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const container = document.querySelector('.messages-container'); container.dispatchEvent(new Event('touchstart', {bubbles: true})); await new Promise(resolve =\u003e setTimeout(resolve, 400)); container.dispatchEvent(new PointerEvent('pointerdown', {pointerId: 1, pointerType: 'mouse', bubbles: true})); container.dispatchEvent(new Event('touchcancel', {bubbles: true})); container.dispatchEvent(new PointerEvent('pointerup', {pointerId: 1, pointerType: 'mouse', bubbles: true})); document.querySelector('[data-testid=\"collapse-test\"]').click(); await new Promise(resolve =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(resolve))); const btn = document.querySelector('.scroll-to-bottom-button'); const r = btn ? btn.getBoundingClientRect() : null; const vis = btn ? getComputedStyle(btn).visibility : 'hidden'; window.__buttonNow = !!(btn \u0026\u0026 r \u0026\u0026 r.width \u003e 0 \u0026\u0026 r.height \u003e 0 \u0026\u0026 vis !== 'hidden'); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__buttonNow",
+      "expect": "false"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo after cancel"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "echo after cancel",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "Math.abs(document.querySelector('.messages-container').scrollHeight - document.querySelector('.messages-container').clientHeight - document.querySelector('.messages-container').scrollTop) \u003c= 1",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T21:24:37.679051536Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 56342,
+    "output_tokens": 3742,
+    "estimated_cost_usd": 0.114417,
+    "mode": "generated"
+  }
+}

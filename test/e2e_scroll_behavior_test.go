@@ -299,6 +299,137 @@ func TestE2EScrollSubMarginClampKeepsButtonHidden(t *testing.T) {
 	})
 }
 
+// Regression: a tap that shrinks the list at the bottom stopped following.
+// Clicking Send in an MCP App view's consent bar closes the bar, and the list
+// clamps by its height. When that clamp's scroll event lands before the
+// ResizeObserver report (a forced reflow does it), handleScroll reads a drop
+// past the gesture threshold as a scroll-up, and the observer's undo refused
+// because the click's pointerdown counted as a scroll gesture. A press that
+// ends without scrolling no longer counts.
+const scrollCollapsible = `window.__addCollapsible = async () => {
+  const container = document.querySelector('.messages-container');
+  const list = container.querySelector('.messages-list');
+  const sentinel = container.querySelector('.messages-bottom-sentinel');
+  if (!list || !sentinel) throw new Error('message list sentinel not found');
+  const block = document.createElement('div');
+  block.style.cssText = 'height: 400px; display: flex; align-items: flex-end;';
+  const button = document.createElement('button');
+  button.dataset.testid = 'collapse-test';
+  button.textContent = 'Collapse';
+  button.addEventListener('click', () => {
+    block.remove();
+    void container.scrollTop; // a forced reflow: the clamp's scroll event goes first
+  });
+  block.append(button);
+  list.insertBefore(block, sentinel);
+  // Let following carry the list down to the block.
+  const gap = () => container.scrollHeight - container.clientHeight - container.scrollTop;
+  for (let i = 0; i < 300 && Math.abs(gap()) > 1; i++) {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  return gap();
+};`
+
+func TestE2EScrollClickCollapsingListKeepsFollowing(t *testing.T) {
+	scrollTapCollapsing(t, "A mouse click", `Click [data-testid="collapse-test"] with a click step (not an eval).`)
+}
+
+func TestE2EScrollTapCollapsingListKeepsFollowing(t *testing.T) {
+	scrollTapCollapsing(t, "A native tap", `Tap [data-testid="collapse-test"] with native touch: a touch start step on it, then a touch end step (no click, no eval).`)
+}
+
+// A touch whose element leaves the document mid-gesture gets its touchend
+// there, where it never reaches the list. It must still end the touch, or
+// following stays off.
+func TestE2EScrollTouchOnRemovedElementEnds(t *testing.T) {
+	e2e(t, scrollTerms+scrollEchoSetup+`A touch whose element is removed while the finger is down still ends, so following continues. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap.
+1. Open the conversation.
+2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
+3. Wait until Math.abs(gap) <= 1 is true (an eval expecting true: the gap can be fractional). The button must not be visible (allow 5s).
+4. Eval Math.abs(await window.__addCollapsible()) <= 1 expecting true.
+5. A touch start step on [data-testid="collapse-test"] (native touch).
+6. Eval document.querySelector('[data-testid="collapse-test"]').remove() without expect (only the button: the block keeps its height).
+7. A touch end step.
+8. Send "echo after removed touch" and wait until a [data-testid="message"] element containing "echo after removed touch" is visible (allow 30s).
+9. Still following: wait until Math.abs(gap) <= 1 is true (allow 10s), and the button must not be visible (allow 5s).`, func(s *shelley) {
+		s.initScript(scrollCollapsible)
+		scrollEchoConversation(s)
+	})
+}
+
+// Lifting one finger from a removed element does not end another finger's
+// touch on the list.
+func TestE2EScrollRemovedTouchKeepsOtherFinger(t *testing.T) {
+	e2e(t, scrollTerms+scrollEchoSetup+`While a second finger is held on the list, lifting a first finger whose element was removed does not end the touch: content that grows below the held finger does not move the list.
+1. Open the conversation.
+2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
+3. Wait until Math.abs(gap) <= 1 is true (an eval expecting true: the gap can be fractional). The button must not be visible (allow 5s).
+4. In one async eval without expect: create two empty divs, x and y, and insert both into the container's .messages-list before its .messages-bottom-sentinel; let a = new Touch({identifier: 1, target: x, clientX: 10, clientY: 10}) and b = new Touch({identifier: 2, target: y, clientX: 20, clientY: 20}); dispatch on x new TouchEvent("touchstart", {bubbles: true, touches: [a], targetTouches: [a], changedTouches: [a]}); dispatch on y new TouchEvent("touchstart", {bubbles: true, touches: [a, b], targetTouches: [b], changedTouches: [b]}); remove x; dispatch on x new TouchEvent("touchend", {bubbles: true, touches: [b], targetTouches: [], changedTouches: [a]}); await two animation frames; store the container's scrollTop in window.__topBefore; insert a div with style height 80px into the .messages-list before the .messages-bottom-sentinel; await three animation frames; store the container's scrollTop in window.__topAfter; then dispatch on y new TouchEvent("touchend", {bubbles: true, touches: [], targetTouches: [], changedTouches: [b]}).
+5. Check that Math.abs(window.__topAfter - window.__topBefore) <= 1 is true.`, func(s *shelley) {
+		scrollEchoConversation(s)
+	})
+}
+
+// A mouse click on the list is no sign that a finger held there has lifted.
+func TestE2EScrollMouseClickKeepsHeldTouch(t *testing.T) {
+	e2e(t, scrollTerms+scrollEchoSetup+`While a finger is held on the list, a mouse click there does not end the touch: content that grows below the held finger does not move the list.
+1. Open the conversation.
+2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
+3. Wait until Math.abs(gap) <= 1 is true (an eval expecting true: the gap can be fractional). The button must not be visible (allow 5s).
+4. In one async eval without expect, on the container: dispatch new Event("touchstart", {bubbles: true}) (a finger that stays down); dispatch new PointerEvent("pointerdown", {pointerId: 1, pointerType: "mouse", bubbles: true}), then new PointerEvent("pointerup", {pointerId: 1, pointerType: "mouse", bubbles: true}); the finger drags the list: lower scrollTop by 30 and dispatch new Event("scroll"); await two animation frames; store the container's scrollTop in window.__topBefore; insert a div with style height 80px into the container's .messages-list before its .messages-bottom-sentinel; await three animation frames; store the container's scrollTop in window.__topAfter; then dispatch new Event("touchend", {bubbles: true}).
+5. Check that Math.abs(window.__topAfter - window.__topBefore) <= 1 is true.`, func(s *shelley) {
+		scrollEchoConversation(s)
+	})
+}
+
+// A touch's cancellation ends only a press the touch made.
+func TestE2EScrollTouchCancelKeepsMouseClick(t *testing.T) {
+	e2e(t, scrollTerms+scrollEchoSetup+`A touch cancelled during a mouse click does not keep that click from being a click: a click that shrinks the list at the bottom does not stop auto-follow. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap. Clicking the button removes the block.
+1. Open the conversation.
+2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
+3. Wait until Math.abs(gap) <= 1 is true. The button must not be visible (allow 5s).
+4. Eval Math.abs(await window.__addCollapsible()) <= 1 expecting true.
+5. In one async eval without expect, on the container: dispatch new Event("touchstart", {bubbles: true}); await new Promise((resolve) => setTimeout(resolve, 400)), so the touch is no longer a recent gesture; dispatch new PointerEvent("pointerdown", {pointerId: 1, pointerType: "mouse", bubbles: true}); dispatch new Event("touchcancel", {bubbles: true}); dispatch new PointerEvent("pointerup", {pointerId: 1, pointerType: "mouse", bubbles: true}); call document.querySelector('[data-testid="collapse-test"]').click(); await two animation frames; store in window.__buttonNow whether the button is visible (it exists, its getBoundingClientRect() has non-zero width and height, and its computed visibility is not "hidden").
+6. Check that window.__buttonNow is false.
+7. Send "echo after cancel" and wait until a [data-testid="message"] element containing "echo after cancel" is visible (allow 30s).
+8. Still following: wait until Math.abs(gap) <= 1 is true (allow 10s), and the button must not be visible (allow 5s).`, func(s *shelley) {
+		s.initScript(scrollCollapsible)
+		scrollEchoConversation(s)
+	})
+}
+
+// Only the pointer that pressed on the list ends its press: another
+// pointer's release elsewhere must not make a drop during the press look
+// like no one's.
+func TestE2EScrollOtherPointerReleaseKeepsPress(t *testing.T) {
+	e2e(t, scrollTerms+scrollEchoSetup+`While a mouse is pressed on the list, another pointer's release outside it does not end that press. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap. Clicking the button removes the block.
+1. Open the conversation.
+2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
+3. Wait until Math.abs(gap) <= 1 is true. The button must not be visible (allow 5s).
+4. Eval Math.abs(await window.__addCollapsible()) <= 1 expecting true.
+5. In one async eval without expect: dispatch new PointerEvent("pointerdown", {pointerId: 1, pointerType: "mouse", bubbles: true}) on the container; dispatch new PointerEvent("pointerup", {pointerId: 2, pointerType: "touch", bubbles: true}) on document.body; call document.querySelector('[data-testid="collapse-test"]').click(); await two animation frames; store in window.__buttonNow whether the button is visible (it exists, its getBoundingClientRect() has non-zero width and height, and its computed visibility is not "hidden"); then dispatch new PointerEvent("pointerup", {pointerId: 1, pointerType: "mouse", bubbles: true}) on the container.
+6. Check that window.__buttonNow is true: the list dropped while the mouse was still pressed on it, so the drop was the reader's.`, func(s *shelley) {
+		s.initScript(scrollCollapsible)
+		scrollEchoConversation(s)
+	})
+}
+
+func scrollTapCollapsing(t *testing.T, kind, press string) {
+	e2e(t, scrollTerms+scrollEchoSetup+fmt.Sprintf(`%s that shrinks the list at the bottom does not stop auto-follow. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap. Clicking the button removes the block.
+1. Open the conversation.
+2. Enough content that the list actually scrolls: %s.
+3. Wait until Math.abs(gap) <= 1 is true. The button must not be visible (allow 5s).
+4. Eval Math.abs(await window.__addCollapsible()) <= 1 expecting true.
+5. %s
+6. Wait until document.querySelector('[data-testid="collapse-test"]') === null is true, then until Math.abs(gap) <= 1 is true. Then eval await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)))) expecting true, so the scroll and resize callbacks have run.
+7. Record in window.__buttonNow whether the button is visible right now (it exists, its getBoundingClientRect() has non-zero width and height, and its computed visibility is not "hidden"), in one eval without expect, then check that window.__buttonNow is false.
+8. Send "echo after collapse" and wait until a [data-testid="message"] element containing "echo after collapse" is visible (allow 30s).
+9. Still following: wait until Math.abs(gap) <= 1 is true (allow 10s), and the button must not be visible (allow 5s).`, kind, scrollEchoTurns(3, true), press), func(s *shelley) {
+		s.initScript(scrollCollapsible)
+		scrollEchoConversation(s)
+	})
+}
+
 // Regression for the "chat jumps toward the top / stops following" bug
 // (GitHub #245). Message rows are wrapped in .messages-chunk elements with
 // content-visibility:auto and a contain-intrinsic-size estimate. Off-screen

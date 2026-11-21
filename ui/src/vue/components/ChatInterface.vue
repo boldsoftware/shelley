@@ -1893,8 +1893,9 @@ let inferredScrollUpDelta = 0;
 let savedBottomRestoration: "seeking" | "following" | null = null;
 let pendingBareRestorationScroll = false;
 let restorationConfirmationFrame: number | null = null;
-// Last upward wheel / touch gesture; a scroll-up near a real gesture must
-// never be undone as a clamp misread.
+// Last scroll gesture: an upward wheel, a scroll key, or a press on the list
+// (taken back on release if it didn't scroll; see endPress). A scroll-up
+// near a real gesture must never be undone as a clamp misread.
 let lastScrollGestureAt = -Infinity;
 // Last scroll event on the messages container, whatever its cause. Used by
 // the bottom sentinel's IntersectionObserver to tell "the user scrolled away"
@@ -3158,6 +3159,21 @@ let touchStartedAt = -Infinity;
 let touchStartScrollTop = 0;
 let touchMoved = false;
 let userScrolledUpAt = -Infinity;
+// Whether a pointer or touch press on the list is down, whether a touch
+// made it, the offset it found, whether the list scrolled during it,
+// lastScrollGestureAt from before it began, and the time the press stamped
+// there. A press that ends without scrolling was a tap or click, not a
+// scroll gesture.
+let pressActive = false;
+let pressTouch = false;
+let pressStartScrollTop = 0;
+let pressScrolled = false;
+let gestureAtBeforePress = -Infinity;
+let pressGestureAt = -Infinity;
+// The pointer whose press on the list scrollPointerActive tracks (null for a
+// touch whose pointerdown never reached the list). Other pointers' releases
+// are not its end.
+let scrollPointerId: number | null = null;
 let bottomPinFrame: number | null = null;
 let bottomPinActive = false;
 
@@ -3215,24 +3231,100 @@ function handleBottomPinWheel(e: WheelEvent) {
   }
 }
 
-function handleBottomPinTouch() {
+function handleBottomPinTouch(e: TouchEvent) {
+  // The touch's pointerdown, which comes first, has begun its press.
+  if (!scrollPointerActive) {
+    beginPress(true);
+    scrollPointerId = null;
+  }
+  watchOrphanedTouch(e.target);
   touchScrolling = true;
   touchStartedAt = performance.now();
   touchMoved = false;
-  handleScrollPointerDown();
+  stampPress();
   // Start from the actual offset, not a rounded/clamped auto-follow target.
   const container = messagesContainerRef.value;
   if (container) lastObservedScrollTop = touchStartScrollTop = container.scrollTop;
 }
 
-function handleScrollPointerDown() {
-  lastScrollGestureAt = performance.now();
+// A touch's end goes to the element it started on even after that element
+// leaves the list, and from there it never reaches the list. Catch it
+// there, or the touch would never end. Another finger still down in the
+// list keeps it going; its own end will reach the list.
+function watchOrphanedTouch(target: EventTarget | null) {
+  if (!(target instanceof Node) || target === messagesContainerRef.value) return;
+  const done = new AbortController();
+  const options = { signal: done.signal, passive: true };
+  const ended = (handle: () => void) => (e: Event) => {
+    done.abort();
+    const container = messagesContainerRef.value;
+    // Still in the list, the event goes on to the list's own handlers.
+    if (!container || container.contains(target)) return;
+    const held = Array.from((e as TouchEvent).touches ?? []).some(
+      (touch) => touch.target instanceof Node && container.contains(touch.target),
+    );
+    if (!held) handle();
+  };
+  target.addEventListener("touchend", ended(handleScrollTouchEnd), options);
+  target.addEventListener("touchcancel", ended(handleScrollTouchCancel), options);
+}
+
+function handleScrollPointerDown(e: PointerEvent) {
+  beginPress(e.pointerType === "touch");
+  stampPress();
+  scrollPointerId = e.pointerId;
+}
+
+function stampPress() {
+  lastScrollGestureAt = pressGestureAt = performance.now();
   scrollPointerActive = true;
   stopBottomPin();
 }
 
-function handleScrollPointerUp() {
+function handleScrollPointerUp(e: PointerEvent) {
+  if (!scrollPointerActive || e.pointerId !== scrollPointerId) return;
   scrollPointerActive = false;
+  // A touch's press ends at its touchend, which takes a last queued scroll
+  // into account first.
+  if (!pressTouch || !touchScrolling) endPress();
+}
+
+// A cancelled pointer or touch was no tap. A touch's pointercancel hands off
+// to a native pan whose first scroll is still to come.
+function handleScrollPointerCancel(e: PointerEvent) {
+  if (e.pointerId !== scrollPointerId) return;
+  scrollPointerActive = false;
+  pressActive = false;
+}
+
+function handleScrollTouchCancel() {
+  if (!touchScrolling) return;
+  if (pressTouch) pressActive = false;
+  handleScrollTouchEnd();
+}
+
+// A new press replaces one whose end never came.
+function beginPress(touch: boolean) {
+  pressActive = true;
+  pressTouch = touch;
+  pressStartScrollTop = messagesContainerRef.value?.scrollTop ?? 0;
+  pressScrolled = false;
+  gestureAtBeforePress = lastScrollGestureAt;
+}
+
+// What a tap or click does can shrink the list at the bottom (closing a
+// view's consent bar, collapsing a card), and the clamp's scroll event can
+// outrun the ResizeObserver. Forget the press as a gesture so the observer
+// can still undo that misread, or following would stop with the reader
+// sitting at the bottom.
+function endPress() {
+  if (!pressActive) return;
+  pressActive = false;
+  // The press's last scroll event may still be queued.
+  const offset = messagesContainerRef.value?.scrollTop ?? pressStartScrollTop;
+  if (pressScrolled || offset !== pressStartScrollTop) return;
+  // Only the press's own stamp: a wheel or key gesture since then stands.
+  if (lastScrollGestureAt === pressGestureAt) lastScrollGestureAt = gestureAtBeforePress;
 }
 
 // Native touch panning fires pointercancel before the gesture's scroll events.
@@ -3246,7 +3338,11 @@ function handleScrollTouchEnd() {
   // Account for a final movement even if its scroll event is still queued.
   handleScroll();
   touchScrolling = false;
-  scrollPointerActive = false;
+  // A mouse or pen press that began since then is not the touch's to end.
+  if (pressTouch) {
+    scrollPointerActive = false;
+    endPress();
+  }
   if (!userScrolled && !loadingFlag && !catchingUp && pendingScroll === undefined) {
     scrollToBottom();
   }
@@ -5174,6 +5270,7 @@ watch(
     inferredScrollUpAt = -Infinity;
     inferredScrollUpDelta = 0;
     lastScrollGestureAt = -Infinity;
+    pressActive = false;
     lastScrollEventAt = -Infinity;
     atBottom = true;
     // Per-message memo caches are keyed by message_id, which is globally
@@ -5624,6 +5721,7 @@ function handleScroll() {
   perfCount("chat.handleScroll");
   lastScrollEventAt = performance.now();
   if (touchScrolling && container.scrollTop !== touchStartScrollTop) touchMoved = true;
+  if (pressActive && container.scrollTop !== lastObservedScrollTop) pressScrolled = true;
   let upwardDelta = lastObservedScrollTop - container.scrollTop;
   // Discount any scrollTop drop the ResizeObserver already attributed to a
   // list shrink (a layout clamp, not a gesture).
@@ -5710,10 +5808,10 @@ function setupScrollObservers() {
   container.addEventListener("wheel", handleBottomPinWheel, { passive: true });
   container.addEventListener("touchstart", handleBottomPinTouch, { passive: true });
   container.addEventListener("touchend", handleScrollTouchEnd, { passive: true });
-  container.addEventListener("touchcancel", handleScrollTouchEnd, { passive: true });
+  container.addEventListener("touchcancel", handleScrollTouchCancel, { passive: true });
   container.addEventListener("pointerdown", handleScrollPointerDown, { passive: true });
   window.addEventListener("pointerup", handleScrollPointerUp, { passive: true });
-  window.addEventListener("pointercancel", handleScrollPointerUp, { passive: true });
+  window.addEventListener("pointercancel", handleScrollPointerCancel, { passive: true });
   bottomObserver = new IntersectionObserver(
     (entries) => {
       // Reports that pile up while delivery lags arrive together, oldest
@@ -6137,10 +6235,10 @@ onUnmounted(() => {
   container?.removeEventListener("wheel", handleBottomPinWheel);
   container?.removeEventListener("touchstart", handleBottomPinTouch);
   container?.removeEventListener("touchend", handleScrollTouchEnd);
-  container?.removeEventListener("touchcancel", handleScrollTouchEnd);
+  container?.removeEventListener("touchcancel", handleScrollTouchCancel);
   container?.removeEventListener("pointerdown", handleScrollPointerDown);
   window.removeEventListener("pointerup", handleScrollPointerUp);
-  window.removeEventListener("pointercancel", handleScrollPointerUp);
+  window.removeEventListener("pointercancel", handleScrollPointerCancel);
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
   clearPendingRestorationScroll();
   ro?.disconnect();

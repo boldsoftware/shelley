@@ -1,0 +1,104 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The test seeds a conversation at /c/{{SLUG}} whose first message is \"echo message 0\". To \"open the conversation\", navigate to /c/{{SLUG}} and wait for the message input to be visible (allow 30s). To \"add message N\", send \"echo message N\" and wait until a [data-testid=\"message\"] element containing the text \"echo message N\" is visible (allow 30s). While a second finger is held on the list, lifting a first finger whose element was removed does not end the touch: content that grows below the held finger does not move the list.\n1. Open the conversation.\n2. Enough content that the list actually scrolls: add message 1 and wait until the agent-thinking indicator ([data-testid=\"agent-thinking\"]) is hidden (allow 30s); then add message 2 and wait until the agent-thinking indicator ([data-testid=\"agent-thinking\"]) is hidden (allow 30s); then add message 3 and wait until the agent-thinking indicator ([data-testid=\"agent-thinking\"]) is hidden (allow 30s).\n3. Wait until Math.abs(gap) \u003c= 1 is true (an eval expecting true: the gap can be fractional). The button must not be visible (allow 5s).\n4. In one async eval without expect: create two empty divs, x and y, and insert both into the container's .messages-list before its .messages-bottom-sentinel; let a = new Touch({identifier: 1, target: x, clientX: 10, clientY: 10}) and b = new Touch({identifier: 2, target: y, clientX: 20, clientY: 20}); dispatch on x new TouchEvent(\"touchstart\", {bubbles: true, touches: [a], targetTouches: [a], changedTouches: [a]}); dispatch on y new TouchEvent(\"touchstart\", {bubbles: true, touches: [a, b], targetTouches: [b], changedTouches: [b]}); remove x; dispatch on x new TouchEvent(\"touchend\", {bubbles: true, touches: [b], targetTouches: [], changedTouches: [a]}); await two animation frames; store the container's scrollTop in window.__topBefore; insert a div with style height 80px into the .messages-list before the .messages-bottom-sentinel; await three animation frames; store the container's scrollTop in window.__topAfter; then dispatch on y new TouchEvent(\"touchend\", {bubbles: true, touches: [], targetTouches: [], changedTouches: [b]}).\n5. Check that Math.abs(window.__topAfter - window.__topBefore) \u003c= 1 is true.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo message 1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "echo message 1",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo message 2"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "echo message 2",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo message 3"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "echo message 3",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "const c = document.querySelector('.messages-container'); Math.abs(c.scrollHeight - c.clientHeight - c.scrollTop) \u003c= 1",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const container = document.querySelector('.messages-container'); const list = container.querySelector('.messages-list'); const sentinel = list.querySelector('.messages-bottom-sentinel'); const x = document.createElement('div'); const y = document.createElement('div'); list.insertBefore(x, sentinel); list.insertBefore(y, sentinel); const a = new Touch({identifier: 1, target: x, clientX: 10, clientY: 10}); const b = new Touch({identifier: 2, target: y, clientX: 20, clientY: 20}); x.dispatchEvent(new TouchEvent('touchstart', {bubbles: true, touches: [a], targetTouches: [a], changedTouches: [a]})); y.dispatchEvent(new TouchEvent('touchstart', {bubbles: true, touches: [a, b], targetTouches: [b], changedTouches: [b]})); x.remove(); x.dispatchEvent(new TouchEvent('touchend', {bubbles: true, touches: [b], targetTouches: [], changedTouches: [a]})); await new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r))); window.__topBefore = container.scrollTop; const spacer = document.createElement('div'); spacer.style.height = '80px'; list.insertBefore(spacer, sentinel); await new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r)))); window.__topAfter = container.scrollTop; y.dispatchEvent(new TouchEvent('touchend', {bubbles: true, touches: [], targetTouches: [], changedTouches: [b]})); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "Math.abs(window.__topAfter - window.__topBefore) \u003c= 1",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T21:40:32.077272879Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 44288,
+    "output_tokens": 2452,
+    "estimated_cost_usd": 0.0625233,
+    "mode": "generated"
+  }
+}

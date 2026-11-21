@@ -1,0 +1,103 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The test seeds a conversation at /c/{{SLUG}} whose first message is \"echo message 0\". To \"open the conversation\", navigate to /c/{{SLUG}} and wait for the message input to be visible (allow 30s). To \"add message N\", send \"echo message N\" and wait until a [data-testid=\"message\"] element containing the text \"echo message N\" is visible (allow 30s). While a finger is held on the list, a mouse click there does not end the touch: content that grows below the held finger does not move the list.\n1. Open the conversation.\n2. Enough content that the list actually scrolls: add message 1 and wait until the agent-thinking indicator ([data-testid=\"agent-thinking\"]) is hidden (allow 30s); then add message 2 and wait until the agent-thinking indicator ([data-testid=\"agent-thinking\"]) is hidden (allow 30s); then add message 3 and wait until the agent-thinking indicator ([data-testid=\"agent-thinking\"]) is hidden (allow 30s).\n3. Wait until Math.abs(gap) \u003c= 1 is true (an eval expecting true: the gap can be fractional). The button must not be visible (allow 5s).\n4. In one async eval without expect, on the container: dispatch new Event(\"touchstart\", {bubbles: true}) (a finger that stays down); dispatch new PointerEvent(\"pointerdown\", {pointerId: 1, pointerType: \"mouse\", bubbles: true}), then new PointerEvent(\"pointerup\", {pointerId: 1, pointerType: \"mouse\", bubbles: true}); the finger drags the list: lower scrollTop by 30 and dispatch new Event(\"scroll\"); await two animation frames; store the container's scrollTop in window.__topBefore; insert a div with style height 80px into the container's .messages-list before its .messages-bottom-sentinel; await three animation frames; store the container's scrollTop in window.__topAfter; then dispatch new Event(\"touchend\", {bubbles: true}).\n5. Check that Math.abs(window.__topAfter - window.__topBefore) \u003c= 1 is true.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo message 1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "echo message 1",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo message 2"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "echo message 2",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo message 3"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "echo message 3",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "Math.abs(document.querySelector('.messages-container').scrollHeight - document.querySelector('.messages-container').clientHeight - document.querySelector('.messages-container').scrollTop) \u003c= 1",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const c = document.querySelector('.messages-container'); c.dispatchEvent(new Event('touchstart', {bubbles: true})); c.dispatchEvent(new PointerEvent('pointerdown', {pointerId: 1, pointerType: 'mouse', bubbles: true})); c.dispatchEvent(new PointerEvent('pointerup', {pointerId: 1, pointerType: 'mouse', bubbles: true})); c.scrollTop = c.scrollTop - 30; c.dispatchEvent(new Event('scroll')); await new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r))); window.__topBefore = c.scrollTop; const list = c.querySelector('.messages-list'); const sentinel = list.querySelector('.messages-bottom-sentinel'); const div = document.createElement('div'); div.style.height = '80px'; list.insertBefore(div, sentinel); await new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r)))); window.__topAfter = c.scrollTop; c.dispatchEvent(new Event('touchend', {bubbles: true})); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "Math.abs(window.__topAfter - window.__topBefore) \u003c= 1",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T21:40:29.330822816Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 53593,
+    "output_tokens": 2347,
+    "estimated_cost_usd": 0.06480165,
+    "mode": "generated"
+  }
+}
