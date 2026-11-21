@@ -1,0 +1,346 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Shelley starts recordings only for sites the user allowed. Another site, http://evil.test/ (title \"Evil\"), can open Shelley about host.test too. \"The ask\" is [data-testid=\"bookmarklet-ask\"] in the Shelley window and \"the panel\" [data-testid=\"recording-panel\"] there. The test opens Shelley from the bookmarklet as a user would: it takes the bookmarklet from Shelley, then clicks it on a page on another origin, http://host.test/ (title \"Host Page\", a main with an h1 \"Host Page\", a paragraph #para \"The quick brown fox jumps over the lazy dog.\" and a list ul.list of \"First item\" and \"Second item\"), with that paragraph selected. The bookmarklet adds a toolbar to the host page, the element \"shelley-bookmarklet\", whose controls are in its open shadow root: a status span \".status\" and the buttons Record, Pick, Shelley and Close. It opens Shelley in a popup, tab \"popup\", \"the Shelley window\". \"The toolbar status\" is the \".status\" element in the toolbar: {\"within\": {\"selector\": \"shelley-bookmarklet\"}, \"selector\": \".status\"} (selectors reach into open shadow roots, but a combinator like \"shelley-bookmarklet .status\" does not cross into one). Pick the toolbar's buttons by role \"button\" and exact accessible name, also with \"within\" the toolbar. Opening it: 1. Navigate to /shelley-bookmarklet.html (the standalone bookmarklet page). 2. Keep its bookmarklet link, which must be a javascript: URL: eval (window.__href = document.querySelector('#link')?.getAttribute('href') ?? '').startsWith('javascript:') expecting true. Then hand the link to the host page with eval fetch('http://host.test/bookmarklet', { method: 'POST', body: window.__href }).then((r) =\u003e r.ok) expecting true. Navigate tab \"host\" to http://host.test/. In tab \"host\", select the paragraph: eval getSelection().selectAllChildren(document.getElementById('para')). In tab \"host\", click the bookmarklet as if in the bookmarks bar: eval fetch('/bookmarklet').then((r) =\u003e r.text()).then((href) =\u003e { location.href = href; }). In tab \"host\", the toolbar status should be visible with exactly the text \"Linked\". Then perform these steps in order: 1. In tab \"host\", click the toolbar's \"Record\" button. 2. The ask's text must contain \"Let http://host.test start recordings?\". 3. The button whose accessible name is exactly \"Allow\" inside the ask must be disabled at first, so it can't be slipped under a click meant for the page. 4. There must be exactly 0 panels. 5. Click the ask's button \"Not now\" (exact name). 6. There must then be exactly 0 asks. 7. In the Shelley window, [data-testid=\"bookmarklet-status\"] must have exactly the text \"Linked to host.test\". 8. There must be exactly 0 panels. 9. In tab \"host\", click the toolbar's \"Record\" button again; in the Shelley window click the ask's \"Allow\" button. 10. The panel should be visible. 11. In the Shelley window, click [data-testid=\"recording-cancel-button\"]. 12. There must then be exactly 0 panels. 13. Allowed, it records straight away: in tab \"host\", click the toolbar's \"Record\" button. 14. The panel should be visible, and there must be exactly 0 asks. 15. In the Shelley window, click [data-testid=\"recording-cancel-button\"]; there must then be exactly 0 panels. 16. Navigate tab \"evil\" to http://evil.test/. 17. In tab \"evil\", open Shelley about host.test: eval (window.__opened = window.open('{{ORIGIN}}{{CHAT}}', '_blank', 'popup'), 'opened'). It opens as tab \"popup2\" (\"the forged window\"). 18. In the forged window, [data-testid=\"message-input\"] must have the value exactly \"Page: Host Page — http://host.test/\". 19. In tab \"evil\", ask the forged window to record, then to pick: eval (() =\u003e { const pick = { url: location.href, selector: 'h1', html: '\u003ch1\u003eEvil\u003c/h1\u003e' }; window.__opened.postMessage({ tag: 'shelley-bookmarklet', type: 'record' }, '*'); window.__opened.postMessage({ tag: 'shelley-bookmarklet', type: 'pick', pick }, '*'); return 'posted'; })(). 20. Once the pick arrives the forged window has handled (and ignored) the record: in the forged window, eval window.__bookmarkletMessages.some((m) =\u003e m.type === 'pick') expecting true. 21. In the forged window, [data-testid=\"bookmarklet-status\"] must have exactly the text \"From host.test\", and there must be exactly 0 [data-testid=\"recording-panel\"] elements. 22. Close tab \"popup2\". 23. Not behind a dialog, where the user couldn't see or stop it: in the Shelley window, click the button whose accessible name contains \"More options\", then click [data-testid=\"bookmarklet-menu-item\"] (which opens the bookmarklet dialog). 24. In tab \"host\", click the toolbar's \"Record\" button; then, so a pick follows the record, click the toolbar's \"Pick\" button and then the page's h1. 25. In the Shelley window, the message input's value must be exactly {{PICKED_H1}}. 26. There must be exactly 0 panels. 27. Forgotten, it asks again: in the Shelley window, [data-testid=\"bookmarklet-sites\"] must have exactly the text \"http://host.testRemove\" (the site, then its Remove button, with no space between). 28. Click the button whose accessible name is exactly \"Remove\" inside it. 29. There must then be exactly 0 [data-testid=\"bookmarklet-sites\"] elements. 30. In the Shelley window, press Escape. 31. In tab \"host\", click the toolbar's \"Record\" button. 32. The ask should be visible. 33. There must be exactly 0 panels.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/shelley-bookmarklet.html"
+    },
+    {
+      "action": "eval",
+      "expression": "(window.__href = document.querySelector('#link')?.getAttribute('href') ?? '').startsWith('javascript:')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "fetch('http://host.test/bookmarklet', { method: 'POST', body: window.__href }).then((r) =\u003e r.ok)",
+      "expect": "true"
+    },
+    {
+      "action": "navigate",
+      "tab": "host",
+      "url": "http://host.test/"
+    },
+    {
+      "action": "eval",
+      "tab": "host",
+      "expression": "getSelection().selectAllChildren(document.getElementById('para'))"
+    },
+    {
+      "action": "eval",
+      "tab": "host",
+      "expression": "fetch('/bookmarklet').then((r) =\u003e r.text()).then((href) =\u003e { location.href = href; })"
+    },
+    {
+      "action": "wait_visible",
+      "tab": "host",
+      "within": {
+        "selector": "shelley-bookmarklet"
+      },
+      "selector": ".status"
+    },
+    {
+      "action": "assert_text",
+      "tab": "host",
+      "within": {
+        "selector": "shelley-bookmarklet"
+      },
+      "selector": ".status",
+      "text": "Linked"
+    },
+    {
+      "action": "wait_visible",
+      "tab": "popup",
+      "selector": "[data-testid='bookmarklet-ask'], [data-testid='bookmarklet-status']"
+    },
+    {
+      "action": "click",
+      "tab": "host",
+      "within": {
+        "selector": "shelley-bookmarklet"
+      },
+      "role": "button",
+      "name": "Record",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "tab": "popup",
+      "selector": "[data-testid='bookmarklet-ask']"
+    },
+    {
+      "action": "assert_text_contains",
+      "tab": "popup",
+      "selector": "[data-testid='bookmarklet-ask']",
+      "text": "Let http://host.test start recordings?"
+    },
+    {
+      "action": "assert_disabled",
+      "tab": "popup",
+      "within": {
+        "selector": "[data-testid='bookmarklet-ask']"
+      },
+      "role": "button",
+      "name": "Allow",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "tab": "popup",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "tab": "popup",
+      "within": {
+        "selector": "[data-testid='bookmarklet-ask']"
+      },
+      "role": "button",
+      "name": "Not now",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "tab": "popup",
+      "selector": "[data-testid='bookmarklet-ask']",
+      "count": 0
+    },
+    {
+      "action": "assert_text",
+      "tab": "popup",
+      "selector": "[data-testid='bookmarklet-status']",
+      "text": "Linked to host.test"
+    },
+    {
+      "action": "assert_count",
+      "tab": "popup",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "tab": "host",
+      "within": {
+        "selector": "shelley-bookmarklet"
+      },
+      "role": "button",
+      "name": "Record",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "tab": "popup",
+      "selector": "[data-testid='bookmarklet-ask']"
+    },
+    {
+      "action": "click",
+      "tab": "popup",
+      "within": {
+        "selector": "[data-testid='bookmarklet-ask']"
+      },
+      "role": "button",
+      "name": "Allow",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "tab": "popup",
+      "selector": "[data-testid='recording-panel']"
+    },
+    {
+      "action": "click",
+      "tab": "popup",
+      "selector": "[data-testid='recording-cancel-button']"
+    },
+    {
+      "action": "assert_count",
+      "tab": "popup",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "tab": "host",
+      "within": {
+        "selector": "shelley-bookmarklet"
+      },
+      "role": "button",
+      "name": "Record",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "tab": "popup",
+      "selector": "[data-testid='recording-panel']"
+    },
+    {
+      "action": "assert_count",
+      "tab": "popup",
+      "selector": "[data-testid='bookmarklet-ask']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "tab": "popup",
+      "selector": "[data-testid='recording-cancel-button']"
+    },
+    {
+      "action": "assert_count",
+      "tab": "popup",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "navigate",
+      "tab": "evil",
+      "url": "http://evil.test/"
+    },
+    {
+      "action": "eval",
+      "tab": "evil",
+      "expression": "(window.__opened = window.open('{{ORIGIN}}{{CHAT}}', '_blank', 'popup'), 'opened')",
+      "expect": "opened"
+    },
+    {
+      "action": "assert_value",
+      "tab": "popup2",
+      "selector": "[data-testid='message-input']",
+      "value": "Page: Host Page — http://host.test/"
+    },
+    {
+      "action": "eval",
+      "tab": "evil",
+      "expression": "(() =\u003e { const pick = { url: location.href, selector: 'h1', html: '\u003ch1\u003eEvil\u003c/h1\u003e' }; window.__opened.postMessage({ tag: 'shelley-bookmarklet', type: 'record' }, '*'); window.__opened.postMessage({ tag: 'shelley-bookmarklet', type: 'pick', pick }, '*'); return 'posted'; })()",
+      "expect": "posted"
+    },
+    {
+      "action": "eval",
+      "tab": "popup2",
+      "expression": "window.__bookmarkletMessages.some((m) =\u003e m.type === 'pick')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "tab": "popup2",
+      "selector": "[data-testid='bookmarklet-status']",
+      "text": "From host.test"
+    },
+    {
+      "action": "assert_count",
+      "tab": "popup2",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "close_tab",
+      "tab": "popup2"
+    },
+    {
+      "action": "click",
+      "tab": "popup",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "click",
+      "tab": "popup",
+      "selector": "[data-testid='bookmarklet-menu-item']"
+    },
+    {
+      "action": "click",
+      "tab": "host",
+      "within": {
+        "selector": "shelley-bookmarklet"
+      },
+      "role": "button",
+      "name": "Record",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "tab": "host",
+      "within": {
+        "selector": "shelley-bookmarklet"
+      },
+      "role": "button",
+      "name": "Pick",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "tab": "host",
+      "selector": "h1"
+    },
+    {
+      "action": "assert_value",
+      "tab": "popup",
+      "selector": "[data-testid='message-input']",
+      "value": "{{PICKED_H1}}"
+    },
+    {
+      "action": "assert_count",
+      "tab": "popup",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    },
+    {
+      "action": "assert_text",
+      "tab": "popup",
+      "selector": "[data-testid='bookmarklet-sites']",
+      "text": "http://host.testRemove"
+    },
+    {
+      "action": "click",
+      "tab": "popup",
+      "within": {
+        "selector": "[data-testid='bookmarklet-sites']"
+      },
+      "role": "button",
+      "name": "Remove",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "tab": "popup",
+      "selector": "[data-testid='bookmarklet-sites']",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "tab": "popup",
+      "key": "Escape"
+    },
+    {
+      "action": "click",
+      "tab": "host",
+      "within": {
+        "selector": "shelley-bookmarklet"
+      },
+      "role": "button",
+      "name": "Record",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "tab": "popup",
+      "selector": "[data-testid='bookmarklet-ask']"
+    },
+    {
+      "action": "assert_count",
+      "tab": "popup",
+      "selector": "[data-testid='recording-panel']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:22:02.458664871Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 127624,
+    "output_tokens": 5027,
+    "estimated_cost_usd": 0.14973915000000002,
+    "mode": "generated"
+  }
+}
