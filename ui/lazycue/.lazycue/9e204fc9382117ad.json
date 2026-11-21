@@ -1,0 +1,160 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Conversation card activity and selection (dark theme, parent working). The test has already set everything up before the first step, so steps must not set up, stub or patch anything themselves (no localStorage, fetch or EventSource evals): an init script sets localStorage \"shelley-theme\" to \"dark\" and \"shelley-group-by\" to \"none\", and the test answers the page's conversation list requests (/api/conversations/snapshot and /api/conversations/search) and cuts off its live stream (/api/stream2, so the page may show \"Reconnecting\"). The list holds conversation {{ID}} (/c/{{SLUG}}, the parent) and its one subagent, \"activity-child\". The parent is working; the subagent is idle. \"The card\" is [data-conversation-id=\"{{ID}}\"], \"the badge\" is [data-conversation-id=\"{{ID}}\"] .subagent-count-badge. To \"open the drawer\": wait for \".header\" to be visible; if the button named exactly \"Open conversations\" is visible, click it; then \".drawer\" should be visible. To \"move the mouse away\": a hover step with \"point\": \"({x: 0, y: 0})\" (the viewport's top-left corner). Perform the steps in order. 1. Navigate to /new. 2. Open the drawer. 3. Move the mouse away. 4. The card must not have the class \"active\" (count '[data-conversation-id=\"{{ID}}\"].active' must be 0). 5. Rows stay clear; activity is shown by dots and badges only: the card's computed CSS background-color must be exactly \"rgba(0, 0, 0, 0)\". 6. Click the card's \".conversation-title\". 7. The URL should become exactly /c/{{SLUG}} (an exact path check). 8. Open the drawer. 9. Move the mouse away. 10. The card should have the class \"active\" (count '[data-conversation-id=\"{{ID}}\"].active' must be 1). 11. Selection is solid primary regardless of activity: the card's computed background-color must equal the color var(--primary) computes to beside it, so this eval must give true: (() =\u003e { const row = document.querySelector('[data-conversation-id=\"{{ID}}\"]'); const probe = document.createElement('div'); probe.style.backgroundColor = 'var(--primary)'; row.parentElement.appendChild(probe); const color = getComputedStyle(probe).backgroundColor; probe.remove(); return getComputedStyle(row).backgroundColor === color; })(). 12. There must be exactly 1 \".drawer-working-indicator\" inside the card. 13. That indicator should be visible. 14. It must be vertically centered on the card's \".drawer-conversation-header-row\" (allow 5s for this to hold): this eval must give true: (() =\u003e { const dot = document.querySelector(\"[data-conversation-id=\\\"{{ID}}\\\"] .drawer-working-indicator\").getBoundingClientRect(); const box = document.querySelector(\"[data-conversation-id=\\\"{{ID}}\\\"] .drawer-conversation-header-row\").getBoundingClientRect(); return Math.abs(dot.y + dot.height / 2 - box.y - box.height / 2) \u003c= 1; })(). 15. The badge must have exactly the text \"1\". 16. There must be exactly 0 elements with data-testid \"subagent-badge-running\" inside the badge. 17. Click the badge. 18. \".drawer-subagent-list .conversation-item\" (the subagent's card) should be visible. 19. Its computed CSS background-color must be exactly \"rgba(0, 0, 0, 0)\". 20. It must not have the class \"active\" (count \".drawer-subagent-list .conversation-item.active\" must be 0). 21. It must sit below the parent's card: this eval must give true: (() =\u003e { const parent = document.querySelector('[data-conversation-id=\"{{ID}}\"]').getBoundingClientRect(); const child = document.querySelector('.drawer-subagent-list .conversation-item').getBoundingClientRect(); return child.y \u003e parent.y + parent.height; })(). 22. Click the badge again. 23. There must then be exactly 0 \".drawer-subagent-list\" elements.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "wait_visible",
+          "selector": ".header"
+        },
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Open conversations",
+          "visible": true
+        }
+      ],
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer"
+    },
+    {
+      "action": "hover",
+      "point": "({x: 0, y: 0})"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id=\"{{ID}}\"].active",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-conversation-id=\"{{ID}}\"]')).backgroundColor",
+      "expect": "rgba(0, 0, 0, 0)"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{ID}}\"] .conversation-title"
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "wait_visible",
+          "selector": ".header"
+        },
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Open conversations",
+          "visible": true
+        }
+      ],
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".drawer"
+    },
+    {
+      "action": "hover",
+      "point": "({x: 0, y: 0})"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id=\"{{ID}}\"].active",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const row = document.querySelector('[data-conversation-id=\"{{ID}}\"]'); const probe = document.createElement('div'); probe.style.backgroundColor = 'var(--primary)'; row.parentElement.appendChild(probe); const color = getComputedStyle(probe).backgroundColor; probe.remove(); return getComputedStyle(row).backgroundColor === color; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id=\"{{ID}}\"] .drawer-working-indicator",
+      "count": 1
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-id=\"{{ID}}\"] .drawer-working-indicator"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const dot = document.querySelector(\"[data-conversation-id=\\\"{{ID}}\\\"] .drawer-working-indicator\").getBoundingClientRect(); const box = document.querySelector(\"[data-conversation-id=\\\"{{ID}}\\\"] .drawer-conversation-header-row\").getBoundingClientRect(); return Math.abs(dot.y + dot.height / 2 - box.y - box.height / 2) \u003c= 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-conversation-id=\"{{ID}}\"] .subagent-count-badge",
+      "text": "1"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-conversation-id=\"{{ID}}\"] .subagent-count-badge [data-testid=\"subagent-badge-running\"]",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{ID}}\"] .subagent-count-badge"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".drawer-subagent-list .conversation-item"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.drawer-subagent-list .conversation-item')).backgroundColor",
+      "expect": "rgba(0, 0, 0, 0)"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer-subagent-list .conversation-item.active",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const parent = document.querySelector('[data-conversation-id=\"{{ID}}\"]').getBoundingClientRect(); const child = document.querySelector('.drawer-subagent-list .conversation-item').getBoundingClientRect(); return child.y \u003e parent.y + parent.height; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-conversation-id=\"{{ID}}\"] .subagent-count-badge"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".drawer-subagent-list",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:07:31.222567329Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 33551,
+    "output_tokens": 2822,
+    "estimated_cost_usd": 0.06623985,
+    "mode": "generated"
+  }
+}
