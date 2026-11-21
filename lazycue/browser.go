@@ -138,6 +138,10 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
+		// A mouse, as Playwright's headless Chrome has: without it a page
+		// without touch emulation matches neither (hover: hover) nor
+		// (pointer: fine). Touch emulation still makes it a phone's.
+		chromedp.Flag("blink-settings", "primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4"),
 		chromedp.WindowSize(d.Width, d.Height),
 	)
 

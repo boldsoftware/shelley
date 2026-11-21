@@ -48,8 +48,8 @@ func TestDefaultDeviceIsAPixel5(t *testing.T) {
 		Step{Action: ActionNavigate, URL: "/"},
 		Step{
 			Action: ActionEval, Expression: `[innerWidth, innerHeight, devicePixelRatio, 'ontouchstart' in window, navigator.maxTouchPoints,
-			matchMedia('(pointer: coarse)').matches, matchMedia('(prefers-reduced-motion: reduce)').matches].join(' ')`,
-			Expect: ptr("393 727 2.75 true 5 true true"),
+			matchMedia('(pointer: coarse)').matches, matchMedia('(hover: none)').matches, matchMedia('(prefers-reduced-motion: reduce)').matches].join(' ')`,
+			Expect: ptr("393 727 2.75 true 5 true true true"),
 		},
 		Step{Action: ActionEval, Expression: `navigator.clipboard.writeText('copied').then(() => navigator.clipboard.readText())`, Expect: ptr("copied")},
 		// A copy button, as apps have, writes from a real click.
@@ -79,8 +79,9 @@ func TestLaunchSettings(t *testing.T) {
 		{Action: ActionNavigate, URL: "/"},
 		{
 			Action: ActionEval, Expression: `[innerWidth, 'ontouchstart' in window, matchMedia('(prefers-color-scheme: dark)').matches,
-			matchMedia('(prefers-reduced-motion: reduce)').matches, Intl.DateTimeFormat().resolvedOptions().timeZone].join(' ')`,
-			Expect: ptr("1024 false true false America/New_York"),
+			matchMedia('(prefers-reduced-motion: reduce)').matches, Intl.DateTimeFormat().resolvedOptions().timeZone,
+			matchMedia('(hover: hover)').matches, matchMedia('(pointer: fine)').matches].join(' ')`,
+			Expect: ptr("1024 false true false America/New_York true true"),
 		},
 	}
 	runSteps(t, br, env, steps...)
