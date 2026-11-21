@@ -1,0 +1,101 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The row\" is the status-bar hook's row, [data-testid=\"status-bar-hook\"]. \"Go within the app to URL\" means: eval (() => { window.history.pushState({}, '', 'URL'); window.dispatchEvent(new PopStateEvent('popstate')); })(), without reloading. \"Send\" means: fill the message input (data-testid \"message-input\") with \"Hello\", then click the send button (data-testid \"send-button\"). For CSS checks, eval getComputedStyle on the element and compare the property exactly. On a phone, swipes on the status row leave the conversation drawer alone, even when the row's content fits. window.swipe(selector, startX, endX) dispatches a synthetic horizontal swipe on the first element matching selector and returns whether it was taken (its touchmove's default prevented), \"true\" or \"false\"; it runs once per eval, so use evals without expect, or with expect only when a single run's result is the check. \"The drawer\" is \".drawer\"; it is open when it has the class \"open\". Perform the steps in order. 1. Navigate to /c/swipe. 2. A link inside the row should be visible. 3. The row's content fits: eval (() => { const el = document.querySelector('[data-testid=\"status-bar-hook\"]'); return el.scrollWidth <= el.clientWidth; })() with expect \"true\". 4. The drawer must not have the class \"open\" (eval with expect \"false\" of document.querySelector('.drawer').classList.contains('open')). 5. Eval window.swipe('[data-testid=\"status-bar-hook\"]', 180, 256) with expect \"false\"; the drawer must still not be open. 6. Eval window.swipe('.status-hook-row .text-link', 180, 256) with expect \"false\"; the drawer must still not be open. 7. Call \"status long\" (the row's text becomes long), then reload the page. 8. The row should contain \"long-status-\". 9. It overflows: eval (() => { const el = document.querySelector('[data-testid=\"status-bar-hook\"]'); return el.scrollWidth > el.clientWidth; })() with expect \"true\". 10. Eval window.swipe('.status-hook-row .status-hook-item', 180, 256) with expect \"false\"; the drawer must still not be open. 11. Eval window.swipe('.main-content', 180, 256) with expect \"true\"; the drawer should come to have the class \"open\". 12. Eval window.swipe('.backdrop', 350, 150) with expect \"true\"; the drawer should come to not have the class \"open\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/swipe"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='status-bar-hook'] a"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=\"status-bar-hook\"]'); return el.scrollWidth <= el.clientWidth; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "window.swipe('[data-testid=\"status-bar-hook\"]', 180, 256)",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "window.swipe('.status-hook-row .text-link', 180, 256)",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "status long"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"status-bar-hook\"]",
+      "text": "long-status-"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=\"status-bar-hook\"]'); return el.scrollWidth > el.clientWidth; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.swipe('.status-hook-row .status-hook-item', 180, 256)",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "window.swipe('.main-content', 180, 256)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.swipe('.backdrop', 350, 150)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.drawer').classList.contains('open')",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:58:50.707647033Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6479,
+    "output_tokens": 660,
+    "estimated_cost_usd": 0.015906299999999998,
+    "mode": "generated"
+  }
+}

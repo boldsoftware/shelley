@@ -1,0 +1,505 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The row\" is the status-bar hook's row, [data-testid=\"status-bar-hook\"]. \"Go within the app to URL\" means: eval (() => { window.history.pushState({}, '', 'URL'); window.dispatchEvent(new PopStateEvent('popstate')); })(), without reloading. \"Send\" means: fill the message input (data-testid \"message-input\") with \"Hello\", then click the send button (data-testid \"send-button\"). For CSS checks, eval getComputedStyle on the element and compare the property exactly. Status items keep their colors, native actions, links, and phone scrolling, in the dark color scheme. The hook prints four items on a white row with black text: a button \"feature/long-branch-name\" (opens Git Graph), a button \"Review commit\" (opens the diff of commit {{COMMIT}}), the inline model picker, and a link \"Preview\" to http://localhost:8000/preview with its own light grey background and dark red text. window.statusItem(kind) is the single item element of kind \"branch\", \"model\" (the picker's label), \"picker\" or \"link\" (null if missing); window.statusFocusRing(kind) and window.statusRowScrolls() return \"ok\" or what is wrong (use with expect \"ok\"). For a CSS check of an item, eval getComputedStyle(window.statusItem(kind)).PROPERTY and compare exactly. Call \"mark diffs\" notes the page's requests so far; call \"diff requested\" says whether since then the page asked for the diff of commit {{COMMIT}} (GET /api/git/diffs with commit={{COMMIT}}), \"true\" or \"false\". \"Hidden\" means hidden or absent. Perform the steps in order. 1. For each width W of 1280 then 390: a. Resize the viewport to W x 900 (set_viewport width and height only) and navigate to /c/items. b. The row's background-color should be \"rgb(255, 255, 255)\"; the branch's color \"rgb(0, 0, 0)\". c. Hover the branch (the button named \"feature/long-branch-name\" in the row); its color should still be \"rgb(0, 0, 0)\". d. The link (the link named \"Preview\" in the row) should have attributes href exactly \"https://myvm.exe.xyz:8000/preview\", target \"_blank\" and rel \"noopener noreferrer\", and background-color \"rgb(240, 240, 240)\". e. Hover the link; its color should be \"rgb(128, 0, 0)\". f. Use the keyboard: eval window.statusItem('branch').focus(), press Tab, then press Shift+Tab as a key_down step \"Shift\", a press_key step \"Tab\" and a key_up step \"Shift\". g. Eval window.statusFocusRing('branch'), window.statusFocusRing('model') and window.statusFocusRing('link'), each with expect \"ok\". h. Hover the picker (\".model-picker-inline\" in the row); its color should be \"rgb(0, 0, 0)\". i. Click the picker. \".model-picker-panel\" should be visible and have at least one \".p-select-option\". Click the button named exactly \"Close\" in \".model-picker-panel\"; the panel should become hidden; the picker's color should be \"rgb(0, 0, 0)\". j. Call \"mark diffs\", then click the button named \"Review commit\" in the row. Call \"diff requested\" with expect \"true\". \".diff-viewer-overlay\" should be visible; click its \".diff-viewer-close\"; the overlay should become hidden. k. Click the branch. \".git-graph-container\" should be visible; click the button named exactly \"Close\" in it; it should become hidden. l. Only when W is 390: eval window.statusRowScrolls() with expect \"ok\". 2. For each N of 1 then 2, with the error E being \"commmit\" for 1 and \"full or abbreviated commit hash\" for 2: a. Call \"bad commit N\" (the hook now prints one \"Bad commit\" item with bad arguments), then reload the page. b. The row's text should be exactly \"Status hook failed\", and \".diff-viewer-overlay\" count 0. c. Click the button named \"Status hook failed\" in the row. d. The dialog named \"Status hook error\" ([role=\"dialog\"][aria-label=\"Status hook error\"]) should contain E and be entirely within the viewport. e. Press Escape; the dialog should become hidden; the row's text should still be exactly \"Status hook failed\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "emulate_media",
+      "value": "prefers-color-scheme: dark"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "action": "navigate",
+      "url": "/c/items"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=\"status-bar-hook\"]')).backgroundColor",
+      "expect": "rgb(255, 255, 255)"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('branch')).color",
+      "expect": "rgb(0, 0, 0)"
+    },
+    {
+      "action": "hover",
+      "role": "button",
+      "name": "feature/long-branch-name",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('branch')).color",
+      "expect": "rgb(0, 0, 0)"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusItem('link').getAttribute('href')",
+      "expect": "https://myvm.exe.xyz:8000/preview"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusItem('link').getAttribute('target')",
+      "expect": "_blank"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusItem('link').getAttribute('rel')",
+      "expect": "noopener noreferrer"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('link')).backgroundColor",
+      "expect": "rgb(240, 240, 240)"
+    },
+    {
+      "action": "hover",
+      "role": "link",
+      "name": "Preview",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('link')).color",
+      "expect": "rgb(128, 0, 0)"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusItem('branch').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab"
+    },
+    {
+      "action": "key_down",
+      "key": "Shift"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab"
+    },
+    {
+      "action": "key_up",
+      "key": "Shift"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusFocusRing('branch')",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusFocusRing('model')",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusFocusRing('link')",
+      "expect": "ok"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid=\"status-bar-hook\"] .model-picker-inline"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('picker')).color",
+      "expect": "rgb(0, 0, 0)"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"status-bar-hook\"] .model-picker-inline"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.model-picker-panel .p-select-option').length >= 1",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close",
+      "exact": true,
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('picker')).color",
+      "expect": "rgb(0, 0, 0)"
+    },
+    {
+      "action": "call",
+      "value": "mark diffs"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Review commit",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "call",
+      "value": "diff requested",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .diff-viewer-close"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "feature/long-branch-name",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close",
+      "exact": true,
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 900
+    },
+    {
+      "action": "navigate",
+      "url": "/c/items"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=\"status-bar-hook\"]')).backgroundColor",
+      "expect": "rgb(255, 255, 255)"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('branch')).color",
+      "expect": "rgb(0, 0, 0)"
+    },
+    {
+      "action": "hover",
+      "role": "button",
+      "name": "feature/long-branch-name",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('branch')).color",
+      "expect": "rgb(0, 0, 0)"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusItem('link').getAttribute('href')",
+      "expect": "https://myvm.exe.xyz:8000/preview"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusItem('link').getAttribute('target')",
+      "expect": "_blank"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusItem('link').getAttribute('rel')",
+      "expect": "noopener noreferrer"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('link')).backgroundColor",
+      "expect": "rgb(240, 240, 240)"
+    },
+    {
+      "action": "hover",
+      "role": "link",
+      "name": "Preview",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('link')).color",
+      "expect": "rgb(128, 0, 0)"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusItem('branch').focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab"
+    },
+    {
+      "action": "key_down",
+      "key": "Shift"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab"
+    },
+    {
+      "action": "key_up",
+      "key": "Shift"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusFocusRing('branch')",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusFocusRing('model')",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusFocusRing('link')",
+      "expect": "ok"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid=\"status-bar-hook\"] .model-picker-inline"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('picker')).color",
+      "expect": "rgb(0, 0, 0)"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"status-bar-hook\"] .model-picker-inline"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.model-picker-panel .p-select-option').length >= 1",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close",
+      "exact": true,
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".model-picker-panel"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(window.statusItem('picker')).color",
+      "expect": "rgb(0, 0, 0)"
+    },
+    {
+      "action": "call",
+      "value": "mark diffs"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Review commit",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "call",
+      "value": "diff requested",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .diff-viewer-close"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "feature/long-branch-name",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close",
+      "exact": true,
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "eval",
+      "expression": "window.statusRowScrolls()",
+      "expect": "ok"
+    },
+    {
+      "action": "call",
+      "value": "bad commit 1"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"status-bar-hook\"]",
+      "text": "Status hook failed"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Status hook failed",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=\"dialog\"][aria-label=\"Status hook error\"]"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role=\"dialog\"][aria-label=\"Status hook error\"]",
+      "text": "commmit"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[role=\"dialog\"][aria-label=\"Status hook error\"]",
+      "ratio": 1.0
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[role=\"dialog\"][aria-label=\"Status hook error\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"status-bar-hook\"]",
+      "text": "Status hook failed"
+    },
+    {
+      "action": "call",
+      "value": "bad commit 2"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"status-bar-hook\"]",
+      "text": "Status hook failed"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Status hook failed",
+      "selector": "[data-testid=\"status-bar-hook\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=\"dialog\"][aria-label=\"Status hook error\"]"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role=\"dialog\"][aria-label=\"Status hook error\"]",
+      "text": "full or abbreviated commit hash"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": "[role=\"dialog\"][aria-label=\"Status hook error\"]",
+      "ratio": 1.0
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[role=\"dialog\"][aria-label=\"Status hook error\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"status-bar-hook\"]",
+      "text": "Status hook failed"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:34:27.707399464Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 274550,
+    "output_tokens": 13661,
+    "estimated_cost_usd": 0.35936925000000003,
+    "mode": "generated"
+  }
+}

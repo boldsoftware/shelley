@@ -1,0 +1,278 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The row\" is the status-bar hook's row, [data-testid=\"status-bar-hook\"]. \"Go within the app to URL\" means: eval (() => { window.history.pushState({}, '', 'URL'); window.dispatchEvent(new PopStateEvent('popstate')); })(), without reloading. \"Send\" means: fill the message input (data-testid \"message-input\") with \"Hello\", then click the send button (data-testid \"send-button\"). For CSS checks, eval getComputedStyle on the element and compare the property exactly. The status-bar hook shows the conversation's status and reruns after each message. Calls \"status ...\" rewrite the hook's output before the next message. The conversation /c/hooked's hook first prints body \"feature-x `wip` http://localhost:8000/\" (a JSON string; it has backticks) with background rgb(32, 74, 135) and color white; the conversation /c/other-chat's hook prints body \"other-branch\", but the page's first request for that conversation's status (GET /api/conversation/{{OTHER_ID}}/status-bar) is held until call \"release other status\"; call \"other status asked\" says whether the page has asked for it, \"true\" or \"false\". Perform the steps in order. 1. Navigate to /c/hooked. 2. The row's text should be exactly \"feature-x `wip` http://localhost:8000/\" (VM-local URLs keep their text; backticks stay backticks). 3. The row's background-color should be \"rgb(32, 74, 135)\" and its color \"rgb(255, 255, 255)\". 4. There should be exactly one link in the row, and its href attribute should be exactly \"https://myvm.exe.xyz:8000/\". 5. The row has its own line above the composer: eval (() => { const r = document.querySelector('[data-testid=\"status-bar-hook\"]').getBoundingClientRect(), i = document.querySelector('[data-testid=\"message-input\"]').getBoundingClientRect(); return r.bottom <= i.top && r.width >= i.width; })() with expect \"true\". 6. Call \"status feature-y\", then send. The row's text should become exactly \"feature-y\", and its style attribute must not contain \"background\" (a missing style attribute passes). 7. Call \"status not json\", then send. The row's text should become exactly \"Status hook failed\". 8. Click the button named \"Status hook failed\" inside the row. The dialog named \"Status hook error\" (role dialog) should contain \"status-bar hook failed: invalid JSON output:\". 9. Press Escape; the dialog should become hidden. 10. Call \"status feature-z\", then send. The row's text should become exactly \"feature-z\". 11. Switching to another conversation keeps the row's place, blank, until its hook answers: go within the app to /c/other-chat. Call \"other status asked\" with expect \"true\". The row should exist with only whitespace as its text (eval /^\\s*$/.test(row.textContent) with expect \"true\", failing if the row is missing), and its style attribute must not contain \"background\". 12. Call \"release other status\". The row's text should become exactly \"other-branch\". 13. An empty status hides the row: for each N of 1, 2, 3, 4 and 5 in turn: call \"status empty N\"; go within the app to /c/hooked; the row should be absent (count 0); go within the app to /c/other-chat; the row's text should be exactly \"other-branch\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/hooked"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='status-bar-hook']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='status-bar-hook']",
+      "text": "feature-x `wip` http://localhost:8000/"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=\"status-bar-hook\"]')).backgroundColor",
+      "expect": "rgb(32, 74, 135)"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('[data-testid=\"status-bar-hook\"]')).color",
+      "expect": "rgb(255, 255, 255)"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='status-bar-hook'] a",
+      "count": 1
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='status-bar-hook'] a",
+      "attribute": "href",
+      "value": "https://myvm.exe.xyz:8000/"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const r = document.querySelector('[data-testid=\"status-bar-hook\"]').getBoundingClientRect(), i = document.querySelector('[data-testid=\"message-input\"]').getBoundingClientRect(); return r.bottom <= i.top && r.width >= i.width; })()",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "status feature-y"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Hello"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='status-bar-hook']",
+      "text": "feature-y"
+    },
+    {
+      "action": "eval",
+      "expression": "(document.querySelector('[data-testid=\"status-bar-hook\"]').getAttribute('style') || '').includes('background')",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "status not json"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Hello"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='status-bar-hook']",
+      "text": "Status hook failed"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Status hook failed",
+      "selector": "[data-testid='status-bar-hook']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role='dialog'][aria-label='Status hook error']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role='dialog'][aria-label='Status hook error']",
+      "text": "status-bar hook failed: invalid JSON output:"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[role='dialog'][aria-label='Status hook error']",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "status feature-z"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Hello"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='status-bar-hook']",
+      "text": "feature-z"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.history.pushState({}, '', '/c/other-chat'); window.dispatchEvent(new PopStateEvent('popstate')); })()"
+    },
+    {
+      "action": "call",
+      "value": "other status asked",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "/^\\s*$/.test(document.querySelector('[data-testid=\"status-bar-hook\"]').textContent)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(document.querySelector('[data-testid=\"status-bar-hook\"]').getAttribute('style') || '').includes('background')",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "release other status"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='status-bar-hook']",
+      "text": "other-branch"
+    },
+    {
+      "action": "call",
+      "value": "status empty 1"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.history.pushState({}, '', '/c/hooked'); window.dispatchEvent(new PopStateEvent('popstate')); })()"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='status-bar-hook']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.history.pushState({}, '', '/c/other-chat'); window.dispatchEvent(new PopStateEvent('popstate')); })()"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='status-bar-hook']",
+      "text": "other-branch"
+    },
+    {
+      "action": "call",
+      "value": "status empty 2"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.history.pushState({}, '', '/c/hooked'); window.dispatchEvent(new PopStateEvent('popstate')); })()"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='status-bar-hook']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.history.pushState({}, '', '/c/other-chat'); window.dispatchEvent(new PopStateEvent('popstate')); })()"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='status-bar-hook']",
+      "text": "other-branch"
+    },
+    {
+      "action": "call",
+      "value": "status empty 3"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.history.pushState({}, '', '/c/hooked'); window.dispatchEvent(new PopStateEvent('popstate')); })()"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='status-bar-hook']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.history.pushState({}, '', '/c/other-chat'); window.dispatchEvent(new PopStateEvent('popstate')); })()"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='status-bar-hook']",
+      "text": "other-branch"
+    },
+    {
+      "action": "call",
+      "value": "status empty 4"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.history.pushState({}, '', '/c/hooked'); window.dispatchEvent(new PopStateEvent('popstate')); })()"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='status-bar-hook']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.history.pushState({}, '', '/c/other-chat'); window.dispatchEvent(new PopStateEvent('popstate')); })()"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='status-bar-hook']",
+      "text": "other-branch"
+    },
+    {
+      "action": "call",
+      "value": "status empty 5"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.history.pushState({}, '', '/c/hooked'); window.dispatchEvent(new PopStateEvent('popstate')); })()"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='status-bar-hook']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.history.pushState({}, '', '/c/other-chat'); window.dispatchEvent(new PopStateEvent('popstate')); })()"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='status-bar-hook']",
+      "text": "other-branch"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:00:04.797075258Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 41327,
+    "output_tokens": 4416,
+    "estimated_cost_usd": 0.1002306,
+    "mode": "generated"
+  }
+}
