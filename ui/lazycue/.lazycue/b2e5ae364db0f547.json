@@ -1,0 +1,78 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "message_user targets survive compaction and forks. A conversation with message_user on asked \"Please check the build\"; the agent replied \"Looking now.\" to it with the reaction 👀, through message_user. Then the conversation was compacted (the old way: a new generation carrying copies of its messages) and forked twice, as /c/{{FORK}} and as the conversation with ID {{OTHER}} and slug {{OTHERSLUG}}. In the first fork the agent then replied \"Still on it.\" to the original first message, through message_user. \"The band\" is the element with data-testid \"carried-band\" (the carried messages, collapsed). 1. Navigate to /c/{{FORK}}. 2. There should be exactly 1 band. 3. It must hold exactly 0 elements with data-testid \"message\" (collapsed). 4. In one eval without \"expect\", watch for highlights: new MutationObserver((records) =\u003e { for (const r of records) { const el = r.target; if (el.classList \u0026\u0026 el.classList.contains('message-highlight')) document.body.dataset.highlighted = el.innerText; } }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] }). 5. Click the element with data-testid \"message-user-quote\" inside the element with data-testid \"message-user-bubble\" containing \"Still on it.\". 6. The band's element with data-testid \"message\" containing \"Please check the build\" (within the band, has_text) should be visible: jumping expanded the band. 7. Eval (document.body.dataset.highlighted || '').includes('Please check the build') until it returns true. 8. That message's element with data-testid \"message-reactions\" should read exactly \"👀\". 9. Click the conversation list's '.conversation-item[data-conversation-id=\"{{OTHER}}\"]': the band expanded here does not expand the same band in another conversation. 10. The URL should contain \"{{OTHERSLUG}}\". 11. The band's button (role \"button\", within the band) should have aria-expanded exactly \"false\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{FORK}}"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='carried-band']",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='carried-band'] [data-testid='message']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "new MutationObserver((records) =\u003e { for (const r of records) { const el = r.target; if (el.classList \u0026\u0026 el.classList.contains('message-highlight')) document.body.dataset.highlighted = el.innerText; } }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] })"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-user-quote']",
+      "within": {
+        "selector": "[data-testid='message-user-bubble']",
+        "has_text": "Still on it."
+      }
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "Please check the build",
+      "within": {
+        "selector": "[data-testid='carried-band']"
+      }
+    },
+    {
+      "action": "eval",
+      "expression": "(document.body.dataset.highlighted || '').includes('Please check the build')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": "[data-testid='carried-band'] [data-testid='message']",
+        "has_text": "Please check the build"
+      },
+      "selector": "[data-testid='message-reactions']",
+      "text": "👀"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{OTHER}}']"
+    },
+    {
+      "action": "assert_url",
+      "text": "{{OTHERSLUG}}"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='carried-band'] button",
+      "attribute": "aria-expanded",
+      "value": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:50:04.458320348Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 77511,
+    "output_tokens": 2296,
+    "estimated_cost_usd": 0.08106719999999999,
+    "mode": "generated"
+  }
+}
