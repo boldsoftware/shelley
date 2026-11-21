@@ -1,0 +1,108 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Refreshing the MCP servers panel clears errors and reloads the servers with a loading state. The screen is the default 393x727 phone. Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means the name is exactly X. To \"open the panel\": navigate to /new, press Control+k, fill \".command-palette-input\" with \"MCP Servers\", and click the first \".command-palette-item\"; \"the panel\", the dialog named \"MCP Servers\" (the element [role=\"dialog\"]:has(.modal-xwide)), should be visible. At first the server fails to list MCP servers (502, \"Integration discovery failed\"). Call \"hold\" makes later listings wait; call \"release\" lets them answer the servers \"kagi\" and \"keyed\". \"The refresh button\" is the panel's button named \"Refresh\". Perform the steps in order. 1. Open the panel. 2. The panel's element with role \"alert\" should contain the text \"Integration discovery failed\". 3. Call \"hold\", then click the refresh button. 4. The refresh button should be disabled, the panel should have no element with role \"alert\" (count 0), and the panel's \".models-loading\" should be visible. 5. Call \"release\". 6. The element in the panel whose text is exactly \"kagi\" should be visible, and the refresh button should be enabled. 7. There must be no column header (role \"columnheader\") named \"Login\" in the panel (count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "MCP Servers"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "alert",
+      "text": "Integration discovery failed"
+    },
+    {
+      "action": "call",
+      "value": "hold"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-xwide)"
+      },
+      "role": "button",
+      "name": "Refresh",
+      "exact": true
+    },
+    {
+      "action": "assert_disabled",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-xwide)"
+      },
+      "role": "button",
+      "name": "Refresh",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "alert",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide) .models-loading"
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "wait_visible",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-xwide)"
+      },
+      "selector": "*",
+      "has_text": "kagi",
+      "exact": true
+    },
+    {
+      "action": "assert_enabled",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-xwide)"
+      },
+      "role": "button",
+      "name": "Refresh",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-xwide)"
+      },
+      "role": "columnheader",
+      "name": "Login",
+      "exact": true,
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:18:30.077182199Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 58521,
+    "output_tokens": 2692,
+    "estimated_cost_usd": 0.0746835,
+    "mode": "generated"
+  }
+}

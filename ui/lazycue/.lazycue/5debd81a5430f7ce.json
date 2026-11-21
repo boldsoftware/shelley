@@ -1,0 +1,67 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The MCP tools dialog shows an HTTP error that has no known authentication action as it came. The screen is the default 393x727 phone. Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means the name is exactly X. To \"open the panel\": navigate to /new, press Control+k, fill \".command-palette-input\" with \"MCP Servers\", and click the first \".command-palette-item\"; \"the panel\", the dialog named \"MCP Servers\" (the element [role=\"dialog\"]:has(.modal-xwide)), should be visible. The server lists one MCP server, \"oauth\"; asking for its tools fails with HTTP 502 \"Remote server failed\". \"The tools dialog\" is the dialog named \"oauth tools\" (the element [role=\"dialog\"]:has(.modal-wide)). Perform the steps in order. 1. Open the panel and click its button named \"Tools\". 2. The tools dialog's element with role \"alert\" should contain the text \"Remote server failed\". 3. The tools dialog must have no link at all (role \"link\", count 0).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "MCP Servers"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Tools",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-xwide)"
+      },
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-wide)"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+      },
+      "role": "alert",
+      "text": "Remote server failed"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+      },
+      "role": "link",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:16:49.333092227Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 44750,
+    "output_tokens": 1026,
+    "estimated_cost_usd": 0.03855945,
+    "mode": "generated"
+  }
+}

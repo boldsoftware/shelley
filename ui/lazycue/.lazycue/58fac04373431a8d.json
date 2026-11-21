@@ -1,0 +1,128 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Integration-managed MCP servers have no login, edit, or delete controls. The screen is the default 393x727 phone. Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means the name is exactly X. To \"open the panel\": navigate to /new, press Control+k, fill \".command-palette-input\" with \"MCP Servers\", and click the first \".command-palette-item\"; \"the panel\", the dialog named \"MCP Servers\" (the element [role=\"dialog\"]:has(.modal-xwide)), should be visible. The server lists four MCP servers: \"kagi\" (managed by the integration kagi-mcp), \"keyed\" (a static API key), \"oauth\" (needs a login at /mcp/login/oauth) and \"logged-in\" (logged in). Perform the steps in order. 1. Open the panel. 2. For each of \"kagi\" and \"keyed\": the row (role \"row\") in the panel that holds an element whose text is exactly that name should be visible, and it must hold no link named \"Sign in\" (count 0). 3. In the panel, the link named \"Sign in\" (exactly one) should have the attribute href=\"/mcp/login/oauth\". 4. The panel's button named \"Log out\" should be visible. 5. The panel must have no button named \"Delete kagi\" (count 0) and no button named \"Edit kagi\" (count 0). 6. Its buttons named \"Delete keyed\" and \"Delete oauth\" should be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "MCP Servers"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "row",
+      "has_text": "kagi"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "role": "row",
+        "has_text": "kagi"
+      },
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "link",
+      "name": "Sign in",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "row",
+      "has_text": "keyed"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "role": "row",
+        "has_text": "keyed"
+      },
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "link",
+      "name": "Sign in",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "link",
+      "name": "Sign in",
+      "exact": true,
+      "count": 1
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "link",
+      "name": "Sign in",
+      "exact": true,
+      "attribute": "href",
+      "value": "/mcp/login/oauth"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "button",
+      "name": "Log out",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "button",
+      "name": "Delete kagi",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "button",
+      "name": "Edit kagi",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "button",
+      "name": "Delete keyed",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)",
+      "role": "button",
+      "name": "Delete oauth",
+      "exact": true
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:16:28.734253267Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 65082,
+    "output_tokens": 2923,
+    "estimated_cost_usd": 0.086589,
+    "mode": "generated"
+  }
+}

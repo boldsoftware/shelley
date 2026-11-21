@@ -1,0 +1,123 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "In the MCP tools dialog, \"Sign in\" is actionable, and tools load again when the page regains focus after authentication. The screen is the default 393x727 phone. Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means the name is exactly X. To \"open the panel\": navigate to /new, press Control+k, fill \".command-palette-input\" with \"MCP Servers\", and click the first \".command-palette-item\"; \"the panel\", the dialog named \"MCP Servers\" (the element [role=\"dialog\"]:has(.modal-xwide)), should be visible. The server lists one MCP server, \"oauth\". Asking for its tools fails with 401 \"MCP server needs authentication: /mcp/login/oauth\" until call \"authenticate\"; after that it answers one tool, \"ready_tool\". Call \"probes\" returns how many times the page has asked for its tools. \"The tools dialog\" is the dialog named \"oauth tools\" (the element [role=\"dialog\"]:has(.modal-wide)); \"the action\" is its link named \"Sign in\". Perform the steps in order. 1. Open the panel and click its button named \"Tools\". 2. The action should have the attribute href=\"/mcp/login/oauth\" and the attribute target=\"_blank\". 3. The tools dialog should have no element with role \"alert\" (count 0), and must not contain the text \"/mcp/login/\". 4. Call \"probes\": it must return \"1\". 5. Call \"authenticate\", then eval window.dispatchEvent(new Event(\"focus\")). 6. The element in the tools dialog whose text is exactly \"ready_tool\" should be visible, and there should be no action (count 0). 7. Call \"probes\": it must return \"2\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "MCP Servers"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-xwide)"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-xwide)"
+      },
+      "role": "button",
+      "name": "Tools",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=\"dialog\"]:has(.modal-wide)"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+      },
+      "role": "link",
+      "name": "Sign in",
+      "exact": true,
+      "attribute": "href",
+      "value": "/mcp/login/oauth"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+      },
+      "role": "link",
+      "name": "Sign in",
+      "exact": true,
+      "attribute": "target",
+      "value": "_blank"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+      },
+      "role": "alert",
+      "count": 0
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": "[role=\"dialog\"]:has(.modal-wide)",
+      "text": "/mcp/login/"
+    },
+    {
+      "action": "call",
+      "value": "probes",
+      "expect": "1"
+    },
+    {
+      "action": "call",
+      "value": "authenticate"
+    },
+    {
+      "action": "eval",
+      "expression": "window.dispatchEvent(new Event('focus'))"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+      },
+      "selector": "*",
+      "has_text": "ready_tool",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "[role=\"dialog\"]:has(.modal-wide)"
+      },
+      "role": "link",
+      "name": "Sign in",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "probes",
+      "expect": "2"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:17:12.690778589Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 66164,
+    "output_tokens": 2349,
+    "estimated_cost_usd": 0.0715581,
+    "mode": "generated"
+  }
+}
