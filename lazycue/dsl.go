@@ -167,6 +167,7 @@ const (
 	ActionAssertURL             = "assert_url"
 	ActionAssertTitle           = "assert_title"
 	ActionAssertDownload        = "assert_download"
+	ActionAssertNoDownload      = "assert_no_download"
 	ActionAssertCount           = "assert_count"
 	ActionSleep                 = "sleep"
 	ActionCloseTab              = "close_tab"

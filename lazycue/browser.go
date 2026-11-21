@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"runtime"
 	"slices"
@@ -52,6 +53,8 @@ type Browser struct {
 	first     *tabState
 	launch    Launch
 	closeOnce sync.Once
+	// downloadDir holds the downloads; Close removes it.
+	downloadDir string
 
 	// saved are the values evals saved, by placeholder name.
 	saved map[string]string
@@ -199,7 +202,10 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 	}
 	err := chromedp.Run(ctx, grantClipboard())
 	if err == nil {
-		b.control, err = dialControl(ctx, <-devtools, launch, b.popup, b.closed)
+		b.downloadDir, err = os.MkdirTemp("", "lazycue-downloads-")
+	}
+	if err == nil {
+		b.control, err = dialControl(ctx, <-devtools, launch, b.downloadDir, b.popup, b.closed)
 	}
 	if err == nil {
 		setupCtx, cancel := context.WithTimeout(parentCtx, defaultStepTimeout)
@@ -595,6 +601,9 @@ func (b *Browser) Close() {
 		}
 		if b.allocCancel != nil {
 			b.allocCancel()
+		}
+		if b.downloadDir != "" {
+			os.RemoveAll(b.downloadDir)
 		}
 	})
 }
@@ -1470,6 +1479,17 @@ func (b *Browser) executeStepErr(ctx, tabCtx context.Context, st *tabState, base
 			}
 			return fmt.Errorf("assert_download: expected a download of %q, got %s", step.Value, got)
 		})
+
+	case ActionAssertNoDownload:
+		// A check, not a wait: it says nothing of downloads that begin later.
+		if began := b.control.begun(); len(began) > 0 {
+			quoted, err := json.Marshal(began)
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("assert_no_download: expected no download, got %s", quoted)
+		}
+		return nil
 
 	case ActionAssertCount:
 		return b.pollCheck(ctx, tabCtx, timeout, func(runCtx context.Context) error {

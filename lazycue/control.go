@@ -76,7 +76,7 @@ func (w devtoolsURL) Write(p []byte) (int, error) {
 
 // dialControl connects to the browser at url and attaches to its pages, the
 // open ones and those to come.
-func dialControl(ctx context.Context, url string, launch Launch, popup, closed func(target.ID)) (*control, error) {
+func dialControl(ctx context.Context, url string, launch Launch, downloadDir string, popup, closed func(target.ID)) (*control, error) {
 	conn, err := chromedp.DialContext(ctx, url)
 	if err != nil {
 		return nil, err
@@ -98,25 +98,36 @@ func dialControl(ctx context.Context, url string, launch Launch, popup, closed f
 		c.close()
 		return nil, err
 	}
-	// Report downloads, as Playwright does, but save none.
-	if err := browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorDeny).WithEventsEnabled(true).Do(bctx); err != nil {
+	// Report downloads, and save them to downloadDir under their GUIDs, as
+	// Playwright saves them to a temporary directory. Denying them would
+	// lose one of a burst now and then.
+	if err := browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorAllowAndName).WithDownloadPath(downloadDir).WithEventsEnabled(true).Do(bctx); err != nil {
 		c.close()
 		return nil, err
 	}
 	return c, nil
 }
 
-// download takes the downloads begun so far if one of them is name's, and
-// reports which had begun.
+// download takes name's download and those begun before it, if one of the
+// downloads begun so far is name's, and reports which had begun.
 func (c *control) download(name string) (began []string, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	began = c.downloads
-	if !slices.Contains(began, name) {
+	i := slices.Index(began, name)
+	if i < 0 {
 		return began, false
 	}
-	c.downloads = nil
+	c.downloads = began[i+1:]
 	return began, true
+}
+
+// begun reports the downloads begun since launch or since download last
+// took them.
+func (c *control) begun() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.downloads)
 }
 
 // close closes the connection and waits for read to stop, which unblocks

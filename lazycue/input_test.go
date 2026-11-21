@@ -629,9 +629,6 @@ func TestFrames(t *testing.T) {
 	}
 }
 
-// Whether Chrome renders a cross-origin frame, so that its roles can be
-// read and its elements wait for frames, is whether the frame intersects
-// the viewport through every scroller around it.
 // assert_download waits for a download to begin with the file name, in the
 // page or a frame, as Playwright's download event and suggestedFilename,
 // and takes it and those before it.
@@ -643,10 +640,12 @@ func TestDownloads(t *testing.T) {
 	}
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 `+save("colors.txt", "0")+`
+<button onclick="setTimeout(() => { for (const name of ['a.txt', 'b.txt']) { const a = document.createElement('a'); a.href = window.URL.createObjectURL(new Blob([name])); a.download = name; a.click(); } }, 200)">Both</button>
 <iframe srcdoc="`+html.EscapeString(save("frame.txt", "300"))+`"></iframe>
 </body></html>`)}
 	runSteps(t, br, env,
 		Step{Action: ActionNavigate, URL: "/"},
+		Step{Action: ActionAssertNoDownload},
 		Step{Action: ActionClick, Role: "button", Name: "Save"},
 		Step{Action: ActionAssertDownload, Value: "colors.txt"},
 		Step{Action: ActionClick, Frame: "iframe", Role: "button", Name: "Save"},
@@ -654,6 +653,12 @@ func TestDownloads(t *testing.T) {
 		Step{Action: ActionClick, Role: "button", Name: "Save"},
 		Step{Action: ActionClick, Frame: "iframe", Role: "button", Name: "Save"},
 		Step{Action: ActionAssertDownload, Value: "frame.txt"},
+		// One takes those before it, not those after. Both begin in one
+		// task, which saving them, rather than denying them, never loses
+		// one of.
+		Step{Action: ActionClick, Role: "button", Name: "Both"},
+		Step{Action: ActionAssertDownload, Value: "a.txt"},
+		Step{Action: ActionAssertDownload, Value: "b.txt"},
 	)
 	for _, c := range []struct {
 		step Step
@@ -663,6 +668,11 @@ func TestDownloads(t *testing.T) {
 		{Step{Action: ActionAssertDownload, Value: "colors.txt"}, `assert_download: expected a download of "colors.txt", got none`},
 		{Step{Action: ActionClick, Role: "button", Name: "Save"}, ""},
 		{Step{Action: ActionAssertDownload, Value: "Colors.txt"}, `assert_download: expected a download of "Colors.txt", got ["colors.txt"]`},
+		// assert_no_download fails at once, without waiting out its
+		// timeout, and takes nothing.
+		{Step{Action: ActionAssertNoDownload}, `(assert_no_download): assert_no_download: expected no download, got ["colors.txt"]`},
+		{Step{Action: ActionAssertDownload, Value: "colors.txt"}, ""},
+		{Step{Action: ActionAssertNoDownload}, ""},
 		{Step{Action: ActionAssertDownload}, "assert_download needs a value: the file name"},
 	} {
 		if c.err == "" {
@@ -673,6 +683,14 @@ func TestDownloads(t *testing.T) {
 		if err := failSteps(t, br, env, c.step); !strings.Contains(err.Error(), c.err) {
 			t.Errorf("%s: got %v, want %q", StepSummary(c.step), err, c.err)
 		}
+	}
+	// The files are saved, and go with the browser.
+	if saved, err := os.ReadDir(br.downloadDir); len(saved) == 0 {
+		t.Fatalf("download dir: %d files, %v", len(saved), err)
+	}
+	br.Close()
+	if _, err := os.Stat(br.downloadDir); !os.IsNotExist(err) {
+		t.Errorf("download dir after Close: %v", err)
 	}
 }
 
@@ -705,6 +723,9 @@ func TestFrameEvalSeesTheFramesGlobals(t *testing.T) {
 	)
 }
 
+// Whether Chrome renders a cross-origin frame, so that its roles can be
+// read and its elements wait for frames, is whether the frame intersects
+// the viewport through every scroller around it.
 func TestCrossOriginFrameInView(t *testing.T) {
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
@@ -1278,8 +1299,6 @@ func TestPlaceholdersAndCalls(t *testing.T) {
 	}
 }
 
-// A retry block starts its steps over until a whole pass succeeds, as
-// Playwright's expect.poll and toPass do.
 // An eval's save keeps its result as a placeholder for the steps after it,
 // so a value in the page can be looked for in a frame.
 func TestSave(t *testing.T) {
@@ -1322,6 +1341,8 @@ func TestSave(t *testing.T) {
 	}
 }
 
+// A retry block starts its steps over until a whole pass succeeds, as
+// Playwright's expect.poll and toPass do.
 func TestRetry(t *testing.T) {
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
