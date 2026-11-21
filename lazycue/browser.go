@@ -753,7 +753,7 @@ func (b *Browser) run(ctx context.Context, env *Env, step Step) (string, error) 
 		defer cancel()
 		return expectResult(ctx, step, timeout, func() (string, error) {
 			var result any
-			if err := chromedp.Run(runCtx, evalStep(step.Frame, step.Expression, &result)); err != nil {
+			if err := chromedp.Run(runCtx, evalIn(step.Frame, evalJS(step.Expression), &result)); err != nil {
 				return "", err
 			}
 			return formatResult(result), nil
@@ -886,43 +886,17 @@ func evaluate(world cdpruntime.ExecutionContextID, expression string, res any) c
 	})
 }
 
-// evalStep evaluates an eval step's expression in the document of the iframe
-// the CSS selector frame matches, or the page's when frame is empty, into
-// res. It evaluates as DevTools' console does, so that an expression
-// declaring a const at the top can run again, as polling and retries run
-// it; unlike the console, it waits for a promise the expression gives to
-// settle, so a step can use await or fetch.
-func evalStep(frame, expression string, res *any) chromedp.Action {
-	return chromedp.ActionFunc(func(ctx context.Context) error {
-		world, err := frameWorld(ctx, frame)
-		if err != nil {
-			return err
-		}
-		const group = "lazycue-eval"
-		defer cdpruntime.ReleaseObjectGroup(group).Do(ctx) //nolint:errcheck // the page may be gone
-		v, exc, err := cdpruntime.Evaluate(expression).WithContextID(world).WithReplMode(true).WithObjectGroup(group).Do(ctx)
-		if err != nil {
-			return err
-		}
-		if exc != nil {
-			return exc
-		}
-		if v.ObjectID != "" {
-			v, exc, err = cdpruntime.CallFunctionOn(`function() { return this; }`).WithObjectID(v.ObjectID).WithAwaitPromise(true).WithReturnByValue(true).Do(ctx)
-			if err != nil {
-				return err
-			}
-			if exc != nil {
-				return exc
-			}
-		}
-		if v.Value == nil {
-			// undefined, or a value JSON cannot hold, such as NaN.
-			*res = nil
-			return nil
-		}
-		return json.Unmarshal(v.Value, res)
-	})
+// evalJS is an eval step's expression run through an indirect eval, as
+// Playwright runs it: it may be statements, the last one's value the
+// result, and its top-level const and let are its own, so that it can run
+// again, as polling and retries run it. Code from strings the page's CSP
+// bars is allowed while DevTools evaluates.
+func evalJS(expression string) string {
+	quoted, err := json.Marshal(expression)
+	if err != nil {
+		panic(err) // a string always marshals
+	}
+	return "(0, eval)(" + string(quoted) + ")"
 }
 
 // evalIn is evaluate in the document of the iframe the CSS selector frame

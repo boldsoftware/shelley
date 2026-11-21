@@ -95,22 +95,37 @@ func TestLaunchSettings(t *testing.T) {
 }
 
 // An eval runs again, when it polls or a retry block repeats, though it
-// declares a const at the top: evals run as DevTools' console runs them.
+// declares a const at the top: evals run through an indirect eval, as
+// Playwright's do, which works under a CSP that bars the page's own.
 func TestEvalRunsTwice(t *testing.T) {
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><body>
 <iframe srcdoc="<p>x</p>"></iframe>
 <script>setTimeout(() => document.title = 'ready', 300);</script>
 </body></html>`)}
-	runSteps(t, br, env,
+	results := runSteps(t, br, env,
 		Step{Action: ActionNavigate, URL: "/"},
 		Step{Action: ActionEval, Expression: `const f = document.title; f`, Expect: ptr("ready")},
 		Step{Action: ActionRetry, Steps: []Step{
 			{Action: ActionEval, Expression: `const g = window.tries = (window.tries || 0) + 1; if (g < 2) throw new Error('again'); g`},
 		}},
-		Step{Action: ActionEval, Expression: `const r = await fetch('/'); r.status`, Expect: ptr("200")},
+		Step{Action: ActionEval, Expression: `const n = 2; (async () => (await fetch('/')).status * n)()`, Expect: ptr("400")},
 		Step{Action: ActionEval, Frame: "iframe", Expression: `let h = 1; h`},
 		Step{Action: ActionEval, Frame: "iframe", Expression: `let h = 2; h`, Expect: ptr("2")},
+		// An eval that navigates still gives its value.
+		Step{Action: ActionEval, Expression: `location.href = '/?again'; ({went: true})`},
+		Step{Action: ActionAssertURL, Value: "/?again"},
+		Step{Action: ActionEval, Expression: `document.readyState`, Expect: ptr("complete")},
+	)
+	if got := results[6].Output; got != `{"went":true}` {
+		t.Errorf("navigating eval = %q", got)
+	}
+	csp := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'"></head><body></body></html>`)}
+	runSteps(t, br, csp,
+		Step{Action: ActionNavigate, URL: "/"},
+		// The page's own eval is barred, outside the step's evaluation.
+		Step{Action: ActionEval, Expression: `new Promise(done => setTimeout(() => { try { eval('1'); done('allowed') } catch (e) { done(e.name) } }))`, Expect: ptr("EvalError")},
+		Step{Action: ActionEval, Expression: `const k = 3; k`, Expect: ptr("3")},
 	)
 }
 
