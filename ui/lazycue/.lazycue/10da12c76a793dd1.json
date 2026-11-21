@@ -1,0 +1,124 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A running bash card previews the tail of its streamed output. \"The card\" is the \".bash-tool\" element (the conversation's only tool call); \"the preview\" is the card's \".bash-tool-preview-code\" element; \"the preview's lines\" is the number of lines of the preview's textContent (split on \"\\n\") that are not blank after trimming; \"the newest tick\" is the largest N among all \"tick-N\" matches in the preview's textContent, or 0 when there are none or the preview is gone. Check every assertion with an assert_* or wait_* step, or an eval that has \"expect\": an eval without \"expect\" asserts nothing. Perform the steps in order, without pauses: the command finishes about 12 seconds after it starts.\n1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Fill the message input with exactly this text (one line): bash: /opt/toolchain/bin/some-really-long-builder-name --flag; for i in $(seq 1 60); do echo \"tick-$i compiling a rather long module name ... ok\"; sleep 0.2; done\n3. Click the send button ([data-testid=\"send-button\"]).\n4. Wait until the card's data-testid is exactly \"tool-call-running\" (allow 30s).\n5. Wait until the preview's text matches /tick-\\d+/ (allow 30s).\n6. The command stays visible in the header while the preview streams below it: the card's \".bash-tool-command\" text contains \"some-really-long-builder-name\".\n7. In one eval (no expect), store the newest tick in window.__first.\n8. The preview tracks the newest line: wait (allow 15s) until the newest tick is greater than window.__first.\n9. Right away, the preview's lines must be at most 5 (it shows only the tail).\n10. The preview clips rather than widening the conversation: the messages container (\".messages-container\") has scrollWidth - clientWidth <= 1, and so does the html element (document.documentElement).\n11. The card's \".bash-tool-preview-more\" text matches /Show all \\d+ lines/. Click it; then no \".bash-tool-preview-more\" element remains (count 0).\n12. Wait (allow 15s) until the preview's lines are more than 5: it now reveals everything streamed so far, in place.\n13. Wait until the card's data-testid is exactly \"tool-call-completed\" (allow 60s). The card then contains no \".bash-tool-preview\" element (count 0).\n14. Click the card's \".bash-tool-header\". The card's \".bash-tool-details\" text contains \"tick-60\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "bash: /opt/toolchain/bin/some-really-long-builder-name --flag; for i in $(seq 1 60); do echo \"tick-$i compiling a rather long module name ... ok\"; sleep 0.2; done"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-running\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "/tick-\\d+/.test(document.querySelector('.bash-tool .bash-tool-preview-code')?.textContent || '')",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool .bash-tool-command",
+      "text": "some-really-long-builder-name"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const preview = document.querySelector('.bash-tool-preview-code'); const text = preview ? preview.textContent || '' : ''; const matches = text.match(/tick-(\\d+)/g) || []; const nums = matches.map(m => parseInt(m.replace('tick-', ''), 10)); window.__first = nums.length > 0 ? Math.max(...nums) : 0; return window.__first; })()"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "(() => { const preview = document.querySelector('.bash-tool-preview-code'); const text = preview ? preview.textContent || '' : ''; const matches = text.match(/tick-(\\d+)/g) || []; const nums = matches.map(m => parseInt(m.replace('tick-', ''), 10)); const newest = nums.length > 0 ? Math.max(...nums) : 0; return newest > window.__first; })()",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const preview = document.querySelector('.bash-tool .bash-tool-preview-code'); if (!preview) return 'no preview'; const lines = (preview.textContent || '').split('\\n').filter(l => l.trim() !== '').length; return lines >= 1 && lines <= 5; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const mc = document.querySelector('.messages-container'); const html = document.documentElement; return mc.scrollWidth - mc.clientWidth <= 1 && html.scrollWidth - html.clientWidth <= 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool .bash-tool-preview-more",
+      "text": "Show all"
+    },
+    {
+      "action": "eval",
+      "expression": "/Show all \\d+ lines/.test(document.querySelector('.bash-tool .bash-tool-preview-more')?.textContent || '')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool .bash-tool-preview-more"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool .bash-tool-preview-more",
+      "count": 0
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "(() => { const preview = document.querySelector('.bash-tool-preview-code'); const text = preview ? preview.textContent || '' : ''; const lines = text.split('\\n').filter(l => l.trim() !== ''); return lines.length > 5; })()",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".bash-tool[data-testid=\"tool-call-completed\"]",
+      "timeout": "60s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".bash-tool .bash-tool-preview",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".bash-tool .bash-tool-header"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".bash-tool .bash-tool-details",
+      "text": "tick-60"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:13:50.548629662Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 59727,
+    "output_tokens": 3323,
+    "estimated_cost_usd": 0.09110325,
+    "mode": "generated"
+  }
+}
