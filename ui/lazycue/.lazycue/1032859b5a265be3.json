@@ -1,0 +1,44 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A message texted to the Assistant is marked \"via text\". Workspace mode is on. On a fresh server the first load of a page takes a few seconds while the Assistant is created (the header title reads \"Shelley\" until then): wait for elements rather than reading the page right after navigating. On a phone-sized screen the drawer is off-canvas until the header's \"Open tasks\" button is clicked. Call \"text\" texts the message \"texted to the Assistant 4f1c\" to Shelley through a debug channel, as a phone would. 1. Navigate to /. 2. The header title (h1.header-title) should read exactly \"Assistant\". 3. Call \"text\"; it returns \"texted\". 4. In the element with data-testid \"message\" whose text contains \"texted to the Assistant 4f1c\" (within, has_text), the element with data-testid \"message-via-text\" should read exactly \"via text\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/"
+    },
+    {
+      "action": "wait_text",
+      "text": "Assistant",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text",
+      "selector": "h1.header-title",
+      "text": "Assistant"
+    },
+    {
+      "action": "call",
+      "value": "text",
+      "expect": "texted"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": "[data-testid='message']",
+        "has_text": "texted to the Assistant 4f1c"
+      },
+      "selector": "[data-testid='message-via-text']",
+      "text": "via text"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:21:07.472522245Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 6475,
+    "output_tokens": 254,
+    "estimated_cost_usd": 0.0083799,
+    "mode": "generated"
+  }
+}
