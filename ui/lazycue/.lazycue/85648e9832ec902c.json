@@ -1,0 +1,47 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "After in-place compaction refreshes the system prompt, the context card shows only the latest one. The conversation /c/{{SLUG}}'s history, as the page loads it, has its original system prompt and then two refreshed copies, \"Refreshed system prompt 1\" and \"Refreshed system prompt 2\"; the page's live stream is cut off. \"The card\" is the element with data-testid \"generation-context\". 1. Navigate to /c/{{SLUG}}. 2. There should be exactly 1 element matching '[data-testid=\"generation-context\"] \u003e .system-prompt-view' (a direct child of the card). 3. Click the card's button (role \"button\", within the card) whose name contains \"System Prompt:\". 4. The card's \".system-prompt-text\" should read exactly \"Refreshed system prompt 2\". 5. The card's \".model-bar\" should be visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"generation-context\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"generation-context\"] \u003e .system-prompt-view",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "System Prompt:",
+      "within": {
+        "selector": "[data-testid=\"generation-context\"]"
+      }
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"generation-context\"] .system-prompt-text",
+      "text": "Refreshed system prompt 2"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"generation-context\"] .model-bar"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:47:19.580916485Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28343,
+    "output_tokens": 822,
+    "estimated_cost_usd": 0.026870099999999997,
+    "mode": "generated"
+  }
+}
