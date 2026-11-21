@@ -1,0 +1,73 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Model upgrade banner offers once to repeat the switch on other chats. The server offers an upgrade from the predictable model to a newer \"Predictable Next\" (ID predictable-next); there is another conversation still on the predictable model; switching a conversation's model lands (the settings POST is faked to succeed); and repeating the switch on the other chats (POST /api/model-upgrade/apply-all) is faked to answer that 2 chats were switched and 1 skipped. Call \"apply all\" returns the JSON body of the first apply-all request, or \"none\". \"The offer\" is the element with data-testid \"model-upgrade-all-banner\". Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The element with data-testid \"model-upgrade-banner\" should be visible (the page has loaded the upgrade). 3. There must be exactly 0 offers. 4. Click the element with data-testid \"model-upgrade-action\". 5. The offer's text should contain \"Switch your other\". 6. The offer's text should contain \"Predictable Next\". 7. Call \"apply all\": it must return exactly \"none\". 8. Click the element with data-testid \"model-upgrade-all-action\". 9. The exact switch just made travels with the request: call \"apply all\" until it returns exactly {\"from\":\"predictable\",\"to\":\"predictable-next\"}. 10. There must then be exactly 0 offers. 11. The count is said, not left to guesswork: the text of the element with data-testid \"model-upgrade-all-result-banner\" should contain \"Switched 2 chats from\". 12. Its text should contain \"Skipped 1 chat still running\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='model-upgrade-banner']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='model-upgrade-all-banner']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='model-upgrade-action']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='model-upgrade-all-banner']",
+      "text": "Switch your other"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='model-upgrade-all-banner']",
+      "text": "Predictable Next"
+    },
+    {
+      "action": "call",
+      "value": "apply all",
+      "expect": "none"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='model-upgrade-all-action']"
+    },
+    {
+      "action": "call",
+      "value": "apply all",
+      "expect": "{\"from\":\"predictable\",\"to\":\"predictable-next\"}"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='model-upgrade-all-banner']",
+      "count": 0
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='model-upgrade-all-result-banner']",
+      "text": "Switched 2 chats from"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='model-upgrade-all-result-banner']",
+      "text": "Skipped 1 chat still running"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T06:56:19.521192194Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 136222,
+    "output_tokens": 1955,
+    "estimated_cost_usd": 0.1030347,
+    "mode": "generated"
+  }
+}

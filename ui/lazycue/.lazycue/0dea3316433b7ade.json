@@ -1,0 +1,54 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Model upgrade banner: new chats show the upgrade before sending, and Switch updates the composer. The server offers an upgrade from the predictable model (display name \"predictable\") to a newer \"Predictable Next\" (ID predictable-next), and an init script sets localStorage \"shelley_selected_model\" to \"predictable\" before the page's own scripts on every load (already in place: steps must not set it). \"The banner\" is the element with data-testid \"model-upgrade-banner\". Perform the steps in order. 1. Navigate to /new. 2. The banner's text should contain \"Newer version of Predictable available\". 3. The banner's text should contain \"predictable → Predictable Next\". 4. Click the element with data-testid \"model-upgrade-action\". 5. There must then be exactly 0 banners. 6. The text of \".status-field-model .model-picker\" should contain \"Predictable Next\" (it need not be visible on this phone-sized screen; check its text). 7. eval localStorage.getItem(\"shelley_selected_model\") must give exactly \"predictable-next\". 8. There must be exactly 0 elements with data-testid \"model-upgrade-all-banner\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='model-upgrade-banner']",
+      "text": "Newer version of Predictable available"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='model-upgrade-banner']",
+      "text": "predictable → Predictable Next"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='model-upgrade-action']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='model-upgrade-banner']",
+      "count": 0
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".status-field-model .model-picker",
+      "text": "Predictable Next"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley_selected_model')",
+      "expect": "predictable-next"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='model-upgrade-all-banner']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:05:00.529101455Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 36191,
+    "output_tokens": 982,
+    "estimated_cost_usd": 0.03219645,
+    "mode": "generated"
+  }
+}
