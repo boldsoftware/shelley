@@ -295,7 +295,10 @@ func TestKillTerminalSessionsExeScroll(t *testing.T) {
 }
 
 func TestHermeticGitEnv(t *testing.T) {
-	set := []string{"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"}
+	set := []string{
+		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
+		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=user.useConfigOnly", "GIT_CONFIG_VALUE_0=true",
+	}
 	for _, tt := range []struct {
 		name      string
 		env, want []string
@@ -411,5 +414,27 @@ func TestHermeticGitEnvIsolatesGit(t *testing.T) {
 	}
 	if want := filepath.Join(dir, ".git"); got != want {
 		t.Errorf("the repository is %s, not %s", got, want)
+	}
+}
+
+// A repository without an identity of its own fails to commit under
+// hermeticGitEnv, as it does on CI, where git cannot guess one.
+func TestHermeticGitEnvWantsAnIdentity(t *testing.T) {
+	dir := t.TempDir()
+	env := hermeticGitEnv(append(os.Environ(), "HOME="+t.TempDir(), "LC_ALL=C"))
+	git := func(args ...string) (string, error) {
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = env
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	if out, err := git("init", "--quiet"); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	if out, err := git("commit", "--quiet", "--allow-empty", "-m", "fixture"); err == nil || !strings.Contains(out, "auto-detection is disabled") {
+		t.Fatalf("a commit without an identity = %v\n%s", err, out)
+	}
+	if out, err := git("-c", "user.name=Shelley Test", "-c", "user.email=test@example.com", "commit", "--quiet", "--allow-empty", "-m", "fixture"); err != nil {
+		t.Fatalf("a commit with an identity: %v\n%s", err, out)
 	}
 }

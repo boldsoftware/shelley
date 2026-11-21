@@ -409,7 +409,8 @@ func (s *shelley) gitIn(dir string, args ...string) string {
 }
 
 // hermeticGitEnv strips from env what would make git read the runner's
-// configuration or another repository.
+// configuration or another repository, and keeps git from guessing an
+// identity, as it cannot on CI.
 func hermeticGitEnv(env []string) []string {
 	env = slices.DeleteFunc(env, func(kv string) bool {
 		name, _, _ := strings.Cut(kv, "=")
@@ -423,7 +424,8 @@ func hermeticGitEnv(env []string) []string {
 		}
 		return strings.HasPrefix(name, "GIT_CONFIG_KEY_") || strings.HasPrefix(name, "GIT_CONFIG_VALUE_")
 	})
-	return append(env, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	return append(env, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
+		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=user.useConfigOnly", "GIT_CONFIG_VALUE_0=true")
 }
 
 // setenv sets server environment variables, "NAME=value", before it starts.
