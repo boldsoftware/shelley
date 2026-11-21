@@ -439,8 +439,8 @@ func TestCustomAnthropicModelsUseCatalogLimitsOnWire(t *testing.T) {
 		{
 			name:     "known provider endpoint uses its snapshot entry",
 			endpoint: "https://api.fireworks.ai/inference/v1",
-			model:    "accounts/fireworks/models/gpt-oss-120b",
-			wantMax:  32768,
+			model:    "accounts/fireworks/models/ember-1",
+			wantMax:  131072,
 			captured: true,
 		},
 		{
@@ -689,11 +689,11 @@ func TestGeminiFactoryUsesStreamingLimit(t *testing.T) {
 func TestGeminiUnconfigurableThinkingDefaults(t *testing.T) {
 	tests := []struct{ name, model, mapping, want string }{
 		{"unknown controls", "custom-unknown", "", ""},
-		{"known model without controls", "gemini-2.5-flash-image", "", ""},
+		{"known model without controls", "gemini-2.5-computer-use-preview-10-2025", "", ""},
 		{"explicit controls", "custom-unknown", `{"high":"future"}`, "future"},
 		{"explicit standard effort", "custom-unknown", `{"high":"high"}`, "high"},
-		{"known model explicit standard effort", "gemini-2.5-flash-image", `{"high":"high"}`, "high"},
-		{"known model explicit custom effort", "gemini-2.5-flash-image", `{"high":"future"}`, "future"},
+		{"known model explicit standard effort", "gemini-2.5-computer-use-preview-10-2025", `{"high":"high"}`, "high"},
+		{"known model explicit custom effort", "gemini-2.5-computer-use-preview-10-2025", `{"high":"future"}`, "future"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

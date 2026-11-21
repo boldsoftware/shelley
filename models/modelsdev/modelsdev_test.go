@@ -554,9 +554,9 @@ func TestLookupAnthropicOutputLimit(t *testing.T) {
 		{"sonnet 5.5 uses snapshot limit", "https://llm.int.exe.xyz/anthropic/v1/messages", "claude-sonnet-5-5", 128000, true},
 		{"haiku 5.5 uses snapshot limit", "https://llm.int.exe.xyz/anthropic/v1/messages", "claude-haiku-5-5", 128000, true},
 		{"date alias resolves canonical catalog", "", "claude-opus-4-5-2026-01-01", 64000, true},
-		// The Fireworks endpoint must win over OpenRouter's differently priced
-		// gpt-oss-120b entry. No cross-provider catalog scan is allowed.
-		{"endpoint-specific entry does not spill providers", "https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/gpt-oss-120b", 32768, true},
+		// The Fireworks endpoint must win over OpenRouter's differently limited
+		// ember-1 entry. No cross-provider catalog scan is allowed.
+		{"endpoint-specific entry does not spill providers", "https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/ember-1", 131072, true},
 		{"unknown has no invented limit", "https://made-up.example/v1", "custom-claude", 0, false},
 	}
 	for _, tc := range cases {
@@ -584,7 +584,10 @@ func TestLookupOutputLimit(t *testing.T) {
 		{"GPT-6.1 Terra", "https://api.openai.com/v1", "gpt-6.1-terra", 128000, true},
 		{"GPT-6 Luna", "https://api.openai.com/v1", "gpt-6-luna", 128000, true},
 		{"Google endpoint", "https://generativelanguage.googleapis.com/v1beta", "gemini-3-flash-preview", 65536, true},
-		{"Fireworks endpoint", "https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/gpt-oss-120b", 32768, true},
+		{"Gemini 4 Carbon", "https://generativelanguage.googleapis.com/v1beta", "gemini-4-carbon", 32768, true},
+		{"Gemini 4 Hydrogen", "https://generativelanguage.googleapis.com/v1beta", "gemini-4-hydrogen", 65536, true},
+		{"Gemini 4 Neon", "https://generativelanguage.googleapis.com/v1beta", "gemini-4-neon", 65536, true},
+		{"Fireworks endpoint", "https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/ember-1", 131072, true},
 		{"gateway falls back by model name", "https://llm.int.exe.xyz/v1", "gpt-5.4", 128000, true},
 		{"unknown has no invented limit", "https://made-up.example/v1", "custom-model", 0, false},
 	}
