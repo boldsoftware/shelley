@@ -1,0 +1,119 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The suggestion\" is [data-testid=\"next-prompt-suggestion\"]; \"the input\" is the message input [data-testid=\"message-input\"]. On a desktop, the conversation suggests the next message: typing hides it, Tab takes it, a new turn replaces it, a click takes it, and a new generation ends it. window.suggestionBetween(above) returns \"ok\" when the suggestion sits below the element matching above and above the input. Perform the steps in order. 1. Navigate to /c/basil. 2. The suggestion's whitespace-collapsed, trimmed text should come to match /^Suggestion\\s*echo: More about water the basil/ (eval with expect \"true\"; it starts with the label \"Suggestion\"). 3. Eval window.suggestionBetween(\".status-bar-content\") with expect \"ok\". 4. The input should be enabled. Fill it with \"x\"; the suggestion should become hidden. Fill it with \"\"; the suggestion should become visible. 5. Press Tab in the input. Its value should become exactly \"echo: More about water the basil\", it should have focus, and the suggestion should be hidden. 6. Press Enter in the input. Inside a message (data-testid \"message\"), an element whose text is exactly \"More about water the basil\" should become visible. 7. The suggestion should come to contain \"echo: More about More about water the basil\". 8. Click the suggestion. The input's value should become exactly \"echo: More about More about water the basil\", and it should have focus. 9. Fill the input with \"/clear\" and click the send button (data-testid \"send-button\"). There should be exactly one \".generation-divider\", and the suggestion should become hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/basil"
+    },
+    {
+      "action": "eval",
+      "expression": "/^Suggestion\\s*echo: More about water the basil/.test(document.querySelector('[data-testid=\"next-prompt-suggestion\"]')?.textContent?.trim()?.replace(/\\s+/g, ' '))",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.suggestionBetween('.status-bar-content')",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "x"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"next-prompt-suggestion\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"next-prompt-suggestion\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "press_key",
+      "key": "Tab"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: More about water the basil"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"next-prompt-suggestion\"]"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message'] *",
+      "has_text": "More about water the basil",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"next-prompt-suggestion\"]')?.textContent?.replace(/\\s+/g, ' ').trim().includes('echo: More about More about water the basil')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"next-prompt-suggestion\"]"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: More about More about water the basil"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "/clear"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".generation-divider",
+      "count": 1
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"next-prompt-suggestion\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:56:37.746732525Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 30026,
+    "output_tokens": 1749,
+    "estimated_cost_usd": 0.0490149,
+    "mode": "generated"
+  }
+}

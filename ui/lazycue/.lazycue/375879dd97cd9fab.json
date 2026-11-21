@@ -1,0 +1,80 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The suggestion\" is [data-testid=\"next-prompt-suggestion\"]; \"the input\" is the message input [data-testid=\"message-input\"]. On a desktop, each conversation shows its own suggestion, and an archived one, with no composer, shows none. Call \"start other\" starts another conversation, whose one turn was \"echo: prune the rosemary\", and makes {{OTHER_ID}} its id; call \"archive\" archives /c/basil, whose id is {{BASIL_ID}}. Perform the steps in order. 1. Navigate to /c/basil. 2. The suggestion should contain \"echo: More about water the basil\". 3. Call \"start other\". 4. Click its drawer row, .conversation-item[data-conversation-id=\"{{OTHER_ID}}\"] (wait for it to appear). The suggestion should come to contain \"echo: More about prune the rosemary\". 5. Click the drawer row .conversation-item[data-conversation-id=\"{{BASIL_ID}}\"]. The suggestion should come to contain \"echo: More about water the basil\". 6. Call \"archive\". 7. Reload the page. The text \"This conversation is archived.\" should be visible, and the suggestion should be hidden (or absent).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/basil"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='next-prompt-suggestion']",
+      "text": "echo: More about water the basil"
+    },
+    {
+      "action": "call",
+      "value": "start other"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OTHER_ID}}']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{OTHER_ID}}']"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "assert_text_contains",
+          "selector": "[data-testid='next-prompt-suggestion']",
+          "text": "echo: More about prune the rosemary"
+        }
+      ],
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{BASIL_ID}}']"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "assert_text_contains",
+          "selector": "[data-testid='next-prompt-suggestion']",
+          "text": "echo: More about water the basil"
+        }
+      ],
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "archive"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_text",
+      "text": "This conversation is archived.",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='next-prompt-suggestion']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:55:48.370963092Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 38543,
+    "output_tokens": 1634,
+    "estimated_cost_usd": 0.0500409,
+    "mode": "generated"
+  }
+}

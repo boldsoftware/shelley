@@ -1,0 +1,52 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The suggestion\" is [data-testid=\"next-prompt-suggestion\"]; \"the input\" is the message input [data-testid=\"message-input\"]. A picked skill, like typed text, leaves the composer not empty, so the suggestion hides. The conversation's directory has a skill named \"draft-review\". 1. Navigate to /c/basil. 2. The suggestion should be visible. 3. Fill the input with \"/skills draft\". 4. Click the first option ([role=\"option\"]) in the skill picker ([data-testid=\"skill-picker\"]). 5. The skill chip ([data-testid=\"skill-chip\"]) should contain \"draft-review\". 6. The input's value should be exactly \"\", and the suggestion should be hidden.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/basil"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='next-prompt-suggestion']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "/skills draft"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='skill-picker'] [role='option']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='skill-picker'] [role='option']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='skill-chip']",
+      "text": "draft-review"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='next-prompt-suggestion']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:09:10.394814059Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 253358,
+    "output_tokens": 4004,
+    "estimated_cost_usd": 0.17995904999999998,
+    "mode": "generated"
+  }
+}

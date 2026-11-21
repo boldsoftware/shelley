@@ -1,0 +1,30 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The suggestion\" is [data-testid=\"next-prompt-suggestion\"]; \"the input\" is the message input [data-testid=\"message-input\"]. The page shows suggestions by default, before or without the feature flags: the page's requests for /feature-flags fail. 1. Navigate to /c/basil. 2. The suggestion should contain \"echo: More about water the basil\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/basil"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='next-prompt-suggestion']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='next-prompt-suggestion']",
+      "text": "echo: More about water the basil"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:57:38.113722594Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 12133,
+    "output_tokens": 318,
+    "estimated_cost_usd": 0.011533350000000001,
+    "mode": "generated"
+  }
+}
