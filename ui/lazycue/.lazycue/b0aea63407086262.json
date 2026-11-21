@@ -1,0 +1,104 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation /c/{{SLUG}} runs in a git repository with uncommitted changes: image.png (a 16x16 PNG, changed), tone.mp3 (an MP3, changed), opaque.bin (binary bytes 00 01 ff, now 00 02 ff), added.bin (a new binary file), deleted.bin (a deleted binary file) and text.dat (a text file whose line \"before\" became \"after\"). \"The file select\" is the overlay's \"select.diff-viewer-select\" (pick a file by filling it with the file's name as the option value); \"the panel\" is the element with data-testid \"binary-file-panel\" in the overlay. Perform the steps in order. Added and deleted binaries shrink and hatch the missing side like text diffs. 1. Navigate to /c/{{SLUG}}. 2. Open the Diffs tool: click the button with aria-label exactly \"Diffs\" in the header's workspace toolbar (\".chat-workspace-actions\"). 3. The overlay \".diff-viewer-overlay\" should be visible. Then do steps 4-9 first for added.bin, whose missing side is the FIRST \".diff-viewer-binary-side\" in the panel (index 0), and then for deleted.bin, whose missing side is the SECOND (index 1): 4. Pick the file in the file select. 5. The panel should be visible. 6. The missing side should have the class \"diff-viewer-binary-side-empty\" and be empty (its textContent.trim() is \"\"). 7. Its width relative to its parent's, el.getBoundingClientRect().width / el.parentElement.getBoundingClientRect().width, should come to be within 0.005 of 0.1 (poll: reduced motion still gives every property a 0.01ms transition, so the new split settles a frame after the class changes). 8. getComputedStyle(missingSide).backgroundImage must contain \"linear-gradient\". 9. The panel must hold exactly 1 link named exactly \"Download\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions button[aria-label='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('select.diff-viewer-select')?.querySelector('option[value=\"added.bin\"]') ? 'ready' : 'loading'",
+      "expect": "ready"
+    },
+    {
+      "action": "fill",
+      "selector": "select.diff-viewer-select",
+      "value": "added.bin"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='binary-file-panel']",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"binary-file-panel\"] .diff-viewer-binary-side')[0]?.classList.contains('diff-viewer-binary-side-empty') ? 'yes' : 'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"binary-file-panel\"] .diff-viewer-binary-side')[0]?.textContent.trim()",
+      "expect": ""
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var el = document.querySelectorAll('[data-testid=\"binary-file-panel\"] .diff-viewer-binary-side')[0]; var r = el.getBoundingClientRect().width / el.parentElement.getBoundingClientRect().width; return Math.abs(r - 0.1) \u003c 0.005 ? 'ok' : r.toFixed(4); })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var bg = getComputedStyle(document.querySelectorAll('[data-testid=\"binary-file-panel\"] .diff-viewer-binary-side')[0]).backgroundImage; return bg.includes('linear-gradient') ? 'ok' : bg; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var links = document.querySelectorAll('[data-testid=\"binary-file-panel\"] a'); var arr = Array.from(links).filter(a =\u003e a.textContent.trim() === 'Download'); return arr.length === 1 ? 'ok' : arr.length; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "fill",
+      "selector": "select.diff-viewer-select",
+      "value": "deleted.bin"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='binary-file-panel']",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"binary-file-panel\"] .diff-viewer-binary-side')[1]?.classList.contains('diff-viewer-binary-side-empty') ? 'yes' : 'no'",
+      "expect": "yes"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"binary-file-panel\"] .diff-viewer-binary-side')[1]?.textContent.trim()",
+      "expect": ""
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var el = document.querySelectorAll('[data-testid=\"binary-file-panel\"] .diff-viewer-binary-side')[1]; var r = el.getBoundingClientRect().width / el.parentElement.getBoundingClientRect().width; return Math.abs(r - 0.1) \u003c 0.005 ? 'ok' : r.toFixed(4); })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var bg = getComputedStyle(document.querySelectorAll('[data-testid=\"binary-file-panel\"] .diff-viewer-binary-side')[1]).backgroundImage; return bg.includes('linear-gradient') ? 'ok' : bg; })()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var links = document.querySelectorAll('[data-testid=\"binary-file-panel\"] a'); var arr = Array.from(links).filter(a =\u003e a.textContent.trim() === 'Download'); return arr.length === 1 ? 'ok' : arr.length; })()",
+      "expect": "ok"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:47:31.572498785Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 269967,
+    "output_tokens": 7416,
+    "estimated_cost_usd": 0.2473458,
+    "mode": "generated"
+  }
+}
