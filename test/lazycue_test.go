@@ -111,8 +111,11 @@ func TestMain(m *testing.M) {
 	}
 
 	opts := lazycue.Options{
-		BaseURL:     ts.URL,
-		CacheDir:    cacheDir,
+		BaseURL:  ts.URL,
+		CacheDir: cacheDir,
+		// The agent's git_command explores the app's source, not the
+		// fixture repository the tests run in.
+		RepoRoot:    filepath.Join(pkgDir, ".."),
 		Verbose:     true,
 		ArtifactDir: os.Getenv("LAZYCUE_ARTIFACT_DIR"),
 		VideoDir:    os.Getenv("LAZYCUE_VIDEO_DIR"),
