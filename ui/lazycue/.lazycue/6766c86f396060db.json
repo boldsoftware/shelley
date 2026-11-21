@@ -1,0 +1,30 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The app opts into keyboard-driven layout viewport resizing. 1. Navigate to /new. 2. There should be exactly one meta[name=\"viewport\"]. 3. Its content attribute must have an interactive-widget=resizes-content entry: eval /(?:^|,)\\s*interactive-widget\\s*=\\s*resizes-content\\s*(?:,|$)/.test(document.querySelector('meta[name=\"viewport\"]').getAttribute('content')) with expect \"true\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "assert_count",
+      "selector": "meta[name=\"viewport\"]",
+      "count": 1
+    },
+    {
+      "action": "eval",
+      "expression": "/(?:^|,)\\s*interactive-widget\\s*=\\s*resizes-content\\s*(?:,|$)/.test(document.querySelector('meta[name=\"viewport\"]').getAttribute('content'))",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:32:55.899626369Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 5077,
+    "output_tokens": 185,
+    "estimated_cost_usd": 0.00632865,
+    "mode": "generated"
+  }
+}

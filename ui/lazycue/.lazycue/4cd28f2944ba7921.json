@@ -1,0 +1,110 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "In a existing conversation, typing stays visible through keyboard-sized resizes. The phone's screen starts at 393x851. window.composerWithin() returns \"ok\" when the message input, the send button and the attach button are all visible within the visual viewport, or else what is wrong; \"the composer is within the viewport\" means an eval of window.composerWithin() with expect \"ok\". \"The draft\" is the 12-line text \"Draft line 1\\nDraft line 2\\nDraft line 3\\nDraft line 4\\nDraft line 5\\nDraft line 6\\nDraft line 7\\nDraft line 8\\nDraft line 9\\nDraft line 10\\nDraft line 11\\nDraft line 12\" (a JSON string; lines joined by newlines). To check the input's value exactly, eval JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value) and compare it with the JSON string given. Perform the steps in order. 1. Navigate to /c/long-read. 2. The message input (data-testid \"message-input\") should be enabled. 3. Fill it with \"Typing with the keyboard open\"; it must then have focus. 4. Resize the viewport to 393x420 (set_viewport width and height only), as an open keyboard would; the composer is within the viewport. 5. Fill the input with the draft; the composer is within the viewport, the input's value is exactly the draft, and the input has focus. 6. Resize the viewport to 851x360 (landscape); the composer is within the viewport, and the input's value is still exactly the draft. 7. Resize the viewport back to 393x851, as when the keyboard closes; the composer is within the viewport, the input's value is still exactly the draft, and the input still has focus. 8. Click the send button (data-testid \"send-button\"); the input's value should become exactly \"\" (JSON \"\\\"\\\"\").",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 393,
+      "height": 851
+    },
+    {
+      "action": "navigate",
+      "url": "/c/long-read"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Typing with the keyboard open"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "set_viewport",
+      "width": 393,
+      "height": 420
+    },
+    {
+      "action": "eval",
+      "expression": "window.composerWithin()",
+      "expect": "ok"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Draft line 1\nDraft line 2\nDraft line 3\nDraft line 4\nDraft line 5\nDraft line 6\nDraft line 7\nDraft line 8\nDraft line 9\nDraft line 10\nDraft line 11\nDraft line 12"
+    },
+    {
+      "action": "eval",
+      "expression": "window.composerWithin()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "\"Draft line 1\\nDraft line 2\\nDraft line 3\\nDraft line 4\\nDraft line 5\\nDraft line 6\\nDraft line 7\\nDraft line 8\\nDraft line 9\\nDraft line 10\\nDraft line 11\\nDraft line 12\""
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "set_viewport",
+      "width": 851,
+      "height": 360
+    },
+    {
+      "action": "eval",
+      "expression": "window.composerWithin()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "\"Draft line 1\\nDraft line 2\\nDraft line 3\\nDraft line 4\\nDraft line 5\\nDraft line 6\\nDraft line 7\\nDraft line 8\\nDraft line 9\\nDraft line 10\\nDraft line 11\\nDraft line 12\""
+    },
+    {
+      "action": "set_viewport",
+      "width": 393,
+      "height": 851
+    },
+    {
+      "action": "eval",
+      "expression": "window.composerWithin()",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "\"Draft line 1\\nDraft line 2\\nDraft line 3\\nDraft line 4\\nDraft line 5\\nDraft line 6\\nDraft line 7\\nDraft line 8\\nDraft line 9\\nDraft line 10\\nDraft line 11\\nDraft line 12\""
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify(document.querySelector('[data-testid=\"message-input\"]').value)",
+      "expect": "\"\""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T04:31:59.512703058Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 12432,
+    "output_tokens": 1886,
+    "estimated_cost_usd": 0.04069065,
+    "mode": "generated"
+  }
+}
