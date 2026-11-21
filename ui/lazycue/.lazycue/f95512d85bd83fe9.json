@@ -1,0 +1,81 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the picker\" is the skill picker [data-testid=\"skill-picker\"]; its options are its [role=\"option\"] elements; \"the chip\" is [data-testid=\"skill-chip\"]. On a phone, the MCP tools named \"search\" stay distinct by their server badges, and both can be selected. The page lists MCP servers web and library, each with a tool \"search\" described \"Search \u003cserver\u003e sources\", and locked, whose tools fail to load. Perform the steps in order. 1. Navigate to /c/skills. 2. For each server S of \"web\", then \"library\": fill the input with \"/skills S search\"; there should be exactly one option; the picker's \".skill-mcp-badge\" text should be exactly S, and its \".skill-picker-description\" text exactly \"Search S sources\"; click the option. 3. There should be exactly 2 chips, and the chips' \".skill-mcp-badge\" texts, in order, should be exactly \"web\" and \"library\" (and no others).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/skills"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "/skills web search"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='skill-picker'] [role='option']",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='skill-picker'] [role='option'] .skill-mcp-badge",
+      "text": "web"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='skill-picker'] [role='option'] .skill-picker-description",
+      "text": "Search web sources"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='skill-picker'] [role='option']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "/skills library search"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='skill-picker'] [role='option']",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='skill-picker'] [role='option'] .skill-mcp-badge",
+      "text": "library"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='skill-picker'] [role='option'] .skill-picker-description",
+      "text": "Search library sources"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='skill-picker'] [role='option']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='skill-chip']",
+      "count": 2
+    },
+    {
+      "action": "assert_texts",
+      "selector": "[data-testid='skill-chip'] .skill-mcp-badge",
+      "texts": [
+        "web",
+        "library"
+      ]
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:00:57.022580342Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 50059,
+    "output_tokens": 1497,
+    "estimated_cost_usd": 0.0567564,
+    "mode": "generated"
+  }
+}

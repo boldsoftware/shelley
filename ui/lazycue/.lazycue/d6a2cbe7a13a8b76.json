@@ -1,0 +1,47 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the picker\" is the skill picker [data-testid=\"skill-picker\"]; its options are its [role=\"option\"] elements; \"the chip\" is [data-testid=\"skill-chip\"]. On a wide screen, the chip can be removed. 1. Navigate to /c/skills. 2. Fill the input with \"/skills draft\". 3. Click the first option. 4. The chip should contain \"draft-review\". 5. Click the button labeled \"Remove skill draft-review\" (button[aria-label=\"Remove skill draft-review\"]). 6. There should be no chips: [data-testid=\"skill-chip\"] count 0.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/skills"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "/skills draft"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='skill-picker'] [role='option']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='skill-picker'] [role='option']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='skill-chip']",
+      "text": "draft-review"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Remove skill draft-review']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='skill-chip']",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:05:05.832518201Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 5997,
+    "output_tokens": 304,
+    "estimated_cost_usd": 0.008758799999999999,
+    "mode": "generated"
+  }
+}

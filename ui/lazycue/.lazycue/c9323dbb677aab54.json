@@ -1,0 +1,75 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the picker\" is the skill picker [data-testid=\"skill-picker\"]; its options are its [role=\"option\"] elements; \"the chip\" is [data-testid=\"skill-chip\"]. On a wide screen, hovering long MCP tool details keeps the picker's height and position fixed. The page's one MCP server, web, has the tool \"search\" with a very long description (\"Long MCP tool description. \" repeated). window.pickerBox() returns the picker's bounding box as JSON. Perform the steps in order. 1. Navigate to /c/skills. 2. Fill the input with \"/skills \" (with the trailing space). 3. Exactly one option should contain \"search\". 4. Hover the option containing \"draft-review\". 5. Eval window.pickerBox(); its height must be exactly 420: eval JSON.parse(window.pickerBox()).height with expect \"420\". 6. Save the box: eval window.savedBox = window.pickerBox(). 7. Hover the option containing \"search\". 8. The picker's \".skill-picker-detail\" should contain \"Long MCP tool description.\". 9. The box is unchanged: eval window.pickerBox() === window.savedBox with expect \"true\". 10. The detail overflows and scrolls: eval (() => { const el = document.querySelector('[data-testid=\"skill-picker\"] .skill-picker-detail'); return el.scrollHeight > el.clientHeight; })() with expect \"true\". 11. Hover the option containing \"draft-review\" again. 12. The box is still unchanged: eval window.pickerBox() === window.savedBox with expect \"true\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/skills"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "/skills "
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='skill-picker'] [role='option']",
+      "has_text": "search",
+      "count": 1
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='skill-picker'] [role='option']",
+      "has_text": "draft-review"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.parse(window.pickerBox()).height",
+      "expect": "420"
+    },
+    {
+      "action": "eval",
+      "expression": "window.savedBox = window.pickerBox()"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='skill-picker'] [role='option']",
+      "has_text": "search"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='skill-picker'] .skill-picker-detail",
+      "text": "Long MCP tool description."
+    },
+    {
+      "action": "eval",
+      "expression": "window.pickerBox() === window.savedBox",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=\"skill-picker\"] .skill-picker-detail'); return el.scrollHeight > el.clientHeight; })()",
+      "expect": "true"
+    },
+    {
+      "action": "hover",
+      "selector": "[data-testid='skill-picker'] [role='option']",
+      "has_text": "draft-review"
+    },
+    {
+      "action": "eval",
+      "expression": "window.pickerBox() === window.savedBox",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:05:29.399797855Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13287,
+    "output_tokens": 1061,
+    "estimated_cost_usd": 0.0259536,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the picker\" is the skill picker [data-testid=\"skill-picker\"]; its options are its [role=\"option\"] elements; \"the chip\" is [data-testid=\"skill-chip\"]. On a phone, the skills picker fills the space above the composer and keeps typing focus in the input. The page lists MCP servers web and library, each with a tool \"search\", and locked, whose tools fail to load. window.pickerBox() returns the picker's bounding box as JSON {x, y, width, height}; window.pickerPlacement() returns JSON {\"top\": its top relative to the visual viewport, \"gap\": the gap from its bottom down to the input's top}, both rounded. Perform the steps in order. 1. Navigate to /c/skills. 2. Fill the input with \"/skills \" (with the trailing space). 3. The input should have focus, and the picker should contain no search box: [data-testid=\"skill-picker\"] [role=\"searchbox\"] count 0. 4. The picker's top should come to be 12 to within half a pixel: eval Math.abs(JSON.parse(window.pickerBox()).y - 12) < 0.5 with expect \"true\". 5. Its height must be more than 420: eval JSON.parse(window.pickerBox()).height > 420 with expect \"true\". 6. Type \"a-long-skill-query-that-wraps-across-multiple-lines\" into the input key by key (a type step, not fill; the input keeps focus). 7. The picker should contain \"No matching skills\". 8. Eval window.pickerPlacement() and JSON.parse it: its top should come to be 12 (eval JSON.parse(window.pickerPlacement()).top with expect \"12\"). 9. Tap the \"No matching skills\" text in the picker: a touch step \"start\" on it immediately followed by a touch step \"end\". 10. The input should have focus, and the picker should be visible. 11. Fill the input with \"/skills \" (with the trailing space), then type \"draft-review\" key by key. 12. There should be exactly one option, containing \"draft-review\", and the input should have focus. 13. Resize the viewport to 393x500 (set_viewport width and height only). 14. Eval window.pickerPlacement() with expect \"{\\\"top\\\":12,\\\"gap\\\":6}\". 15. The picker's height must be more than 200: eval JSON.parse(window.pickerBox()).height > 200 with expect \"true\". 16. Click the picker's \"Close skills\" button (button[aria-label=\"Close skills\"]). 17. The picker should become hidden (or absent), and the input should have focus.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/skills"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "/skills "
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"skill-picker\"] [role=\"searchbox\"]",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "Math.abs(JSON.parse(window.pickerBox()).y - 12) < 0.5",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.parse(window.pickerBox()).height > 420",
+      "expect": "true"
+    },
+    {
+      "action": "type",
+      "value": "a-long-skill-query-that-wraps-across-multiple-lines"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"skill-picker\"]",
+      "text": "No matching skills"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.parse(window.pickerPlacement()).top",
+      "expect": "12"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": "[data-testid=\"skill-picker\"] *",
+      "has_text": "No matching skills"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid=\"skill-picker\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "/skills "
+    },
+    {
+      "action": "type",
+      "value": "draft-review"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"skill-picker\"] [role=\"option\"]",
+      "count": 1
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"skill-picker\"] [role=\"option\"]",
+      "text": "draft-review"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "set_viewport",
+      "width": 393,
+      "height": 500
+    },
+    {
+      "action": "eval",
+      "expression": "window.pickerPlacement()",
+      "expect": "{\"top\":12,\"gap\":6}"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.parse(window.pickerBox()).height > 200",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label=\"Close skills\"]"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid=\"skill-picker\"]"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid=\"message-input\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:02:25.377536397Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 31069,
+    "output_tokens": 1637,
+    "estimated_cost_usd": 0.0484758,
+    "mode": "generated"
+  }
+}

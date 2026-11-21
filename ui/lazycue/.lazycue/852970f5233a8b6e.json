@@ -1,0 +1,70 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the picker\" is the skill picker [data-testid=\"skill-picker\"]; its options are its [role=\"option\"] elements; \"the chip\" is [data-testid=\"skill-chip\"]. On a wide screen, sending carries the skill, and the stored message has the skills prefix. Call \"posted chat\" returns the message and skills of the last chat the page posted, as JSON; call \"stored message\" returns the conversation's last stored user message as a JSON string. Perform the steps in order. 1. Navigate to /c/skills. 2. Fill the input with \"/skills draft\". 3. Click the first option. 4. The chip should contain \"draft-review\". 5. Fill the input with \"echo: please review\". 6. Click the send button (data-testid \"send-button\"). 7. Call \"posted chat\" with expect \"{\\\"message\\\":\\\"echo: please review\\\",\\\"skills\\\":[\\\"draft-review\\\"]}\" (a JSON string holding the expected output). 8. There should be no chips: [data-testid=\"skill-chip\"] count 0. 9. Exactly one element on the page has the text \"Use the following skills:\" (it may contain more text), and it is visible. 10. Call \"stored message\" with expect \"\\\"Use the following skills: `draft-review`.\\\\n\\\\necho: please review\\\"\" (a JSON string holding the expected output).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/skills"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "/skills draft"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='skill-picker']",
+      "role": "option"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"skill-chip\"]",
+      "text": "draft-review"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo: please review"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "call",
+      "value": "posted chat",
+      "expect": "{\"message\":\"echo: please review\",\"skills\":[\"draft-review\"]}"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"skill-chip\"]",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": "*",
+      "has_text": "Use the following skills:"
+    },
+    {
+      "action": "assert_count",
+      "selector": "*",
+      "has_text": "Use the following skills:",
+      "count": 1
+    },
+    {
+      "action": "call",
+      "value": "stored message",
+      "expect": "\"Use the following skills: `draft-review`.\\n\\necho: please review\""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:04:56.282003449Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 13039,
+    "output_tokens": 818,
+    "estimated_cost_usd": 0.021564899999999998,
+    "mode": "generated"
+  }
+}

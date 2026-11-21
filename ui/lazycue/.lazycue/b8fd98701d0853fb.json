@@ -1,0 +1,65 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the picker\" is the skill picker [data-testid=\"skill-picker\"]; its options are its [role=\"option\"] elements; \"the chip\" is [data-testid=\"skill-chip\"]. On a phone, filtering MCP tools and selecting one keep focus in the input. The page lists MCP servers web and library, each with a tool \"search\", and locked, whose tools fail to load. Perform the steps in order. 1. Navigate to /c/skills. 2. Fill the input with \"/skills \" (with the trailing space); the input should have focus. 3. Type \"library search\" into the input key by key (a type step, not fill). 4. There should be exactly one option, and the picker's \".skill-mcp-badge\" text should be exactly \"library\". 5. The input should have focus. 6. Click the option. 7. The chip should contain \"search\". 8. The input's value should be exactly \"\", and the input should have focus.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/skills"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "/skills "
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "type",
+      "value": "library search"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='skill-picker'] [role='option']",
+      "count": 1
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='skill-picker'] .skill-mcp-badge",
+      "text": "library"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='skill-picker'] [role='option']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='skill-chip']",
+      "text": "search"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid='message-input']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:01:33.0534025Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 28813,
+    "output_tokens": 867,
+    "estimated_cost_usd": 0.03278175,
+    "mode": "generated"
+  }
+}

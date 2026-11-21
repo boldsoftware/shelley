@@ -1,0 +1,107 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the picker\" is the skill picker [data-testid=\"skill-picker\"]; its options are its [role=\"option\"] elements; \"the chip\" is [data-testid=\"skill-chip\"]. On a wide screen, MCP tools show short names, server badges, schemas and partial errors, and send the exact tool. The page lists MCP servers web and library, each with a tool \"search\" taking a required \"query\", and locked, whose tools fail to load. Call \"posted chat\" returns JSON {\"skills\": the last posted chat's skills, \"requests web.search\": whether its message starts with \"echo: find sources\", a blank line, then 'Use the MCP tool \"web.search\"'}. Perform the steps in order. 1. Navigate to /c/skills. 2. Fill the input with \"/skills search\". 3. There should be exactly 2 options. 4. The first option's \".truncate\" text should be exactly \"search\", and its \".skill-mcp-badge\" text exactly \"web\". 5. The last option's \".skill-mcp-badge\" text should be exactly \"library\". 6. The picker's \".skill-picker-warning\" should contain \"locked\". 7. The picker's \".skill-mcp-parameters\" should contain \"query\" and contain \"required\". 8. The picker's \".skill-mcp-activate\" should contain \"'web.search'\" (with the single quotes). 9. Click the first option. 10. The chip's \".skill-chip-label\" text should be exactly \"search\", and the chip's \".skill-mcp-badge\" text exactly \"web\". 11. Inside the chip, a button whose accessible name is exactly \"Remove tool search from web\" (button[aria-label=\"Remove tool search from web\"]) should be visible. 12. Fill the input with \"echo: find sources\". 13. Click the send button (data-testid \"send-button\"). 14. Call \"posted chat\" with expect \"{\\\"skills\\\":[],\\\"requests web.search\\\":true}\". 15. There should be no chips: [data-testid=\"skill-chip\"] count 0. 16. The last user message (the last \".message-user\") should contain 'Use the MCP tool \"web.search\"'.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/skills"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "/skills search"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='skill-picker'] [role='option']",
+      "count": 2
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const o = [...document.querySelectorAll(\"[data-testid=skill-picker] [role=option]\")]; return o.length ? (o[0].querySelector(\".truncate\")?.textContent ?? \"\").replace(/\\s+/g, \" \").trim() : \"no options\"; })()",
+      "expect": "search"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const o = [...document.querySelectorAll(\"[data-testid=skill-picker] [role=option]\")]; return o.length ? (o[0].querySelector(\".skill-mcp-badge\")?.textContent ?? \"\").replace(/\\s+/g, \" \").trim() : \"no options\"; })()",
+      "expect": "web"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const o = [...document.querySelectorAll(\"[data-testid=skill-picker] [role=option]\")]; return o.length ? (o[o.length - 1].querySelector(\".skill-mcp-badge\")?.textContent ?? \"\").replace(/\\s+/g, \" \").trim() : \"no options\"; })()",
+      "expect": "library"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='skill-picker'] .skill-picker-warning",
+      "text": "locked"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='skill-picker'] .skill-mcp-parameters",
+      "text": "query"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='skill-picker'] .skill-mcp-parameters",
+      "text": "required"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='skill-picker'] .skill-mcp-activate",
+      "text": "'web.search'"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='skill-picker'] [role='option']"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='skill-chip'] .skill-chip-label",
+      "text": "search"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='skill-chip'] .skill-mcp-badge",
+      "text": "web"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='skill-chip'] button[aria-label='Remove tool search from web']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: find sources"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "call",
+      "value": "posted chat",
+      "expect": "{\"skills\":[],\"requests web.search\":true}"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='skill-chip']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll(\".message-user\")].pop()?.textContent.includes('Use the MCP tool \"web.search\"') ?? false",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T05:04:42.536038426Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 80717,
+    "output_tokens": 3675,
+    "estimated_cost_usd": 0.11032125,
+    "mode": "generated"
+  }
+}
