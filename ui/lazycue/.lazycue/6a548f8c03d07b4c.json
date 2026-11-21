@@ -1,0 +1,117 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The test seeds a long conversation with ID {{ID}}; to \"open the conversation\", navigate to /c/{{ID}}, wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then wait for the first [data-testid=\"message\"] element to be visible (allow 30s). \"Scroll up\" means: eval setting the container's scrollTop to 0; the button should become visible (allow 10s). \"Still up\" means: record the container's scrollTop in window.__top, then window.__top \u003c 50 must be true. Focus matters here: press keys with press_key steps alone, and add no clicks the steps do not ask for. Cmd/Ctrl+ArrowDown does not scroll the message list hidden behind an overlay.\n1. Open the conversation.\n2. Scroll up.\n3. Open the \"Git Graph\" workspace tool: click the button in \".chat-workspace-actions\" whose aria-label is exactly \"Git Graph\" if it is visible, or else click the \"More options\" button (aria-label \"More options\") and then the button in \".chat-overflow-popover\" whose text starts with \"Git Graph\". \".git-graph-container\" should become visible (allow 30s).\n4. Press ArrowDown with the Control modifier, then sleep 500ms.\n5. Still up.\n6. Press Escape. \".git-graph-container\" should become hidden (allow 10s). The focused element must be the button in \".chat-workspace-actions\" whose aria-label is exactly \"Git Graph\".\n7. Eval document.querySelector('[data-testid=\"message-input\"]').focus(). Wait until the message input is focused (allow 10s). Its value must be exactly \"\".\n8. Press ArrowDown with the Control modifier. Wait until the gap \u003c= 2 is true (allow 10s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container').scrollTop = 0"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top = document.querySelector('.messages-container').scrollTop; undefined"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top \u003c 50",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.chat-workspace-actions button[aria-label=\"Git Graph\"]') ? 'visible' : 'not visible'"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions button[aria-label='Git Graph']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container",
+      "timeout": "30s"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown",
+      "modifiers": "Control"
+    },
+    {
+      "action": "sleep",
+      "timeout": "500ms"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top = document.querySelector('.messages-container').scrollTop; undefined"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top \u003c 50",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".git-graph-container",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".chat-workspace-actions button[aria-label='Git Graph']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid='message-input']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown",
+      "modifiers": "Control"
+    },
+    {
+      "action": "eval",
+      "expression": "const c = document.querySelector('.messages-container'); c.scrollHeight - c.clientHeight - c.scrollTop \u003c= 2",
+      "expect": "true",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:16:37.637859325Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 48019,
+    "output_tokens": 1985,
+    "estimated_cost_usd": 0.06559995,
+    "mode": "generated"
+  }
+}

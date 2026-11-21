@@ -1,0 +1,53 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The test seeds a long conversation with ID {{ID}}; to \"open the conversation\", navigate to /c/{{ID}}, wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then wait for the first [data-testid=\"message\"] element to be visible (allow 30s). Leaving right after Scroll to bottom saves the bottom, not a pixel offset. The conversation's saved scroll position is localStorage item \"shelley_scroll_{{ID}}\"; \"what leaving saves\" is the value of that item right after window.dispatchEvent(new Event(\"beforeunload\")).\n1. Open the conversation.\n2. In one eval, set the container's scrollTop to 0 and dispatch new Event(\"scroll\") on it. The button should become visible.\n3. Wait until what leaving saves is not \"bottom\": eval (window.dispatchEvent(new Event(\"beforeunload\")), localStorage.getItem(\"shelley_scroll_{{ID}}\")) !== \"bottom\", expecting true.\n4. The click and the unload share a task, so no observer report can come in between: the click alone has to establish that this is the bottom. A pixel offset would not survive the reload (lazily laid-out history changes the height), and would leave follow disarmed. In one eval without expect: call click() on the button element, dispatch a beforeunload event on window, and store localStorage.getItem(\"shelley_scroll_{{ID}}\") in window.__savedOnLeave.\n5. window.__savedOnLeave must be exactly \"bottom\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "const c = document.querySelector('.messages-container'); c.scrollTop = 0; c.dispatchEvent(new Event('scroll')); 'done'"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(window.dispatchEvent(new Event('beforeunload')), localStorage.getItem('shelley_scroll_{{ID}}')) !== 'bottom'",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "const btn = document.querySelector('.scroll-to-bottom-button'); btn.click(); window.dispatchEvent(new Event('beforeunload')); window.__savedOnLeave = localStorage.getItem('shelley_scroll_{{ID}}'); window.__savedOnLeave"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__savedOnLeave",
+      "expect": "bottom"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:42:02.477594357Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 32230,
+    "output_tokens": 1227,
+    "estimated_cost_usd": 0.03669375,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,175 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The test answers the page's /api/stream2 EventSource itself and sends stream events only on call steps, for a short seeded conversation with ID {{ID}}. \"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the value of window.__gap() (the container's scrollHeight - clientHeight - scrollTop). To \"stream\" a call with text T: run the call step, then wait until window.__streamed(T) is true (the one \".streaming-message\" element's text contains T, with runs of whitespace taken as one space), then eval await window.__frames() (two animation frames, so the rendered chunk's resize and intersection callbacks run). \"Following\" means: wait until the gap is below 2, and the button is hidden. To \"finish\": call \"finish\" (it marks the conversation idle), then wait until \".streaming-message\" is hidden. The touch helpers dispatch on the container: \"touch down\" means, in that order, new PointerEvent(\"pointerdown\", {pointerType: \"touch\", bubbles: true}), new Event(\"touchstart\", {bubbles: true}) and new PointerEvent(\"pointercancel\", {pointerType: \"touch\", bubbles: true}) (native panning cancels the pointer, not the touch gesture); \"dispatch a native E\" (E being touchend or touchcancel) means dispatch new TouchEvent(E, {bubbles: true, cancelable: true, composed: true}). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. Wait with such steps, not with polling loops inside the expression. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check it in a separate eval with \"expect\". \"Unmoved from V\" means: record in window.__unmoved whether Math.abs(the container's scrollTop - V) \u003c 0.5, and window.__unmoved must be true. Perform the steps in order. Start like this:\n1. Navigate to /c/{{ID}}; wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then the first [data-testid=\"message\"] element (allow 30s).\n2. Stream call \"start\" (it marks the conversation working and sends a text chunk) with text \"Stream ready.\".\n3. Wait until the gap is below 2.\nThe scroll-to-bottom arrow resumes following continuing chunks after touchcancel.\n4. In one eval: touch down; then lower the container's scrollTop by 300 and dispatch new Event(\"scroll\") on it; store the container's scrollTop in window.__scrolled.\n5. Dispatch a native touchcancel.\n6. The button should become visible.\n7. Stream call \"before arrow\" with text \"Before arrow.\". The list must be unmoved from window.__scrolled.\n8. Click the button. Following.\n9. Stream call \"continuing 0\" with text window.__paragraphs(\"Continuing 0\") (pass that expression, which builds the twelve paragraphs, to window.__streamed). Following.\n10. Stream call \"continuing 1\" with text window.__paragraphs(\"Continuing 1\"). Following.\n11. Stream call \"continuing 2\" with text window.__paragraphs(\"Continuing 2\"). Following.\n12. Finish.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "start"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamed('Stream ready.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__frames()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__gap()",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ var c = document.querySelector('.messages-container'); c.dispatchEvent(new PointerEvent('pointerdown', {pointerType: 'touch', bubbles: true})); c.dispatchEvent(new Event('touchstart', {bubbles: true})); c.dispatchEvent(new PointerEvent('pointercancel', {pointerType: 'touch', bubbles: true})); c.scrollTop -= 300; c.dispatchEvent(new Event('scroll')); window.__scrolled = c.scrollTop; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container').dispatchEvent(new TouchEvent('touchcancel', {bubbles: true, cancelable: true, composed: true}))"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "call",
+      "value": "before arrow"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamed('Before arrow.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__frames()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__unmoved = Math.abs(document.querySelector('.messages-container').scrollTop - window.__scrolled) \u003c 0.5"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__unmoved",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__gap() \u003c 2",
+      "expect": "true"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "call",
+      "value": "continuing 0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamed(window.__paragraphs('Continuing 0'))",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__frames()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__gap() \u003c 2",
+      "expect": "true"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "call",
+      "value": "continuing 1"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamed(window.__paragraphs('Continuing 1'))",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__frames()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__gap() \u003c 2",
+      "expect": "true"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "call",
+      "value": "continuing 2"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamed(window.__paragraphs('Continuing 2'))",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__frames()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__gap() \u003c 2",
+      "expect": "true"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "call",
+      "value": "finish"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".streaming-message",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:52:56.496465627Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 117017,
+    "output_tokens": 6062,
+    "estimated_cost_usd": 0.16224539999999998,
+    "mode": "generated"
+  }
+}

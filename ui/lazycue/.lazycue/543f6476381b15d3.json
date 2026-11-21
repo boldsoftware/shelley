@@ -1,0 +1,79 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The test seeds a long conversation with ID {{ID}}; to \"open the conversation\", navigate to /c/{{ID}}, wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then wait for the first [data-testid=\"message\"] element to be visible (allow 30s). \"Scroll up\" means: eval setting the container's scrollTop to 0; the button should become visible (allow 10s). \"Still up\" means: record the container's scrollTop in window.__top, then window.__top \u003c 50 must be true. Focus matters here: press keys with press_key steps alone, and add no clicks the steps do not ask for. Cmd+ArrowDown leaves the terminal alone.\n1. Open the conversation.\n2. Open the \"Terminal\" workspace tool: click the button in \".chat-workspace-actions\" whose aria-label is exactly \"Terminal\" if it is visible, or else click the \"More options\" button (aria-label \"More options\") and then the button in \".chat-overflow-popover\" whose text starts with \"Terminal\". Wait for the terminal's input, \".terminal-panel textarea[aria-label=\\\"Terminal input\\\"]\", to be visible (allow 30s), then eval its focus().\n3. Scroll up.\n4. Press ArrowDown with the Meta modifier, then sleep 500ms.\n5. Still up.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions button[aria-label='Terminal']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel textarea[aria-label=\"Terminal input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.terminal-panel textarea[aria-label=\"Terminal input\"]').focus()"
+    },
+    {
+      "action": "eval",
+      "expression": "const c = document.querySelector('.messages-container'); c.scrollTop = 0;"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top = document.querySelector('.messages-container').scrollTop; window.__top"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top \u003c 50",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown",
+      "modifiers": "Meta"
+    },
+    {
+      "action": "sleep",
+      "timeout": "500ms"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top = document.querySelector('.messages-container').scrollTop; window.__top"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top \u003c 50",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:19:09.284427944Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 44643,
+    "output_tokens": 1833,
+    "estimated_cost_usd": 0.05945400000000001,
+    "mode": "generated"
+  }
+}

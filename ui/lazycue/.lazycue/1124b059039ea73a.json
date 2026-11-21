@@ -1,0 +1,150 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The test answers the page's /api/stream2 EventSource itself and sends stream events only on call steps, for a short seeded conversation with ID {{ID}}. \"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the value of window.__gap() (the container's scrollHeight - clientHeight - scrollTop). To \"stream\" a call with text T: run the call step, then wait until window.__streamed(T) is true (the one \".streaming-message\" element's text contains T, with runs of whitespace taken as one space), then eval await window.__frames() (two animation frames, so the rendered chunk's resize and intersection callbacks run). \"Following\" means: wait until the gap is below 2, and the button is hidden. To \"finish\": call \"finish\" (it marks the conversation idle), then wait until \".streaming-message\" is hidden. The touch helpers dispatch on the container: \"touch down\" means, in that order, new PointerEvent(\"pointerdown\", {pointerType: \"touch\", bubbles: true}), new Event(\"touchstart\", {bubbles: true}) and new PointerEvent(\"pointercancel\", {pointerType: \"touch\", bubbles: true}) (native panning cancels the pointer, not the touch gesture); \"dispatch a native E\" (E being touchend or touchcancel) means dispatch new TouchEvent(E, {bubbles: true, cancelable: true, composed: true}). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. Wait with such steps, not with polling loops inside the expression. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check it in a separate eval with \"expect\". \"Unmoved from V\" means: record in window.__unmoved whether Math.abs(the container's scrollTop - V) \u003c 0.5, and window.__unmoved must be true. Perform the steps in order. Start like this:\n1. Navigate to /c/{{ID}}; wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then the first [data-testid=\"message\"] element (allow 30s).\n2. Stream call \"start\" (it marks the conversation working and sends a text chunk) with text \"Stream ready.\".\n3. Wait until the gap is below 2.\nThe page holds back IntersectionObserver reports on request: window.holdIntersections() starts holding them, window.heldIntersections() is how many held reports include the bottom sentinel, window.releaseIntersections() delivers the held reports one by one and window.releaseIntersections(true) delivers them batched (one callback per observer with every held entry, oldest first, as a browser delivers reports that piled up). window.sentinelNear is whether the page has been told the bottom sentinel is near (held reports don't count until released). \"Wait for held reports\" means wait until window.heldIntersections() \u003e 0 is true. window.__touch(\"touchstart\") and window.__touch(\"touchend\") make a touch as the page sees one, on the container; window.__scrollBy(D) adds D to the container's scrollTop and dispatches a scroll event. \"Scroll away\" means: eval window.__touch(\"touchstart\"), eval window.__scrollBy(-400), eval window.__touch(\"touchend\"), the button should become visible, then wait until window.sentinelNear is false (scrolled away by a finished touch, and told so, so the next return crosses into the near-bottom zone and is reported). A late near-bottom report does not end a touch that began after it was observed.\n4. Scroll away.\n5. The reader comes back down and, before that is reported, touches again: eval window.holdIntersections(); eval setting the container's scrollTop to its scrollHeight; wait for held reports; eval window.__touch(\"touchstart\"); eval window.releaseIntersections().\n6. The finger is still down, so growth must not move the list under it: record the container's scrollTop in window.__before, then stream call \"held\" with text \"Held under the finger.\"; the list must be unmoved from window.__before.\n7. Lifting it at the bottom resumes following: eval window.__touch(\"touchend\"), stream call \"after lifting\" with text \"After lifting.\", and wait until the gap is below 2.\n8. Finish.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "start"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamed('Stream ready.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await window.__frames(); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__gap() \u003c 2",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__touch('touchstart')"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__scrollBy(-400)"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__touch('touchend')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "window.sentinelNear",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "window.holdIntersections()"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const c = document.querySelector('.messages-container'); c.scrollTop = c.scrollHeight; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.heldIntersections() \u003e 0",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__touch('touchstart')"
+    },
+    {
+      "action": "eval",
+      "expression": "window.releaseIntersections()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__before = document.querySelector('.messages-container').scrollTop"
+    },
+    {
+      "action": "call",
+      "value": "held"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamed('Held under the finger.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await window.__frames(); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__unmoved = Math.abs(document.querySelector('.messages-container').scrollTop - window.__before) \u003c 0.5"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__unmoved",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__touch('touchend')"
+    },
+    {
+      "action": "call",
+      "value": "after lifting"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamed('After lifting.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await window.__frames(); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__gap() \u003c 2",
+      "expect": "true"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "call",
+      "value": "finish"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".streaming-message"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:25:09.702840171Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 130545,
+    "output_tokens": 3587,
+    "estimated_cost_usd": 0.13279245000000003,
+    "mode": "generated"
+  }
+}

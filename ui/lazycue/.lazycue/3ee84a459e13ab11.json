@@ -1,0 +1,67 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The test seeds a long conversation with ID {{ID}}; to \"open the conversation\", navigate to /c/{{ID}}, wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then wait for the first [data-testid=\"message\"] element to be visible (allow 30s). \"Scroll up\" means: eval setting the container's scrollTop to 0; the button should become visible (allow 10s). \"Still up\" means: record the container's scrollTop in window.__top, then window.__top \u003c 50 must be true. Focus matters here: press keys with press_key steps alone, and add no clicks the steps do not ask for. Cmd/Ctrl+ArrowDown leaves the drawer search box alone.\n1. Open the conversation.\n2. Scroll up.\n3. Click the element with aria-label \"Search conversations\" inside \".drawer-header-actions\". Wait until document.activeElement matches \".drawer-search-input\" (allow 10s).\n4. Press ArrowDown with the Control modifier, then sleep 300ms.\n5. Still up.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container').scrollTop = 0"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".drawer-header-actions [aria-label^=\"Search conversations\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement.matches('.drawer-search-input')",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "press_key",
+      "key": "ArrowDown",
+      "modifiers": "Control"
+    },
+    {
+      "action": "sleep",
+      "timeout": "300ms"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top = document.querySelector('.messages-container').scrollTop; undefined"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top \u003c 50",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:21:13.712321728Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 41028,
+    "output_tokens": 1673,
+    "estimated_cost_usd": 0.05218830000000001,
+    "mode": "generated"
+  }
+}

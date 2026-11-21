@@ -1,0 +1,67 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The test seeds a long conversation with ID {{ID}}; to \"open the conversation\", navigate to /c/{{ID}}, wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then wait for the first [data-testid=\"message\"] element to be visible (allow 30s). \"Settle the layout\" means: in one eval, append to document.head a \u003cstyle\u003e element with the text \".messages-chunk { content-visibility: visible !important; contain-intrinsic-size: none !important; }\"; then eval a promise that resolves after two animation frames. PageDown rearms auto-follow before same-frame growth at the bottom. window.__pinStopped() moves the container 1px above the bottom, waits two frames, and returns whether it stayed there (the bottom pin has lapsed), then returns to the bottom. window.__keyThenGrow(key) dispatches new KeyboardEvent(\"keydown\", {key, bubbles: true}) on the message input and, in the same task, inserts an 800px div before the bottom sentinel.\n1. Open the conversation, then settle the layout.\n2. Eval document.querySelector('[data-testid=\"message-input\"]').focus(). Wait out the bottom pin: eval await window.__pinStopped() expecting true, allowing 5s (the eval runs again until it returns true).\n3. Eval setting the container's scrollTop to scrollHeight - clientHeight - clientHeight / 2. The button should become visible (allow 5s).\n4. Eval window.__keyThenGrow(\"PageDown\").\n5. Wait until the gap is below 100 (allow 5s). The button must not be visible (allow 5s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const s = document.createElement('style'); s.textContent = '.messages-chunk { content-visibility: visible !important; contain-intrinsic-size: none !important; }'; document.head.appendChild(s); return new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r))); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus()"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e await window.__pinStopped())()",
+      "expect": "true",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c = document.querySelector('.messages-container'); c.scrollTop = c.scrollHeight - c.clientHeight - c.clientHeight / 2; })()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__keyThenGrow('PageDown')"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c = document.querySelector('.messages-container'); return (c.scrollHeight - c.clientHeight - c.scrollTop) \u003c 100; })()",
+      "expect": "true",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:15:20.305376197Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 17907,
+    "output_tokens": 1629,
+    "estimated_cost_usd": 0.0390639,
+    "mode": "generated"
+  }
+}

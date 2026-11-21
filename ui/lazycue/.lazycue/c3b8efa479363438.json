@@ -1,0 +1,104 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The test seeds a long conversation with ID {{ID}}; to \"open the conversation\", navigate to /c/{{ID}}, wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then wait for the first [data-testid=\"message\"] element to be visible (allow 30s). \"Settle the layout\" means: in one eval, append to document.head a \u003cstyle\u003e element with the text \".messages-chunk { content-visibility: visible !important; contain-intrinsic-size: none !important; }\"; then eval a promise that resolves after two animation frames. PageUp and PageDown scroll the conversation while the composer stays focused. \"The input\" is [data-testid=\"message-input\"]; \"the input is focused\" means document.activeElement === the input is true.\n1. Open the conversation, then settle the layout.\n2. Fill the input with \"keep this draft in the composer\". Eval setting the input's selectionStart and selectionEnd to its value.length. Eval setting the container's scrollTop to its scrollHeight. Wait until the input is focused.\n3. Record the container's scrollTop in window.__bottom. Press PageUp. Wait until the container's scrollTop \u003c window.__bottom - 100 is true (allow 5s). Wait until the input is focused. Record the input's selectionEnd in window.__selectionEnd; it must be exactly 31 (the draft's length).\n4. Record the container's scrollTop in window.__pageUp. Press PageDown. Wait until the container's scrollTop \u003e window.__pageUp + 100 is true (allow 5s). Wait until the input is focused. The input's value must be exactly \"keep this draft in the composer\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var s = document.createElement('style'); s.textContent = '.messages-chunk { content-visibility: visible !important; contain-intrinsic-size: none !important; }'; document.head.appendChild(s); return new Promise(function(resolve) { requestAnimationFrame(function() { requestAnimationFrame(function() { resolve('done'); }); }); }); })()"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "keep this draft in the composer"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var input = document.querySelector('[data-testid=\"message-input\"]'); input.selectionStart = input.value.length; input.selectionEnd = input.value.length; return input.value.length; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { var c = document.querySelector('.messages-container'); c.scrollTop = c.scrollHeight; return c.scrollTop; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__bottom = document.querySelector('.messages-container').scrollTop; window.__bottom"
+    },
+    {
+      "action": "press_key",
+      "key": "PageUp"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container').scrollTop \u003c window.__bottom - 100",
+      "expect": "true",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__selectionEnd = document.querySelector('[data-testid=\"message-input\"]').selectionEnd; window.__selectionEnd"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__selectionEnd",
+      "expect": "31"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__pageUp = document.querySelector('.messages-container').scrollTop; window.__pageUp"
+    },
+    {
+      "action": "press_key",
+      "key": "PageDown"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container').scrollTop \u003e window.__pageUp + 100",
+      "expect": "true",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelector('[data-testid=\"message-input\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "keep this draft in the composer"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:21:53.225227218Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 19588,
+    "output_tokens": 1751,
+    "estimated_cost_usd": 0.0450207,
+    "mode": "generated"
+  }
+}

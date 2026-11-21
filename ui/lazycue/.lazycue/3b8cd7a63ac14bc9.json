@@ -1,0 +1,185 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. Selecting a previously read conversation in the drawer opens it at the bottom. The test seeds three conversations, with IDs {{FIRST}} and {{SECOND}} (long) and {{THIRD}} (shorter). \"The row\" of a conversation X is \".conversation-item[data-conversation-id=\\\"X\\\"]\" in the drawer, which stays visible on this desktop window. A conversation's saved scroll position is localStorage item \"shelley_scroll_\u003cits ID\u003e\". \"Many messages\" means: wait until document.querySelectorAll('[data-testid=\"message\"]').length \u003e 100 is true. Once call \"hold third\" has run, the server's answer to the page's load of {{THIRD}} (a GET of /api/conversation/{{THIRD}} with no query) is held back until call \"release third\"; call \"third requested\" says whether such a load has arrived (\"true\" or \"false\").\n1. Navigate to /c/{{FIRST}}; wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s). Many messages.\n2. Eval setting the container's scrollTop to 0. The button should become visible (allow 10s). Wait until localStorage.getItem(\"shelley_scroll_{{FIRST}}\") is exactly \"0\".\n3. Click {{SECOND}}'s row. Wait until new RegExp(\"/c/[^/]*{{SECOND}}\").test(location.href) is true (allow 30s). Many messages.\n4. Click {{FIRST}}'s row. Wait until new RegExp(\"/c/[^/]*{{FIRST}}\").test(location.href) is true (allow 30s). Many messages.\n5. Wait until the gap is below 120 (allow 10s). The button must not be visible (allow 10s). Wait until localStorage.getItem(\"shelley_scroll_{{FIRST}}\") is exactly \"bottom\".\n6. Explicit in-conversation navigation must release the open-at-bottom follow state rather than be snapped back by late layout protection: click the table of contents button (\".toc-button\"), then \".toc-entry-top\". Wait until the container's scrollTop is below 50 (allow 10s). The button should become visible (allow 10s).\n7. Clicking the already-active conversation is also a selection: it should return to the latest content without leaving pending scroll state behind. Click {{FIRST}}'s row. Wait until the gap is below 120 (allow 10s). The button must not be visible (allow 10s).\n8. Browser find and accessibility jumps carry no wheel or pointer markers; once the selected conversation reaches the bottom, a raw upward scroll must be treated as navigation rather than late layout growth. Eval setting the container's scrollTop to 0 (nothing else). Wait until the container's scrollTop is below 50 (allow 10s). The button should become visible (allow 10s). Click {{FIRST}}'s row. The button must not be visible (allow 10s).\n9. Reselecting while a saved-position load is still pending must replace that restoration with the explicit bottom request. Eval localStorage.setItem(\"shelley_scroll_{{THIRD}}\", \"1000\"). Call \"hold third\". Navigate to /c/{{THIRD}}. Call \"third requested\" until it returns \"true\". Click {{THIRD}}'s row. Call \"release third\".\n10. Wait until document.querySelectorAll('[data-testid=\"message\"]').length \u003e 20 is true. Wait until the gap is below 120 (allow 10s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{FIRST}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"message\"]').length \u003e 100",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container').scrollTop = 0; 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley_scroll_{{FIRST}}')",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{SECOND}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "new RegExp('/c/[^/]*{{SECOND}}').test(location.href)",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"message\"]').length \u003e 100",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{FIRST}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "new RegExp('/c/[^/]*{{FIRST}}').test(location.href)",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"message\"]').length \u003e 100",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c = document.querySelector('.messages-container'); return c.scrollHeight - c.clientHeight - c.scrollTop \u003c 120; })()",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.getItem('shelley_scroll_{{FIRST}}')",
+      "expect": "bottom"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-button"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-entry-top"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container').scrollTop \u003c 50",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{FIRST}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c = document.querySelector('.messages-container'); return c.scrollHeight - c.clientHeight - c.scrollTop \u003c 120; })()",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container').scrollTop = 0; 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container').scrollTop \u003c 50",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{FIRST}}\"]"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley_scroll_{{THIRD}}', '1000'); 'done'",
+      "expect": "done"
+    },
+    {
+      "action": "call",
+      "value": "hold third"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{THIRD}}"
+    },
+    {
+      "action": "call",
+      "value": "third requested",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{THIRD}}\"]"
+    },
+    {
+      "action": "call",
+      "value": "release third"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"message\"]').length \u003e 20",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c = document.querySelector('.messages-container'); return c.scrollHeight - c.clientHeight - c.scrollTop \u003c 120; })()",
+      "expect": "true",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:23:21.006013515Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 38992,
+    "output_tokens": 4154,
+    "estimated_cost_usd": 0.0987672,
+    "mode": "generated"
+  }
+}

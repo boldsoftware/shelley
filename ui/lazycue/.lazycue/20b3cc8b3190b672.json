@@ -1,0 +1,91 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The test answers the page's /api/stream2 EventSource itself and sends stream events only on call steps, for a short seeded conversation with ID {{ID}}. \"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the value of window.__gap() (the container's scrollHeight - clientHeight - scrollTop). To \"stream\" a call with text T: run the call step, then wait until window.__streamed(T) is true (the one \".streaming-message\" element's text contains T, with runs of whitespace taken as one space), then eval await window.__frames() (two animation frames, so the rendered chunk's resize and intersection callbacks run). \"Following\" means: wait until the gap is below 2, and the button is hidden. To \"finish\": call \"finish\" (it marks the conversation idle), then wait until \".streaming-message\" is hidden. The touch helpers dispatch on the container: \"touch down\" means, in that order, new PointerEvent(\"pointerdown\", {pointerType: \"touch\", bubbles: true}), new Event(\"touchstart\", {bubbles: true}) and new PointerEvent(\"pointercancel\", {pointerType: \"touch\", bubbles: true}) (native panning cancels the pointer, not the touch gesture); \"dispatch a native E\" (E being touchend or touchcancel) means dispatch new TouchEvent(E, {bubbles: true, cancelable: true, composed: true}). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. Wait with such steps, not with polling loops inside the expression. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check it in a separate eval with \"expect\". \"Unmoved from V\" means: record in window.__unmoved whether Math.abs(the container's scrollTop - V) \u003c 0.5, and window.__unmoved must be true. Perform the steps in order. Start like this:\n1. Navigate to /c/{{ID}}; wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then the first [data-testid=\"message\"] element (allow 30s).\n2. Stream call \"start\" (it marks the conversation working and sends a text chunk) with text \"Stream ready.\".\n3. Wait until the gap is below 2.\nStreamed fenced code stays plain until the durable message renders.\n4. Wait until the last \".message-agent pre \u003e code\" element contains a \".shelley-code-token\" element (allow 30s): durable messages highlight their code.\n5. Stream call \"code\" with text \"const values = Array.from({ length: 200 }, (_, index) =\u003e index);\" (the call sends that line as a fenced typescript block).\n6. There must be exactly 1 \".streaming-message pre \u003e code\" element; it must not have a data-shelley-code-highlight attribute; and \".streaming-message pre \u003e code .shelley-code-token\" must match exactly 0 elements.\n7. Finish.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "start"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamed('Stream ready.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__frames()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__gap() \u003c 2",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const els = document.querySelectorAll('.message-agent pre \u003e code'); if (!els.length) return false; return els[els.length-1].querySelector('.shelley-code-token') !== null; })()",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "code"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamed('const values = Array.from({ length: 200 }, (_, index) =\u003e index);')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__frames()"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".streaming-message pre \u003e code",
+      "count": 1
+    },
+    {
+      "action": "assert_count",
+      "selector": ".streaming-message pre \u003e code[data-shelley-code-highlight]",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".streaming-message pre \u003e code .shelley-code-token",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "finish"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".streaming-message",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:01:31.401750022Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 381863,
+    "output_tokens": 4520,
+    "estimated_cost_usd": 0.25844025,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,245 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The test seeds a conversation at /c/{{SLUG}} whose first message is \"echo message 0\". To \"open the conversation\", navigate to /c/{{SLUG}} and wait for the message input to be visible (allow 30s). To \"add message N\", send \"echo message N\" and wait until a [data-testid=\"message\"] element containing the text \"echo message N\" is visible (allow 30s). The button shows when scrolled up, and the conversation auto-scrolls at the bottom. The page provides two helpers: window.__installScrollProbes() makes the page count, in window.__messageRectReads, getBoundingClientRect() calls on elements with a data-message-id, and in window.__messagesScrollHeightReads reads of the container's scrollHeight (and makes scrollTop writes above 0x7fffffff land at 0, as WebKit does); window.__scrollUpUntilButton() zeroes those counters, sets the container's scrollTop to 0 and waits for the button to be visible, repeating that for up to 30s until it is, and throws if it never is (\"scroll up until the button shows\": eval await window.__scrollUpUntilButton() with a 40s step timeout).\n1. Open the conversation.\n2. For N = 1, 2 and 3 in turn: add message N, then wait until the agent-thinking indicator ([data-testid=\"agent-thinking\"]) is hidden (allow 30s).\n3. Eval window.__installScrollProbes().\n4. Scroll up until the button shows.\n5. window.__messageRectReads must be exactly 0 and window.__messagesScrollHeightReads exactly 0: the table of contents must not synchronously measure every message during scroll (that forces Safari to lay out far-off content-visibility:auto messages).\n6. Click the table of contents button (\".toc-button\"); the \".toc-entry-top\" element should get the class \"toc-entry-active\".\n7. The TOC's bottom action must stay pinned while lazy content expands. In one eval: insert a div with data-testid \"lazy-bottom-growth\" into the container's \".messages-list\" just before its \".messages-bottom-sentinel\", and start growing it on animation frames: each frame adds 400px to its height, until 1200px.\n8. Right after, click \".toc-entry-bottom\".\n9. Wait until Math.abs(gap) \u003c= 1 is true.\n10. Scroll up until the button shows.\n11. Return to the bottom. A late streaming-driven auto-scroll may beat us to it and hide the button first; either path leaves us pinned at the bottom. So in one eval, if the button is visible right now (it exists, its getBoundingClientRect() has non-zero width and height, and its computed visibility is not \"hidden\"), call its click(). Then the button should become hidden (allow 5s).\n12. A slow touch or scrollbar drag must release the bottom pin even when its first scroll event moves less than the pin's jump threshold. In one async eval on the container: first await two animation frames, so the bottom observer has seen the return to the bottom (a drag in the very frame of the return races it); then dispatch new PointerEvent(\"pointerdown\", {pointerId: 1, bubbles: true}); set scrollTop to Math.max(0, scrollTop - 50); await one animation frame; dispatch new PointerEvent(\"pointerup\", {pointerId: 1, bubbles: true}).\n13. Wait until the gap is greater than 20. The button should become visible (allow 5s). Click it; it should become hidden (allow 5s).\n14. An upward wheel gesture must immediately release lazy-layout pinning. In one eval on the container: dispatch new WheelEvent(\"wheel\", {deltaY: -200, bubbles: true}), then set scrollTop to 0. The button should become visible (allow 5s).\n15. A large upward jump (Home, a scrollbar drag) must release the pin too, even with no wheel event before it. In one eval: call .click() on the button element (a DOM click, in the same task), insert a div 1200px tall into \".messages-list\" just before \".messages-bottom-sentinel\", and set the container's scrollTop to Math.max(0, scrollTop - 200).\n16. Wait until the gap is greater than 100. The button should become visible (allow 5s). Click it. Wait until Math.abs(gap) \u003c= 1 is true.\n17. Send \"echo final message\" and wait until a [data-testid=\"message\"] element containing \"echo final message\" is visible (allow 30s). The button should not become visible: assert it is not visible (we are following the conversation).\n18. Regression: after a full reload the conversation renders through the loading spinner, which recreates \".messages-list\", and the scroll observers must re-attach to the new nodes. Reload the page, then wait for the message input and the container to be visible (allow 30s).\n19. Scroll up until the button shows.\n20. Eval setting the container's scrollTop to its scrollHeight. The button should become hidden (allow 5s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo message 1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "echo message 1",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo message 2"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "echo message 2",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo message 3"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "echo message 3",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__installScrollProbes()"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await window.__scrollUpUntilButton(); })()",
+      "timeout": "40s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__messageRectReads",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__messagesScrollHeightReads",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-button"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.toc-entry-top').classList.contains('toc-entry-active')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const container = document.querySelector('.messages-container'); const list = document.querySelector('.messages-list'); const sentinel = document.querySelector('.messages-bottom-sentinel'); const div = document.createElement('div'); div.dataset.testid = 'lazy-bottom-growth'; list.insertBefore(div, sentinel); let h = 0; const grow = () =\u003e { h = Math.min(h + 400, 1200); div.style.height = h + 'px'; if (h \u003c 1200) requestAnimationFrame(grow); }; requestAnimationFrame(grow); })()"
+    },
+    {
+      "action": "click",
+      "selector": ".toc-entry-bottom"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c = document.querySelector('.messages-container'); return Math.abs(c.scrollHeight - c.clientHeight - c.scrollTop) \u003c= 1; })()",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await window.__scrollUpUntilButton(); })()",
+      "timeout": "40s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('.scroll-to-bottom-button'); if (btn) { const r = btn.getBoundingClientRect(); const vis = window.getComputedStyle(btn).visibility; if (r.width \u003e 0 \u0026\u0026 r.height \u003e 0 \u0026\u0026 vis !== 'hidden') { btn.click(); } } })()"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r))); const c = document.querySelector('.messages-container'); c.dispatchEvent(new PointerEvent('pointerdown', {pointerId: 1, bubbles: true})); c.scrollTop = Math.max(0, c.scrollTop - 50); await new Promise(r =\u003e requestAnimationFrame(r)); c.dispatchEvent(new PointerEvent('pointerup', {pointerId: 1, bubbles: true})); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c2 = document.querySelector('.messages-container'); return c2.scrollHeight - c2.clientHeight - c2.scrollTop \u003e 20; })()",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c = document.querySelector('.messages-container'); c.dispatchEvent(new WheelEvent('wheel', {deltaY: -200, bubbles: true})); c.scrollTop = 0; })()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('.scroll-to-bottom-button'); btn.click(); const list = document.querySelector('.messages-list'); const sentinel = document.querySelector('.messages-bottom-sentinel'); const div2 = document.createElement('div'); div2.style.height = '1200px'; list.insertBefore(div2, sentinel); const c = document.querySelector('.messages-container'); c.scrollTop = Math.max(0, c.scrollTop - 200); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c3 = document.querySelector('.messages-container'); return c3.scrollHeight - c3.clientHeight - c3.scrollTop \u003e 100; })()",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c4 = document.querySelector('.messages-container'); return Math.abs(c4.scrollHeight - c4.clientHeight - c4.scrollTop) \u003c= 1; })()",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo final message"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "echo final message",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { await window.__scrollUpUntilButton(); })()",
+      "timeout": "40s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const c5 = document.querySelector('.messages-container'); c5.scrollTop = c5.scrollHeight; })()"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:42:19.023848433Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 202851,
+    "output_tokens": 11685,
+    "estimated_cost_usd": 0.3048201,
+    "mode": "generated"
+  }
+}

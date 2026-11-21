@@ -1,0 +1,95 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The conversation restores to the true bottom after a reload despite content-visibility height estimates. The test seeds a conversation of 33 turns at /c/{{SLUG}}. \"Open the conversation\" means: navigate to /c/{{SLUG}}, wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then the container (allow 30s).\n1. Open the conversation.\n2. Confirm it actually built multiple content-visibility chunks, or the test would pass vacuously: wait until document.querySelectorAll(\".messages-chunk\").length \u003e= 2 is true (allow 30s).\n3. Go to the true bottom with the app's own scroll-to-bottom: in one eval, if the button is visible (it exists, its getBoundingClientRect() has non-zero width and height, and its computed visibility is not \"hidden\"), call its click(). Then the button must not be visible (allow 10s).\n4. Reload the page, then wait for the message input, and then the container, to be visible (allow 30s each).\n5. After restore we must be pinned at the bottom: the button must not be visible (allow 10s), and wait until the gap is below 120 (allow 10s).\n6. A new message must still scroll into view (auto-follow armed): send \"echo after reload\" and wait until a [data-testid=\"message\"] element containing \"echo after reload\" is visible (allow 30s). The button must not be visible (allow 5s), and wait until the gap is below 120 (allow 10s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve, reject) =\u003e { const deadline = Date.now() + 30000; const check = () =\u003e { if (document.querySelectorAll('.messages-chunk').length \u003e= 2) { resolve('ok'); } else if (Date.now() \u003e deadline) { reject(new Error('timeout: chunks=' + document.querySelectorAll('.messages-chunk').length)); } else { setTimeout(check, 500); } }; check(); })",
+      "expect": "ok"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('.scroll-to-bottom-button'); if (btn) { const r = btn.getBoundingClientRect(); const vis = getComputedStyle(btn).visibility; if (r.width \u003e 0 \u0026\u0026 r.height \u003e 0 \u0026\u0026 vis !== 'hidden') { btn.click(); return 'clicked'; } } return 'not-visible'; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('.scroll-to-bottom-button'); if (!btn) return 'hidden'; const r = btn.getBoundingClientRect(); const vis = getComputedStyle(btn).visibility; if (r.width \u003e 0 \u0026\u0026 r.height \u003e 0 \u0026\u0026 vis !== 'hidden') return 'visible'; return 'hidden'; })()",
+      "expect": "hidden",
+      "timeout": "10s"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('.scroll-to-bottom-button'); if (!btn) return 'hidden'; const r = btn.getBoundingClientRect(); const vis = getComputedStyle(btn).visibility; if (r.width \u003e 0 \u0026\u0026 r.height \u003e 0 \u0026\u0026 vis !== 'hidden') return 'visible'; return 'hidden'; })()",
+      "expect": "hidden",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve, reject) =\u003e { const deadline = Date.now() + 10000; const check = () =\u003e { const c = document.querySelector('.messages-container'); const gap = c.scrollHeight - c.clientHeight - c.scrollTop; if (gap \u003c 120) { resolve('ok'); } else if (Date.now() \u003e deadline) { reject(new Error('timeout: gap=' + gap)); } else { setTimeout(check, 300); } }; check(); })",
+      "expect": "ok"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "echo after reload"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message\"]",
+      "has_text": "echo after reload",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('.scroll-to-bottom-button'); if (!btn) return 'hidden'; const r = btn.getBoundingClientRect(); const vis = getComputedStyle(btn).visibility; if (r.width \u003e 0 \u0026\u0026 r.height \u003e 0 \u0026\u0026 vis !== 'hidden') return 'visible'; return 'hidden'; })()",
+      "expect": "hidden",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve, reject) =\u003e { const deadline = Date.now() + 10000; const check = () =\u003e { const c = document.querySelector('.messages-container'); const gap = c.scrollHeight - c.clientHeight - c.scrollTop; if (gap \u003c 120) { resolve('ok'); } else if (Date.now() \u003e deadline) { reject(new Error('timeout: gap=' + gap)); } else { setTimeout(check, 300); } }; check(); })",
+      "expect": "ok"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:36:25.587104709Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 29917,
+    "output_tokens": 3888,
+    "estimated_cost_usd": 0.08286045,
+    "mode": "generated"
+  }
+}

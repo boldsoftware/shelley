@@ -1,0 +1,34 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. Page keys typed while composing belong to the IME. The test seeds a conversation at /c/{{SLUG}}.\n1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. In one eval without expect: dispatch on the message input const event = new KeyboardEvent(\"keydown\", {key: \"PageUp\", bubbles: true, cancelable: true, isComposing: true}), and store event.defaultPrevented in window.__prevented.\n3. window.__prevented must be false.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "const input = document.querySelector('[data-testid=\"message-input\"]'); const event = new KeyboardEvent('keydown', {key: 'PageUp', bubbles: true, cancelable: true, isComposing: true}); input.dispatchEvent(event); window.__prevented = event.defaultPrevented; window.__prevented"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__prevented",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:25:16.135988743Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 4896,
+    "output_tokens": 272,
+    "estimated_cost_usd": 0.00833145,
+    "mode": "generated"
+  }
+}

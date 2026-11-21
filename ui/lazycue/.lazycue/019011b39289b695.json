@@ -1,0 +1,67 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. The test seeds a long conversation with ID {{ID}}; to \"open the conversation\", navigate to /c/{{ID}}, wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s), then wait for the first [data-testid=\"message\"] element to be visible (allow 30s). Modified page keys stay composer editing commands. \"The input\" is [data-testid=\"message-input\"].\n1. Open the conversation.\n2. Fill the input with twenty lines, \"draft line 0\" to \"draft line 19\", joined by newlines (no trailing newline). Eval setting the input's selectionStart and selectionEnd to its value.length. Eval setting the container's scrollTop to 0.\n3. Press PageUp with the Shift modifier.\n4. Record the container's scrollTop in window.__top right away; window.__top must be exactly 0.\n5. Wait until the input's selectionStart \u003c 269 (the draft's length) is true. Record the input's selectionEnd in window.__selectionEnd; it must be exactly 269.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "draft line 0\ndraft line 1\ndraft line 2\ndraft line 3\ndraft line 4\ndraft line 5\ndraft line 6\ndraft line 7\ndraft line 8\ndraft line 9\ndraft line 10\ndraft line 11\ndraft line 12\ndraft line 13\ndraft line 14\ndraft line 15\ndraft line 16\ndraft line 17\ndraft line 18\ndraft line 19"
+    },
+    {
+      "action": "eval",
+      "expression": "const el = document.querySelector('[data-testid=\"message-input\"]'); el.selectionStart = el.value.length; el.selectionEnd = el.value.length; el.selectionEnd"
+    },
+    {
+      "action": "eval",
+      "expression": "const c = document.querySelector('.messages-container'); c.scrollTop = 0; c.scrollTop"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').focus(); document.querySelector('[data-testid=\"message-input\"]').selectionEnd"
+    },
+    {
+      "action": "press_key",
+      "key": "PageUp",
+      "modifiers": "Shift"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__top = document.querySelector('.messages-container').scrollTop; window.__top",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').selectionStart \u003c 269",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__selectionEnd = document.querySelector('[data-testid=\"message-input\"]').selectionEnd; window.__selectionEnd",
+      "expect": "269"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T03:23:21.202849661Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 24001,
+    "output_tokens": 2158,
+    "estimated_cost_usd": 0.0506997,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,132 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The container\" is the messages container (\".messages-container\"), \"the button\" the scroll-to-bottom button (\".scroll-to-bottom-button\"), and \"the gap\" the container's scrollHeight - clientHeight - scrollTop. To \"send\" a message, fill the message input ([data-testid=\"message-input\"]) with it and click the send button ([data-testid=\"send-button\"]). Check every assertion with an eval that has \"expect\" (or an assert_* or wait_* step): an eval without \"expect\" asserts nothing. When a step says to record something, do it in one eval without \"expect\" that stores it in the named window variable, then check that variable. Perform the steps in order. Saved-bottom restoration survives clamps but yields to gestures and bare navigation. The test seeds a long conversation with ID {{ID}}; its saved scroll position is localStorage item \"shelley_scroll_{{ID}}\", called KEY below (pass the string \"shelley_scroll_{{ID}}\" where KEY appears). The page provides helpers, each of which also stores its result in a window variable: window.__clampAndSave(KEY) shrinks the list by 600px so the browser clamps scrollTop with the bottom sentinel still in view, saves (a beforeunload event) at once and again two frames later, and stores a JSON string of both saved values {immediate, settled} in window.__afterClamp; window.__bareJump(KEY) sets scrollTop to 0 with a bare scroll event, saves at once, and stores the saved value in window.__beforeConfirmation; window.__wheelUp(KEY) dispatches an upward wheel event, saves at once, stores the saved value in window.__afterWheel and then sets scrollTop to 0; window.__saved(KEY) saves and returns the saved value. \"Wait for the bottom sentinel\" means: wait until document.querySelector(\".messages-bottom-sentinel\") !== null is true (allow 30s).\n1. Navigate to /c/{{ID}} and wait for the container to be visible (allow 30s).\n2. Eval localStorage.setItem(KEY, \"bottom\"), then reload the page. Wait for the button to be hidden (allow 10s) and for the bottom sentinel.\n3. Saving during a startup-style clamp must keep the semantic bottom rather than persist the transient pixel offset: eval await window.__clampAndSave(KEY) without expect, then window.__afterClamp must be exactly {\"immediate\":\"bottom\",\"settled\":\"bottom\"}.\n4. A bare jump is provisional until the sentinel confirms it left the bottom: eval window.__bareJump(KEY) without expect, then window.__beforeConfirmation must be exactly \"bottom\". The button should become visible (allow 5s). Then wait until window.__saved(KEY) !== \"bottom\" is true.\n5. Returning to the bottom and restoring again re-arms the guard, but an explicit upward wheel gesture cancels it immediately: click the button, eval localStorage.setItem(KEY, \"bottom\"), and reload the page. Wait for the button to be hidden (allow 10s) and for the bottom sentinel, then eval a promise that resolves after two animation frames.\n6. Eval window.__wheelUp(KEY) without expect, then window.__afterWheel !== \"bottom\" must be true. The button should become visible (allow 5s).\n7. Record window.__saved(KEY) in window.__final (one eval without expect), then window.__final !== \"bottom\" must be true.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{ID}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".messages-container",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley_scroll_{{ID}}', 'bottom')"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-bottom-sentinel') !== null",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container .messages-list') !== null",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { return await window.__clampAndSave('shelley_scroll_{{ID}}'); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__afterClamp",
+      "expect": "{\"immediate\":\"bottom\",\"settled\":\"bottom\"}"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__bareJump('shelley_scroll_{{ID}}')"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__beforeConfirmation",
+      "expect": "bottom"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__saved('shelley_scroll_{{ID}}') !== 'bottom'",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".scroll-to-bottom-button"
+    },
+    {
+      "action": "eval",
+      "expression": "localStorage.setItem('shelley_scroll_{{ID}}', 'bottom')"
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-bottom-sentinel') !== null",
+      "expect": "true",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.messages-container .messages-list') !== null",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise(r =\u003e requestAnimationFrame(() =\u003e requestAnimationFrame(r)))"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__wheelUp('shelley_scroll_{{ID}}')"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__afterWheel !== 'bottom'",
+      "expect": "true"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".scroll-to-bottom-button",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__final = window.__saved('shelley_scroll_{{ID}}')"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__final !== 'bottom'",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T02:32:42.2364445Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 168857,
+    "output_tokens": 6433,
+    "estimated_cost_usd": 0.19004700000000002,
+    "mode": "generated"
+  }
+}
