@@ -1,0 +1,103 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Command palette from overflow: the overflow button opens the command palette. To \"tap\" an element means a touch step with value \"start\" on it followed by a touch step with value \"end\" (a finger tap on the touch screen, not a click). Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The palette starts closed: there must be exactly 0 \".command-palette-input\" elements. 3. Tap the button whose accessible name is exactly \"More options\". 4. In the overflow menu (\".chat-overflow-popover\"), the button whose accessible name starts with \"Command menu\" should be visible. 5. The keyboard shortcut hint is there but hidden: the overflow menu has exactly 1 \".overflow-menu-shortcut\" whose text contains \"Ctrl+K\", and it must not be visible. 6. Tap that \"Command menu\" button. 7. The overflow menu \".chat-overflow-popover\" should become hidden. 8. The palette's search input \".command-palette-input\" should be visible. 9. Fill it with \"notification\". 10. The first \".command-palette-item\" should be visible. 11. Its \".command-palette-item-title\" must have the computed CSS font-size exactly \"16px\" (eval getComputedStyle(...).fontSize, expecting \"16px\"). 12. Press Escape. 13. There must then be exactly 0 \".command-palette-input\" elements.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-input",
+      "count": 0
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      },
+      "role": "button",
+      "name": "Command menu"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".chat-overflow-popover .overflow-menu-shortcut",
+      "has_text": "Ctrl+K",
+      "count": 1
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover .overflow-menu-shortcut",
+      "has_text": "Ctrl+K"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      },
+      "role": "button",
+      "name": "Command menu"
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "notification"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.command-palette-item .command-palette-item-title')).fontSize",
+      "expect": "16px"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".command-palette-input",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-21T07:38:49.254326666Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 82918,
+    "output_tokens": 2873,
+    "estimated_cost_usd": 0.10804500000000002,
+    "mode": "generated"
+  }
+}
