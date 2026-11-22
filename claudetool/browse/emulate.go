@@ -2,11 +2,14 @@ package browse
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"shelley.exe.dev/llm"
 )
@@ -65,7 +68,7 @@ type emulateInput struct {
 	DeviceScaleFactor float64
 	Mobile            bool
 	Touch             bool
-	Enabled           *bool
+	ColorScheme       string
 	Media             string
 	Timeout           string
 }
@@ -75,12 +78,12 @@ func (b *BrowseTools) emulateHelp() llm.ToolOut {
 	sb.WriteString("Device Emulation — actions on the browser tool.\n")
 	sb.WriteString("=======================================\n\n")
 	sb.WriteString("Actions (pass as the browser tool's \"action\"):\n")
-	sb.WriteString("  emulate_help      - Show this help message\n")
-	sb.WriteString("  emulate_device    - Emulate a preset device (param: device)\n")
-	sb.WriteString("  emulate_custom    - Custom viewport emulation (params: width, height, device_scale_factor, mobile, touch); clears any prior UA override\n")
-	sb.WriteString("  emulate_reset     - Reset to default viewport (1280x720)\n")
-	sb.WriteString("  emulate_dark_mode - Toggle automatic dark mode (param: enabled, default true)\n")
-	sb.WriteString("  emulate_media     - Emulate CSS media type (param: media, e.g. 'print', 'screen')\n")
+	sb.WriteString("  emulate_help         - Show this help message\n")
+	sb.WriteString("  emulate_device       - Emulate a preset device (param: device)\n")
+	sb.WriteString("  emulate_custom       - Custom viewport emulation (params: width, height, device_scale_factor, mobile, touch); clears any prior UA override\n")
+	sb.WriteString("  emulate_reset        - Reset to default viewport (1280x720); color scheme and media type are unchanged\n")
+	sb.WriteString("  emulate_color_scheme - Set prefers-color-scheme (param: color_scheme: light, dark, or system to clear); persists across navigations until changed\n")
+	sb.WriteString("  emulate_media        - Emulate CSS media type (param: media: 'print', 'screen', or empty to clear)\n")
 	sb.WriteString("\nAvailable device presets:\n")
 	names := make([]string, 0, len(devicePresets))
 	for name := range devicePresets {
@@ -190,32 +193,194 @@ func (b *BrowseTools) emulateReset(ctx context.Context, timeout string) llm.Tool
 	return llm.ToolOut{LLMContent: llm.TextContent("Emulation reset to default (1280x720)")}
 }
 
-func (b *BrowseTools) emulateDarkMode(ctx context.Context, input emulateInput) llm.ToolOut {
-	enabled := true
-	if input.Enabled != nil {
-		enabled = *input.Enabled
-	}
+// emulatedMedia is the session's CSS media emulation. Emulation.setEmulatedMedia
+// replaces the media type and every media feature at once, so both live here
+// and are always sent together. GetBrowserContext applies it to every browser
+// it starts, so it survives idle shutdowns and crashes as well as navigation.
+type emulatedMedia struct {
+	Type        string // "", "screen", or "print"
+	ColorScheme string // prefers-color-scheme: "light", "dark", or "" for none
+}
 
-	err := b.browserRun(ctx, input.Timeout, "", chromedp.ActionFunc(func(ctx context.Context) error {
-		return emulation.SetAutoDarkModeOverride().WithEnabled(enabled).Do(ctx)
-	}))
+func (m emulatedMedia) action() chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		var features []*emulation.MediaFeature
+		if m.ColorScheme != "" {
+			features = append(features, &emulation.MediaFeature{Name: "prefers-color-scheme", Value: m.ColorScheme})
+		}
+		return emulation.SetEmulatedMedia().WithMedia(m.Type).WithFeatures(features).Do(ctx)
+	})
+}
+
+func (m emulatedMedia) String() string {
+	var parts []string
+	if m.ColorScheme != "" {
+		parts = append(parts, "prefers-color-scheme: "+m.ColorScheme)
+	}
+	if m.Type != "" {
+		parts = append(parts, "media type: "+m.Type)
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// settleMediaJS resolves once the page has rendered a media emulation
+// change: two animation frames let matchMedia change listeners run, then the
+// CSS transitions they started (a theme fade) finish. It waits at most 2s, and
+// only for the top document, not iframes.
+const settleMediaJS = `Promise.race([
+	new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+		.then(() => Promise.all(document.getAnimations().filter(a => a instanceof CSSTransition).map(a => a.finished.catch(() => {})))),
+	new Promise(r => setTimeout(r, 2000)),
+]).then(() => true)`
+
+// colorSchemeJS is the prefers-color-scheme the page matches.
+const colorSchemeJS = `matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"`
+
+// isolatedEval returns an action that evaluates js in the top frame, awaiting
+// its promise, and stores the result in res. It runs in an isolated world,
+// whose matchMedia, requestAnimationFrame and setTimeout page scripts can't
+// replace. chromedp then takes that world as the frame's script context, which
+// only DOM queries use; page scripts run in the main world (chromedp.Evaluate),
+// but chromedp.Poll would not.
+func isolatedEval(js string, res any) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		tree, err := page.GetFrameTree().Do(ctx)
+		if err != nil {
+			return err
+		}
+		world, err := page.CreateIsolatedWorld(tree.Frame.ID).WithWorldName("shelley-media").Do(ctx)
+		if err != nil {
+			return err
+		}
+		v, exc, err := runtime.Evaluate(js).WithContextID(world).WithAwaitPromise(true).WithReturnByValue(true).Do(ctx)
+		if err != nil {
+			return err
+		}
+		if exc != nil {
+			return exc
+		}
+		return json.Unmarshal(v.Value, res)
+	})
+}
+
+// saveMedia makes m the session's media emulation. Nothing is sent yet: the
+// next browserRun sends it (see syncMedia), and a browser that starts gets it
+// at startup. Callers hold mediaMu, which serializes changes.
+func (b *BrowseTools) saveMedia(m emulatedMedia) {
+	b.mux.Lock()
+	b.media = m
+	b.mediaGen++
+	b.mux.Unlock()
+}
+
+// syncMedia returns an action that sends the session's media emulation to the
+// page unless Chrome has confirmed it. browserRun runs it first, so a change
+// whose call failed, which Chrome may or may not have, is in place before the
+// next action. One send runs at a time, so the last one Chrome gets is the
+// newest. A page frozen before Chrome confirms a change blocks every action,
+// even a navigate to another site, until the page recovers or the browser
+// restarts.
+func (b *BrowseTools) syncMedia() chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		b.mux.Lock()
+		synced := b.mediaSent == b.mediaGen
+		b.mux.Unlock()
+		if synced {
+			return nil
+		}
+		select {
+		case b.mediaSync <- struct{}{}:
+			defer func() { <-b.mediaSync }()
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		b.mux.Lock()
+		m, gen := b.media, b.mediaGen
+		synced = b.mediaSent == gen
+		b.mux.Unlock()
+		if synced {
+			return nil
+		}
+		if err := m.action().Do(ctx); err != nil {
+			return fmt.Errorf("sending media emulation (%s): %w", m, err)
+		}
+		b.mux.Lock()
+		b.mediaSent = gen
+		b.mux.Unlock()
+		return nil
+	})
+}
+
+// settleMedia returns an action that waits for the page to render the media
+// emulation Chrome has, unless it already has. Run it after syncMedia, before
+// looking at the page.
+func (b *BrowseTools) settleMedia() chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		b.mux.Lock()
+		m, sent, shown := b.media, b.mediaSent, b.mediaShown
+		b.mux.Unlock()
+		if shown >= sent {
+			return nil
+		}
+		var settled bool
+		if err := isolatedEval(settleMediaJS, &settled).Do(ctx); err != nil {
+			return fmt.Errorf("waiting for the page to render media emulation (%s): %w", m, err)
+		}
+		b.mux.Lock()
+		b.mediaShown = max(b.mediaShown, sent)
+		b.mux.Unlock()
+		return nil
+	})
+}
+
+// parseColorScheme maps a color_scheme input to the prefers-color-scheme value
+// to emulate; "system" is "", no override.
+func parseColorScheme(s string) (string, error) {
+	switch s {
+	case "light", "dark":
+		return s, nil
+	case "system":
+		return "", nil
+	}
+	return "", fmt.Errorf(`color_scheme must be "light", "dark", or "system", got %q`, s)
+}
+
+func (b *BrowseTools) emulateColorScheme(ctx context.Context, input emulateInput) llm.ToolOut {
+	scheme, err := parseColorScheme(input.ColorScheme)
 	if err != nil {
 		return llm.ErrorToolOut(err)
 	}
-
-	state := "enabled"
-	if !enabled {
-		state = "disabled"
+	b.mediaMu.Lock()
+	defer b.mediaMu.Unlock()
+	m := b.media
+	m.ColorScheme = scheme
+	b.saveMedia(m)
+	var got string
+	if err := b.browserRun(ctx, input.Timeout, "", b.settleMedia(), isolatedEval(colorSchemeJS, &got)); err != nil {
+		return llm.ErrorfToolOut("color_scheme is now %s, but the page did not show it in time: %w", input.ColorScheme, err)
 	}
-	return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf("Automatic dark mode %s", state))}
+	if scheme == "" {
+		return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf("Color scheme override cleared; pages see the browser's prefers-color-scheme: %s.", got))}
+	}
+	return llm.ToolOut{LLMContent: llm.TextContent(fmt.Sprintf("Pages see prefers-color-scheme: %s, across navigations, until changed.", scheme))}
 }
 
 func (b *BrowseTools) emulateMedia(ctx context.Context, input emulateInput) llm.ToolOut {
-	err := b.browserRun(ctx, input.Timeout, "", chromedp.ActionFunc(func(ctx context.Context) error {
-		return emulation.SetEmulatedMedia().WithMedia(input.Media).Do(ctx)
-	}))
-	if err != nil {
-		return llm.ErrorToolOut(err)
+	switch input.Media {
+	case "", "screen", "print":
+	default:
+		return llm.ErrorfToolOut(`media must be "screen", "print", or empty to clear, got %q; to set prefers-color-scheme, use emulate_color_scheme`, input.Media)
+	}
+	b.mediaMu.Lock()
+	defer b.mediaMu.Unlock()
+	m := b.media
+	m.Type = input.Media
+	b.saveMedia(m)
+	if err := b.browserRun(ctx, input.Timeout, ""); err != nil {
+		return llm.ErrorfToolOut("media type is now %q, but Chrome did not confirm it in time: %w", input.Media, err)
 	}
 
 	if input.Media == "" {

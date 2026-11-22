@@ -226,7 +226,7 @@ func browserInputErrors() []browserInputError {
 		{"number-action", map[string]any{"action": 42}, actionType + retry, `invalid browser call: "action" must be a string, got 42.`},
 		{"null-action", map[string]any{"action": nil}, actionType + retry, `invalid browser call: "action" must be a string, got null.`},
 	}
-	for _, action := range []string{"click", "emulate_bogus", "network_bogus", "accessibility_bogus", "profile_bogus"} {
+	for _, action := range []string{"click", "emulate_dark_mode", "emulate_bogus", "network_bogus", "accessibility_bogus", "profile_bogus"} {
 		cases = append(cases, browserInputError{
 			action,
 			map[string]any{"action": action},

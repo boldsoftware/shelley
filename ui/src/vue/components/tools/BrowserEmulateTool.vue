@@ -1,5 +1,5 @@
-<!-- browser emulate_* actions: the device, size and media in the header and
-     the details. -->
+<!-- browser emulate_* actions: the device, size, media and color scheme in the
+     header and the details. -->
 <template>
   <ToolCard
     emoji="📱"
@@ -18,6 +18,7 @@
       :text="`${input.width} × ${input.height}`"
     />
     <ToolSection v-if="input.media" label="Media" :text="input.media" />
+    <ToolSection v-if="input.color_scheme" label="Color scheme" :text="input.color_scheme" />
     <ToolSection
       v-if="complete && output"
       label="Output"
@@ -44,6 +45,7 @@ const input = computed(() =>
     height: number;
     enabled: boolean;
     media: string;
+    color_scheme: string;
   }>(props.toolInput),
 );
 const output = computed(() => firstResultText(props.toolResult));
@@ -55,6 +57,7 @@ const summary = computed(() => {
   if (i.device) summaryParts.push(i.device);
   if (i.width && i.height) summaryParts.push(`${i.width}×${i.height}`);
   if (i.media) summaryParts.push(i.media);
+  if (i.color_scheme) summaryParts.push(i.color_scheme);
   if (i.enabled !== undefined) summaryParts.push(i.enabled ? "on" : "off");
   return summaryParts.filter(Boolean).join(" ") || "emulate";
 });

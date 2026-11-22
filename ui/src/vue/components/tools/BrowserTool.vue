@@ -14,6 +14,12 @@
     :warn-missing-ui="false"
     v-bind="props"
   />
+  <GenericTool
+    v-else-if="rejectedAsUnknown"
+    :tool-name="`Invalid browser call: unsupported action ${JSON.stringify(action)}${retryNote}`"
+    :warn-missing-ui="false"
+    v-bind="props"
+  />
   <BrowserNavigateTool v-else-if="action === 'navigate'" v-bind="props" />
   <BrowserEvalTool v-else-if="action === 'eval'" v-bind="props" />
   <BrowserResizeTool v-else-if="action === 'resize'" v-bind="props" />
@@ -55,12 +61,6 @@
     v-bind="props"
     :tool-input="withSubAction('profile')"
   />
-  <GenericTool
-    v-else-if="rejectedAsUnknown"
-    :tool-name="`Invalid browser call: unsupported action ${JSON.stringify(action)}${retryNote}`"
-    :warn-missing-ui="false"
-    v-bind="props"
-  />
   <GenericTool v-else :tool-name="`browser (${action})`" v-bind="props" />
 </template>
 
@@ -84,7 +84,9 @@ const props = defineProps<ToolProps>();
 
 const action = computed(() => inputString(props.toolInput, "action"));
 const familyActions: Record<string, readonly string[]> = {
-  emulate: ["help", "device", "custom", "reset", "dark_mode", "media"],
+  // dark_mode is gone from the backend; kept so old conversations still render
+  // (rejectedAsUnknown catches new calls to it first).
+  emulate: ["help", "device", "custom", "reset", "color_scheme", "dark_mode", "media"],
   network: ["help", "enable", "disable", "get_log", "clear", "cookies", "clear_cache"],
   accessibility: ["help", "tree", "query", "node"],
   profile: ["help", "metrics", "cpu_start", "cpu_stop", "trace_start", "trace_stop", "coverage_start", "coverage_stop"],

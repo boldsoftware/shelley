@@ -1,6 +1,7 @@
 <!-- Vue port of components/ScreenshotTool.tsx. Default expanded.
      Preserves: .screenshot-tool, .screenshot-tool-header, .screenshot-tool-summary,
-     .screenshot-tool-emoji 📷, .screenshot-tool-filename, .screenshot-tool-toggle,
+     .screenshot-tool-emoji 📷, .screenshot-tool-filename, .screenshot-tool-scheme,
+     .screenshot-tool-toggle,
      .screenshot-tool-details, .screenshot-tool-section, .screenshot-tool-label,
      .screenshot-tool-time, .screenshot-tool-image-container, .tool-image-responsive,
      .screenshot-tool-error-message,
@@ -19,6 +20,12 @@
           :text="filename"
         />
         <span v-else class="screenshot-tool-filename" :title="filename">{{ filename }}</span>
+        <span
+          v-if="colorScheme"
+          class="screenshot-tool-scheme"
+          :title="`prefers-color-scheme: ${colorScheme}`"
+          >{{ colorScheme }}</span
+        >
       </div>
       <button
         class="screenshot-tool-toggle"
@@ -108,6 +115,9 @@ const filename = computed(
     getStringField(props.toolInput, "selector") ||
     "screenshot",
 );
+
+// The prefers-color-scheme the page was captured with, if one was set.
+const colorScheme = computed(() => getStringField(props.display, "color_scheme"));
 
 // Construct image URL from the tool result's image content.
 // The server replaces inline base64 data with a URL to /api/message/{id}/image/...

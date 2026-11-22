@@ -1279,6 +1279,15 @@ func (s *Service) makeToolSmorgasbordResponse(inputTokens uint64) *llm.Response 
 		ToolInput: json.RawMessage(emulateInput),
 	})
 
+	// browser: emulate_color_scheme action
+	colorSchemeInput, _ := json.Marshal(map[string]string{"action": "emulate_color_scheme", "color_scheme": "dark"})
+	content = append(content, llm.Content{
+		ID:        fmt.Sprintf("tool_color_scheme_%d", (baseNano+23)%1000),
+		Type:      llm.ContentTypeToolUse,
+		ToolName:  "browser",
+		ToolInput: json.RawMessage(colorSchemeInput),
+	})
+
 	// browser: network_enable action (folded-in network family)
 	networkInput, _ := json.Marshal(map[string]string{"action": "network_enable"})
 	content = append(content, llm.Content{

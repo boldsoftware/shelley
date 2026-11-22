@@ -91,6 +91,15 @@ type BrowseTools struct {
 	traceMutex      sync.Mutex
 	// Screencast state
 	screencast screencastState
+	// media is the session's CSS media emulation, and mediaGen counts changes
+	// to it; mediaSent is the latest change Chrome has confirmed, mediaShown
+	// the latest the page has finished rendering. All guarded by mux. Changes,
+	// and screenshots so their label matches, also hold mediaMu; sends hold the
+	// mediaSync semaphore. See emulatedMedia.
+	media                           emulatedMedia
+	mediaGen, mediaSent, mediaShown uint64
+	mediaMu                         sync.Mutex
+	mediaSync                       chan struct{}
 	// browserCmd is the headless-shell *exec.Cmd, captured via
 	// chromedp.ModifyCmdFunc so we can kill its process group on shutdown.
 	browserCmd *exec.Cmd
@@ -114,6 +123,7 @@ func NewBrowseTools(ctx context.Context, idleTimeout time.Duration) *BrowseTools
 		maxConsoleLogs: 100,
 		idleTimeout:    idleTimeout,
 		downloads:      make(map[string]*DownloadInfo),
+		mediaSync:      make(chan struct{}, 1),
 	}
 	bt.downloadCond = sync.NewCond(&bt.downloadsMutex)
 	return bt
@@ -210,6 +220,14 @@ func (b *BrowseTools) GetBrowserContext() (context.Context, error) {
 		killCapturedGroup()
 		return nil, fmt.Errorf("failed to configure download behavior: %w", err)
 	}
+
+	if err := chromedp.Run(browserCtx, b.media.action()); err != nil {
+		browserCancel()
+		allocCancel()
+		killCapturedGroup()
+		return nil, fmt.Errorf("failed to apply media emulation: %w", err)
+	}
+	b.mediaSent, b.mediaShown = b.mediaGen, b.mediaGen
 
 	b.allocCtx = allocCtx
 	b.allocCancel = allocCancel
@@ -482,7 +500,8 @@ type screenshotInput struct {
 
 func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) llm.ToolOut {
 	var buf []byte
-	var actions []chromedp.Action
+	// Let a theme change finish rendering first.
+	actions := []chromedp.Action{b.settleMedia()}
 
 	if input.Selector != "" {
 		// Take screenshot of specific element
@@ -496,7 +515,14 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 		actions = append(actions, chromedp.CaptureScreenshot(&buf))
 	}
 
-	if err := b.browserRun(ctx, input.Timeout, "", actions...); err != nil {
+	// Hold off media changes so the label below matches the capture.
+	b.mediaMu.Lock()
+	err := b.browserRun(ctx, input.Timeout, "", actions...)
+	b.mux.Lock()
+	colorScheme := b.media.ColorScheme
+	b.mux.Unlock()
+	b.mediaMu.Unlock()
+	if err != nil {
 		return llm.ErrorToolOut(err)
 	}
 
@@ -516,6 +542,12 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 		"path":     screenshotPath,
 		"selector": input.Selector,
 	}
+	description := "Screenshot taken"
+	if colorScheme != "" {
+		display["color_scheme"] = colorScheme
+		description += " with prefers-color-scheme: " + colorScheme
+	}
+	description += fmt.Sprintf(" (saved as %s)", screenshotPath)
 
 	// Dimensions of the file at "path", which may differ from the (possibly
 	// downscaled) copy sent to the model. The UI reports image comments in
@@ -535,12 +567,7 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 	// a text note with the path. A nil service (tests, ad-hoc callers) is
 	// treated as image-capable.
 	if svc := llm.ServiceFromContext(ctx); svc != nil && !svc.SupportsImages() {
-		return llm.ToolOut{LLMContent: []llm.Content{
-			{
-				Type: llm.ContentTypeText,
-				Text: fmt.Sprintf("Screenshot taken (saved as %s)", screenshotPath),
-			},
-		}, Display: display}
+		return llm.ToolOut{LLMContent: llm.TextContent(description), Display: display}
 	}
 
 	// Fit the screenshot inside the model's per-image limits. The full-size
@@ -556,7 +583,6 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 
 	base64Data := base64.StdEncoding.EncodeToString(prepared.Data)
 
-	description := fmt.Sprintf("Screenshot taken (saved as %s)", screenshotPath)
 	if prepared.Resized {
 		description += " [resized to fit model limits]"
 	}
@@ -590,7 +616,7 @@ func (b *BrowseTools) GetTools() []*llm.Tool {
 var combinedBrowserActions = []string{
 	"navigate", "eval", "resize", "screenshot", "pdf", "console_logs", "clear_console_logs",
 	"screencast_start", "screencast_stop", "screencast_status",
-	"emulate_help", "emulate_device", "emulate_custom", "emulate_reset", "emulate_dark_mode", "emulate_media",
+	"emulate_help", "emulate_device", "emulate_custom", "emulate_reset", "emulate_color_scheme", "emulate_media",
 	"network_help", "network_enable", "network_disable", "network_get_log", "network_clear", "network_cookies", "network_clear_cache",
 	"accessibility_help", "accessibility_tree", "accessibility_query", "accessibility_node",
 	"profile_help", "profile_metrics", "profile_cpu_start", "profile_cpu_stop", "profile_trace_start", "profile_trace_stop", "profile_coverage_start", "profile_coverage_stop",
@@ -620,7 +646,10 @@ are in the schema.
 Device/display emulation, network monitoring, accessibility, and profiling:
 - emulate_device(device)
 - emulate_custom(width, height, device_scale_factor?, mobile?, touch?)
-- emulate_dark_mode(enabled?)
+- emulate_color_scheme(color_scheme): set prefers-color-scheme to light or dark (the OS
+  dark mode setting) for this and later pages until changed; system clears it (headless
+  Chromium reports light). Pages that choose their theme only on load need a navigate.
+  To check both themes, screenshot after each setting.
 - emulate_media(media?)
 - network_get_log(limit?, filter?)
 - accessibility_tree(depth?)
@@ -710,13 +739,14 @@ examples as needed, use emulate_help, network_help, accessibility_help, or profi
 				"type": "boolean",
 				"description": "Enable touch emulation (emulate_custom action, default false)"
 			},
-			"enabled": {
-				"type": "boolean",
-				"description": "Enable or disable (emulate_dark_mode action, default true)"
+			"color_scheme": {
+				"type": "string",
+				"enum": ["light", "dark", "system"],
+				"description": "prefers-color-scheme to emulate; system clears the override (emulate_color_scheme action)"
 			},
 			"media": {
 				"type": "string",
-				"description": "CSS media type to emulate, e.g. 'print' or 'screen' (emulate_media action)"
+				"description": "CSS media type to emulate: 'print', 'screen', or empty to clear (emulate_media action)"
 			},
 			"filter": {
 				"type": "string",
@@ -813,7 +843,7 @@ type combinedInput struct {
 	DeviceScaleFactor float64 `json:"device_scale_factor,omitempty"`
 	Mobile            bool    `json:"mobile,omitempty"`
 	Touch             bool    `json:"touch,omitempty"`
-	Enabled           *bool   `json:"enabled,omitempty"`
+	ColorScheme       string  `json:"color_scheme,omitempty"`
 	Media             string  `json:"media,omitempty"`
 
 	// Network fields (network_* actions).
@@ -892,8 +922,8 @@ func (b *BrowseTools) runCombined(ctx context.Context, input combinedInput) llm.
 		return b.emulateCustom(ctx, emulateInput{Width: int64(input.Width), Height: int64(input.Height), DeviceScaleFactor: input.DeviceScaleFactor, Mobile: input.Mobile, Touch: input.Touch, Timeout: input.Timeout})
 	case "emulate_reset":
 		return b.emulateReset(ctx, input.Timeout)
-	case "emulate_dark_mode":
-		return b.emulateDarkMode(ctx, emulateInput{Enabled: input.Enabled, Timeout: input.Timeout})
+	case "emulate_color_scheme":
+		return b.emulateColorScheme(ctx, emulateInput{ColorScheme: input.ColorScheme, Timeout: input.Timeout})
 	case "emulate_media":
 		return b.emulateMedia(ctx, emulateInput{Media: input.Media, Timeout: input.Timeout})
 
@@ -1072,7 +1102,8 @@ func browserActionContext(toolCtx, browserCtx context.Context, timeout string) (
 }
 
 // browserRun runs actions in the shared browser, starting it if needed. The run
-// is bounded by the tool call's context and by timeout (see parseTimeout).
+// is bounded by the tool call's context and by timeout (see parseTimeout). It
+// first sends media emulation Chrome hasn't confirmed (see syncMedia).
 // Browser startup errors are returned as is; errors from the actions are
 // prefixed with "failMsg: " unless failMsg is empty.
 func (b *BrowseTools) browserRun(ctx context.Context, timeout, failMsg string, actions ...chromedp.Action) error {
@@ -1082,7 +1113,7 @@ func (b *BrowseTools) browserRun(ctx context.Context, timeout, failMsg string, a
 	}
 	actionCtx, cancel := browserActionContext(ctx, browserCtx, timeout)
 	defer cancel()
-	if err := chromedp.Run(actionCtx, actions...); err != nil {
+	if err := chromedp.Run(actionCtx, append([]chromedp.Action{b.syncMedia()}, actions...)...); err != nil {
 		if failMsg != "" {
 			return fmt.Errorf("%s: %w", failMsg, err)
 		}
