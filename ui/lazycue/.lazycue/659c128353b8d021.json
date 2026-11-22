@@ -1,6 +1,6 @@
 {
   "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
-  "description": "Queued and transcribing conversation messages share the source header. The conversation /c/{{SLUG}} was started with \"echo: queue provenance\". The test adds three queued messages, all created one second after the page's fake clock starts, to what the server says of it, and cuts its stream off: \"Queued progress\" from the subagent \"backend\", and two voice transcriptions (one working, one failed) from the parent conversation \"{{SLUG}}\". The page runs on a fake clock that steps drive with window.__clock; it is paused at the messages' creation time when the page loads. \"The ghost\" is the element with data-testid \"queued-ghost\", \"the tasks\" the elements with data-testid \"transcription-task\". 1. Navigate to /c/{{SLUG}}. 2. There must be exactly 2 tasks (allow 30s). 3. There must be exactly 0 ghosts. 4. Eval window.__clock.runFor(1999) on its own (it returns a promise the step awaits). 5. There must still be exactly 0 ghosts. 6. Eval window.__clock.runFor(1) on its own. 7. The ghost's element with data-testid \"message-author-conversation\" should read exactly \"Message from backend\". 8. Eval document.querySelector('[data-testid=\"queued-ghost\"]').classList.contains('message-tool'): it must return true. 9. Eval getComputedStyle(document.querySelector('[data-testid=\"queued-ghost\"]')).backgroundColor: it must return exactly \"rgb(243, 244, 246)\". 10. Eval getComputedStyle(document.querySelector('[data-testid=\"queued-ghost\"] [data-testid=\"message-content\"]')).borderTopStyle: it must return exactly \"dashed\". 11. The ghost should contain \"Queued progress\". 12. For each task, i = 0 and i = 1 of document.querySelectorAll('[data-testid=\"transcription-task\"]'): eval getComputedStyle(\u003ctask i\u003e).backgroundColor, which must return exactly \"rgb(243, 244, 246)\", and eval \u003ctask i\u003e.querySelector('[data-testid=\"message-author-conversation\"]').textContent.replace(/\\s+/g, ' ').trim(), which must return exactly \"Message from {{SLUG}}\".",
+  "description": "Queued and transcribing conversation messages share the source header. The conversation /c/{{SLUG}} was started with \"echo: queue provenance\". The test adds three queued messages, all created one second after the page's fake clock starts, to what the server says of it, and cuts its stream off: \"Queued progress\" from the subagent \"backend\", and two voice transcriptions (one working, one failed) from the parent conversation \"{{SLUG}}\". The page runs on a fake clock that steps drive with window.__clock; it is paused at the messages' creation time when the page loads. \"The ghost\" is the element with data-testid \"queued-ghost\", \"the tasks\" the elements with data-testid \"transcription-task\". 1. Navigate to /c/{{SLUG}}. 2. There must be exactly 2 tasks (allow 30s). 3. There must be exactly 0 ghosts. 4. Eval window.__clock.runFor(1999) on its own (it returns a promise the step awaits). 5. There must still be exactly 0 ghosts. 6. Eval window.__clock.runFor(1) on its own. 7. The ghost's element with data-testid \"message-author-conversation\" should read exactly \"Message from backend\". 8. Eval document.querySelector('[data-testid=\"queued-ghost\"]').classList.contains('message-tool'): it must return true. 9. Eval getComputedStyle(document.querySelector('[data-testid=\"queued-ghost\"]')).backgroundColor: it must return exactly \"rgb(243, 244, 246)\". 10. The ghost's [data-testid=\"queued-badge\"] should be visible. 11. The ghost should contain \"Queued progress\". 12. For each task, i = 0 and i = 1 of document.querySelectorAll('[data-testid=\"transcription-task\"]'): eval getComputedStyle(\u003ctask i\u003e).backgroundColor, which must return exactly \"rgb(243, 244, 246)\", and eval \u003ctask i\u003e.querySelector('[data-testid=\"message-author-conversation\"]').textContent.replace(/\\s+/g, ' ').trim(), which must return exactly \"Message from {{SLUG}}\".",
   "version": 1,
   "steps": [
     {
@@ -33,7 +33,10 @@
     },
     {
       "action": "assert_text",
-      "selector": "[data-testid='queued-ghost'] [data-testid='message-author-conversation']",
+      "within": {
+        "selector": "[data-testid='queued-ghost']"
+      },
+      "selector": "[data-testid='message-author-conversation']",
       "text": "Message from backend"
     },
     {
@@ -47,9 +50,8 @@
       "expect": "rgb(243, 244, 246)"
     },
     {
-      "action": "eval",
-      "expression": "getComputedStyle(document.querySelector('[data-testid=\"queued-ghost\"] [data-testid=\"message-content\"]')).borderTopStyle",
-      "expect": "dashed"
+      "action": "assert_visible",
+      "selector": "[data-testid='queued-ghost'] [data-testid='queued-badge']"
     },
     {
       "action": "assert_text_contains",
@@ -78,12 +80,12 @@
     }
   ],
   "metadata": {
-    "created_at": "2026-11-21T06:46:48.687714246Z",
+    "created_at": "2026-11-22T23:03:31.32696482Z",
     "hostname": "phil-dev",
     "model": "claude-sonnet-4-6",
-    "input_tokens": 38601,
-    "output_tokens": 1936,
-    "estimated_cost_usd": 0.05127975,
+    "input_tokens": 42655,
+    "output_tokens": 1872,
+    "estimated_cost_usd": 0.0513324,
     "mode": "generated"
   }
 }

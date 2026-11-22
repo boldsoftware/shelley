@@ -607,15 +607,16 @@ func TestNewPageScrollToBottomButton(t *testing.T) {
 // agent is working (kept busy with a long "delay:" command), the composer shows
 // a split send button whose chevron (data-testid "send-options-button") opens a
 // menu with a queue option (data-testid "queue-option"). A queued message shows
-// a badge (data-testid "queued-badge") with a cancel button (data-testid
-// "cancel-queued"). The agent-busy indicator is data-testid "agent-thinking". ---
+// a clock badge (data-testid "queued-badge") that opens a menu with a cancel
+// item (data-testid "cancel-queued"). The agent-busy indicator is data-testid
+// "agent-thinking". ---
 
 func TestNewPageQueueSplitButtonAppears(t *testing.T) {
 	lazyTest(t, useful(0), `Navigate to /new. Type "delay: 15" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"). The agent becomes busy: the thinking indicator (data-testid "agent-thinking") should become visible, and the split-button chevron (data-testid "send-options-button") should also be visible.`)
 }
 
 func TestNewPageQueueMessage(t *testing.T) {
-	lazyTest(t, useful(0), `Navigate to /new. Type "delay: 15" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"); wait for the thinking indicator (data-testid "agent-thinking") to become visible. Then type "echo: queued hello" into the message input, click the split-button chevron (data-testid "send-options-button") to open the menu, and click the queue option (data-testid "queue-option"). A queued badge (data-testid "queued-badge") should become visible, and within it a cancel button (data-testid "cancel-queued") should be visible.`)
+	lazyTest(t, useful(0), `Navigate to /new. Type "delay: 15" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"); wait for the thinking indicator (data-testid "agent-thinking") to become visible. Then type "echo: queued hello" into the message input, click the split-button chevron (data-testid "send-options-button") to open the menu, and click the queue option (data-testid "queue-option"). A queued badge (data-testid "queued-badge") should become visible. Click it: its menu's cancel item (data-testid "cancel-queued") should become visible.`)
 }
 
 func TestNewPageQueueImmediateSendStillWorks(t *testing.T) {
@@ -700,7 +701,7 @@ func TestNewPageQueueCancel(t *testing.T) {
 	// After clicking cancel the server deletes the queued message, but the live
 	// SSE update is metadata-only and doesn't refresh the message list, so the
 	// badge only disappears after a page reload (matching the Playwright spec).
-	lazyTest(t, useful(0), `Navigate to /new. Type "delay: 60" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"); wait for the thinking indicator (data-testid "agent-thinking") to become visible. Then type "echo: to be cancelled" into the message input, click the split-button chevron (data-testid "send-options-button"), and click the queue option (data-testid "queue-option"). Wait for the queued badge (data-testid "queued-badge") to become visible, then click the cancel button (data-testid "cancel-queued"). The cancel only takes effect on the server and is not reflected live, so reload the page (use an eval step that calls location.reload()) and wait for the message input (data-testid "message-input") to be visible again. After the reload, the queued badge (data-testid "queued-badge") should match 0 elements and the text "to be cancelled" should no longer be present on the page.`)
+	lazyTest(t, useful(0), `Navigate to /new. Type "delay: 60" into the message input (data-testid "message-input") and click the send button (data-testid "send-button"); wait for the thinking indicator (data-testid "agent-thinking") to become visible. Then type "echo: to be cancelled" into the message input, click the split-button chevron (data-testid "send-options-button"), and click the queue option (data-testid "queue-option"). Wait for the queued badge (data-testid "queued-badge") to become visible, click it to open its menu, then click the cancel item (data-testid "cancel-queued") once it is visible. The cancel only takes effect on the server and is not reflected live, so reload the page (use an eval step that calls location.reload()) and wait for the message input (data-testid "message-input") to be visible again. After the reload, the queued badge (data-testid "queued-badge") should match 0 elements and the text "to be cancelled" should no longer be present on the page.`)
 }
 
 func TestNewPageQueueDrains(t *testing.T) {

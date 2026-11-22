@@ -590,11 +590,12 @@ func (s *shelley) firstRequest(call, suffix string) {
 func TestE2ERecordingQueueStatesInOrderAfterReload(t *testing.T) {
 	e2e(t, useful(0), `Durable transcription queue states render in exact order, also after a reload. The test seeded a conversation at /c/{{SLUG}} whose server data reports four queued messages, in this order: a plain message "echo: first queued message"; a transcription still working on /tmp/shelley-uploads/working.webm with the context "Keep this image [/tmp/shelley-uploads/context.png]"; a ready transcription of /tmp/shelley-uploads/ready.webm with the text "Finished spoken words."; and a failed transcription of /tmp/shelley-uploads/failed.webm with the error "transcription unavailable". The live event stream is cut off. Requests to send a queued message now (POST /api/conversation/<id>/send-queued?queued_id=<id>) are accepted without effect; call "sendQueued" reports the first one as "<method> /send-queued?<query>" ("none" before there is one). "The items" are the elements matching '[data-testid="queued-ghost"], [data-testid="transcription-task"]', in document order. Perform the steps in order.
 1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input ([data-testid="message-input"]) to be visible.
-2. There should be exactly 4 items. Item 1 should contain "first queued message"; item 2 "Transcribing…", "working.webm" and "Keep this image"; item 3 "Finished spoken words." and "Queued"; item 4 "Recording failed" and "transcription unavailable".
-3. There should be exactly 2 [data-testid="queued-ghost"], exactly 2 [data-testid="transcription-task"] and exactly 1 [data-testid="send-queued-now"].
-4. Click [data-testid="send-queued-now"]. Call "sendQueued" should return "POST /send-queued?queued_id=q-first".
-5. Reload: navigate to /c/{{SLUG}} again. The URL should have exactly the path "/c/{{SLUG}}" (an exact "value", not "text").
-6. There should again be exactly 4 items: item 1 containing "first queued message", item 2 "working.webm", item 3 "Finished spoken words." and item 4 "failed.webm".`, func(s *shelley) {
+2. There should be exactly 4 items. Item 1 should contain "first queued message"; item 2 "Transcribing…", "working.webm" and "Keep this image"; item 3 "Finished spoken words." and a [data-testid="queued-badge"]; item 4 "Recording failed" and "transcription unavailable".
+3. There should be exactly 2 [data-testid="queued-ghost"] and exactly 2 [data-testid="transcription-task"].
+4. Click the [data-testid="queued-badge"] in item 3. [data-testid="cancel-queued"] should become visible (up to 5s), and there should be exactly 0 [data-testid="send-queued-now"]. Press Escape: [data-testid="cancel-queued"] should become hidden (up to 5s), and document.activeElement must be item 3's badge (eval document.activeElement === document.querySelectorAll('[data-testid="queued-ghost"], [data-testid="transcription-task"]')[2].querySelector('[data-testid="queued-badge"]'), which must return true).
+5. Click the [data-testid="queued-badge"] in item 3 again, and then the [data-testid="queued-badge"] in item 1. [data-testid="send-queued-now"] should become visible (up to 5s), and the count of [data-testid="cancel-queued"] should become exactly 1 (up to 5s): opening one menu closes the other. Click [data-testid="send-queued-now"]. Call "sendQueued" should return "POST /send-queued?queued_id=q-first".
+6. Reload: navigate to /c/{{SLUG}} again. The URL should have exactly the path "/c/{{SLUG}}" (an exact "value", not "text").
+7. There should again be exactly 4 items: item 1 containing "first queued message", item 2 "working.webm", item 3 "Finished spoken words." and item 4 "failed.webm".`, func(s *shelley) {
 		recording(s)
 		c := s.queuedConversation([]map[string]any{
 			queuedMessage("q-first", "echo: first queued message", nil),
@@ -1665,7 +1666,7 @@ func TestE2ERecordingLegacyCompactionRowDoesNotBlockQueue(t *testing.T) {
 	e2e(t, useful(0), `Legacy compaction status rows render without blocking queued messages. The test seeded a conversation at /c/{{SLUG}} whose server data reports one queued message, "queued during compaction", and also an in-progress compaction status row that the old generation-based compaction left behind. The live event stream is cut off.
 1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input ([data-testid="message-input"]) to be visible.
 2. [data-testid="distill-in-progress"] should contain "Compacting", and [data-testid="queued-badge"] should be visible.
-3. Exactly one [data-testid="send-queued-now"] should exist, and [data-testid="cancel-queued"] should be visible.`, func(s *shelley) {
+3. Click the [data-testid="queued-badge"]: [data-testid="send-queued-now"] and [data-testid="cancel-queued"] should become visible (up to 5s).`, func(s *shelley) {
 		recording(s)
 		s.v("SLUG", s.queuedConversation([]map[string]any{queuedMessage("q-compacting", "queued during compaction", nil)}, true).Slug)
 	})

@@ -393,21 +393,11 @@
               "
               :send-now-pending="sendingQueuedNow === qm.id"
               :on-cancel="conversationId ? cancelQueuedMessage : undefined"
+              :on-cancel-all="
+                conversationId && visibleQueuedGhosts.length > 1 ? cancelQueuedMessages : undefined
+              "
             />
           </template>
-          <div
-            v-if="visibleQueuedGhosts.length > 1 && conversationId"
-            class="queued-cancel-all-row"
-          >
-            <button
-              class="queued-message-badge-cancel"
-              data-testid="cancel-all-queued"
-              v-tooltip.top="'Cancel all queued messages'"
-              @click="cancelQueuedMessages"
-            >
-              Cancel all queued
-            </button>
-          </div>
           <LiveExchange
             v-if="voicePhase !== 'idle'"
             v-show="liveExchangeTurns.length > 0"

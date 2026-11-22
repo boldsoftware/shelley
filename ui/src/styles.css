@@ -4008,98 +4008,89 @@ diffs-container {
   color: var(--text-secondary);
 }
 
-/* Queued message badge (shown on queued user messages) */
-.message-queued {
-  opacity: 0.7;
-}
-
-/* Ghost queued messages render with a dashed border to read as "pending". */
-.message-queued:not(.message-tool-card) .message-content,
-.message-queued.message-tool-card .bash-tool {
-  border: 1px dashed rgba(249, 115, 22, 0.5);
-}
-
-.message-queued.message-tool-card .queued-message-badge {
-  margin: 0 1rem 0.75rem;
-}
-
-.queued-cancel-all-row {
-  display: flex;
+/* Queued messages read as ordinary ones; a quiet clock, beside a user's
+   message and under a card, opens their actions. */
+.message-queued.message-user {
+  flex-direction: row;
+  align-items: center;
   justify-content: flex-end;
-  margin: 4px 0 8px;
 }
 
-.queued-message-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  padding: 4px 10px;
-  font-size: var(--font-size-12);
-  color: var(--orange-600, #ea580c);
-  background: rgba(249, 115, 22, 0.08);
-  border-radius: 6px;
-  width: fit-content;
+.message-queued.message-user > .message-content {
+  margin-left: 0;
 }
 
-.dark .queued-message-badge {
-  color: var(--orange-400, #fb923c);
-  background: rgba(249, 115, 22, 0.12);
+/* The clock's menu opens above it; the component sets its left. */
+.message-queued.message-user > .queued-clock-anchor {
+  position: relative;
+  order: -1;
+  margin-right: -0.625rem;
 }
 
-.queued-message-badge-label {
-  display: flex;
-  align-items: center;
-  font-weight: 600;
-  letter-spacing: 0.03em;
+.message-queued.message-tool > .queued-clock-anchor {
+  position: relative;
+  align-self: flex-start;
+  margin: -0.125rem 0 0.25rem 0.5rem;
 }
 
-.queued-message-badge-cancel,
-.queued-message-badge-action {
-  display: flex;
+.queued-menu {
+  right: auto;
+}
+
+.queued-menu-below {
+  top: calc(100% + 4px);
+  bottom: auto;
+}
+
+/* Positioned, it stays on top of the message's padding it reaches into. */
+.queued-clock {
+  position: relative;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 10px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
   background: transparent;
-  color: inherit;
+  color: var(--text-secondary);
+  opacity: 0.8;
   cursor: pointer;
-  font-size: var(--font-size-12);
-  font-weight: 500;
-  opacity: 0.7;
   transition:
     opacity 0.15s,
     background-color 0.15s;
-  /* Ensure tappable on mobile */
-  min-height: 28px;
-  min-width: 44px;
 }
 
-.queued-message-badge-cancel:hover,
-.queued-message-badge-action:hover {
+/* A finger-sized target around the small glyph. */
+.queued-clock::after {
+  content: "";
+  position: absolute;
+  inset: -0.375rem;
+}
+
+.queued-clock:hover,
+.queued-clock[aria-expanded="true"] {
   opacity: 1;
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--bg-hover);
 }
 
-.dark .queued-message-badge-cancel:hover,
-.dark .queued-message-badge-action:hover {
-  background: rgba(255, 255, 255, 0.08);
+.queued-clock svg {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
-.queued-message-badge-action:disabled {
+.queued-menu-status {
+  padding: 4px 12px 6px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+}
+
+.queue-menu-item:disabled,
+.dark .queue-menu-item:disabled {
+  background: none;
   cursor: wait;
   opacity: 0.5;
-}
-
-.queued-message-badge-send {
-  background: rgba(249, 115, 22, 0.12);
-  font-weight: 600;
-  opacity: 1;
-}
-
-.dark .queued-message-badge-send {
-  background: rgba(249, 115, 22, 0.18);
 }
 
 /* The text box and the suggested next message share a cell, so a long

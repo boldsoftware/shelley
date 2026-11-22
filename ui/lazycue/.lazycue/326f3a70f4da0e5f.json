@@ -1,0 +1,48 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Legacy compaction status rows render without blocking queued messages. The test seeded a conversation at /c/{{SLUG}} whose server data reports one queued message, \"queued during compaction\", and also an in-progress compaction status row that the old generation-based compaction left behind. The live event stream is cut off.\n1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input ([data-testid=\"message-input\"]) to be visible.\n2. [data-testid=\"distill-in-progress\"] should contain \"Compacting\", and [data-testid=\"queued-badge\"] should be visible.\n3. Click the [data-testid=\"queued-badge\"]: [data-testid=\"send-queued-now\"] and [data-testid=\"cancel-queued\"] should become visible (up to 5s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='distill-in-progress']",
+      "text": "Compacting"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='queued-badge']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='queued-badge']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='send-queued-now']",
+      "timeout": "5s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='cancel-queued']",
+      "timeout": "5s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T23:02:31.104353626Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 15392,
+    "output_tokens": 561,
+    "estimated_cost_usd": 0.017360100000000003,
+    "mode": "generated"
+  }
+}

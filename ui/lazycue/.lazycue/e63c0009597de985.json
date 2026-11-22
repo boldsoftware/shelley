@@ -1,0 +1,204 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Durable transcription queue states render in exact order, also after a reload. The test seeded a conversation at /c/{{SLUG}} whose server data reports four queued messages, in this order: a plain message \"echo: first queued message\"; a transcription still working on /tmp/shelley-uploads/working.webm with the context \"Keep this image [/tmp/shelley-uploads/context.png]\"; a ready transcription of /tmp/shelley-uploads/ready.webm with the text \"Finished spoken words.\"; and a failed transcription of /tmp/shelley-uploads/failed.webm with the error \"transcription unavailable\". The live event stream is cut off. Requests to send a queued message now (POST /api/conversation/\u003cid\u003e/send-queued?queued_id=\u003cid\u003e) are accepted without effect; call \"sendQueued\" reports the first one as \"\u003cmethod\u003e /send-queued?\u003cquery\u003e\" (\"none\" before there is one). \"The items\" are the elements matching '[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]', in document order. Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input ([data-testid=\"message-input\"]) to be visible.\n2. There should be exactly 4 items. Item 1 should contain \"first queued message\"; item 2 \"Transcribing…\", \"working.webm\" and \"Keep this image\"; item 3 \"Finished spoken words.\" and a [data-testid=\"queued-badge\"]; item 4 \"Recording failed\" and \"transcription unavailable\".\n3. There should be exactly 2 [data-testid=\"queued-ghost\"] and exactly 2 [data-testid=\"transcription-task\"].\n4. Click the [data-testid=\"queued-badge\"] in item 3. [data-testid=\"cancel-queued\"] should become visible (up to 5s), and there should be exactly 0 [data-testid=\"send-queued-now\"]. Press Escape: [data-testid=\"cancel-queued\"] should become hidden (up to 5s), and document.activeElement must be item 3's badge (eval document.activeElement === document.querySelectorAll('[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]')[2].querySelector('[data-testid=\"queued-badge\"]'), which must return true).\n5. Click the [data-testid=\"queued-badge\"] in item 3 again, and then the [data-testid=\"queued-badge\"] in item 1. [data-testid=\"send-queued-now\"] should become visible (up to 5s), and the count of [data-testid=\"cancel-queued\"] should become exactly 1 (up to 5s): opening one menu closes the other. Click [data-testid=\"send-queued-now\"]. Call \"sendQueued\" should return \"POST /send-queued?queued_id=q-first\".\n6. Reload: navigate to /c/{{SLUG}} again. The URL should have exactly the path \"/c/{{SLUG}}\" (an exact \"value\", not \"text\").\n7. There should again be exactly 4 items: item 1 containing \"first queued message\", item 2 \"working.webm\", item 3 \"Finished spoken words.\" and item 4 \"failed.webm\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "count": 4
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "nth": 0,
+      "text": "first queued message"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "nth": 1,
+      "text": "Transcribing…"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "nth": 1,
+      "text": "working.webm"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "nth": 1,
+      "text": "Keep this image"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "nth": 2,
+      "text": "Finished spoken words."
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+        "nth": 2
+      },
+      "selector": "[data-testid=\"queued-badge\"]"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "nth": 3,
+      "text": "Recording failed"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "nth": 3,
+      "text": "transcription unavailable"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"queued-ghost\"]",
+      "count": 2
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"transcription-task\"]",
+      "count": 2
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+        "nth": 2
+      },
+      "selector": "[data-testid=\"queued-badge\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"cancel-queued\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"send-queued-now\"]",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid=\"cancel-queued\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === document.querySelectorAll('[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]')[2].querySelector('[data-testid=\"queued-badge\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+        "nth": 2
+      },
+      "selector": "[data-testid=\"queued-badge\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"cancel-queued\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+        "nth": 0
+      },
+      "selector": "[data-testid=\"queued-badge\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-queued-now\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"cancel-queued\"]",
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-queued-now\"]"
+    },
+    {
+      "action": "call",
+      "value": "sendQueued",
+      "expect": "POST /send-queued?queued_id=q-first"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "count": 4
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "nth": 0,
+      "text": "first queued message"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "nth": 1,
+      "text": "working.webm"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "nth": 2,
+      "text": "Finished spoken words."
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"queued-ghost\"], [data-testid=\"transcription-task\"]",
+      "nth": 3,
+      "text": "failed.webm"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T23:13:49.096739647Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 93283,
+    "output_tokens": 3831,
+    "estimated_cost_usd": 0.13655070000000002,
+    "mode": "generated"
+  }
+}
