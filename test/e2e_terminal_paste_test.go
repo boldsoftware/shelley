@@ -13,7 +13,7 @@ import (
 // single onData. A bigger paste used to close the socket and leave the
 // terminal hung, whatever was reading it.
 func TestE2ETerminalPasteBiggerThanMessage(t *testing.T) {
-	e2e(t, `A paste bigger than a websocket message reaches the program. The test seeded a conversation at /c/term-paste, whose directory holds paste.sh, which prints "paste-ready" and then writes the next 600 lines it reads to the file "got". window.__paste is the text to paste: 600 lines, over 32 KiB as a websocket message. Call "got" compares the file "got" with that text; it returns "same" once they are equal. `+termMenu+`
+	e2e(t, useful(0), `A paste bigger than a websocket message reaches the program. The test seeded a conversation at /c/term-paste, whose directory holds paste.sh, which prints "paste-ready" and then writes the next 600 lines it reads to the file "got". window.__paste is the text to paste: 600 lines, over 32 KiB as a websocket message. Call "got" compares the file "got" with that text; it returns "same" once they are equal. `+termMenu+`
 1. Navigate to /c/term-paste. Fill [data-testid="message-input"] with "!bash paste.sh" and click [data-testid="send-button"].
 2. Retry the following steps as one block until they pass (timeout 15s): choose the terminal menu item "Insert all output into input" (both clicks inside the block); then the message input's value must contain "paste-ready" (eval with expect true).
 3. Paste: in one eval, on the terminal input ('`+visibleTerminal+` textarea[aria-label="Terminal input"]'), make a DataTransfer, setData("text/plain", window.__paste) on it, and dispatch on the textarea a new ClipboardEvent("paste", {clipboardData: that DataTransfer, bubbles: true, cancelable: true}).

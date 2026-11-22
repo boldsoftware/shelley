@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/boldsoftware/shelley/lazycue"
 )
 
 // Ported from ui/e2e/chat-toolbar.spec.ts.
@@ -147,12 +149,12 @@ func chatToolbarOpen(mobile bool, tool string) string {
 	return `click More options, then click the button in the menu whose name contains "` + tool + `"`
 }
 
-func TestE2EChatToolbarCompact320(t *testing.T)  { chatToolbarCompact(t, 0) }
-func TestE2EChatToolbarCompact393(t *testing.T)  { chatToolbarCompact(t, 1) }
-func TestE2EChatToolbarCompact768(t *testing.T)  { chatToolbarCompact(t, 2) }
-func TestE2EChatToolbarCompact1280(t *testing.T) { chatToolbarCompact(t, 3) }
+func TestE2EChatToolbarCompact320(t *testing.T)  { chatToolbarCompact(t, useful(0), 0) }
+func TestE2EChatToolbarCompact393(t *testing.T)  { chatToolbarCompact(t, useful(0), 1) }
+func TestE2EChatToolbarCompact768(t *testing.T)  { chatToolbarCompact(t, useful(0), 2) }
+func TestE2EChatToolbarCompact1280(t *testing.T) { chatToolbarCompact(t, useful(0), 3) }
 
-func chatToolbarCompact(t *testing.T, i int) {
+func chatToolbarCompact(t *testing.T, useful lazycue.Useful, i int) {
 	W, H := chatToolbarViewports[i].width, chatToolbarViewports[i].height
 	mobile := W < 768
 	var d strings.Builder
@@ -208,7 +210,7 @@ func chatToolbarCompact(t *testing.T, i int) {
 	} else {
 		step(`Click the header's button named exactly "New Conversation". The URL path should become exactly "/new", the message input should be visible, the toolbar's buttons named exactly "Diffs", "Git Graph" and "Terminal" should be visible, and the VM link should be visible.`)
 	}
-	e2e(t, d.String(), func(s *shelley) {
+	e2e(t, useful, d.String(), func(s *shelley) {
 		s.viewport(W, H)
 		s.initScript(chatToolbarJS)
 		chatToolbarLinks(s, true)
@@ -224,18 +226,18 @@ func chatToolbarCompact(t *testing.T, i int) {
 	})
 }
 
-func TestE2EChatToolbarMissingVMLink320(t *testing.T)  { chatToolbarMissingVM(t, 0) }
-func TestE2EChatToolbarMissingVMLink393(t *testing.T)  { chatToolbarMissingVM(t, 1) }
-func TestE2EChatToolbarMissingVMLink768(t *testing.T)  { chatToolbarMissingVM(t, 2) }
-func TestE2EChatToolbarMissingVMLink1280(t *testing.T) { chatToolbarMissingVM(t, 3) }
+func TestE2EChatToolbarMissingVMLink320(t *testing.T)  { chatToolbarMissingVM(t, useful(0), 0) }
+func TestE2EChatToolbarMissingVMLink393(t *testing.T)  { chatToolbarMissingVM(t, useful(0), 1) }
+func TestE2EChatToolbarMissingVMLink768(t *testing.T)  { chatToolbarMissingVM(t, useful(0), 2) }
+func TestE2EChatToolbarMissingVMLink1280(t *testing.T) { chatToolbarMissingVM(t, useful(0), 3) }
 
-func chatToolbarMissingVM(t *testing.T, i int) {
+func chatToolbarMissingVM(t *testing.T, useful lazycue.Useful, i int) {
 	W, H := chatToolbarViewports[i].width, chatToolbarViewports[i].height
 	visible := 3
 	if W < 768 {
 		visible = 0
 	}
-	e2e(t, chatToolbarSetup+fmt.Sprintf(`Without a VM link, every configured link stays in the overflow menu, at %dpx. The links are "Manage on exe.dev" (it opens https://exe.example/vm/vm) and "Documentation" (it opens https://docs.example/documentation). Perform the steps in order. 1. Navigate to /new and wait for the header. 2. Eval window.toolbarCounts() with expect "{\"buttons\":3,\"links\":0}". The toolbar should have exactly %d visible buttons (role button, count %d). 3. The header's [data-testid="live-call-header"] should be visible. 4. For each link name in turn, "Manage on exe.dev" then "Documentation": click More options; the menu's buttons named exactly "Manage on exe.dev" and "Documentation" should both be visible; click the one named exactly that name; it opens its page; the menu should then be hidden.`, W, visible, visible), func(s *shelley) {
+	e2e(t, useful, chatToolbarSetup+fmt.Sprintf(`Without a VM link, every configured link stays in the overflow menu, at %dpx. The links are "Manage on exe.dev" (it opens https://exe.example/vm/vm) and "Documentation" (it opens https://docs.example/documentation). Perform the steps in order. 1. Navigate to /new and wait for the header. 2. Eval window.toolbarCounts() with expect "{\"buttons\":3,\"links\":0}". The toolbar should have exactly %d visible buttons (role button, count %d). 3. The header's [data-testid="live-call-header"] should be visible. 4. For each link name in turn, "Manage on exe.dev" then "Documentation": click More options; the menu's buttons named exactly "Manage on exe.dev" and "Documentation" should both be visible; click the one named exactly that name; it opens its page; the menu should then be hidden.`, W, visible, visible), func(s *shelley) {
 		s.viewport(W, H)
 		s.initScript(chatToolbarJS)
 		chatToolbarLinks(s, false)
@@ -243,7 +245,7 @@ func chatToolbarMissingVM(t *testing.T, i int) {
 }
 
 func TestE2EChatToolbarGitGraphDirectOnDesktop(t *testing.T) {
-	e2e(t, `On a wide screen, Git Graph remains a direct toolbar action. 1. Navigate to /new. 2. The button named exactly "Git Graph" directly in the toolbar, ".chat-workspace-actions button[aria-label='Git Graph']", should be visible. 3. Click it. 4. ".git-graph-container" should become visible.`, func(s *shelley) {
+	e2e(t, useful(0), `On a wide screen, Git Graph remains a direct toolbar action. 1. Navigate to /new. 2. The button named exactly "Git Graph" directly in the toolbar, ".chat-workspace-actions button[aria-label='Git Graph']", should be visible. 3. Click it. 4. ".git-graph-container" should become visible.`, func(s *shelley) {
 		s.viewport(1280, 800)
 	})
 }
@@ -252,7 +254,7 @@ func TestE2EChatToolbarGitGraphDirectOnDesktop(t *testing.T) {
 // was skipped elsewhere, so this one has the page say it runs on exe.dev, as
 // the server would there.
 func TestE2EChatToolbarManageOnExeDev(t *testing.T) {
-	e2e(t, `On exe.dev, "Manage on exe.dev" opens this VM's management page. 1. Navigate to /new. 2. Click the button named exactly "More options". 3. The button named exactly "Manage on exe.dev" in ".chat-overflow-popover" should be visible, and there must be no button named exactly "Back to exe.dev" in it (count 0). 4. Click that button. 5. A popup opens (tab "popup"): its URL should come to be exactly "https://exe.dev/vm/myvm", and it should show the heading (role heading) named "VM management". 6. ".chat-overflow-popover" should be hidden (or absent). 7. Close tab "popup".`, func(s *shelley) {
+	e2e(t, useful(0), `On exe.dev, "Manage on exe.dev" opens this VM's management page. 1. Navigate to /new. 2. Click the button named exactly "More options". 3. The button named exactly "Manage on exe.dev" in ".chat-overflow-popover" should be visible, and there must be no button named exactly "Back to exe.dev" in it (count 0). 4. Click that button. 5. A popup opens (tab "popup"): its URL should come to be exactly "https://exe.dev/vm/myvm", and it should show the heading (role heading) named "VM management". 6. ".chat-overflow-popover" should be hidden (or absent). 7. Close tab "popup".`, func(s *shelley) {
 		s.patchInit(map[string]any{
 			"is_exe_dev": true,
 			"hostname":   "myvm.exe.xyz",

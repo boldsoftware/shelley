@@ -34,14 +34,14 @@ const inputAlignmentJS = `window.composerAligned = (ids) => {
 const inputAlignmentSetup = `window.composerAligned(ids) returns "ok" when the composer form is as tall as the message input and every control whose data-testid is in ids is vertically centred on the input, or else what is wrong. `
 
 func TestE2EMessageInputAlignmentNewConversation(t *testing.T) {
-	e2e(t, inputAlignmentSetup+`On a desktop, the new-conversation composer aligns the textarea and its actions. 1. Navigate to /new. 2. The message input (data-testid "message-input"), the attach button (data-testid "attach-button") and the send button (data-testid "send-button") should be visible. 3. Eval window.composerAligned(["attach-button", "send-button"]) with expect "ok".`, func(s *shelley) {
+	e2e(t, useful(0), inputAlignmentSetup+`On a desktop, the new-conversation composer aligns the textarea and its actions. 1. Navigate to /new. 2. The message input (data-testid "message-input"), the attach button (data-testid "attach-button") and the send button (data-testid "send-button") should be visible. 3. Eval window.composerAligned(["attach-button", "send-button"]) with expect "ok".`, func(s *shelley) {
 		s.device(pixel5Desktop(1280, 720))
 		s.initScript(inputAlignmentJS)
 	})
 }
 
 func TestE2EMessageInputAlignmentConversation(t *testing.T) {
-	e2e(t, inputAlignmentSetup+`On a desktop, a conversation's composer aligns the textarea and the split-send actions. 1. Navigate to /c/alignment. 2. The message input (data-testid "message-input"), the attach button (data-testid "attach-button"), the send button (data-testid "send-button") and the send options button (data-testid "send-options-button") should be visible. 3. Eval window.composerAligned(["attach-button", "send-button", "send-options-button"]) with expect "ok".`, func(s *shelley) {
+	e2e(t, useful(0), inputAlignmentSetup+`On a desktop, a conversation's composer aligns the textarea and the split-send actions. 1. Navigate to /c/alignment. 2. The message input (data-testid "message-input"), the attach button (data-testid "attach-button"), the send button (data-testid "send-button") and the send options button (data-testid "send-options-button") should be visible. 3. Eval window.composerAligned(["attach-button", "send-button", "send-options-button"]) with expect "ok".`, func(s *shelley) {
 		s.device(pixel5Desktop(1280, 720))
 		s.initScript(inputAlignmentJS)
 		s.conversation("composer alignment fixture", "alignment")

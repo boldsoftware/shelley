@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/boldsoftware/shelley/lazycue"
 )
 
 // Ported from ui/e2e/conversation-activity.spec.ts. The spec's test ran six
@@ -38,7 +40,7 @@ func activityCentered(circle, line string) string {
 
 // conversationActivity tests the parent conversation's drawer card in one
 // activity state and theme.
-func conversationActivity(t *testing.T, theme string, st activityState) {
+func conversationActivity(t *testing.T, useful lazycue.Useful, theme string, st activityState) {
 	const card = `[data-conversation-id="{{ID}}"]`
 	const badge = card + ` .subagent-count-badge`
 	var b strings.Builder
@@ -88,7 +90,7 @@ func conversationActivity(t *testing.T, theme string, st activityState) {
 	for i, step := range steps {
 		fmt.Fprintf(&b, "%d. %s ", i+1, step)
 	}
-	e2e(t, strings.TrimSpace(b.String()), func(s *shelley) {
+	e2e(t, useful, strings.TrimSpace(b.String()), func(s *shelley) {
 		s.initScript(fmt.Sprintf(`localStorage.setItem("shelley-theme", %q);
 localStorage.setItem("shelley-group-by", "none");`, theme))
 		c := s.conversation("echo: activity", "")
@@ -157,49 +159,49 @@ var activityStates = []activityState{
 }
 
 func TestE2EConversationActivityLightIdle(t *testing.T) {
-	conversationActivity(t, "light", activityStates[0])
+	conversationActivity(t, useful(0), "light", activityStates[0])
 }
 
 func TestE2EConversationActivityLightParentWorking(t *testing.T) {
-	conversationActivity(t, "light", activityStates[1])
+	conversationActivity(t, useful(0), "light", activityStates[1])
 }
 
 func TestE2EConversationActivityLightSubagentWorking(t *testing.T) {
-	conversationActivity(t, "light", activityStates[2])
+	conversationActivity(t, useful(0), "light", activityStates[2])
 }
 
 func TestE2EConversationActivityLightBothWorking(t *testing.T) {
-	conversationActivity(t, "light", activityStates[3])
+	conversationActivity(t, useful(0), "light", activityStates[3])
 }
 
 func TestE2EConversationActivityLightParentBackgroundJob(t *testing.T) {
-	conversationActivity(t, "light", activityStates[4])
+	conversationActivity(t, useful(0), "light", activityStates[4])
 }
 
 func TestE2EConversationActivityLightSubagentBackgroundJob(t *testing.T) {
-	conversationActivity(t, "light", activityStates[5])
+	conversationActivity(t, useful(0), "light", activityStates[5])
 }
 
 func TestE2EConversationActivityDarkIdle(t *testing.T) {
-	conversationActivity(t, "dark", activityStates[0])
+	conversationActivity(t, useful(0), "dark", activityStates[0])
 }
 
 func TestE2EConversationActivityDarkParentWorking(t *testing.T) {
-	conversationActivity(t, "dark", activityStates[1])
+	conversationActivity(t, useful(0), "dark", activityStates[1])
 }
 
 func TestE2EConversationActivityDarkSubagentWorking(t *testing.T) {
-	conversationActivity(t, "dark", activityStates[2])
+	conversationActivity(t, useful(0), "dark", activityStates[2])
 }
 
 func TestE2EConversationActivityDarkBothWorking(t *testing.T) {
-	conversationActivity(t, "dark", activityStates[3])
+	conversationActivity(t, useful(0), "dark", activityStates[3])
 }
 
 func TestE2EConversationActivityDarkParentBackgroundJob(t *testing.T) {
-	conversationActivity(t, "dark", activityStates[4])
+	conversationActivity(t, useful(0), "dark", activityStates[4])
 }
 
 func TestE2EConversationActivityDarkSubagentBackgroundJob(t *testing.T) {
-	conversationActivity(t, "dark", activityStates[5])
+	conversationActivity(t, useful(0), "dark", activityStates[5])
 }

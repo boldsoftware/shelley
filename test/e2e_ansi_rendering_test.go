@@ -10,7 +10,7 @@ const ansiOutput = `"The output" is the last ".bash-tool-code" inside that card'
 func TestE2EAnsiRenderingColors(t *testing.T) {
 	// The spec also saved a full-page screenshot for visual review; it
 	// asserted nothing.
-	e2e(t, `Bash output with ANSI colors renders styled text, not raw escapes. The test seeded a conversation at /c/ansi-colors whose bash tool call ran printf with green, red, bold and yellow escape sequences around the words "Green", "Red", "Bold" and "Yellow", then " plain". `+ansiOutput+`
+	e2e(t, useful(0), `Bash output with ANSI colors renders styled text, not raw escapes. The test seeded a conversation at /c/ansi-colors whose bash tool call ran printf with green, red, bold and yellow escape sequences around the words "Green", "Red", "Bold" and "Yellow", then " plain". `+ansiOutput+`
 1. Navigate to /c/ansi-colors. The first '.bash-tool[data-testid="tool-call-completed"]' should become visible (wait up to 15s). The bash card renders inline, collapsed: click that card's ".bash-tool-header", and its ".bash-tool-details" should become visible.
 2. The output should be visible.
 3. The output's textContent must not contain "[0m", "[32m", "[31m" or the escape character (U+001B, '\u001b' in JS); it must contain each of "Green", "Red", "Bold", "Yellow" and "plain".
@@ -22,7 +22,7 @@ func TestE2EAnsiRenderingColors(t *testing.T) {
 }
 
 func TestE2EAnsiRenderingPlainText(t *testing.T) {
-	e2e(t, `Bash output without ANSI codes renders as plain text. The test seeded a conversation at /c/ansi-plain whose bash tool call ran: echo "just plain text with no escapes". "The card" is the first ".bash-tool" whose text contains "just plain text with no escapes". `+ansiOutput+`
+	e2e(t, useful(0), `Bash output without ANSI codes renders as plain text. The test seeded a conversation at /c/ansi-plain whose bash tool call ran: echo "just plain text with no escapes". "The card" is the first ".bash-tool" whose text contains "just plain text with no escapes". `+ansiOutput+`
 1. Navigate to /c/ansi-plain. The card should become visible (wait up to 15s). Click its ".bash-tool-header"; its ".bash-tool-details" should become visible.
 2. The output should be visible, and its textContent must contain "just plain text with no escapes".
 3. Plain text renders as a text node, not HTML: the output's innerHTML must not contain "<span".`, func(s *shelley) {
@@ -38,7 +38,7 @@ func TestE2EAnsiRenderingPlainText(t *testing.T) {
 // non-SGR sequences (and now uses ansi_up, which parses complete CSI
 // sequences), so only the readable text remains.
 func TestE2EAnsiRenderingCursorMovement(t *testing.T) {
-	e2e(t, `Bash output with cursor-movement ANSI sequences renders no stray letters. The test seeded a conversation at /c/ansi-cursor whose bash tool call ran printf with three cursor-horizontal-absolute sequences (ESC [1G) followed by "Dev code has changes not yet deployed". "The card" is the first ".bash-tool" whose text contains "Dev code has changes". `+ansiOutput+`
+	e2e(t, useful(0), `Bash output with cursor-movement ANSI sequences renders no stray letters. The test seeded a conversation at /c/ansi-cursor whose bash tool call ran printf with three cursor-horizontal-absolute sequences (ESC [1G) followed by "Dev code has changes not yet deployed". "The card" is the first ".bash-tool" whose text contains "Dev code has changes". `+ansiOutput+`
 1. Navigate to /c/ansi-cursor. The card should become visible (wait up to 15s). Click its ".bash-tool-header"; its ".bash-tool-details" should become visible.
 2. The output should be visible, and its textContent must contain "Dev code has changes not yet deployed".
 3. No stray escape letters or raw fragments leak through: the output's textContent must not contain "GGG", "[1G" or the escape character (U+001B, '\u001b' in JS).

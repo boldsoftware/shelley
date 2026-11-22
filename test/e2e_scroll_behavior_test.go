@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/boldsoftware/shelley/lazycue"
 )
 
 // Ported from ui/e2e/scroll-behavior.spec.ts.
@@ -33,7 +35,7 @@ func scrollMediumConversation(s *shelley) convo {
 }
 
 func TestE2EScrollAutoPinningNoSyncReadback(t *testing.T) {
-	e2e(t, scrollTerms+scrollMediumSetup+`Auto-pinning does not synchronously read back scrollTop. The page counts the container's scrollTop writes in window.__messagesScrollTopWrites, and in window.__messagesScrollTopReadsAfterWrite every read of its scrollTop in the same task as a write (before the next microtask).
+	e2e(t, useful(0), scrollTerms+scrollMediumSetup+`Auto-pinning does not synchronously read back scrollTop. The page counts the container's scrollTop writes in window.__messagesScrollTopWrites, and in window.__messagesScrollTopReadsAfterWrite every read of its scrollTop in the same task as a write (before the next microtask).
 1. Open the conversation.
 2. Wait until (window.__messagesScrollTopWrites || 0) > 0 is true.
 3. (window.__messagesScrollTopReadsAfterWrite || 0) must be exactly 0.`, func(s *shelley) {
@@ -64,7 +66,7 @@ Object.defineProperty(Element.prototype, 'scrollTop', {
 }
 
 func TestE2EScrollPromotedDraftAllowsBareScrolling(t *testing.T) {
-	e2e(t, scrollTerms+`A promoted draft allows bare scrolling after its first response.
+	e2e(t, useful(0), scrollTerms+`A promoted draft allows bare scrolling after its first response.
 1. Navigate to /new and wait for the message input ([data-testid="message-input"]) to be visible.
 2. Let the observer report the empty list before the draft gains an ID: eval a promise that resolves after two animation frames.
 3. Fill the message input with "wide tables"; the draft is promoted, so wait until /\/c\/[^/]+$/.test(location.href) is true.
@@ -141,7 +143,7 @@ window.__scrollUpUntilButton = async () => {
 };`
 
 func TestE2EScrollButtonAndAutoScroll(t *testing.T) {
-	e2e(t, scrollTerms+scrollEchoSetup+`The button shows when scrolled up, and the conversation auto-scrolls at the bottom. The page provides two helpers: window.__installScrollProbes() makes the page count, in window.__messageRectReads, getBoundingClientRect() calls on elements with a data-message-id, and in window.__messagesScrollHeightReads reads of the container's scrollHeight (and makes scrollTop writes above 0x7fffffff land at 0, as WebKit does); window.__scrollUpUntilButton() zeroes those counters, sets the container's scrollTop to 0 and waits for the button to be visible, repeating that for up to 30s until it is, and throws if it never is ("scroll up until the button shows": eval await window.__scrollUpUntilButton() with a 40s step timeout).
+	e2e(t, useful(0), scrollTerms+scrollEchoSetup+`The button shows when scrolled up, and the conversation auto-scrolls at the bottom. The page provides two helpers: window.__installScrollProbes() makes the page count, in window.__messageRectReads, getBoundingClientRect() calls on elements with a data-message-id, and in window.__messagesScrollHeightReads reads of the container's scrollHeight (and makes scrollTop writes above 0x7fffffff land at 0, as WebKit does); window.__scrollUpUntilButton() zeroes those counters, sets the container's scrollTop to 0 and waits for the button to be visible, repeating that for up to 30s until it is, and throws if it never is ("scroll up until the button shows": eval await window.__scrollUpUntilButton() with a 40s step timeout).
 1. Open the conversation.
 2. For N = 1, 2 and 3 in turn: add message N, then wait until the agent-thinking indicator ([data-testid="agent-thinking"]) is hidden (allow 30s).
 3. Eval window.__installScrollProbes().
@@ -246,7 +248,7 @@ const scrollDeflationTrap = `window.__springDeflationTrap = async () => {
 };`
 
 func TestE2EScrollClampedFollowWriteKeepsFollowing(t *testing.T) {
-	e2e(t, scrollTerms+scrollEchoSetup+`A clamped follow write does not disarm auto-follow (Safari estimate deflation). The page provides window.__springDeflationTrap(): it inserts a 600px spacer before the container's bottom sentinel, waits four animation frames for the follow branch to chase it, and if that follow writes a scrollTop more than 300px past the current one it collapses the spacer just before the write lands (as WebKit's estimates deflate), then removes the spacer and resolves to whether that happened.
+	e2e(t, useful(0), scrollTerms+scrollEchoSetup+`A clamped follow write does not disarm auto-follow (Safari estimate deflation). The page provides window.__springDeflationTrap(): it inserts a 600px spacer before the container's bottom sentinel, waits four animation frames for the follow branch to chase it, and if that follow writes a scrollTop more than 300px past the current one it collapses the spacer just before the write lands (as WebKit's estimates deflate), then removes the spacer and resolves to whether that happened.
 1. Open the conversation.
 2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
 3. Wait until Math.abs(gap) <= 1 is true. The button must not be visible (allow 5s).
@@ -287,7 +289,7 @@ const scrollNudgeUp = `window.__nudgeUp = async () => {
 };`
 
 func TestE2EScrollSubMarginClampKeepsButtonHidden(t *testing.T) {
-	e2e(t, scrollTerms+scrollEchoSetup+`A sub-margin scrollTop clamp does not strand the scroll-to-bottom button. The page provides window.__nudgeUp(): it lowers the container's scrollTop by 5, waits two animation frames, and resolves to the gap.
+	e2e(t, useful(0), scrollTerms+scrollEchoSetup+`A sub-margin scrollTop clamp does not strand the scroll-to-bottom button. The page provides window.__nudgeUp(): it lowers the container's scrollTop by 5, waits two animation frames, and resolves to the gap.
 1. Open the conversation.
 2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
 3. Wait until Math.abs(gap) <= 1 is true. The button must not be visible (allow 5s).
@@ -331,18 +333,18 @@ const scrollCollapsible = `window.__addCollapsible = async () => {
 };`
 
 func TestE2EScrollClickCollapsingListKeepsFollowing(t *testing.T) {
-	scrollTapCollapsing(t, "A mouse click", `Click [data-testid="collapse-test"] with a click step (not an eval).`)
+	scrollTapCollapsing(t, useful(0), "A mouse click", `Click [data-testid="collapse-test"] with a click step (not an eval).`)
 }
 
 func TestE2EScrollTapCollapsingListKeepsFollowing(t *testing.T) {
-	scrollTapCollapsing(t, "A native tap", `Tap [data-testid="collapse-test"] with native touch: a touch start step on it, then a touch end step (no click, no eval).`)
+	scrollTapCollapsing(t, useful(0), "A native tap", `Tap [data-testid="collapse-test"] with native touch: a touch start step on it, then a touch end step (no click, no eval).`)
 }
 
 // A touch whose element leaves the document mid-gesture gets its touchend
 // there, where it never reaches the list. It must still end the touch, or
 // following stays off.
 func TestE2EScrollTouchOnRemovedElementEnds(t *testing.T) {
-	e2e(t, scrollTerms+scrollEchoSetup+`A touch whose element is removed while the finger is down still ends, so following continues. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap.
+	e2e(t, useful(0), scrollTerms+scrollEchoSetup+`A touch whose element is removed while the finger is down still ends, so following continues. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap.
 1. Open the conversation.
 2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
 3. Wait until Math.abs(gap) <= 1 is true (an eval expecting true: the gap can be fractional). The button must not be visible (allow 5s).
@@ -360,7 +362,7 @@ func TestE2EScrollTouchOnRemovedElementEnds(t *testing.T) {
 // Lifting one finger from a removed element does not end another finger's
 // touch on the list.
 func TestE2EScrollRemovedTouchKeepsOtherFinger(t *testing.T) {
-	e2e(t, scrollTerms+scrollEchoSetup+`While a second finger is held on the list, lifting a first finger whose element was removed does not end the touch: content that grows below the held finger does not move the list.
+	e2e(t, useful(0), scrollTerms+scrollEchoSetup+`While a second finger is held on the list, lifting a first finger whose element was removed does not end the touch: content that grows below the held finger does not move the list.
 1. Open the conversation.
 2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
 3. Wait until Math.abs(gap) <= 1 is true (an eval expecting true: the gap can be fractional). The button must not be visible (allow 5s).
@@ -372,7 +374,7 @@ func TestE2EScrollRemovedTouchKeepsOtherFinger(t *testing.T) {
 
 // A mouse click on the list is no sign that a finger held there has lifted.
 func TestE2EScrollMouseClickKeepsHeldTouch(t *testing.T) {
-	e2e(t, scrollTerms+scrollEchoSetup+`While a finger is held on the list, a mouse click there does not end the touch: content that grows below the held finger does not move the list.
+	e2e(t, useful(0), scrollTerms+scrollEchoSetup+`While a finger is held on the list, a mouse click there does not end the touch: content that grows below the held finger does not move the list.
 1. Open the conversation.
 2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
 3. Wait until Math.abs(gap) <= 1 is true (an eval expecting true: the gap can be fractional). The button must not be visible (allow 5s).
@@ -384,7 +386,7 @@ func TestE2EScrollMouseClickKeepsHeldTouch(t *testing.T) {
 
 // A touch's cancellation ends only a press the touch made.
 func TestE2EScrollTouchCancelKeepsMouseClick(t *testing.T) {
-	e2e(t, scrollTerms+scrollEchoSetup+`A touch cancelled during a mouse click does not keep that click from being a click: a click that shrinks the list at the bottom does not stop auto-follow. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap. Clicking the button removes the block.
+	e2e(t, useful(0), scrollTerms+scrollEchoSetup+`A touch cancelled during a mouse click does not keep that click from being a click: a click that shrinks the list at the bottom does not stop auto-follow. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap. Clicking the button removes the block.
 1. Open the conversation.
 2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
 3. Wait until Math.abs(gap) <= 1 is true. The button must not be visible (allow 5s).
@@ -402,7 +404,7 @@ func TestE2EScrollTouchCancelKeepsMouseClick(t *testing.T) {
 // pointer's release elsewhere must not make a drop during the press look
 // like no one's.
 func TestE2EScrollOtherPointerReleaseKeepsPress(t *testing.T) {
-	e2e(t, scrollTerms+scrollEchoSetup+`While a mouse is pressed on the list, another pointer's release outside it does not end that press. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap. Clicking the button removes the block.
+	e2e(t, useful(0), scrollTerms+scrollEchoSetup+`While a mouse is pressed on the list, another pointer's release outside it does not end that press. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap. Clicking the button removes the block.
 1. Open the conversation.
 2. Enough content that the list actually scrolls: `+scrollEchoTurns(3, true)+`.
 3. Wait until Math.abs(gap) <= 1 is true. The button must not be visible (allow 5s).
@@ -414,8 +416,8 @@ func TestE2EScrollOtherPointerReleaseKeepsPress(t *testing.T) {
 	})
 }
 
-func scrollTapCollapsing(t *testing.T, kind, press string) {
-	e2e(t, scrollTerms+scrollEchoSetup+fmt.Sprintf(`%s that shrinks the list at the bottom does not stop auto-follow. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap. Clicking the button removes the block.
+func scrollTapCollapsing(t *testing.T, useful lazycue.Useful, kind, press string) {
+	e2e(t, useful, scrollTerms+scrollEchoSetup+fmt.Sprintf(`%s that shrinks the list at the bottom does not stop auto-follow. The page provides window.__addCollapsible(): it inserts a 400px block, with a "Collapse" button ([data-testid="collapse-test"]) at its bottom, before the container's bottom sentinel, waits for following to reach it, and resolves to the gap. Clicking the button removes the block.
 1. Open the conversation.
 2. Enough content that the list actually scrolls: %s.
 3. Wait until Math.abs(gap) <= 1 is true. The button must not be visible (allow 5s).
@@ -443,7 +445,7 @@ func scrollTapCollapsing(t *testing.T, kind, press string) {
 // sentinel's IntersectionObserver) instead of a raw offset, so an
 // at-bottom conversation re-pins to the real bottom on restore.
 func TestE2EScrollReloadRestoresTrueBottom(t *testing.T) {
-	e2e(t, scrollTerms+`The conversation restores to the true bottom after a reload despite content-visibility height estimates. The test seeds a conversation of 33 turns at /c/{{SLUG}}. "Open the conversation" means: navigate to /c/{{SLUG}}, wait for the message input ([data-testid="message-input"]) to be visible (allow 30s), then the container (allow 30s).
+	e2e(t, useful(0), scrollTerms+`The conversation restores to the true bottom after a reload despite content-visibility height estimates. The test seeds a conversation of 33 turns at /c/{{SLUG}}. "Open the conversation" means: navigate to /c/{{SLUG}}, wait for the message input ([data-testid="message-input"]) to be visible (allow 30s), then the container (allow 30s).
 1. Open the conversation.
 2. Confirm it actually built multiple content-visibility chunks, or the test would pass vacuously: wait until document.querySelectorAll(".messages-chunk").length >= 2 is true (allow 30s).
 3. Go to the true bottom with the app's own scroll-to-bottom: in one eval, if the button is visible (it exists, its getBoundingClientRect() has non-zero width and height, and its computed visibility is not "hidden"), call its click(). Then the button must not be visible (allow 10s).
@@ -518,7 +520,7 @@ window.__saved = (key) => {
 };`
 
 func TestE2EScrollSavedBottomRestoration(t *testing.T) {
-	e2e(t, scrollTerms+`Saved-bottom restoration survives clamps but yields to gestures and bare navigation. The test seeds a long conversation with ID {{ID}}; its saved scroll position is localStorage item "shelley_scroll_{{ID}}", called KEY below (pass the string "shelley_scroll_{{ID}}" where KEY appears). The page provides helpers, each of which also stores its result in a window variable: window.__clampAndSave(KEY) shrinks the list by 600px so the browser clamps scrollTop with the bottom sentinel still in view, saves (a beforeunload event) at once and again two frames later, and stores a JSON string of both saved values {immediate, settled} in window.__afterClamp; window.__bareJump(KEY) sets scrollTop to 0 with a bare scroll event, saves at once, and stores the saved value in window.__beforeConfirmation; window.__wheelUp(KEY) dispatches an upward wheel event, saves at once, stores the saved value in window.__afterWheel and then sets scrollTop to 0; window.__saved(KEY) saves and returns the saved value. "Wait for the bottom sentinel" means: wait until document.querySelector(".messages-bottom-sentinel") !== null is true (allow 30s).
+	e2e(t, useful(0), scrollTerms+`Saved-bottom restoration survives clamps but yields to gestures and bare navigation. The test seeds a long conversation with ID {{ID}}; its saved scroll position is localStorage item "shelley_scroll_{{ID}}", called KEY below (pass the string "shelley_scroll_{{ID}}" where KEY appears). The page provides helpers, each of which also stores its result in a window variable: window.__clampAndSave(KEY) shrinks the list by 600px so the browser clamps scrollTop with the bottom sentinel still in view, saves (a beforeunload event) at once and again two frames later, and stores a JSON string of both saved values {immediate, settled} in window.__afterClamp; window.__bareJump(KEY) sets scrollTop to 0 with a bare scroll event, saves at once, and stores the saved value in window.__beforeConfirmation; window.__wheelUp(KEY) dispatches an upward wheel event, saves at once, stores the saved value in window.__afterWheel and then sets scrollTop to 0; window.__saved(KEY) saves and returns the saved value. "Wait for the bottom sentinel" means: wait until document.querySelector(".messages-bottom-sentinel") !== null is true (allow 30s).
 1. Navigate to /c/{{ID}} and wait for the container to be visible (allow 30s).
 2. Eval localStorage.setItem(KEY, "bottom"), then reload the page. Wait for the button to be hidden (allow 10s) and for the bottom sentinel.
 3. Saving during a startup-style clamp must keep the semantic bottom rather than persist the transient pixel offset: eval await window.__clampAndSave(KEY) without expect, then window.__afterClamp must be exactly {"immediate":"bottom","settled":"bottom"}.
@@ -532,7 +534,7 @@ func TestE2EScrollSavedBottomRestoration(t *testing.T) {
 }
 
 func TestE2EScrollLeavingAfterScrollToBottomKeepsBottom(t *testing.T) {
-	e2e(t, scrollTerms+scrollMediumSetup+`Leaving right after Scroll to bottom saves the bottom, not a pixel offset. The conversation's saved scroll position is localStorage item "shelley_scroll_{{ID}}"; "what leaving saves" is the value of that item right after window.dispatchEvent(new Event("beforeunload")).
+	e2e(t, useful(0), scrollTerms+scrollMediumSetup+`Leaving right after Scroll to bottom saves the bottom, not a pixel offset. The conversation's saved scroll position is localStorage item "shelley_scroll_{{ID}}"; "what leaving saves" is the value of that item right after window.dispatchEvent(new Event("beforeunload")).
 1. Open the conversation.
 2. In one eval, set the container's scrollTop to 0 and dispatch new Event("scroll") on it. The button should become visible.
 3. Wait until what leaving saves is not "bottom": eval (window.dispatchEvent(new Event("beforeunload")), localStorage.getItem("shelley_scroll_{{ID}}")) !== "bottom", expecting true.
@@ -553,7 +555,7 @@ func TestE2EScrollLeavingAfterScrollToBottomKeepsBottom(t *testing.T) {
 // Scroll far enough to leave the 100px margin, then check both halves:
 // the button appears, AND new content does not drag the viewport down.
 func TestE2EScrollUnreportedScrollUpDisarms(t *testing.T) {
-	e2e(t, scrollTerms+scrollEchoSetup+`A scroll-up the observer has not yet reported still disarms auto-follow.
+	e2e(t, useful(0), scrollTerms+scrollEchoSetup+`A scroll-up the observer has not yet reported still disarms auto-follow.
 1. Open the conversation.
 2. `+strings.ToUpper(scrollEchoTurns(4, false)[:1])+scrollEchoTurns(4, false)[1:]+`.
 3. The button must not be visible (allow 5s).
@@ -570,7 +572,7 @@ func TestE2EScrollUnreportedScrollUpDisarms(t *testing.T) {
 // itself are still behind -- and it re-pinned to the bottom, throwing the
 // reader back down.
 func TestE2EScrollScrollUpRacingGrowth(t *testing.T) {
-	e2e(t, scrollTerms+scrollEchoSetup+`A scroll-up racing list growth in the same frame is not overridden.
+	e2e(t, useful(0), scrollTerms+scrollEchoSetup+`A scroll-up racing list growth in the same frame is not overridden.
 1. Open the conversation.
 2. `+strings.ToUpper(scrollEchoTurns(4, false)[:1])+scrollEchoTurns(4, false)[1:]+`.
 3. The button must not be visible (allow 5s).
@@ -729,8 +731,8 @@ const scrollStreamSetup = `The test answers the page's /api/stream2 EventSource 
 const scrollTouchUp = `In one eval: touch down; then lower the container's scrollTop by 300 and dispatch new Event("scroll") on it; store the container's scrollTop in window.__scrolled.`
 
 // Mobile streaming scroll gestures: a 393x851 touch screen.
-func scrollMobileStream(t *testing.T, description string, setup func(s *shelley, cs *scrollStream)) {
-	e2e(t, scrollStreamSetup+description, func(s *shelley) {
+func scrollMobileStream(t *testing.T, useful lazycue.Useful, description string, setup func(s *shelley, cs *scrollStream)) {
+	e2e(t, useful, scrollStreamSetup+description, func(s *shelley) {
 		s.viewport(393, 851)
 		cs := s.scrollControlled()
 		setup(s, cs)
@@ -742,12 +744,12 @@ func scrollMobileStream(t *testing.T, description string, setup func(s *shelley,
 // reached the container: explicit return must win. Reaching the bottom once
 // is insufficient: the sentinel stops the RAF pin, and later chunks must
 // still follow after that temporary pin ends.
-func scrollArrowResumes(t *testing.T, end string) {
+func scrollArrowResumes(t *testing.T, useful lazycue.Useful, end string) {
 	release := "Dispatch a native " + end + "."
 	if end == "unreleased" {
 		release = "Do not end the touch: it is left unreleased."
 	}
-	scrollMobileStream(t, fmt.Sprintf(`The scroll-to-bottom arrow resumes following continuing chunks after %s.
+	scrollMobileStream(t, useful, fmt.Sprintf(`The scroll-to-bottom arrow resumes following continuing chunks after %s.
 4. %s
 5. %s
 6. The button should become visible.
@@ -764,18 +766,22 @@ func scrollArrowResumes(t *testing.T, end string) {
 	})
 }
 
-func TestE2EScrollMobileArrowResumesAfterTouchend(t *testing.T) { scrollArrowResumes(t, "touchend") }
-
-func TestE2EScrollMobileArrowResumesAfterTouchcancel(t *testing.T) {
-	scrollArrowResumes(t, "touchcancel")
+func TestE2EScrollMobileArrowResumesAfterTouchend(t *testing.T) {
+	scrollArrowResumes(t, useful(0), "touchend")
 }
 
-func TestE2EScrollMobileArrowResumesUnreleased(t *testing.T) { scrollArrowResumes(t, "unreleased") }
+func TestE2EScrollMobileArrowResumesAfterTouchcancel(t *testing.T) {
+	scrollArrowResumes(t, useful(0), "touchcancel")
+}
+
+func TestE2EScrollMobileArrowResumesUnreleased(t *testing.T) {
+	scrollArrowResumes(t, useful(0), "unreleased")
+}
 
 // With no arrow or shortcut, the scroll and the real sentinel intersection
 // are delivered before more SSE data, including when touchend was lost. A
 // late end event must not be needed to resume, nor undo the resume.
-func scrollManualBottomResumes(t *testing.T, end string) {
+func scrollManualBottomResumes(t *testing.T, useful lazycue.Useful, end string) {
 	release, late := "Do not end the touch here.", ""
 	switch end {
 	case "touchend", "touchcancel":
@@ -783,7 +789,7 @@ func scrollManualBottomResumes(t *testing.T, end string) {
 	case "delayed touchend":
 		late = " Then, late, dispatch a native touchend."
 	}
-	scrollMobileStream(t, fmt.Sprintf(`Returning to the bottom by hand resumes following continuing chunks after %s.
+	scrollMobileStream(t, useful, fmt.Sprintf(`Returning to the bottom by hand resumes following continuing chunks after %s.
 4. %s
 5. The button should become visible.
 6. Stream call "while away" with text "While manually scrolled away.". The list must be unmoved from window.__scrolled.
@@ -802,27 +808,27 @@ func scrollManualBottomResumes(t *testing.T, end string) {
 }
 
 func TestE2EScrollMobileManualBottomResumesAfterTouchend(t *testing.T) {
-	scrollManualBottomResumes(t, "touchend")
+	scrollManualBottomResumes(t, useful(0), "touchend")
 }
 
 func TestE2EScrollMobileManualBottomResumesAfterTouchcancel(t *testing.T) {
-	scrollManualBottomResumes(t, "touchcancel")
+	scrollManualBottomResumes(t, useful(0), "touchcancel")
 }
 
 func TestE2EScrollMobileManualBottomResumesAfterDelayedTouchend(t *testing.T) {
-	scrollManualBottomResumes(t, "delayed touchend")
+	scrollManualBottomResumes(t, useful(0), "delayed touchend")
 }
 
 func TestE2EScrollMobileManualBottomResumesUnreleased(t *testing.T) {
-	scrollManualBottomResumes(t, "unreleased")
+	scrollManualBottomResumes(t, useful(0), "unreleased")
 }
 
 // A second gesture must work after an explicit return to the bottom. The
 // 20px scroll-up is below both the pin-release and sentinel margins. On the
 // second gesture, the touch is released before the browser delivers the
 // queued scroll event.
-func scrollChunksRespectUp(t *testing.T, end string) {
-	scrollMobileStream(t, scrollChunksRespectUpSteps(end), func(s *shelley, cs *scrollStream) {
+func scrollChunksRespectUp(t *testing.T, useful lazycue.Useful, end string) {
+	scrollMobileStream(t, useful, scrollChunksRespectUpSteps(end), func(s *shelley, cs *scrollStream) {
 		for g := range 2 {
 			cs.chunk(fmt.Sprintf("held %d", g), "text", fmt.Sprintf("Held chunk %d.\n\n", g))
 			cs.chunk(fmt.Sprintf("thinking %d", g), "thinking", fmt.Sprintf("Thinking %d. ", g))
@@ -858,19 +864,19 @@ func scrollChunksRespectUpSteps(end string) string {
 }
 
 func TestE2EScrollMobileChunksRespectScrollUpThroughTouchend(t *testing.T) {
-	scrollChunksRespectUp(t, "touchend")
+	scrollChunksRespectUp(t, useful(0), "touchend")
 }
 
 func TestE2EScrollMobileChunksRespectScrollUpThroughTouchcancel(t *testing.T) {
-	scrollChunksRespectUp(t, "touchcancel")
+	scrollChunksRespectUp(t, useful(0), "touchcancel")
 }
 
 // The held chunk crosses the sentinel margin as well as growing the list:
 // neither observer may re-pin or mistake growth for a genuine user
 // scroll-up. Then no new chunk, DOM growth, or keyboard action can rescue a
 // missing resume.
-func scrollResumesDeferredFollow(t *testing.T, end string) {
-	scrollMobileStream(t, fmt.Sprintf(`Follow deferred by a touch resumes on %s, without another chunk.
+func scrollResumesDeferredFollow(t *testing.T, useful lazycue.Useful, end string) {
+	scrollMobileStream(t, useful, fmt.Sprintf(`Follow deferred by a touch resumes on %s, without another chunk.
 4. In one eval, touch down and store the container's scrollTop in window.__before.
 5. Stream call "held" with text window.__paragraphs("Held") (pass that expression, which builds the twelve paragraphs, to window.__streamed).
 6. Record in window.__held JSON.stringify({unmoved: Math.abs(scrollTop - window.__before) < 0.5, gap: gap > 100}) from the container's scrollTop and the gap; it must be exactly {"unmoved":true,"gap":true}.
@@ -882,11 +888,11 @@ func scrollResumesDeferredFollow(t *testing.T, end string) {
 }
 
 func TestE2EScrollMobileResumesDeferredFollowOnTouchend(t *testing.T) {
-	scrollResumesDeferredFollow(t, "touchend")
+	scrollResumesDeferredFollow(t, useful(0), "touchend")
 }
 
 func TestE2EScrollMobileResumesDeferredFollowOnTouchcancel(t *testing.T) {
-	scrollResumesDeferredFollow(t, "touchcancel")
+	scrollResumesDeferredFollow(t, useful(0), "touchcancel")
 }
 
 // IntersectionObserver reports arrive in a task some time after the frame
@@ -956,15 +962,15 @@ window.__scrollBy = (delta) => {
 // scrollLateSetup describes scrollLateReports.
 const scrollLateSetup = `The page holds back IntersectionObserver reports on request: window.holdIntersections() starts holding them, window.heldIntersections() is how many held reports include the bottom sentinel, window.releaseIntersections() delivers the held reports one by one and window.releaseIntersections(true) delivers them batched (one callback per observer with every held entry, oldest first, as a browser delivers reports that piled up). window.sentinelNear is whether the page has been told the bottom sentinel is near (held reports don't count until released). "Wait for held reports" means wait until window.heldIntersections() > 0 is true. window.__touch("touchstart") and window.__touch("touchend") make a touch as the page sees one, on the container; window.__scrollBy(D) adds D to the container's scrollTop and dispatches a scroll event. "Scroll away" means: eval window.__touch("touchstart"), eval window.__scrollBy(-400), eval window.__touch("touchend"), the button should become visible, then wait until window.sentinelNear is false (scrolled away by a finished touch, and told so, so the next return crosses into the near-bottom zone and is reported). `
 
-func scrollLateReport(t *testing.T, description string, setup func(cs *scrollStream)) {
-	e2e(t, scrollStreamSetup+scrollLateSetup+description, func(s *shelley) {
+func scrollLateReport(t *testing.T, useful lazycue.Useful, description string, setup func(cs *scrollStream)) {
+	e2e(t, useful, scrollStreamSetup+scrollLateSetup+description, func(s *shelley) {
 		s.initScript(scrollLateReports)
 		setup(s.scrollControlled())
 	})
 }
 
 func TestE2EScrollLateReportTouchAfterObserved(t *testing.T) {
-	scrollLateReport(t, `A late near-bottom report does not end a touch that began after it was observed.
+	scrollLateReport(t, useful(0), `A late near-bottom report does not end a touch that began after it was observed.
 4. Scroll away.
 5. The reader comes back down and, before that is reported, touches again: eval window.holdIntersections(); eval setting the container's scrollTop to its scrollHeight; wait for held reports; eval window.__touch("touchstart"); eval window.releaseIntersections().
 6. The finger is still down, so growth must not move the list under it: record the container's scrollTop in window.__before, then stream call "held" with text "Held under the finger."; the list must be unmoved from window.__before.
@@ -976,7 +982,7 @@ func TestE2EScrollLateReportTouchAfterObserved(t *testing.T) {
 }
 
 func TestE2EScrollLateReportReturnBeforeTouch(t *testing.T) {
-	scrollLateReport(t, `A late near-bottom report does not end a touch observed after it began, for a return made before it.
+	scrollLateReport(t, useful(0), `A late near-bottom report does not end a touch observed after it began, for a return made before it.
 4. Scroll away.
 5. Back to the bottom and a touch in one task, so no frame comes between and the return is observed only once the finger is down: in one eval, set the container's scrollTop to its scrollHeight, touch down (pointerdown, touchstart, pointercancel as defined above, not window.__touch), and store the container's scrollTop in window.__before.
 6. The button should become hidden.
@@ -989,7 +995,7 @@ func TestE2EScrollLateReportReturnBeforeTouch(t *testing.T) {
 }
 
 func TestE2EScrollLateReportTouchReturnedWithoutTouchend(t *testing.T) {
-	scrollLateReport(t, `A touch that came back to where it began ends without its touchend: up and away, then back to the very offset the touch found. The touch made this return, so its report resumes following even if the end event never comes.
+	scrollLateReport(t, useful(0), `A touch that came back to where it began ends without its touchend: up and away, then back to the very offset the touch found. The touch made this return, so its report resumes following even if the end event never comes.
 4. Eval window.__touch("touchstart"), then record the container's scrollTop in window.__start.
 5. Eval window.__scrollBy(-300); wait until window.sentinelNear is false.
 6. Eval window.__scrollBy(300); record in window.__back whether the container's scrollTop === window.__start, and window.__back must be true. Then wait until window.sentinelNear is true.
@@ -1000,7 +1006,7 @@ func TestE2EScrollLateReportTouchReturnedWithoutTouchend(t *testing.T) {
 }
 
 func TestE2EScrollLateReportNewestOfBatch(t *testing.T) {
-	scrollLateReport(t, `The page goes by the newest of reports delivered together: away and back within one touch, both reported late and together.
+	scrollLateReport(t, useful(0), `The page goes by the newest of reports delivered together: away and back within one touch, both reported late and together.
 4. Eval window.holdIntersections(); eval window.__touch("touchstart"); eval window.__scrollBy(-400); wait for held reports.
 5. Eval window.__scrollBy(400); wait until window.heldIntersections() > 1 is true.
 6. Eval window.releaseIntersections(true), then eval window.__touch("touchend").
@@ -1012,7 +1018,7 @@ func TestE2EScrollLateReportNewestOfBatch(t *testing.T) {
 }
 
 func TestE2EScrollLateReportKeepsLaterScrollUp(t *testing.T) {
-	scrollLateReport(t, `A late near-bottom report does not undo a scroll-up the touch made after it was observed.
+	scrollLateReport(t, useful(0), `A late near-bottom report does not undo a scroll-up the touch made after it was observed.
 4. Scroll away.
 5. The reader comes back down and, before that is reported, touches again and drags up and away: eval window.holdIntersections(); eval setting the container's scrollTop to its scrollHeight; wait for held reports; eval window.__touch("touchstart"); eval window.__scrollBy(-400); record the container's scrollTop in window.__away; eval window.releaseIntersections().
 6. Lifting the finger there leaves the list there, through more output: eval window.__touch("touchend"), then stream call "after lifting" with text "After lifting."; the list must be unmoved from window.__away. The button must be visible.
@@ -1022,15 +1028,15 @@ func TestE2EScrollLateReportKeepsLaterScrollUp(t *testing.T) {
 }
 
 // Desktop streaming scroll behavior.
-func scrollDesktopStream(t *testing.T, description string, setup func(cs *scrollStream)) {
-	e2e(t, scrollStreamSetup+description, func(s *shelley) {
+func scrollDesktopStream(t *testing.T, useful lazycue.Useful, description string, setup func(cs *scrollStream)) {
+	e2e(t, useful, scrollStreamSetup+description, func(s *shelley) {
 		s.device(desktop)
 		setup(s.scrollControlled())
 	})
 }
 
 func TestE2EScrollStreamedCodeStaysPlain(t *testing.T) {
-	scrollDesktopStream(t, `Streamed fenced code stays plain until the durable message renders.
+	scrollDesktopStream(t, useful(0), `Streamed fenced code stays plain until the durable message renders.
 4. Wait until the last ".message-agent pre > code" element contains a ".shelley-code-token" element (allow 30s): durable messages highlight their code.
 5. Stream call "code" with text "const values = Array.from({ length: 200 }, (_, index) => index);" (the call sends that line as a fenced typescript block).
 6. There must be exactly 1 ".streaming-message pre > code" element; it must not have a data-shelley-code-highlight attribute; and ".streaming-message pre > code .shelley-code-token" must match exactly 0 elements.
@@ -1044,7 +1050,7 @@ func TestE2EScrollStreamedCodeStaysPlain(t *testing.T) {
 // The existing wheel release / scrollPointerActive recognition must keep
 // small upward movements from being undone by the next streaming chunk.
 func TestE2EScrollMouseHeldStreamingFollows(t *testing.T) {
-	scrollDesktopStream(t, `Mouse-held streaming still follows; wheel and pointer scroll-ups still disarm.
+	scrollDesktopStream(t, useful(0), `Mouse-held streaming still follows; wheel and pointer scroll-ups still disarm.
 4. In one eval: dispatch new PointerEvent("pointerdown", {pointerType: "mouse", bubbles: true}) on the container and store its scrollTop in window.__before.
 5. Stream call "mouse held" with text "Mouse-held chunk.". Wait until the gap is below 2. Record in window.__followed whether the container's scrollTop > window.__before; it must be true.
 6. Dispatch new PointerEvent("pointerup", {bubbles: true, cancelable: true, composed: true}) on the container.
@@ -1065,7 +1071,7 @@ func TestE2EScrollMouseHeldStreamingFollows(t *testing.T) {
 // regression test for the row-click behavior rather than a mobile drawer
 // test.
 func TestE2EScrollDrawerOpensReadConversationAtBottom(t *testing.T) {
-	e2e(t, scrollTerms+`Selecting a previously read conversation in the drawer opens it at the bottom. The test seeds three conversations, with IDs {{FIRST}} and {{SECOND}} (long) and {{THIRD}} (shorter). "The row" of a conversation X is ".conversation-item[data-conversation-id=\"X\"]" in the drawer, which stays visible on this desktop window. A conversation's saved scroll position is localStorage item "shelley_scroll_<its ID>". "Many messages" means: wait until document.querySelectorAll('[data-testid="message"]').length > 100 is true. Once call "hold third" has run, the server's answer to the page's load of {{THIRD}} (a GET of /api/conversation/{{THIRD}} with no query) is held back until call "release third"; call "third requested" says whether such a load has arrived ("true" or "false").
+	e2e(t, useful(0), scrollTerms+`Selecting a previously read conversation in the drawer opens it at the bottom. The test seeds three conversations, with IDs {{FIRST}} and {{SECOND}} (long) and {{THIRD}} (shorter). "The row" of a conversation X is ".conversation-item[data-conversation-id=\"X\"]" in the drawer, which stays visible on this desktop window. A conversation's saved scroll position is localStorage item "shelley_scroll_<its ID>". "Many messages" means: wait until document.querySelectorAll('[data-testid="message"]').length > 100 is true. Once call "hold third" has run, the server's answer to the page's load of {{THIRD}} (a GET of /api/conversation/{{THIRD}} with no query) is held back until call "release third"; call "third requested" says whether such a load has arrived ("true" or "false").
 1. Navigate to /c/{{FIRST}}; wait for the message input ([data-testid="message-input"]) to be visible (allow 30s). Many messages.
 2. Eval setting the container's scrollTop to 0. The button should become visible (allow 10s). Wait until localStorage.getItem("shelley_scroll_{{FIRST}}") is exactly "0".
 3. Click {{SECOND}}'s row. Wait until new RegExp("/c/[^/]*{{SECOND}}").test(location.href) is true (allow 30s). Many messages.
@@ -1123,7 +1129,7 @@ const scrollPinStopped = `window.__pinStopped = async () => {
 // conversation, even though the composer deliberately keeps keyboard focus
 // for fast replies.
 func TestE2EScrollPageKeysKeepComposerFocus(t *testing.T) {
-	e2e(t, scrollTerms+scrollMediumSetup+scrollPageKeys+`PageUp and PageDown scroll the conversation while the composer stays focused. "The input" is [data-testid="message-input"]; "the input is focused" means document.activeElement === the input is true.
+	e2e(t, useful(0), scrollTerms+scrollMediumSetup+scrollPageKeys+`PageUp and PageDown scroll the conversation while the composer stays focused. "The input" is [data-testid="message-input"]; "the input is focused" means document.activeElement === the input is true.
 1. Open the conversation, then settle the layout.
 2. Fill the input with "keep this draft in the composer". Eval setting the input's selectionStart and selectionEnd to its value.length. Eval setting the container's scrollTop to its scrollHeight. Wait until the input is focused.
 3. Record the container's scrollTop in window.__bottom. Press PageUp. Wait until the container's scrollTop < window.__bottom - 100 is true (allow 5s). Wait until the input is focused. Record the input's selectionEnd in window.__selectionEnd; it must be exactly 31 (the draft's length).
@@ -1170,7 +1176,7 @@ EventTarget.prototype.addEventListener = function (type, listener, options) {
 const scrollPinSteps = `Eval document.querySelector('[data-testid="message-input"]').focus(). Wait out the bottom pin: eval await window.__pinStopped() expecting true, allowing 5s (the eval runs again until it returns true).`
 
 func TestE2EScrollPageUpDisarmsBeforeGrowth(t *testing.T) {
-	e2e(t, scrollTerms+scrollMediumSetup+scrollPageKeys+`PageUp disarms auto-follow before same-frame conversation growth. The page delivers the container's scroll events to the app two animation frames late. window.__pinStopped() moves the container 1px above the bottom, waits two frames, and returns whether it stayed there (the bottom pin has lapsed), then returns to the bottom. window.__keyThenGrow(key) dispatches new KeyboardEvent("keydown", {key, bubbles: true}) on the message input and, in the same task, inserts an 800px div before the bottom sentinel; it records {before, afterKey}, the container's scrollTop before and right after the key, in window.__positions.
+	e2e(t, useful(0), scrollTerms+scrollMediumSetup+scrollPageKeys+`PageUp disarms auto-follow before same-frame conversation growth. The page delivers the container's scroll events to the app two animation frames late. window.__pinStopped() moves the container 1px above the bottom, waits two frames, and returns whether it stayed there (the bottom pin has lapsed), then returns to the bottom. window.__keyThenGrow(key) dispatches new KeyboardEvent("keydown", {key, bubbles: true}) on the message input and, in the same task, inserts an 800px div before the bottom sentinel; it records {before, afterKey}, the container's scrollTop before and right after the key, in window.__positions.
 1. Open the conversation, then settle the layout.
 2. `+scrollPinSteps+`
 3. Eval window.__keyThenGrow("PageUp") without expect. window.__positions.afterKey < window.__positions.before - 100 must be true.
@@ -1184,7 +1190,7 @@ func TestE2EScrollPageUpDisarmsBeforeGrowth(t *testing.T) {
 }
 
 func TestE2EScrollPageDownRearmsBeforeGrowth(t *testing.T) {
-	e2e(t, scrollTerms+scrollMediumSetup+scrollPageKeys+`PageDown rearms auto-follow before same-frame growth at the bottom. window.__pinStopped() moves the container 1px above the bottom, waits two frames, and returns whether it stayed there (the bottom pin has lapsed), then returns to the bottom. window.__keyThenGrow(key) dispatches new KeyboardEvent("keydown", {key, bubbles: true}) on the message input and, in the same task, inserts an 800px div before the bottom sentinel.
+	e2e(t, useful(0), scrollTerms+scrollMediumSetup+scrollPageKeys+`PageDown rearms auto-follow before same-frame growth at the bottom. window.__pinStopped() moves the container 1px above the bottom, waits two frames, and returns whether it stayed there (the bottom pin has lapsed), then returns to the bottom. window.__keyThenGrow(key) dispatches new KeyboardEvent("keydown", {key, bubbles: true}) on the message input and, in the same task, inserts an 800px div before the bottom sentinel.
 1. Open the conversation, then settle the layout.
 2. `+scrollPinSteps+`
 3. Eval setting the container's scrollTop to scrollHeight - clientHeight - clientHeight / 2. The button should become visible (allow 5s).
@@ -1198,7 +1204,7 @@ func TestE2EScrollPageDownRearmsBeforeGrowth(t *testing.T) {
 }
 
 func TestE2EScrollPageKeysLeftToIME(t *testing.T) {
-	e2e(t, scrollTerms+`Page keys typed while composing belong to the IME. The test seeds a conversation at /c/{{SLUG}}.
+	e2e(t, useful(0), scrollTerms+`Page keys typed while composing belong to the IME. The test seeds a conversation at /c/{{SLUG}}.
 1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. In one eval without expect: dispatch on the message input const event = new KeyboardEvent("keydown", {key: "PageUp", bubbles: true, cancelable: true, isComposing: true}), and store event.defaultPrevented in window.__prevented.
 3. window.__prevented must be false.`, func(s *shelley) {
@@ -1208,7 +1214,7 @@ func TestE2EScrollPageKeysLeftToIME(t *testing.T) {
 }
 
 func TestE2EScrollModifiedPageKeysEditComposer(t *testing.T) {
-	e2e(t, scrollTerms+scrollMediumSetup+`Modified page keys stay composer editing commands. "The input" is [data-testid="message-input"].
+	e2e(t, useful(0), scrollTerms+scrollMediumSetup+`Modified page keys stay composer editing commands. "The input" is [data-testid="message-input"].
 1. Open the conversation.
 2. Fill the input with twenty lines, "draft line 0" to "draft line 19", joined by newlines (no trailing newline). Eval setting the input's selectionStart and selectionEnd to its value.length. Eval setting the container's scrollTop to 0.
 3. Press PageUp with the Shift modifier.
@@ -1222,8 +1228,8 @@ func TestE2EScrollModifiedPageKeysEditComposer(t *testing.T) {
 // scrollShortcut sets up the Cmd/Ctrl+ArrowDown tests: a desktop window, where
 // the drawer is rendered alongside the chat and the shortcut is a
 // desktop-only affordance anyway, and a long conversation.
-func scrollShortcut(t *testing.T, description string, setup func(s *shelley)) {
-	e2e(t, scrollTerms+scrollMediumSetup+`"Scroll up" means: eval setting the container's scrollTop to 0; the button should become visible (allow 10s). "Still up" means: record the container's scrollTop in window.__top, then window.__top < 50 must be true. Focus matters here: press keys with press_key steps alone, and add no clicks the steps do not ask for. `+description, func(s *shelley) {
+func scrollShortcut(t *testing.T, useful lazycue.Useful, description string, setup func(s *shelley)) {
+	e2e(t, useful, scrollTerms+scrollMediumSetup+`"Scroll up" means: eval setting the container's scrollTop to 0; the button should become visible (allow 10s). "Still up" means: record the container's scrollTop in window.__top, then window.__top < 50 must be true. Focus matters here: press keys with press_key steps alone, and add no clicks the steps do not ask for. `+description, func(s *shelley) {
 		s.device(desktop)
 		scrollMediumConversation(s)
 		if setup != nil {
@@ -1243,7 +1249,7 @@ func scrollOpenWorkspaceTool(name string) string {
 // keypress then went nowhere -- exactly the state a reader is in right
 // after switching conversations.
 func TestE2EScrollShortcutAfterDrawerSwitch(t *testing.T) {
-	scrollShortcut(t, `Cmd/Ctrl+ArrowDown scrolls to the bottom after switching conversations in the drawer. The test also seeds a second long conversation, {{SECOND}}.
+	scrollShortcut(t, useful(0), `Cmd/Ctrl+ArrowDown scrolls to the bottom after switching conversations in the drawer. The test also seeds a second long conversation, {{SECOND}}.
 1. Open the conversation.
 2. Click ".conversation-item[data-conversation-id=\"{{SECOND}}\"]" in the drawer. The first conversation's messages stay mounted briefly during the switch, and the second's own load-time autoscroll could land after the manual scroll below, so wait until new RegExp("/c/[^/]*{{SECOND}}").test(location.href) is true (allow 30s), then for the first [data-testid="message"] to be visible (allow 30s).
 3. The precondition the fix hinges on: focus is in the composer, not the list. Wait until document.activeElement?.tagName is exactly "TEXTAREA" (allow 10s).
@@ -1262,7 +1268,7 @@ func TestE2EScrollShortcutAfterDrawerSwitch(t *testing.T) {
 // (Linux/Windows move down a line, macOS jumps to the end), so it only
 // asserts that it left the first line.
 func TestE2EScrollShortcutLeavesCaretWithTextBelow(t *testing.T) {
-	scrollShortcut(t, `Cmd/Ctrl+ArrowDown leaves the caret alone when the composer has text below it.
+	scrollShortcut(t, useful(0), `Cmd/Ctrl+ArrowDown leaves the caret alone when the composer has text below it.
 1. Open the conversation.
 2. Fill the message input with "first line\nsecond line" (two lines). Eval setting its selectionStart and selectionEnd to 0.
 3. Scroll up.
@@ -1274,7 +1280,7 @@ func TestE2EScrollShortcutLeavesCaretWithTextBelow(t *testing.T) {
 // ArrowDown is list navigation in the drawer's single-line inputs, so they
 // keep the key even though no caret moves vertically.
 func TestE2EScrollShortcutLeavesDrawerSearch(t *testing.T) {
-	scrollShortcut(t, `Cmd/Ctrl+ArrowDown leaves the drawer search box alone.
+	scrollShortcut(t, useful(0), `Cmd/Ctrl+ArrowDown leaves the drawer search box alone.
 1. Open the conversation.
 2. Scroll up.
 3. Click the element with aria-label "Search conversations" inside ".drawer-header-actions". Wait until document.activeElement matches ".drawer-search-input" (allow 10s).
@@ -1288,7 +1294,7 @@ func TestE2EScrollShortcutLeavesDrawerSearch(t *testing.T) {
 // the key and advancing its selection is a positive signal, so this doesn't
 // green merely because the keypress went unprocessed.
 func TestE2EScrollShortcutLeavesSlashMenu(t *testing.T) {
-	scrollShortcut(t, `Cmd/Ctrl+ArrowDown leaves the composer's slash menu alone.
+	scrollShortcut(t, useful(0), `Cmd/Ctrl+ArrowDown leaves the composer's slash menu alone.
 1. Open the conversation.
 2. Click the message input and type "/". The slash command menu ([data-testid="slash-command-menu"]) should become visible (allow 10s).
 3. Scroll up.
@@ -1305,7 +1311,7 @@ func TestE2EScrollShortcutLeavesSlashMenu(t *testing.T) {
 // conversation behind the dock. Meta specifically: Ctrl+ArrowDown is
 // consumed by xterm itself, so it would pass even with the bug present.
 func TestE2EScrollShortcutLeavesTerminal(t *testing.T) {
-	scrollShortcut(t, `Cmd+ArrowDown leaves the terminal alone.
+	scrollShortcut(t, useful(0), `Cmd+ArrowDown leaves the terminal alone.
 1. Open the conversation.
 2. `+strings.ToUpper(scrollOpenWorkspaceTool("Terminal")[:1])+scrollOpenWorkspaceTool("Terminal")[1:]+`. Wait for the terminal's input, ".terminal-panel textarea[aria-label=\"Terminal input\"]", to be visible (allow 30s), then eval its focus().
 3. Scroll up.
@@ -1319,7 +1325,7 @@ func TestE2EScrollShortcutLeavesTerminal(t *testing.T) {
 // the graph keeps focus once it closes, so the test focuses the composer to
 // exercise its shortcut.
 func TestE2EScrollShortcutIgnoresListBehindOverlay(t *testing.T) {
-	scrollShortcut(t, `Cmd/Ctrl+ArrowDown does not scroll the message list hidden behind an overlay.
+	scrollShortcut(t, useful(0), `Cmd/Ctrl+ArrowDown does not scroll the message list hidden behind an overlay.
 1. Open the conversation.
 2. Scroll up.
 3. `+strings.ToUpper(scrollOpenWorkspaceTool("Git Graph")[:1])+scrollOpenWorkspaceTool("Git Graph")[1:]+`. ".git-graph-container" should become visible (allow 30s).

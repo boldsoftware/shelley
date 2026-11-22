@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/boldsoftware/shelley/lazycue"
 )
 
 // Ported from ui/e2e/recording.spec.ts.
@@ -304,7 +306,7 @@ func (s *shelley) acceptChats() *requests {
 }
 
 func TestE2ERecordingMobileTOCSurvivesRecorder(t *testing.T) {
-	e2e(t, `The mobile table of contents survives opening and cancelling the recorder. The test seeded a conversation at /c/{{SLUG}}. "The TOC button" is 'button[aria-label="Conversation table of contents"]', which stays in the page while hidden; check whether it is visible or hidden with wait_visible and wait_hidden on that selector, and click it with a click step (a real click, not an eval). `+recIDs+`
+	e2e(t, useful(0), `The mobile table of contents survives opening and cancelling the recorder. The test seeded a conversation at /c/{{SLUG}}. "The TOC button" is 'button[aria-label="Conversation table of contents"]', which stays in the page while hidden; check whether it is visible or hidden with wait_visible and wait_hidden on that selector, and click it with a click step (a real click, not an eval). `+recIDs+`
 1. Navigate to /c/{{SLUG}}. The TOC button should become visible.
 2. Mark it: eval "document.querySelector('button[aria-label=\"Conversation table of contents\"]').dataset.mountIdentity = 'original'".
 Then do steps 3 to 10 twice, as two rounds:
@@ -323,7 +325,7 @@ Then do steps 3 to 10 twice, as two rounds:
 }
 
 func TestE2ERecordingPaletteActions(t *testing.T) {
-	e2e(t, `The command palette offers exact recording actions and starts audio by click and screen by Enter. The test seeded a conversation at /c/{{SLUG}}. `+recMocks+recPalette+recIDs+`
+	e2e(t, useful(0), `The command palette offers exact recording actions and starts audio by click and screen by Enter. The test seeded a conversation at /c/{{SLUG}}. `+recMocks+recPalette+recIDs+`
 1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input to be visible.
 2. Open the recording palette.
 3. The palette item "Record audio" should be visible, and its ".command-palette-item-shortcut" should have the text exactly "Ctrl+Shift+M" (assert_text on '.command-palette-item[data-test-title="Record audio"] .command-palette-item-shortcut').
@@ -345,7 +347,7 @@ func TestE2ERecordingPaletteActions(t *testing.T) {
 }
 
 func TestE2ERecordingScreenShortcutBeforeDelayedDraft(t *testing.T) {
-	e2e(t, `The record-screen shortcut requests the screen in its own turn, before a delayed draft, and blocks duplicates. `+recMocks+recShortcuts+recPalette+`The server's answers to the browser's draft creations (POST /api/conversations/draft) are held back until call "releaseDraft"; call "draftStarted" says ("true" or "false") whether the server has created the draft, and call "draftRequests" counts the draft creations the browser sent. window.__displayRequestsAtDraft is what window.__recordingMock.displayRequests was when the page sent its draft creation. `+recIDs+`
+	e2e(t, useful(0), `The record-screen shortcut requests the screen in its own turn, before a delayed draft, and blocks duplicates. `+recMocks+recShortcuts+recPalette+`The server's answers to the browser's draft creations (POST /api/conversations/draft) are held back until call "releaseDraft"; call "draftStarted" says ("true" or "false") whether the server has created the draft, and call "draftRequests" counts the draft creations the browser sent. window.__displayRequestsAtDraft is what window.__recordingMock.displayRequests was when the page sent its draft creation. `+recIDs+`
 1. Navigate to /new and wait up to 30s for the message input to be visible.
 2. Press the record-screen shortcut.
 3. Call "draftStarted" until it returns "true".
@@ -391,7 +393,7 @@ window.fetch = function (input, init) {
 
 // earlyStopAttachments is the spec's test of early-stop attachments, with
 // the drawer navigation before or after Stop.
-func earlyStopAttachments(t *testing.T, beforeStop bool) {
+func earlyStopAttachments(t *testing.T, useful lazycue.Useful, beforeStop bool) {
 	navigate := `6. Select conversation {{VIEWED}} from the drawer.
 7. Click the stop button; the recording state should become "stopping".`
 	name := "before"
@@ -400,7 +402,7 @@ func earlyStopAttachments(t *testing.T, beforeStop bool) {
 7. Select conversation {{VIEWED}} from the drawer.`
 		name = "after"
 	}
-	e2e(t, `Early-stop attachments are kept when navigating `+name+` Stop and the submission fails. `+recMocks+recPaste+recDrawer+`The test seeded a separate draft conversation with ID {{VIEWED}} and the draft text "A separately viewed draft.". The server's answer to the browser's own draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created it and, once it has, sets {{DRAFT}} to its conversation ID. Recording uploads succeed, and every message submission (POST /api/conversation/<id>/chat) fails with "acceptance unavailable". `+recIDs+`
+	e2e(t, useful, `Early-stop attachments are kept when navigating `+name+` Stop and the submission fails. `+recMocks+recPaste+recDrawer+`The test seeded a separate draft conversation with ID {{VIEWED}} and the draft text "A separately viewed draft.". The server's answer to the browser's own draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created it and, once it has, sets {{DRAFT}} to its conversation ID. Recording uploads succeed, and every message submission (POST /api/conversation/<id>/chat) fails with "acceptance unavailable". `+recIDs+`
 1. Navigate to /new. Fill the message input with "Keep this text and attachment after the failed send.".
 2. Paste file "keep.txt".
 3. Click the voice button.
@@ -424,18 +426,18 @@ func earlyStopAttachments(t *testing.T, beforeStop bool) {
 }
 
 func TestE2ERecordingEarlyStopAttachmentsNavigateBeforeStop(t *testing.T) {
-	earlyStopAttachments(t, true)
+	earlyStopAttachments(t, useful(0), true)
 }
 
 func TestE2ERecordingEarlyStopAttachmentsNavigateAfterStop(t *testing.T) {
-	earlyStopAttachments(t, false)
+	earlyStopAttachments(t, useful(0), false)
 }
 
 // uploadedPNG matches the reference to a pasted PNG's upload in a message.
 var uploadedPNG = regexp.MustCompile(`\[/tmp/shelley-uploads/[^\]]+\.png\]`)
 
 func TestE2ERecordingInlineMicrophoneSubmitsTranscription(t *testing.T) {
-	e2e(t, `Microphone recording starts inline and submits only the transcription command. `+recMocks+recPaste+`Setting window.__recordingMock.meterPeak changes the fake microphone's level (it starts at 4). The page runs on a fake clock that steps drive with window.__clock: pauseAt(ms), runFor(ms) and resume(). Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/recording.webm; call "upload" describes the last one as "<method> <filename with every digit replaced by #> <its first 4 bytes in hex> <the rest of its bytes as text>". Message submissions (POST /api/conversation/<id>/chat) are recorded and held back until call "releaseAcceptance", then accepted; call "transcriptionRequested" says ("true" or "false") whether one has arrived, and call "chats" lists them as JSON: each one's message (with any "[/tmp/shelley-uploads/<name>.png]" reference rewritten to "[/tmp/shelley-uploads/*.png]"), its model, and whether its body has a transcription_context property. `+recIDs+`
+	e2e(t, useful(0), `Microphone recording starts inline and submits only the transcription command. `+recMocks+recPaste+`Setting window.__recordingMock.meterPeak changes the fake microphone's level (it starts at 4). The page runs on a fake clock that steps drive with window.__clock: pauseAt(ms), runFor(ms) and resume(). Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/recording.webm; call "upload" describes the last one as "<method> <filename with every digit replaced by #> <its first 4 bytes in hex> <the rest of its bytes as text>". Message submissions (POST /api/conversation/<id>/chat) are recorded and held back until call "releaseAcceptance", then accepted; call "transcriptionRequested" says ("true" or "false") whether one has arrived, and call "chats" lists them as JSON: each one's message (with any "[/tmp/shelley-uploads/<name>.png]" reference rewritten to "[/tmp/shelley-uploads/*.png]"), its model, and whether its body has a transcription_context property. `+recIDs+`
 1. Navigate to /new. Fill the message input with "Keep this note with the recording.".
 2. Paste file "context.png" with contents "image" and type "image/png".
 3. [data-testid="voice-video-icon"] should be visible.
@@ -586,7 +588,7 @@ func (s *shelley) firstRequest(call, suffix string) {
 }
 
 func TestE2ERecordingQueueStatesInOrderAfterReload(t *testing.T) {
-	e2e(t, `Durable transcription queue states render in exact order, also after a reload. The test seeded a conversation at /c/{{SLUG}} whose server data reports four queued messages, in this order: a plain message "echo: first queued message"; a transcription still working on /tmp/shelley-uploads/working.webm with the context "Keep this image [/tmp/shelley-uploads/context.png]"; a ready transcription of /tmp/shelley-uploads/ready.webm with the text "Finished spoken words."; and a failed transcription of /tmp/shelley-uploads/failed.webm with the error "transcription unavailable". The live event stream is cut off. Requests to send a queued message now (POST /api/conversation/<id>/send-queued?queued_id=<id>) are accepted without effect; call "sendQueued" reports the first one as "<method> /send-queued?<query>" ("none" before there is one). "The items" are the elements matching '[data-testid="queued-ghost"], [data-testid="transcription-task"]', in document order. Perform the steps in order.
+	e2e(t, useful(0), `Durable transcription queue states render in exact order, also after a reload. The test seeded a conversation at /c/{{SLUG}} whose server data reports four queued messages, in this order: a plain message "echo: first queued message"; a transcription still working on /tmp/shelley-uploads/working.webm with the context "Keep this image [/tmp/shelley-uploads/context.png]"; a ready transcription of /tmp/shelley-uploads/ready.webm with the text "Finished spoken words."; and a failed transcription of /tmp/shelley-uploads/failed.webm with the error "transcription unavailable". The live event stream is cut off. Requests to send a queued message now (POST /api/conversation/<id>/send-queued?queued_id=<id>) are accepted without effect; call "sendQueued" reports the first one as "<method> /send-queued?<query>" ("none" before there is one). "The items" are the elements matching '[data-testid="queued-ghost"], [data-testid="transcription-task"]', in document order. Perform the steps in order.
 1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input ([data-testid="message-input"]) to be visible.
 2. There should be exactly 4 items. Item 1 should contain "first queued message"; item 2 "Transcribing…", "working.webm" and "Keep this image"; item 3 "Finished spoken words." and "Queued"; item 4 "Recording failed" and "transcription unavailable".
 3. There should be exactly 2 [data-testid="queued-ghost"], exactly 2 [data-testid="transcription-task"] and exactly 1 [data-testid="send-queued-now"].
@@ -625,7 +627,7 @@ func TestE2ERecordingQueueStatesInOrderAfterReload(t *testing.T) {
 }
 
 func TestE2ERecordingMacShortcutsAndHints(t *testing.T) {
-	e2e(t, `On Macs, recording uses Command shortcuts and the palette shows matching hints. navigator.platform is "MacIntel", so the record-audio shortcut is press_key "M" with modifiers "Meta+Shift" and the record-screen shortcut press_key "M" with modifiers "Meta+Alt+Shift". `+recMocks+`"The palette item X" is the command palette item whose title is exactly X; select it with '.command-palette-item[data-test-title="X"]' (the page keeps that attribute equal to the item's title). `+recIDs+`
+	e2e(t, useful(0), `On Macs, recording uses Command shortcuts and the palette shows matching hints. navigator.platform is "MacIntel", so the record-audio shortcut is press_key "M" with modifiers "Meta+Shift" and the record-screen shortcut press_key "M" with modifiers "Meta+Alt+Shift". `+recMocks+`"The palette item X" is the command palette item whose title is exactly X; select it with '.command-palette-item[data-test-title="X"]' (the page keeps that attribute equal to the item's title). `+recIDs+`
 1. Navigate to /new. The voice button should be enabled.
 2. Press "k" with modifier "Meta". The command palette input (".command-palette-input") should become visible; fill it with "Record audio".
 3. The "kbd" of the palette item "Record audio" should have the text exactly "⌘⇧M", and the "kbd" of the palette item "Record audio and screen" the text exactly "⌘⌥⇧M".
@@ -639,7 +641,7 @@ func TestE2ERecordingMacShortcutsAndHints(t *testing.T) {
 }
 
 func TestE2ERecordingIgnoresRepeatedComposingConsumedShortcuts(t *testing.T) {
-	e2e(t, `Recording ignores repeated, composing, and consumed recording shortcuts. `+recMocks+recShortcuts+recIDs+`
+	e2e(t, useful(0), `Recording ignores repeated, composing, and consumed recording shortcuts. `+recMocks+recShortcuts+recIDs+`
 1. Navigate to /new. The voice button should be enabled.
 2. Dispatch three record-audio keydowns on the document that recording must ignore, in one eval: "(() => { const o = {key: 'M', code: 'KeyM', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true}; document.dispatchEvent(new KeyboardEvent('keydown', {...o, repeat: true})); document.dispatchEvent(new KeyboardEvent('keydown', {...o, isComposing: true})); const consumed = new KeyboardEvent('keydown', o); consumed.preventDefault(); document.dispatchEvent(consumed); return 'dispatched'; })()".
 3. The voice button should be enabled, and window.__recordingMock.microphoneRequests must be 0.
@@ -648,7 +650,7 @@ func TestE2ERecordingIgnoresRepeatedComposingConsumedShortcuts(t *testing.T) {
 }
 
 func TestE2ERecordingNotBehindAnotherDialog(t *testing.T) {
-	e2e(t, `Recording does not start behind another dialog. `+recMocks+recShortcuts+recPalette+`"The dialog" is the one visible element with role "dialog"; there must be exactly one. `+recIDs+`
+	e2e(t, useful(0), `Recording does not start behind another dialog. `+recMocks+recShortcuts+recPalette+`"The dialog" is the one visible element with role "dialog"; there must be exactly one. `+recIDs+`
 1. Navigate to /new. The voice button should be enabled.
 2. Open the recording palette, then fill its input with "Notification Settings" and click the element whose text is exactly "Notification Settings".
 3. The dialog should be visible.
@@ -660,7 +662,7 @@ Cmd-K can also open above an existing modal: neither its shortcuts nor its actio
 }
 
 func TestE2ERecordingCancelsScreenWhileDraftPending(t *testing.T) {
-	e2e(t, `Cancelling selected screen capture while draft creation is pending. `+recMocks+recShortcuts+`The server's answer to the browser's draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created the draft, and call "draftAnswered" whether the browser has received the answer. `+recIDs+`
+	e2e(t, useful(0), `Cancelling selected screen capture while draft creation is pending. `+recMocks+recShortcuts+`The server's answer to the browser's draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created the draft, and call "draftAnswered" whether the browser has received the answer. `+recIDs+`
 1. Navigate to /new. The voice button should be enabled.
 2. Press the record-screen shortcut.
 3. Call "draftCreated" until it returns "true".
@@ -677,7 +679,7 @@ func TestE2ERecordingCancelsScreenWhileDraftPending(t *testing.T) {
 }
 
 func TestE2ERecordingMicrophoneBeforeDelayedDraftCancelStopsTracks(t *testing.T) {
-	e2e(t, `The microphone starts before a delayed draft, and cancelling stops its tracks. `+recMocks+recShortcuts+`The server's answer to the browser's draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created the draft. Call "uploads" counts recording uploads (POST /api/upload/raw). `+recIDs+`
+	e2e(t, useful(0), `The microphone starts before a delayed draft, and cancelling stops its tracks. `+recMocks+recShortcuts+`The server's answer to the browser's draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created the draft. Call "uploads" counts recording uploads (POST /api/upload/raw). `+recIDs+`
 1. Navigate to /new. Fill the message input with "Pending draft text.".
 2. Press the record-audio shortcut.
 3. Exactly one [data-testid="recording-inline"] should exist, and the recording state should become "recording".
@@ -694,7 +696,7 @@ func TestE2ERecordingMicrophoneBeforeDelayedDraftCancelStopsTracks(t *testing.T)
 }
 
 func TestE2ERecordingReturnBeforeDelayedDraftNoNavigateAfterCancel(t *testing.T) {
-	e2e(t, `A Return clicked before the delayed draft resolves does not navigate after cancel. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recMocks+recDrawer+recFloating+`The server's answer to the browser's draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created the draft, and call "draftAnswered" whether the browser has received the answer. `+recIDs+`
+	e2e(t, useful(0), `A Return clicked before the delayed draft resolves does not navigate after cancel. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recMocks+recDrawer+recFloating+`The server's answer to the browser's draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created the draft, and call "draftAnswered" whether the browser has received the answer. `+recIDs+`
 1. Navigate to /new and click the voice button.
 2. Call "draftCreated" until it returns "true".
 3. Select conversation {{VIEWED}} from the drawer. The recorder should float.
@@ -711,7 +713,7 @@ func TestE2ERecordingReturnBeforeDelayedDraftNoNavigateAfterCancel(t *testing.T)
 }
 
 func TestE2ERecordingReturnLookupAfterCancelNoNavigate(t *testing.T) {
-	e2e(t, `A Return whose lookup finishes after cancel does not navigate. The test seeded a source conversation at /c/{{SOURCE_SLUG}} and a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recMocks+recDrawer+recFloating+`The recorder's lookup of its source conversation (GET /api/conversation-by-slug/<source ID>) is held back until call "releaseLookup"; call "lookupStarted" says ("true" or "false") whether it has arrived. Eval window.__watchReturnRead() makes the page set the body's data-recording-return-read attribute to "true" once it has read the JSON of a later conversation-by-slug response. `+recIDs+`
+	e2e(t, useful(0), `A Return whose lookup finishes after cancel does not navigate. The test seeded a source conversation at /c/{{SOURCE_SLUG}} and a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recMocks+recDrawer+recFloating+`The recorder's lookup of its source conversation (GET /api/conversation-by-slug/<source ID>) is held back until call "releaseLookup"; call "lookupStarted" says ("true" or "false") whether it has arrived. Eval window.__watchReturnRead() makes the page set the body's data-recording-return-read attribute to "true" once it has read the JSON of a later conversation-by-slug response. `+recIDs+`
 1. Navigate to /c/{{SOURCE_SLUG}}. The voice button should be enabled; click it.
 2. The recording state should become "recording".
 3. Select conversation {{VIEWED}} from the drawer. The recorder should float.
@@ -756,7 +758,7 @@ Wait for JSON consumption, not merely the response headers. The lookup's awaitin
 }
 
 func TestE2ERecordingFinishedBeforeDelayedDraftSubmitsToIt(t *testing.T) {
-	e2e(t, `A recording that finished before its delayed draft is submitted to that draft. `+recMocks+`The server's answer to the browser's draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created it and, once it has, sets {{DRAFT}} to its conversation ID. Recording uploads (POST /api/upload/raw) succeed with the path /tmp/shelley-uploads/early-stop.webm, and call "uploads" counts them. Message submissions (POST /api/conversation/<id>/chat) are accepted without being sent on; call "chatPaths" lists their URL paths as JSON. `+recIDs+`
+	e2e(t, useful(0), `A recording that finished before its delayed draft is submitted to that draft. `+recMocks+`The server's answer to the browser's draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created it and, once it has, sets {{DRAFT}} to its conversation ID. Recording uploads (POST /api/upload/raw) succeed with the path /tmp/shelley-uploads/early-stop.webm, and call "uploads" counts them. Message submissions (POST /api/conversation/<id>/chat) are accepted without being sent on; call "chatPaths" lists their URL paths as JSON. `+recIDs+`
 1. Navigate to /new. Fill the message input with "Context for the early stop.". Click the voice button.
 2. The recording state should become "recording".
 3. Call "draftCreated" until it returns "true".
@@ -773,7 +775,7 @@ func TestE2ERecordingFinishedBeforeDelayedDraftSubmitsToIt(t *testing.T) {
 }
 
 func TestE2ERecordingRetainsUploadWhenDelayedDraftFailsAfterStop(t *testing.T) {
-	e2e(t, `The uploaded recording is retained when its delayed draft fails after stopping. `+recMocks+`The browser's draft creations are held back until call "releaseDraft", then fail with "draft unavailable". Recording uploads (POST /api/upload/raw) succeed with the path /tmp/shelley-uploads/orphaned.webm. Message submissions are accepted without being sent on, and call "chats" counts them. `+recIDs+`
+	e2e(t, useful(0), `The uploaded recording is retained when its delayed draft fails after stopping. `+recMocks+`The browser's draft creations are held back until call "releaseDraft", then fail with "draft unavailable". Recording uploads (POST /api/upload/raw) succeed with the path /tmp/shelley-uploads/orphaned.webm. Message submissions are accepted without being sent on, and call "chats" counts them. `+recIDs+`
 1. Navigate to /new. Fill the message input with "Context that stays after the failed draft.". Click the voice button.
 2. The recording state should become "recording".
 3. Click the stop button. The recording state should become "stopping".
@@ -790,7 +792,7 @@ func TestE2ERecordingRetainsUploadWhenDelayedDraftFailsAfterStop(t *testing.T) {
 
 // retriesScreenMetadata is the spec's test of retrying a screen recording
 // whose metadata upload failed, with or without a failed draft too.
-func retriesScreenMetadata(t *testing.T, draftFails bool) {
+func retriesScreenMetadata(t *testing.T, useful lazycue.Useful, draftFails bool) {
 	title, drafts, draftSteps, draftCheck := "Retained screen metadata is retried without reuploading the video", "", "", ""
 	if draftFails {
 		title = "Retained screen metadata is retried after draft failure"
@@ -799,7 +801,7 @@ func retriesScreenMetadata(t *testing.T, draftFails bool) {
 4a. Call "releaseDraft". The recording state should become "stopping", and ".status-error" should contain "draft unavailable".`
 		draftCheck = `,"drafts":2`
 	}
-	e2e(t, title+`. `+recMocks+recShortcuts+recPaste+drafts+`Recording uploads (POST /api/upload/raw) are either the video or, with a filename ending in ".json", its metadata. Videos succeed with the path /tmp/shelley-uploads/saved-screen.webm. The first metadata upload is held back until call "releaseMetadata", then fails with "metadata unavailable"; call "metadataStarted" says ("true" or "false") whether it has arrived. Later metadata uploads succeed with the path /tmp/shelley-uploads/saved-screen.webm.json. Message submissions are accepted without being sent on, and call "chats" counts them. Call "requests" reports, as JSON, how many videos and metadata were uploaded, whether the second metadata upload's body is the same as the first's ("sameMetadata"), and how many submissions`+map[bool]string{true: ` and draft creations`, false: ``}[draftFails]+` there were. `+recIDs+`
+	e2e(t, useful, title+`. `+recMocks+recShortcuts+recPaste+drafts+`Recording uploads (POST /api/upload/raw) are either the video or, with a filename ending in ".json", its metadata. Videos succeed with the path /tmp/shelley-uploads/saved-screen.webm. The first metadata upload is held back until call "releaseMetadata", then fails with "metadata unavailable"; call "metadataStarted" says ("true" or "false") whether it has arrived. Later metadata uploads succeed with the path /tmp/shelley-uploads/saved-screen.webm.json. Message submissions are accepted without being sent on, and call "chats" counts them. Call "requests" reports, as JSON, how many videos and metadata were uploaded, whether the second metadata upload's body is the same as the first's ("sameMetadata"), and how many submissions`+map[bool]string{true: ` and draft creations`, false: ``}[draftFails]+` there were. `+recIDs+`
 1. Navigate to /new. Fill the message input with "Keep this screen recording context.". Paste file "screen-context.txt".
 2. Press the record-screen shortcut. The recording state should become "recording".
 3. Click the stop button.
@@ -861,15 +863,15 @@ func retriesScreenMetadata(t *testing.T, draftFails bool) {
 }
 
 func TestE2ERecordingRetriesScreenMetadataWithoutReupload(t *testing.T) {
-	retriesScreenMetadata(t, false)
+	retriesScreenMetadata(t, useful(0), false)
 }
 
 func TestE2ERecordingRetriesScreenMetadataAfterDraftFailure(t *testing.T) {
-	retriesScreenMetadata(t, true)
+	retriesScreenMetadata(t, useful(0), true)
 }
 
 func TestE2ERecordingRetainsUploadFinishingAfterDraftFailure(t *testing.T) {
-	e2e(t, `An upload that finishes after draft failure is retained. `+recMocks+`The browser's draft creations are held back until call "releaseDraft", then fail with "draft unavailable". Recording uploads (POST /api/upload/raw) are held back until call "releaseUpload", then succeed with the path /tmp/shelley-uploads/late-upload.webm; call "uploadStarted" says ("true" or "false") whether one has arrived. `+recIDs+`
+	e2e(t, useful(0), `An upload that finishes after draft failure is retained. `+recMocks+`The browser's draft creations are held back until call "releaseDraft", then fail with "draft unavailable". Recording uploads (POST /api/upload/raw) are held back until call "releaseUpload", then succeed with the path /tmp/shelley-uploads/late-upload.webm; call "uploadStarted" says ("true" or "false") whether one has arrived. `+recIDs+`
 1. Navigate to /new and click the voice button. The recording state should become "recording".
 2. Click the stop button. Call "uploadStarted" until it returns "true".
 3. Call "releaseDraft". The recording state should be "stopping", and ".status-error" should contain "draft unavailable".
@@ -889,7 +891,7 @@ func TestE2ERecordingRetainsUploadFinishingAfterDraftFailure(t *testing.T) {
 }
 
 func TestE2ERecordingKeepsMicrophoneAfterDestinationFailure(t *testing.T) {
-	e2e(t, `The microphone recording is kept after destination failure until the user cancels. `+recMocks+recPaste+`The browser's draft creations are held back until call "releaseDraft", then fail with "draft unavailable". `+recIDs+`
+	e2e(t, useful(0), `The microphone recording is kept after destination failure until the user cancels. `+recMocks+recPaste+`The browser's draft creations are held back until call "releaseDraft", then fail with "draft unavailable". `+recIDs+`
 1. Navigate to /new. Fill the message input with "Keep this after the failed draft.". Paste file "keep.txt".
 2. Click the voice button. The recording state should become "recording".
 3. Call "releaseDraft".
@@ -905,7 +907,7 @@ func TestE2ERecordingKeepsMicrophoneAfterDestinationFailure(t *testing.T) {
 }
 
 func TestE2ERecordingRetriesFailedDestinationAfterNavigation(t *testing.T) {
-	e2e(t, `A failed recording destination is retried after navigation without recapturing or changing its context. The test seeded a separate draft conversation {{VIEWED}} with the draft text "A separate draft.". `+recMocks+recPaste+recDrawer+recNewFromHeader+`Draft creations (POST /api/conversations/draft) whose "draft" is "A newer new-conversation composer." reach the server, but the server's answer is held back until call "releaseNewerDraft"; call "newerDraftStarted" says ("true" or "false") whether the server has created that draft. Of the other draft creations, the first is held back until call "releaseFirstDraft" and then fails with "draft unavailable", the second fails with "retry still unavailable", and later ones reach the server. Call "drafts" reports those other draft creations as "<count> <same|different>": "same" when every request body equals the first's. Call "source" says ("true" or "false") whether one of them reached the server, and once it has, sets {{SOURCE}} to the conversation it created. Attachment uploads (POST /api/upload) answer with the path /tmp/shelley-uploads/original-context.txt. Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/retained.webm, and call "uploads" counts them. Message submissions are accepted without being sent on; call "submissions" lists them as JSON, each with its URL path, message and model. `+recIDs+`
+	e2e(t, useful(0), `A failed recording destination is retried after navigation without recapturing or changing its context. The test seeded a separate draft conversation {{VIEWED}} with the draft text "A separate draft.". `+recMocks+recPaste+recDrawer+recNewFromHeader+`Draft creations (POST /api/conversations/draft) whose "draft" is "A newer new-conversation composer." reach the server, but the server's answer is held back until call "releaseNewerDraft"; call "newerDraftStarted" says ("true" or "false") whether the server has created that draft. Of the other draft creations, the first is held back until call "releaseFirstDraft" and then fails with "draft unavailable", the second fails with "retry still unavailable", and later ones reach the server. Call "drafts" reports those other draft creations as "<count> <same|different>": "same" when every request body equals the first's. Call "source" says ("true" or "false") whether one of them reached the server, and once it has, sets {{SOURCE}} to the conversation it created. Attachment uploads (POST /api/upload) answer with the path /tmp/shelley-uploads/original-context.txt. Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/retained.webm, and call "uploads" counts them. Message submissions are accepted without being sent on; call "submissions" lists them as JSON, each with its URL path, message and model. `+recIDs+`
 1. Navigate to /new. Fill the message input with "Original recording context.". Paste file "original-context.txt".
 2. Click the voice button. The recording state should become "recording".
 3. Call "releaseFirstDraft". [data-testid="recording-error"] should come to contain "draft unavailable", and the recording state should still be "recording".
@@ -980,7 +982,7 @@ func TestE2ERecordingRetriesFailedDestinationAfterNavigation(t *testing.T) {
 }
 
 func TestE2ERecordingRetriesFailedRawUploadWithRetainedBytes(t *testing.T) {
-	e2e(t, `A failed raw upload is retried using the retained audio bytes. `+recMocks+`The first recording upload (POST /api/upload/raw) fails with "upload unavailable"; later ones succeed with the path /tmp/shelley-uploads/retried-upload.webm. Call "uploads" reports them as "<count> <same|different>": "same" when every upload's bytes equal the first's. Message submissions are accepted without being sent on, and call "chats" counts them. `+recIDs+`
+	e2e(t, useful(0), `A failed raw upload is retried using the retained audio bytes. `+recMocks+`The first recording upload (POST /api/upload/raw) fails with "upload unavailable"; later ones succeed with the path /tmp/shelley-uploads/retried-upload.webm. Call "uploads" reports them as "<count> <same|different>": "same" when every upload's bytes equal the first's. Message submissions are accepted without being sent on, and call "chats" counts them. `+recIDs+`
 1. Navigate to /new and click the voice button. The recording state should become "recording".
 2. Click the stop button. [data-testid="recording-retained"] should become visible, and [data-testid="recording-error"] should contain "upload unavailable".
 3. Call "chats" must return "0", and window.__recordingMock.stoppedTracks should become 1.
@@ -1010,7 +1012,7 @@ func TestE2ERecordingRetriesFailedRawUploadWithRetainedBytes(t *testing.T) {
 }
 
 func TestE2ERecordingDiscardsRetainedWhileDestinationPending(t *testing.T) {
-	e2e(t, `Discarding retained audio while its destination is pending submits nothing later. `+recMocks+`The server's answer to the browser's draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created it and, once it has, sets {{DRAFT}} to its conversation ID. Recording uploads succeed with the path /tmp/shelley-uploads/discard-pending.webm, and call "uploads" counts them. Message submissions are accepted without being sent on, and call "chats" counts them. `+recIDs+`
+	e2e(t, useful(0), `Discarding retained audio while its destination is pending submits nothing later. `+recMocks+`The server's answer to the browser's draft creation is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created it and, once it has, sets {{DRAFT}} to its conversation ID. Recording uploads succeed with the path /tmp/shelley-uploads/discard-pending.webm, and call "uploads" counts them. Message submissions are accepted without being sent on, and call "chats" counts them. `+recIDs+`
 1. Navigate to /new. Fill the message input with "Keep the composer after discarding audio.". Click the voice button.
 2. Call "draftCreated" until it returns "true".
 3. The recording state should become "recording". Click the stop button.
@@ -1028,7 +1030,7 @@ func TestE2ERecordingDiscardsRetainedWhileDestinationPending(t *testing.T) {
 }
 
 func TestE2ERecordingDiscardFailedFloatingReleasesPreviews(t *testing.T) {
-	e2e(t, `Discarding a failed floating recording releases orphaned previews without touching the viewed composer. The test seeded a separate draft conversation {{VIEWED}} with the draft text "Keep the viewed draft.". `+recMocks+`window.__recordingMock.revokedPreviews lists the object URLs the page revoked. `+recPaste+recDrawer+`Draft creations fail with "draft unavailable". Attachment uploads (POST /api/upload) answer with the path /tmp/shelley-uploads/attachment.png, and recording uploads with /tmp/shelley-uploads/discarded.webm. `+recIDs+`
+	e2e(t, useful(0), `Discarding a failed floating recording releases orphaned previews without touching the viewed composer. The test seeded a separate draft conversation {{VIEWED}} with the draft text "Keep the viewed draft.". `+recMocks+`window.__recordingMock.revokedPreviews lists the object URLs the page revoked. `+recPaste+recDrawer+`Draft creations fail with "draft unavailable". Attachment uploads (POST /api/upload) answer with the path /tmp/shelley-uploads/attachment.png, and recording uploads with /tmp/shelley-uploads/discarded.webm. `+recIDs+`
 1. Navigate to /new. Paste file "source.png" with contents "image" and type "image/png".
 2. Save the preview: eval "window.__preview = document.querySelector('.message-attachment-thumb').getAttribute('src')".
 3. Click the voice button. [data-testid="recording-error"] should come to contain "draft unavailable", and the recording state should be "recording".
@@ -1052,12 +1054,12 @@ func TestE2ERecordingDiscardFailedFloatingReleasesPreviews(t *testing.T) {
 
 // escapeConsumed is the spec's test that a menu consuming Escape leaves the
 // Ctrl+M chord unarmed.
-func escapeConsumed(t *testing.T, fileMenu bool) {
+func escapeConsumed(t *testing.T, useful lazycue.Useful, fileMenu bool) {
 	menu, open, typed := "palette", `Open the recording palette.`, `"a"`
 	if fileMenu {
 		menu, open, typed = "file menu", `Fill the message input with "@example". [data-testid="file-completion-menu"] should become visible.`, `"@examplea"`
 	}
-	e2e(t, `Plain typing is not recorded after the `+menu+` consumes Escape. `+recMocks+recPalette+recIDs+`
+	e2e(t, useful, `Plain typing is not recorded after the `+menu+` consumes Escape. `+recMocks+recPalette+recIDs+`
 1. Navigate to /new. The voice button should be enabled.
 2. `+open+`
 3. Press "m" with modifier "Control", then press Escape.
@@ -1068,15 +1070,15 @@ func escapeConsumed(t *testing.T, fileMenu bool) {
 }
 
 func TestE2ERecordingPlainTypingAfterPaletteConsumesEscape(t *testing.T) {
-	escapeConsumed(t, false)
+	escapeConsumed(t, useful(0), false)
 }
 
 func TestE2ERecordingPlainTypingAfterFileMenuConsumesEscape(t *testing.T) {
-	escapeConsumed(t, true)
+	escapeConsumed(t, useful(0), true)
 }
 
 func TestE2ERecordingRejectedChooserRetriesScreenInClickTurn(t *testing.T) {
-	e2e(t, `The composer is preserved after a rejected chooser, and screen capture is retried in a click turn. The test seeded a conversation at /c/{{SLUG}}. `+recMocks+`Setting window.__recordingMock.displayError to a message makes screen capture fail with it; "" makes it succeed. `+recShortcuts+recIDs+`Read the counts with eval "(m => ({display: m.displayRequests, synchronousDisplay: m.synchronousDisplayRequests, microphone: m.microphoneRequests, starts: m.recorderStarts}))(window.__recordingMock)".
+	e2e(t, useful(0), `The composer is preserved after a rejected chooser, and screen capture is retried in a click turn. The test seeded a conversation at /c/{{SLUG}}. `+recMocks+`Setting window.__recordingMock.displayError to a message makes screen capture fail with it; "" makes it succeed. `+recShortcuts+recIDs+`Read the counts with eval "(m => ({display: m.displayRequests, synchronousDisplay: m.synchronousDisplayRequests, microphone: m.microphoneRequests, starts: m.recorderStarts}))(window.__recordingMock)".
 1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input to be visible. Fill it with "Keep this draft through screen failures.".
 2. Eval "window.__recordingMock.displayError = 'Screen sharing was cancelled'".
 3. Press the record-screen shortcut.
@@ -1092,7 +1094,7 @@ func TestE2ERecordingRejectedChooserRetriesScreenInClickTurn(t *testing.T) {
 }
 
 func TestE2ERecordingKeepsScreenAfterDestinationFailure(t *testing.T) {
-	e2e(t, `Screen capture is kept after destination failure until the user cancels. `+recMocks+recShortcuts+`Draft creations fail with "draft unavailable"; call "draftText" returns the "draft" field of the last draft creation's JSON body ("none" before there is one). `+recIDs+`
+	e2e(t, useful(0), `Screen capture is kept after destination failure until the user cancels. `+recMocks+recShortcuts+`Draft creations fail with "draft unavailable"; call "draftText" returns the "draft" field of the last draft creation's JSON body ("none" before there is one). `+recIDs+`
 1. Navigate to /new and wait up to 30s for the message input to be visible. Fill it with "Do not lose this failed recording draft.".
 2. Press the record-screen shortcut.
 3. Call "draftText" should return "Do not lose this failed recording draft.".
@@ -1120,7 +1122,7 @@ func TestE2ERecordingKeepsScreenAfterDestinationFailure(t *testing.T) {
 }
 
 func TestE2ERecordingPaletteHidesActionsWhileAttachmentUploads(t *testing.T) {
-	e2e(t, `Recording palette actions are hidden while an attachment uploads. The test seeded a conversation at /c/{{SLUG}}. Attachment uploads (POST /api/upload) are held back until call "releaseUpload". `+recPalette+recIDs+`
+	e2e(t, useful(0), `Recording palette actions are hidden while an attachment uploads. The test seeded a conversation at /c/{{SLUG}}. Attachment uploads (POST /api/upload) are held back until call "releaseUpload". `+recPalette+recIDs+`
 1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input to be visible.
 2. Drop a file on the composer: eval window.__dropFile("pending.txt", "pending").
 3. Exactly one ".message-attachment-uploading" should exist.
@@ -1146,7 +1148,7 @@ func TestE2ERecordingPaletteHidesActionsWhileAttachmentUploads(t *testing.T) {
 }
 
 func TestE2ERecordingPaletteHidesActionsInArchivedConversation(t *testing.T) {
-	e2e(t, `Recording palette actions are hidden in an archived conversation. The test seeded and archived a conversation {{ARCHIVED}}. `+recPalette+recIDs+`
+	e2e(t, useful(0), `Recording palette actions are hidden in an archived conversation. The test seeded and archived a conversation {{ARCHIVED}}. `+recPalette+recIDs+`
 1. Navigate to /new and wait up to 30s for the message input to be visible.
 2. If the button with aria-label "Open conversations" is visible, click it.
 3. Click the button "View Archived", then click ".conversation-item[data-conversation-id=\"{{ARCHIVED}}\"]".
@@ -1187,12 +1189,12 @@ func submissions(chats *requests, fields ...string) func() string {
 
 // switchingRecorder is the spec's test of one live recorder across a switch
 // away from an existing draft or conversation and back.
-func switchingRecorder(t *testing.T, draft bool) {
+func switchingRecorder(t *testing.T, useful lazycue.Useful, draft bool) {
 	kind, prepare, original := "conversation", `Fill it with "Preserve the conversation recording context.".`, `the conversation at /c/{{ORIGINAL}}`
 	if draft {
 		kind, prepare, original = "draft", `It should have the value "Preserve the draft recording context.".`, `a draft conversation at /c/{{ORIGINAL}} with the draft text "Preserve the draft recording context."`
 	}
-	e2e(t, `One live recorder is kept when switching from an existing `+kind+` and returning. The test seeded `+original+`, and another conversation {{OTHER}} at /c/{{OTHER_SLUG}}. `+recMocks+recDrawer+recFloating+`Recording uploads are counted by call "uploads". "The recorder counts" are what eval "(m => ({starts: m.recorderStarts, stops: m.recorderStops}))(window.__recordingMock)" returns. `+recIDs+`
+	e2e(t, useful, `One live recorder is kept when switching from an existing `+kind+` and returning. The test seeded `+original+`, and another conversation {{OTHER}} at /c/{{OTHER_SLUG}}. `+recMocks+recDrawer+recFloating+`Recording uploads are counted by call "uploads". "The recorder counts" are what eval "(m => ({starts: m.recorderStarts, stops: m.recorderStops}))(window.__recordingMock)" returns. `+recIDs+`
 1. Navigate to /c/{{ORIGINAL}} and wait up to 30s for the message input to be visible. `+prepare+`
 2. Click the voice button. The recording panel should be visible. Mark it: eval "document.querySelector('[data-testid=\"recording-panel\"]').setAttribute('data-instance-marker', 'original')".
 3. window.__recordingMock.recorderStarts should become 1.
@@ -1219,15 +1221,15 @@ func switchingRecorder(t *testing.T, draft bool) {
 }
 
 func TestE2ERecordingOneLiveRecorderSwitchingFromDraft(t *testing.T) {
-	switchingRecorder(t, true)
+	switchingRecorder(t, useful(0), true)
 }
 
 func TestE2ERecordingOneLiveRecorderSwitchingFromConversation(t *testing.T) {
-	switchingRecorder(t, false)
+	switchingRecorder(t, useful(0), false)
 }
 
 func TestE2ERecordingScreenCaptureAndPreviewSurviveNavigation(t *testing.T) {
-	e2e(t, `One screen capture and its preview stay alive across navigation and return. The test seeded the conversation at /c/{{ORIGINAL_SLUG}} and another conversation {{VIEWED}}. `+recMocks+recDrawer+recFloating+`Recording uploads are counted by call "uploads". "The preview" is [data-testid="recording-preview"], a video element. "The capture counts" are what eval "({sameStarts: window.__recordingMock.recorderStarts === window.__starts, displayRequests: window.__recordingMock.displayRequests})" returns. "The preview keeps its stream" when eval "document.querySelector('[data-testid=\"recording-preview\"]').srcObject === window.__recordingPreviewSource" is true. `+recIDs+`
+	e2e(t, useful(0), `One screen capture and its preview stay alive across navigation and return. The test seeded the conversation at /c/{{ORIGINAL_SLUG}} and another conversation {{VIEWED}}. `+recMocks+recDrawer+recFloating+`Recording uploads are counted by call "uploads". "The preview" is [data-testid="recording-preview"], a video element. "The capture counts" are what eval "({sameStarts: window.__recordingMock.recorderStarts === window.__starts, displayRequests: window.__recordingMock.displayRequests})" returns. "The preview keeps its stream" when eval "document.querySelector('[data-testid=\"recording-preview\"]').srcObject === window.__recordingPreviewSource" is true. `+recIDs+`
 1. Navigate to /c/{{ORIGINAL_SLUG}} and wait up to 30s for the message input to be visible.
 2. Click the voice button. [data-testid="recording-status"] should have the text exactly "Recording…".
 3. Click [data-testid="recording-screen-button"].
@@ -1249,7 +1251,7 @@ func TestE2ERecordingScreenCaptureAndPreviewSurviveNavigation(t *testing.T) {
 }
 
 func TestE2ERecordingFloatsWhileArchivedConversationViewed(t *testing.T) {
-	e2e(t, `The active recorder keeps floating while an archived conversation is viewed. The test seeded the conversation at /c/{{ORIGINAL_SLUG}}, and archived another conversation {{ARCHIVED}} at /c/{{ARCHIVED_SLUG}}. `+recMocks+recFloating+`Recording uploads are counted by call "uploads". `+recIDs+`
+	e2e(t, useful(0), `The active recorder keeps floating while an archived conversation is viewed. The test seeded the conversation at /c/{{ORIGINAL_SLUG}}, and archived another conversation {{ARCHIVED}} at /c/{{ARCHIVED_SLUG}}. `+recMocks+recFloating+`Recording uploads are counted by call "uploads". `+recIDs+`
 1. Navigate to /c/{{ORIGINAL_SLUG}} and wait up to 30s for the message input to be visible.
 2. Click the voice button. The recording panel should be visible. Mark it: eval "document.querySelector('[data-testid=\"recording-panel\"]').setAttribute('data-instance-marker', 'archived')".
 3. If the button with aria-label "Open conversations" is visible, click it. Click the button "View Archived", then click ".conversation-item[data-conversation-id=\"{{ARCHIVED}}\"]".
@@ -1268,7 +1270,7 @@ func TestE2ERecordingFloatsWhileArchivedConversationViewed(t *testing.T) {
 }
 
 func TestE2ERecordingRestoresSourceDraftKeepsViewedDraftSeparate(t *testing.T) {
-	e2e(t, `The source draft is restored after return, and the viewed draft is kept separate. The test seeded the conversation at /c/{{ORIGINAL_SLUG}} and a draft conversation {{VIEWED}} with the draft text "Seeded text in the viewed draft.". `+recMocks+recDrawer+`Recording uploads are counted by call "uploads". `+recIDs+`
+	e2e(t, useful(0), `The source draft is restored after return, and the viewed draft is kept separate. The test seeded the conversation at /c/{{ORIGINAL_SLUG}} and a draft conversation {{VIEWED}} with the draft text "Seeded text in the viewed draft.". `+recMocks+recDrawer+`Recording uploads are counted by call "uploads". `+recIDs+`
 1. Navigate to /c/{{ORIGINAL_SLUG}} and wait up to 30s for the message input to be visible. Fill it with "Restore this source text after cancellation.".
 2. Click the voice button. The recording panel should be visible.
 3. Select conversation {{VIEWED}} from the drawer. The message input should have the value "Seeded text in the viewed draft.".
@@ -1285,7 +1287,7 @@ func TestE2ERecordingRestoresSourceDraftKeepsViewedDraftSeparate(t *testing.T) {
 }
 
 func TestE2ERecordingStopsFloatingIntoOriginalConversation(t *testing.T) {
-	e2e(t, `Stopping a floating recording submits it to its original conversation without touching the viewed composer. The test seeded the conversation {{ORIGINAL}} at /c/{{ORIGINAL_SLUG}} and another conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recMocks+recDrawer+recFloating+recPaste+`Attachment uploads (POST /api/upload) answer with the path /tmp/shelley-uploads/viewed-draft.txt. Recording uploads (POST /api/upload/raw) answer with /tmp/shelley-uploads/floating.webm, and call "uploads" counts them. Message submissions are accepted without being sent on; call "chats" counts them, and call "submissions" lists them as JSON, each with its URL path, message, model, and whether its body has a transcription_context property. `+recIDs+`
+	e2e(t, useful(0), `Stopping a floating recording submits it to its original conversation without touching the viewed composer. The test seeded the conversation {{ORIGINAL}} at /c/{{ORIGINAL_SLUG}} and another conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recMocks+recDrawer+recFloating+recPaste+`Attachment uploads (POST /api/upload) answer with the path /tmp/shelley-uploads/viewed-draft.txt. Recording uploads (POST /api/upload/raw) answer with /tmp/shelley-uploads/floating.webm, and call "uploads" counts them. Message submissions are accepted without being sent on; call "chats" counts them, and call "submissions" lists them as JSON, each with its URL path, message, model, and whether its body has a transcription_context property. `+recIDs+`
 1. Navigate to /c/{{ORIGINAL_SLUG}} and wait up to 30s for the message input to be visible. Fill it with "Original spoken context.".
 2. Click the voice button. [data-testid="recording-status"] should have the text exactly "Recording…".
 3. Select conversation {{VIEWED}} from the drawer. Fill the message input with "Do not disturb this viewed draft.". Paste file "viewed-draft.txt".
@@ -1311,7 +1313,7 @@ func TestE2ERecordingStopsFloatingIntoOriginalConversation(t *testing.T) {
 }
 
 func TestE2ERecordingDiscardWhileFloatingSavesTrailingSourceEdit(t *testing.T) {
-	e2e(t, `Discarding while floating saves a trailing source edit without touching the viewed draft. The test seeded a draft conversation {{ORIGINAL}} with the draft text "Original saved draft before the final edit.", and another draft conversation {{VIEWED}} with the draft text "Keep the viewed saved draft.". `+recMocks+recDrawer+recFloating+`Call "savedDrafts" returns, as JSON, the drafts the server has saved for [{{ORIGINAL}}, {{VIEWED}}]. Recording uploads are counted by call "uploads". `+recIDs+`
+	e2e(t, useful(0), `Discarding while floating saves a trailing source edit without touching the viewed draft. The test seeded a draft conversation {{ORIGINAL}} with the draft text "Original saved draft before the final edit.", and another draft conversation {{VIEWED}} with the draft text "Keep the viewed saved draft.". `+recMocks+recDrawer+recFloating+`Call "savedDrafts" returns, as JSON, the drafts the server has saved for [{{ORIGINAL}}, {{VIEWED}}]. Recording uploads are counted by call "uploads". `+recIDs+`
 1. Navigate to /c/{{ORIGINAL}}. The message input should have the value "Original saved draft before the final edit." (wait up to 30s).
 Leave the edit inside the autosave debounce, then switch immediately. The trailing save must retain the source id instead of reading the newly viewed draft from mutable composer mirrors.
 2. Fill the message input with "Keep the original saved draft's final edit.", then immediately click the voice button and select conversation {{VIEWED}} from the drawer.
@@ -1342,7 +1344,7 @@ Leave the edit inside the autosave debounce, then switch immediately. The traili
 }
 
 func TestE2ERecordingBlankNewConversationSavedReturnTarget(t *testing.T) {
-	e2e(t, `A blank new-conversation recording gets a saved return target. The test seeded a conversation {{VIEWED}}. `+recMocks+recDrawer+recFloating+`Call "draftCreated" says ("true" or "false") whether the browser's first draft creation (POST /api/conversations/draft) has been answered and, once it has, sets {{DRAFT}} to the conversation it created; call "draftResponse" reports that answer's status and the "draft" field of its request as JSON. Recording uploads are counted by call "uploads". `+recIDs+`
+	e2e(t, useful(0), `A blank new-conversation recording gets a saved return target. The test seeded a conversation {{VIEWED}}. `+recMocks+recDrawer+recFloating+`Call "draftCreated" says ("true" or "false") whether the browser's first draft creation (POST /api/conversations/draft) has been answered and, once it has, sets {{DRAFT}} to the conversation it created; call "draftResponse" reports that answer's status and the "draft" field of its request as JSON. Recording uploads are counted by call "uploads". `+recIDs+`
 1. Navigate to /new and click the voice button.
 2. Call "draftCreated" should return "true" within 10s.
 3. Call "draftResponse" must return exactly {"status":201,"draft":""}.
@@ -1385,7 +1387,7 @@ func TestE2ERecordingBlankNewConversationSavedReturnTarget(t *testing.T) {
 const recHeldDraft = `The server's answer to the browser's draft creation (POST /api/conversations/draft) is held back until call "releaseDraft"; call "draftCreated" says ("true" or "false") whether the server has created the draft and, once it has, sets {{DRAFT}} to its conversation ID; call "draftAnswered" says whether the browser has received the answer. `
 
 func TestE2ERecordingDelayedBlankDraftNoHijack(t *testing.T) {
-	e2e(t, `Delayed blank-recording draft creation does not hijack a later selection. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recMocks+recDrawer+recFloating+recHeldDraft+recIDs+`
+	e2e(t, useful(0), `Delayed blank-recording draft creation does not hijack a later selection. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recMocks+recDrawer+recFloating+recHeldDraft+recIDs+`
 1. Navigate to /new and click the voice button.
 2. Call "draftCreated" until it returns "true".
 3. Exactly one [data-testid="recording-inline"] should exist, and window.__recordingMock.recorderStarts should become 1.
@@ -1404,7 +1406,7 @@ func TestE2ERecordingDelayedBlankDraftNoHijack(t *testing.T) {
 
 // delayedSend is the spec's test that a send waits for its delayed
 // new-conversation draft, as a normal message or a /transcription command.
-func delayedSend(t *testing.T, transcription bool) {
+func delayedSend(t *testing.T, useful lazycue.Useful, transcription bool) {
 	label, fill, message, chats := "Normal send", `"Send this message to the draft that created it."`, "Send this message to the draft that created it.", `reach the server`
 	if transcription {
 		label, fill, message, chats = "Explicit transcription command", `two lines, "/transcription /tmp/shelley-uploads/existing-recording.webm" and "Keep this context with it.", separated by a newline`, "/transcription /tmp/shelley-uploads/existing-recording.webm\nKeep this context with it.", `are accepted without being sent on`
@@ -1414,7 +1416,7 @@ func delayedSend(t *testing.T, transcription bool) {
 		last = `
 9. Select conversation {{DRAFT}} from the drawer. The message input should have the value "" (empty).`
 	}
-	e2e(t, label+` waits for its delayed new-conversation draft without following later navigation. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recDrawer+recHeldDraft+`Message submissions (POST /api/conversation/<id>/chat) `+chats+`; call "chats" counts them, and call "submissions" lists them as JSON, each with its URL path and message. `+recIDs+`
+	e2e(t, useful, label+` waits for its delayed new-conversation draft without following later navigation. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recDrawer+recHeldDraft+`Message submissions (POST /api/conversation/<id>/chat) `+chats+`; call "chats" counts them, and call "submissions" lists them as JSON, each with its URL path and message. `+recIDs+`
 1. Navigate to /new. Fill the message input with `+fill+`.
 2. Call "draftCreated" until it returns "true".
 3. Click [data-testid="send-button"].
@@ -1443,15 +1445,15 @@ func delayedSend(t *testing.T, transcription bool) {
 }
 
 func TestE2ERecordingNormalSendWaitsForDelayedDraft(t *testing.T) {
-	delayedSend(t, false)
+	delayedSend(t, useful(0), false)
 }
 
 func TestE2ERecordingTranscriptionCommandWaitsForDelayedDraft(t *testing.T) {
-	delayedSend(t, true)
+	delayedSend(t, useful(0), true)
 }
 
 func TestE2ERecordingDelayedDraftMovesAfterNavigation(t *testing.T) {
-	e2e(t, `A delayed new-conversation recording draft moves after navigation and clears its source. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recMocks+recDrawer+recFloating+recNewFromHeader+recHeldDraft+`Call "draftText" returns the "draft" field of the last draft creation's request. Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/delayed-new.webm. Message submissions are accepted without being sent on; call "chats" counts them, and call "submissions" lists them as JSON, each with its URL path, message and model. `+recIDs+`
+	e2e(t, useful(0), `A delayed new-conversation recording draft moves after navigation and clears its source. The test seeded a conversation {{VIEWED}} at /c/{{VIEWED_SLUG}}. `+recMocks+recDrawer+recFloating+recNewFromHeader+recHeldDraft+`Call "draftText" returns the "draft" field of the last draft creation's request. Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/delayed-new.webm. Message submissions are accepted without being sent on; call "chats" counts them, and call "submissions" lists them as JSON, each with its URL path, message and model. `+recIDs+`
 1. Navigate to /new. Fill the message input with "Initial text while the draft request starts.".
 2. Call "draftCreated" until it returns "true". Call "draftText" must return "Initial text while the draft request starts.".
 3. Fill the message input with "Latest text owned by the delayed recording draft.". Click the voice button.
@@ -1474,7 +1476,7 @@ func TestE2ERecordingDelayedDraftMovesAfterNavigation(t *testing.T) {
 }
 
 func TestE2ERecordingDelayedDraftSparesNewerComposer(t *testing.T) {
-	e2e(t, `A delayed recording draft does not consume a newer new-conversation composer. The test seeded a conversation {{VIEWED}}. `+recMocks+recDrawer+recFloating+recNewFromHeader+`The server's answer to the browser's first draft creation (POST /api/conversations/draft) is held back until call "releaseOldDraft"; call "oldDraftCreated" says ("true" or "false") whether the server has created it and, once it has, sets {{OLD}} to its conversation ID; call "oldDraftAnswered" says whether the browser has received that answer. The answers to later draft creations are held back for the rest of the test. `+recIDs+`
+	e2e(t, useful(0), `A delayed recording draft does not consume a newer new-conversation composer. The test seeded a conversation {{VIEWED}}. `+recMocks+recDrawer+recFloating+recNewFromHeader+`The server's answer to the browser's first draft creation (POST /api/conversations/draft) is held back until call "releaseOldDraft"; call "oldDraftCreated" says ("true" or "false") whether the server has created it and, once it has, sets {{OLD}} to its conversation ID; call "oldDraftAnswered" says whether the browser has received that answer. The answers to later draft creations are held back for the rest of the test. `+recIDs+`
 1. Navigate to /new. Fill the message input with "Text owned by the older delayed draft.".
 2. Call "oldDraftCreated" until it returns "true". Click the voice button.
 3. Exactly one [data-testid="recording-inline"] should exist, and window.__recordingMock.recorderStarts should become 1.
@@ -1512,7 +1514,7 @@ func TestE2ERecordingDelayedDraftSparesNewerComposer(t *testing.T) {
 }
 
 func TestE2ERecordingNarrowDesktopControlsFit(t *testing.T) {
-	e2e(t, `The recording controls fit in a narrow desktop composer. `+recMocks+recIDs+`
+	e2e(t, useful(0), `The recording controls fit in a narrow desktop composer. `+recMocks+recIDs+`
 1. Navigate to /new and wait up to 30s for the message input to be visible. Fill it with "Keep this long note with the recording so the status has to truncate.".
 2. Click the voice button. The recording state should become "recording".
 3. Eval "(() => { const b = s => { const r = document.querySelector(s).getBoundingClientRect(); return {left: r.x, right: r.x + r.width, width: r.width}; }; const panel = b('.recording-panel'), main = b('.recording-panel-main'), waveform = b('[data-testid=\"recording-waveform\"]'), preserved = b('[data-testid=\"recording-preserved-text\"]'), timer = b('[data-testid=\"recording-timer\"]'), screen = b('[data-testid=\"recording-screen-button\"]'), cancel = b('[data-testid=\"recording-cancel-button\"]'); return {waveformInPanel: waveform.left > panel.left, waveformBeforeText: waveform.right <= preserved.left, textWide: preserved.width > 40, textBeforeTimer: preserved.right <= timer.left, timerWide: timer.width > 30, timerInMain: timer.right <= main.right, mainBeforeScreen: main.right <= screen.left, cancelInPanel: cancel.right < panel.right}; })()" must return exactly {"waveformInPanel":true,"waveformBeforeText":true,"textWide":true,"textBeforeTimer":true,"timerWide":true,"timerInMain":true,"mainBeforeScreen":true,"cancelInPanel":true}.
@@ -1525,7 +1527,7 @@ The secondary action goes icon-only before the primary ones do.
 }
 
 func TestE2ERecordingDiscardsMicrophoneSubmitsScreen(t *testing.T) {
-	e2e(t, `Microphone capture is discarded and the screen recording submitted for transcription. `+recMocks+`Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/screen.webm.json for filenames ending in ".json" and /tmp/shelley-uploads/screen.webm otherwise; call "uploadNames" lists their filenames as JSON, with every digit replaced by "#". Message submissions are accepted without being sent on; call "transcription" returns the last one's message and model as JSON ("none" before there is one). `+recIDs+`
+	e2e(t, useful(0), `Microphone capture is discarded and the screen recording submitted for transcription. `+recMocks+`Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/screen.webm.json for filenames ending in ".json" and /tmp/shelley-uploads/screen.webm otherwise; call "uploadNames" lists their filenames as JSON, with every digit replaced by "#". Message submissions are accepted without being sent on; call "transcription" returns the last one's message and model as JSON ("none" before there is one). `+recIDs+`
 1. Navigate to /new and click the voice button. [data-testid="recording-status"] should have the text exactly "Recording…".
 2. Click [data-testid="recording-screen-button"].
 3. The recording panel should get data-mode "screen", [data-testid="recording-preview"] should be visible, and [data-testid="recording-status"] should have the text exactly "Recording screen + microphone…".
@@ -1579,7 +1581,7 @@ func (s *shelley) lastTranscription() {
 }
 
 func TestE2ERecordingHoverOffersVoiceAndScreen(t *testing.T) {
-	e2e(t, `Hovering the record button offers Voice & Screen with a single screen request. `+recMocks+`"The record menu" is [data-testid="record-menu"]. `+recIDs+`
+	e2e(t, useful(0), `Hovering the record button offers Voice & Screen with a single screen request. `+recMocks+`"The record menu" is [data-testid="record-menu"]. `+recIDs+`
 1. Navigate to /new. No record menu may exist (count 0).
 2. Hover the voice button. The record menu should become visible.
 3. Exactly 2 buttons ('[data-testid="record-menu"] button') should be in it. The first's accessible name (its aria-label) should be exactly "Voice", and the last's exactly "Voice & Screen".
@@ -1594,7 +1596,7 @@ func TestE2ERecordingLongPressOpensMenuWithoutRecording(t *testing.T) {
 	// install() leaves time flowing: pause it so only runFor moves the long
 	// press. Wall-clock time between the pointerdown and the first check
 	// could otherwise fire the 450ms timer early on a loaded host.
-	e2e(t, `Long-pressing the record button opens the menu without starting a recording. `+recMocks+`The page runs on a fake clock that steps drive with window.__clock: pauseAt(ms) and runFor(ms). "The record menu" is [data-testid="record-menu"]. `+recIDs+`
+	e2e(t, useful(0), `Long-pressing the record button opens the menu without starting a recording. `+recMocks+`The page runs on a fake clock that steps drive with window.__clock: pauseAt(ms) and runFor(ms). "The record menu" is [data-testid="record-menu"]. `+recIDs+`
 1. Navigate to /new. The voice button should be enabled (assert_enabled): a press while it is disabled would never start the long-press timer.
 2. The clock leaves time flowing: pause it a second from now, so that only runFor moves the long press: eval "window.__clock.pauseAt(Date.now() + 1000)".
 3. Touch the voice button: eval "document.querySelector('[data-testid=\"voice-button\"]').dispatchEvent(new PointerEvent('pointerdown', {pointerType: 'touch', button: 0, isPrimary: true, bubbles: true, cancelable: true, composed: true}))".
@@ -1611,7 +1613,7 @@ The click that ends a long press must not also start voice recording.
 }
 
 func TestE2ERecordingKeyboardFocusRevealsChoices(t *testing.T) {
-	e2e(t, `Keyboard focus reveals the record choices, and Escape returns focus to the button. `+recMocks+`"The record menu" is [data-testid="record-menu"]. Keys go to whatever has focus: do not click anything in this test. "X is focused" means X is document.activeElement. `+recIDs+`
+	e2e(t, useful(0), `Keyboard focus reveals the record choices, and Escape returns focus to the button. `+recMocks+`"The record menu" is [data-testid="record-menu"]. Keys go to whatever has focus: do not click anything in this test. "X is focused" means X is document.activeElement. `+recIDs+`
 1. Navigate to /new. The voice button should be visible.
 2. Focus [data-testid="attach-button"] (eval its focus()). Press Tab.
 3. The voice button should be focused, and the record menu visible.
@@ -1621,7 +1623,7 @@ func TestE2ERecordingKeyboardFocusRevealsChoices(t *testing.T) {
 }
 
 func TestE2ERecordingPrerollScreenEndUsesRecorderLifetime(t *testing.T) {
-	e2e(t, `The recorder lifetime is used when screen sharing ends during pre-roll. `+recMocks+`window.__recordingMock.endDisplay() ends the screen share as the browser's "Stop sharing" would. The page runs on a fake clock that is already paused when the page loads, at window.__captureStartedAt (epoch milliseconds); steps drive it with window.__clock.runFor(ms) and window.__clock.setFixedTime(ms). Click buttons with click steps on their selectors, never with an eval. Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/preroll.webm.json for filenames ending in ".json" and /tmp/shelley-uploads/preroll.webm otherwise; call "metadataDuration" returns the duration_ms of the last metadata (".json") upload's JSON body ("none" before there is one). Message submissions are accepted without being sent on. `+recIDs+`
+	e2e(t, useful(0), `The recorder lifetime is used when screen sharing ends during pre-roll. `+recMocks+`window.__recordingMock.endDisplay() ends the screen share as the browser's "Stop sharing" would. The page runs on a fake clock that is already paused when the page loads, at window.__captureStartedAt (epoch milliseconds); steps drive it with window.__clock.runFor(ms) and window.__clock.setFixedTime(ms). Click buttons with click steps on their selectors, never with an eval. Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/preroll.webm.json for filenames ending in ".json" and /tmp/shelley-uploads/preroll.webm otherwise; call "metadataDuration" returns the duration_ms of the last metadata (".json") upload's JSON body ("none" before there is one). Message submissions are accepted without being sent on. `+recIDs+`
 1. Navigate to /new. The voice button should be visible; click it.
 2. The recording state should become "preroll".
 3. Run the clock 100ms (eval "window.__clock.runFor(100)"). The recording state should become "recording".
@@ -1660,7 +1662,7 @@ window.__clock.pauseAt(window.__captureStartedAt);`)
 }
 
 func TestE2ERecordingLegacyCompactionRowDoesNotBlockQueue(t *testing.T) {
-	e2e(t, `Legacy compaction status rows render without blocking queued messages. The test seeded a conversation at /c/{{SLUG}} whose server data reports one queued message, "queued during compaction", and also an in-progress compaction status row that the old generation-based compaction left behind. The live event stream is cut off.
+	e2e(t, useful(0), `Legacy compaction status rows render without blocking queued messages. The test seeded a conversation at /c/{{SLUG}} whose server data reports one queued message, "queued during compaction", and also an in-progress compaction status row that the old generation-based compaction left behind. The live event stream is cut off.
 1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input ([data-testid="message-input"]) to be visible.
 2. [data-testid="distill-in-progress"] should contain "Compacting", and [data-testid="queued-badge"] should be visible.
 3. Exactly one [data-testid="send-queued-now"] should exist, and [data-testid="cancel-queued"] should be visible.`, func(s *shelley) {
@@ -1670,7 +1672,7 @@ func TestE2ERecordingLegacyCompactionRowDoesNotBlockQueue(t *testing.T) {
 }
 
 func TestE2ERecordingTranscriptionCardsUseQueuedMessageRPCs(t *testing.T) {
-	e2e(t, `Transcription cards use the queued-message cancel and retry RPCs. The test seeded a conversation at /c/{{SLUG}} whose server data reports two queued transcriptions: one still working on /tmp/shelley-uploads/working.webm with the context "Keep working draft", and one of /tmp/shelley-uploads/failed.webm that failed with "transcription unavailable", with the context "Keep failed draft". The live event stream is cut off. Requests to cancel or retry a queued message (POST /api/conversation/<id>/cancel-queued?queued_id=<id> and .../retry-queued?queued_id=<id>) succeed without effect. Calls "stopRequest", "retryRequest" and "cancelRequest" return the method of the first request whose URL contains "/cancel-queued?queued_id=q-working", "/retry-queued?queued_id=q-failed" and "/cancel-queued?queued_id=q-failed" respectively ("none" before there is one). The message input is [data-testid="message-input"]. Perform the steps in order.
+	e2e(t, useful(0), `Transcription cards use the queued-message cancel and retry RPCs. The test seeded a conversation at /c/{{SLUG}} whose server data reports two queued transcriptions: one still working on /tmp/shelley-uploads/working.webm with the context "Keep working draft", and one of /tmp/shelley-uploads/failed.webm that failed with "transcription unavailable", with the context "Keep failed draft". The live event stream is cut off. Requests to cancel or retry a queued message (POST /api/conversation/<id>/cancel-queued?queued_id=<id> and .../retry-queued?queued_id=<id>) succeed without effect. Calls "stopRequest", "retryRequest" and "cancelRequest" return the method of the first request whose URL contains "/cancel-queued?queued_id=q-working", "/retry-queued?queued_id=q-failed" and "/cancel-queued?queued_id=q-failed" respectively ("none" before there is one). The message input is [data-testid="message-input"]. Perform the steps in order.
 1. Navigate to /c/{{SLUG}} and wait up to 30s for the message input to be visible.
 2. Call "stopRequest" should return "none" (nothing sent yet). Click [data-testid="transcription-stop-button"]. Call "stopRequest" should return "POST". The message input should have the value "Keep working draft".
 3. Fill the message input with "" (empty it).
@@ -1714,7 +1716,7 @@ func TestE2ERecordingTranscriptionCardsUseQueuedMessageRPCs(t *testing.T) {
 }
 
 func TestE2ERecordingRetriesFailedDurableAcceptance(t *testing.T) {
-	e2e(t, `The original recording is retained, and failed durable acceptance is retried. `+recMocks+`Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/preserved.webm, and call "uploads" counts them. The first message submission (POST /api/conversation/<id>/chat) fails with "transcription unavailable"; later ones are accepted without being sent on. Call "submissions" reports them as "<count> <same|different>": "same" when every one has the same URL and body as the first. `+recIDs+`
+	e2e(t, useful(0), `The original recording is retained, and failed durable acceptance is retried. `+recMocks+`Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/preserved.webm, and call "uploads" counts them. The first message submission (POST /api/conversation/<id>/chat) fails with "transcription unavailable"; later ones are accepted without being sent on. Call "submissions" reports them as "<count> <same|different>": "same" when every one has the same URL and body as the first. `+recIDs+`
 1. Navigate to /new. Fill the message input with "Keep this draft". Click the voice button.
 2. [data-testid="recording-status"] should have the text exactly "Recording…". Click the stop button.
 3. [data-testid="recording-retained"] should become visible, [data-testid="recording-preserved-text"] should have the text exactly "Keep this draft", and no [data-testid="transcription-task"] may exist (count 0).
@@ -1751,7 +1753,7 @@ func TestE2ERecordingRetriesFailedDurableAcceptance(t *testing.T) {
 }
 
 func TestE2ERecordingKeepsMicrophoneWhenScreenSelectionFails(t *testing.T) {
-	e2e(t, `The microphone recording is kept when screen selection fails. `+recMocks+`Setting window.__recordingMock.displayError to a message makes screen capture fail with it. Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/kept.webm, and call "uploads" counts them. Message submissions are accepted without being sent on; call "transcription" returns the last one's message and model as JSON ("none" before there is one). `+recIDs+`
+	e2e(t, useful(0), `The microphone recording is kept when screen selection fails. `+recMocks+`Setting window.__recordingMock.displayError to a message makes screen capture fail with it. Recording uploads (POST /api/upload/raw) answer with the path /tmp/shelley-uploads/kept.webm, and call "uploads" counts them. Message submissions are accepted without being sent on; call "transcription" returns the last one's message and model as JSON ("none" before there is one). `+recIDs+`
 1. Navigate to /new and click the voice button. [data-testid="recording-status"] should have the text exactly "Recording…".
 2. Eval "window.__recordingMock.displayError = 'Screen sharing was cancelled'".
 3. Click [data-testid="recording-screen-button"].
@@ -1766,7 +1768,7 @@ func TestE2ERecordingKeepsMicrophoneWhenScreenSelectionFails(t *testing.T) {
 }
 
 func TestE2ERecordingCancelInlineRestoresComposer(t *testing.T) {
-	e2e(t, `Cancelling an active inline recording uploads nothing and restores the composer. `+recMocks+`Recording uploads (POST /api/upload/raw) are counted by call "uploads". `+recIDs+`
+	e2e(t, useful(0), `Cancelling an active inline recording uploads nothing and restores the composer. `+recMocks+`Recording uploads (POST /api/upload/raw) are counted by call "uploads". `+recIDs+`
 1. Navigate to /new and click the voice button. [data-testid="recording-status"] should have the text exactly "Recording…".
 2. Click the cancel button. No recording panel should remain (count 0).
 3. Call "uploads" must return "0", and the message input should have the value "" (empty).
@@ -1780,7 +1782,7 @@ func TestE2ERecordingCancelInlineRestoresComposer(t *testing.T) {
 // beforeEach media mocks, and installed their own.
 
 func TestE2ERecordingAudioWithoutScreenCapture(t *testing.T) {
-	e2e(t, `Audio recording stays available without screen capture. The browser can record audio but cannot capture the screen. The page runs on a fake clock that steps drive with window.__clock.runFor(ms). `+recPalette+recIDs+`
+	e2e(t, useful(0), `Audio recording stays available without screen capture. The browser can record audio but cannot capture the screen. The page runs on a fake clock that steps drive with window.__clock.runFor(ms). `+recPalette+recIDs+`
 1. Navigate to /new. [data-testid="voice-microphone-icon"] should be visible, and no [data-testid="voice-video-icon"] may exist (count 0).
 2. Hover the voice button. Run the clock 1000ms (eval "window.__clock.runFor(1000)").
 3. No [data-testid="record-menu"] may exist (count 0).
@@ -1793,7 +1795,7 @@ func TestE2ERecordingAudioWithoutScreenCapture(t *testing.T) {
 }
 
 func TestE2ERecordingExplainsMissingTranscription(t *testing.T) {
-	e2e(t, `Missing transcription is explained instead of recording. The server has no transcription available. window.__recordingMock.microphoneRequests counts the microphone captures the page requested. `+recShortcuts+recIDs+`
+	e2e(t, useful(0), `Missing transcription is explained instead of recording. The server has no transcription available. window.__recordingMock.microphoneRequests counts the microphone captures the page requested. `+recShortcuts+recIDs+`
 1. Navigate to /new and click the voice button.
 2. ".status-error" should contain "Set OPENAI_API_KEY", and no recording panel may exist (count 0).
 3. Press the record-audio shortcut. No recording panel may exist (count 0).
@@ -1804,7 +1806,7 @@ func TestE2ERecordingExplainsMissingTranscription(t *testing.T) {
 }
 
 func TestE2ERecordingPaletteHidesActionsWithoutMediaRecorder(t *testing.T) {
-	e2e(t, `Recording palette actions are hidden when media recording is unavailable: the page has no MediaRecorder. `+recPalette+`
+	e2e(t, useful(0), `Recording palette actions are hidden when media recording is unavailable: the page has no MediaRecorder. `+recPalette+`
 1. Navigate to /new. No [data-testid="voice-button"] may exist (count 0).
 2. Open the recording palette. There must be no palette item "Record audio" and no palette item "Record audio and screen" (both counts 0).`, func(s *shelley) {
 		s.mediaMocks(true, true)

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"slices"
 	"testing"
+
+	"github.com/boldsoftware/shelley/lazycue"
 )
 
 // Ported from ui/e2e/keyword-search-history.spec.ts.
@@ -12,7 +14,7 @@ import (
 // keywordSearchHistory checks that a stored keyword_search call and its
 // result still render, though keyword_search is no longer an executable
 // tool: the route replays the conversation's bash call as one.
-func keywordSearchHistory(t *testing.T, hasError bool, searchTerms any) {
+func keywordSearchHistory(t *testing.T, useful lazycue.Useful, hasError bool, searchTerms any) {
 	const query = "find authentication handlers"
 	output, label, errors, outcome := "src/auth.ts:42: handleLogin", "Results:", "0", "successful"
 	if hasError {
@@ -22,7 +24,7 @@ func keywordSearchHistory(t *testing.T, hasError bool, searchTerms any) {
 	if _, ok := searchTerms.(string); ok {
 		terms = "a single string of terms"
 	}
-	e2e(t, `A historical keyword_search call renders its `+outcome+` result (the stored call has `+terms+`). "The card" is the completed tool card, .tool[data-testid="tool-call-completed"], whose ".tool-command" contains "`+query+`"; all checks below are inside the card unless said otherwise. Perform the steps in order. 1. Call "tool registry"; it must return "keyword_search is not registered". 2. Navigate to /c/historical-search. 3. The card should be visible. 4. Its ".tool-emoji" text should be exactly "🔍". 5. Its ".tool-header" text must contain neither "✓" nor "✗" (one assert_text_not_contains on that header for each). 6. Its ".tool-details" must be hidden (or absent). 7. Click the card's ".tool-header", then move the mouse away to the viewport's top-left corner (a hover step with no selector at x 0, y 0). 8. There must be no message action bar anywhere on the page: "[data-action-bar]" count 0. 9. The card's ".tool-code" elements must be exactly three, with whitespace-normalised texts, in order, exactly "`+query+`", "auth, handler" and "`+output+`". 10. The card's ".tool-time" text should be exactly "1.0s". 11. The card's last ".tool-label" should contain "`+label+`". 12. The card's ".tool-code.error" count should be exactly `+errors+`. 13. Click the card's collapse button, button[aria-label="Collapse"] inside the card. 14. The card's ".tool-details" should become hidden (or absent).`, func(s *shelley) {
+	e2e(t, useful, `A historical keyword_search call renders its `+outcome+` result (the stored call has `+terms+`). "The card" is the completed tool card, .tool[data-testid="tool-call-completed"], whose ".tool-command" contains "`+query+`"; all checks below are inside the card unless said otherwise. Perform the steps in order. 1. Call "tool registry"; it must return "keyword_search is not registered". 2. Navigate to /c/historical-search. 3. The card should be visible. 4. Its ".tool-emoji" text should be exactly "🔍". 5. Its ".tool-header" text must contain neither "✓" nor "✗" (one assert_text_not_contains on that header for each). 6. Its ".tool-details" must be hidden (or absent). 7. Click the card's ".tool-header", then move the mouse away to the viewport's top-left corner (a hover step with no selector at x 0, y 0). 8. There must be no message action bar anywhere on the page: "[data-action-bar]" count 0. 9. The card's ".tool-code" elements must be exactly three, with whitespace-normalised texts, in order, exactly "`+query+`", "auth, handler" and "`+output+`". 10. The card's ".tool-time" text should be exactly "1.0s". 11. The card's last ".tool-label" should contain "`+label+`". 12. The card's ".tool-code.error" count should be exactly `+errors+`. 13. Click the card's collapse button, button[aria-label="Collapse"] inside the card. 14. The card's ".tool-details" should become hidden (or absent).`, func(s *shelley) {
 		s.call("tool registry", func() string {
 			var registry struct {
 				Tools []struct {
@@ -84,13 +86,13 @@ func keywordSearchHistory(t *testing.T, hasError bool, searchTerms any) {
 }
 
 func TestE2EKeywordSearchHistorySuccessfulArrayTerms(t *testing.T) {
-	keywordSearchHistory(t, false, []string{"auth", "handler"})
+	keywordSearchHistory(t, useful(0), false, []string{"auth", "handler"})
 }
 
 func TestE2EKeywordSearchHistoryFailedArrayTerms(t *testing.T) {
-	keywordSearchHistory(t, true, []string{"auth", "handler"})
+	keywordSearchHistory(t, useful(0), true, []string{"auth", "handler"})
 }
 
 func TestE2EKeywordSearchHistorySuccessfulStringTerms(t *testing.T) {
-	keywordSearchHistory(t, false, "auth, handler")
+	keywordSearchHistory(t, useful(0), false, "auth, handler")
 }

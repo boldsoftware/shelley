@@ -59,7 +59,7 @@ const commitHighlightsOpen = `The conversation at /c/{{SLUG}} works in a git rep
 `
 
 func TestE2ECommitHighlightsSidebarRanksFiles(t *testing.T) {
-	e2e(t, `The diff viewer's sidebar ranks files by commit highlights and marks highlighted lines. `+commitHighlightsOpen+`3. A clean tree defaults to the highlighted top commit: the overlay's element with role "radio" and name "Single commit" has aria-checked exactly "true".
+	e2e(t, useful(0), `The diff viewer's sidebar ranks files by commit highlights and marks highlighted lines. `+commitHighlightsOpen+`3. A clean tree defaults to the highlighted top commit: the overlay's element with role "radio" and name "Single commit" has aria-checked exactly "true".
 4. The overlay's ".diff-viewer-commit-list-item .commit-picker-highlights-badge" has exactly the text "highlights".
 5. An element in the overlay with the text "Commit Messages and Files by Importance" is visible.
 6. There are exactly 4 files, and their ".diff-tree-label" elements have exactly the texts "Highlighted commit", "zeta.ts", "README.md", "alpha.ts", in order.
@@ -76,7 +76,7 @@ func TestE2ECommitHighlightsSidebarRanksFiles(t *testing.T) {
 }
 
 func TestE2ECommitHighlightsCalloutCommentButton(t *testing.T) {
-	e2e(t, `A highlight callout's Comment button answers the highlight. `+commitHighlightsOpen+`3. Click the second file. "The callout" is the overlay's ".diff-highlight-callout-text"; it is in the viewport.
+	e2e(t, useful(0), `A highlight callout's Comment button answers the highlight. `+commitHighlightsOpen+`3. Click the second file. "The callout" is the overlay's ".diff-highlight-callout-text"; it is in the viewport.
 4. Comment mode marks the line under the pointer, but not over a callout, where a click doesn't comment on a line. "The hover mark" is the overlay's ".diff-viewer-line-hover". Hover the overlay's ".view-line" whose text contains "const critical = true;": there is then exactly 1 hover mark.
 5. The callout lets the pointer through to the space reserved for it: move the mouse (a hover step with a "point", no hit test) to x = the callout's left + 10 and y = its top + half its height (from getBoundingClientRect()). There is then no hover mark (count 0).
 6. Screen readers reach the callout and its button: "the note" is the overlay's element with role "note"; its text contains "The one line that matters.". "The button" is the note's element with role "button" and name "Comment".
@@ -90,7 +90,7 @@ func TestE2ECommitHighlightsCalloutCommentButton(t *testing.T) {
 }
 
 func TestE2ECommitHighlightsTabScrollsCallout(t *testing.T) {
-	e2e(t, `Tabbing to a highlight callout's button scrolls it into view. The commit also highlights src/zeta.ts line 10 ("Far above the other."). `+commitHighlightsOpen+`3. Click the second file. It opens at its first highlight; the second is far below: "the notes" are the overlay's elements with role "note"; the first note is in the viewport and the last note is NOT in the viewport.
+	e2e(t, useful(0), `Tabbing to a highlight callout's button scrolls it into view. The commit also highlights src/zeta.ts line 10 ("Far above the other."). `+commitHighlightsOpen+`3. Click the second file. It opens at its first highlight; the second is far below: "the notes" are the overlay's elements with role "note"; the first note is in the viewport and the last note is NOT in the viewport.
 4. Focus the first note's button with role "button" and name "Comment" (in an eval: .focus()), then press Tab.
 5. The last note's button with role "button" and name "Comment" has focus; the last note is in the viewport, and its text contains "The one line that matters.".
 6. Press Enter. The ".diff-viewer-comment-dialog" text contains "Add Comment (Line 160, new)".`, func(s *shelley) {
@@ -101,7 +101,7 @@ func TestE2ECommitHighlightsTabScrollsCallout(t *testing.T) {
 
 func TestE2ECommitHighlightsCalloutsKeepSpace(t *testing.T) {
 	comment := strings.TrimSpace(strings.Repeat("A long highlight that wraps onto more lines as the editor narrows. ", 3))
-	e2e(t, `Highlight callouts keep their space as the editor narrows. The commit also highlights src/zeta.ts line 10 with a long comment that wraps onto more lines as the editor narrows. `+commitHighlightsOpen+`3. Click the second file. "The callout" is the FIRST ".diff-highlight-zone" in the overlay; "the next line" is the overlay's ".editor.modified .view-line" element whose textContent matches /^line\s11$/. "The gap" is the next line's getBoundingClientRect().y - (the callout's y + height), or NaN when either is missing (Monaco re-renders lines as it lays out).
+	e2e(t, useful(0), `Highlight callouts keep their space as the editor narrows. The commit also highlights src/zeta.ts line 10 with a long comment that wraps onto more lines as the editor narrows. `+commitHighlightsOpen+`3. Click the second file. "The callout" is the FIRST ".diff-highlight-zone" in the overlay; "the next line" is the overlay's ".editor.modified .view-line" element whose textContent matches /^line\s11$/. "The gap" is the next line's getBoundingClientRect().y - (the callout's y + height), or NaN when either is missing (Monaco re-renders lines as it lays out).
 4. The callout is in the viewport.
 5. The line after the highlight starts where its callout ends: wait (with an eval that has expect "true") until Math.abs(gap) < 0.5.
 6. In one eval (no expect), store the callout's getBoundingClientRect().height in window.__height.
@@ -114,7 +114,7 @@ func TestE2ECommitHighlightsCalloutsKeepSpace(t *testing.T) {
 }
 
 func TestE2ECommitHighlightsPhoneFilePicker(t *testing.T) {
-	e2e(t, `A phone's diff file picker follows the ranked order. `+commitHighlightsOpen+`3. "The picker" is the VISIBLE select element matching ".diff-viewer-file-selector-wrapper select" in the overlay; "the options" are its option elements. There are exactly 5 options: a placeholder, the commit message, then the ranked files.
+	e2e(t, useful(0), `A phone's diff file picker follows the ranked order. `+commitHighlightsOpen+`3. "The picker" is the VISIBLE select element matching ".diff-viewer-file-selector-wrapper select" in the overlay; "the options" are its option elements. There are exactly 5 options: a placeholder, the commit message, then the ranked files.
 4. In one eval with expect "true" testing each option's raw textContent: the third option matches / src\/zeta\.ts .*★1$/, the fourth matches / README\.md .*★1$/ and the fifth matches / src\/alpha\.ts /.
 5. The narrow diff is inline; the comment still shows under its line: select the option with value "src/zeta.ts" in the picker. "The callout" is the overlay's ".diff-highlight-callout-text": it has exactly the text "The one line that matters." and is in the viewport.
 6. A tap on the callout's button opens the comment dialog, though Monaco claims touches inside the editor: tap (touch start, then touch end) the button with role "button" and name "Comment" inside the overlay's element with role "note". The ".diff-viewer-comment-dialog" text then contains "Add Comment (Line 160, new)".`, func(s *shelley) {

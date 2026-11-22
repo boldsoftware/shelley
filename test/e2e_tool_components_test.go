@@ -64,7 +64,7 @@ const toolComponentsEmoji = `window.__toolEmoji = (summary) => {
 };`
 
 func TestE2EToolComponentsAllCustom(t *testing.T) {
-	e2e(t, `Every tool uses its own component, not GenericTool. The conversation at /c/{{SLUG}} ran the "tool smorgasbord": one call of nearly every tool. The page defines window.__toolEmoji(summary): the text of the ".tool-emoji" of the first ".tool" card that has a ".tool-command" matching summary (a string matches as a case-insensitive substring, a RegExp is tested against the whitespace-collapsed text), or "missing" if there is no such card. The transcript is taller than the screen and offscreen cards are content-visibility: auto, so check that cards exist (assert_count or eval) rather than that they are visible, unless a step says visible. Perform the steps in order.
+	e2e(t, useful(0), `Every tool uses its own component, not GenericTool. The conversation at /c/{{SLUG}} ran the "tool smorgasbord": one call of nearly every tool. The page defines window.__toolEmoji(summary): the text of the ".tool-emoji" of the first ".tool" card that has a ".tool-command" matching summary (a string matches as a case-insensitive substring, a RegExp is tested against the whitespace-collapsed text), or "missing" if there is no such card. The transcript is taller than the screen and offscreen cards are content-visibility: auto, so check that cards exist (assert_count or eval) rather than that they are visible, unless a step says visible. Perform the steps in order.
 1. Call "keyword_search": it must return exactly "absent" (the tool registry, GET /api/tools, has no keyword_search tool).
 2. `+toolComponentsMount+`
 3. There is no ".tool-status-icon" element (count 0).
@@ -99,7 +99,7 @@ func TestE2EToolComponentsAllCustom(t *testing.T) {
 }
 
 func TestE2EToolComponentsBrowserNavigateURL(t *testing.T) {
-	e2e(t, `The browser navigate card shows the URL in its header. The conversation at /c/{{SLUG}} ran the "tool smorgasbord", including a browser navigate to https://example.com. Perform the steps in order.
+	e2e(t, useful(0), `The browser navigate card shows the URL in its header. The conversation at /c/{{SLUG}} ran the "tool smorgasbord", including a browser navigate to https://example.com. Perform the steps in order.
 1. `+toolComponentsMount+`
 2. "The navigate card" is the first ".tool" element that has a ".tool-command" whose text contains "https://example.com". Its text contains "https://example.com".
 3. Click the navigate card's ".tool-header". Expanding it shows the URL section: a ".tool-code" element inside the navigate card whose text contains "https://example.com" is visible.`, func(s *shelley) {
@@ -108,7 +108,7 @@ func TestE2EToolComponentsBrowserNavigateURL(t *testing.T) {
 }
 
 func TestE2EToolComponentsEmojiSizes(t *testing.T) {
-	e2e(t, `Emoji sizes are consistent across all tools. The conversation at /c/{{SLUG}} ran the "tool smorgasbord": one call of nearly every tool. Perform the steps in order.
+	e2e(t, useful(0), `Emoji sizes are consistent across all tools. The conversation at /c/{{SLUG}} ran the "tool smorgasbord": one call of nearly every tool. Perform the steps in order.
 1. `+toolComponentsMount+`
 2. Every tool card's emoji has the computed font-size 16px (1rem): an eval of JSON.stringify([...new Set([...document.querySelectorAll('.tool-emoji, .bash-tool-emoji, .patch-tool-emoji, .screenshot-tool-emoji')].map((el) => getComputedStyle(el).fontSize))]) must equal exactly ["16px"].`, func(s *shelley) {
 		s.v("SLUG", s.smorgasbord())
@@ -142,7 +142,7 @@ const (
 )
 
 func TestE2EToolComponentsAudioAndGenericFallbacks(t *testing.T) {
-	e2e(t, `Audio transcription has its own card, and generic fallbacks identify themselves. The conversation at /c/{{SLUG}} is served as a replay (its live stream is cut off) of four tool calls: two audio transcriptions, one of an unknown tool "`+toolComponentsRawName+`" and one of an unknown browser action. Names used below:
+	e2e(t, useful(0), `Audio transcription has its own card, and generic fallbacks identify themselves. The conversation at /c/{{SLUG}} is served as a replay (its live stream is cut off) of four tool calls: two audio transcriptions, one of an unknown tool "`+toolComponentsRawName+`" and one of an unknown browser action. Names used below:
 - "the transcription" is the ".audio-transcription-tool" element whose text contains "planning-session.webm"; "the failed transcription" is the ".audio-transcription-tool" element whose text contains "broken-recording.webm".
 - "The raw summary" is the ".tool-result-summary" element (the unknown tool's generic card); "the raw details" is the <details> element around it ('details:has(.tool-result-summary)'); "the raw warning" is the raw summary's "a.generic-tool-warning".
 - "The browser card" is the ".tool" element whose text contains "`+toolComponentsBrowserName+`"; "the browser warning" is its "a.generic-tool-warning".
@@ -251,7 +251,7 @@ func TestE2EToolComponentsBrowserInputErrors(t *testing.T) {
 		}
 		list.WriteString("\n")
 	}
-	e2e(t, `Browser input errors are labeled, and keep the model's guidance visible. The conversation at /c/{{SLUG}} is served as a replay (its live stream is cut off) of `+fmt.Sprint(len(cases)+7)+` browser tool calls: `+fmt.Sprint(len(cases))+` the backend rejected as invalid (listed below), 2 with actions this UI has no card for ("brand_new_action", which worked, and "other_new_action", which failed), one valid eval of "document.title", and one each of emulate_help, network_help, accessibility_help and profile_help. "The invalid cards" are the ".tool" elements whose text contains "Invalid browser call:" (has_text); the Nth invalid call below renders the Nth invalid card (pick it with nth, as the spec's invalidCards.nth(i) did). "The card for action A" is the ".tool" element that has a ".tool-command" whose text contains "browser (A)" (a "has" filter).
+	e2e(t, useful(0), `Browser input errors are labeled, and keep the model's guidance visible. The conversation at /c/{{SLUG}} is served as a replay (its live stream is cut off) of `+fmt.Sprint(len(cases)+7)+` browser tool calls: `+fmt.Sprint(len(cases))+` the backend rejected as invalid (listed below), 2 with actions this UI has no card for ("brand_new_action", which worked, and "other_new_action", which failed), one valid eval of "document.title", and one each of emulate_help, network_help, accessibility_help and profile_help. "The invalid cards" are the ".tool" elements whose text contains "Invalid browser call:" (has_text); the Nth invalid call below renders the Nth invalid card (pick it with nth, as the spec's invalidCards.nth(i) did). "The card for action A" is the ".tool" element that has a ".tool-command" whose text contains "browser (A)" (a "has" filter).
 The invalid calls, in order, with the label each card's ".tool-command" shows, a text its expanded details contain, and for some the code its input shows (JSON-quoted here; the page shows the unquoted text):
 `+list.String()+`Perform the steps in order.
 1. Navigate to /c/{{SLUG}}. There are exactly `+fmt.Sprint(len(cases)+7)+` [data-testid="tool-call-completed"] elements (one per call).
@@ -323,7 +323,7 @@ const toolComponentsAuditHTML = `<div style="padding: 16px">
 </div>`
 
 func TestE2EToolComponentsGenericAuditMobile(t *testing.T) {
-	e2e(t, `The generic tool audit stays inside its card on a 360px-wide phone. The page defines window.__auditHTML, the markup of a generic tool card. Perform the steps in order.
+	e2e(t, useful(0), `The generic tool audit stays inside its card on a 360px-wide phone. The page defines window.__auditHTML, the markup of a generic tool card. Perform the steps in order.
 1. Navigate to /new and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. Replace the page with the card: in an eval, set document.body.innerHTML = window.__auditHTML.
 3. The card (".tool-result-details") and the warning (".generic-tool-warning") are visible.
@@ -335,7 +335,7 @@ func TestE2EToolComponentsGenericAuditMobile(t *testing.T) {
 }
 
 func TestE2EToolComponentsBashCommandInHeader(t *testing.T) {
-	e2e(t, `The bash card shows its command in the header. The conversation at /c/{{SLUG}} ran the bash command "unique-test-command-xyz123". Perform the steps in order.
+	e2e(t, useful(0), `The bash card shows its command in the header. The conversation at /c/{{SLUG}} ran the bash command "unique-test-command-xyz123". Perform the steps in order.
 1. Navigate to /c/{{SLUG}}.
 2. "The card" is the ".bash-tool" element whose text contains "unique-test-command-xyz123"; it renders inline and collapsed, and is visible (allow 15s).
 3. The card's ".bash-tool-command" is visible and its text contains "unique-test-command-xyz123".`, func(s *shelley) {
@@ -344,7 +344,7 @@ func TestE2EToolComponentsBashCommandInHeader(t *testing.T) {
 }
 
 func TestE2EToolComponentsThinkInline(t *testing.T) {
-	e2e(t, `The think tool's thought shows inline with its text. The conversation at /c/{{SLUG}} thought "This is a long thought that should be truncated in the header display" and then answered "I've considered my approach.". Perform the steps in order.
+	e2e(t, useful(0), `The think tool's thought shows inline with its text. The conversation at /c/{{SLUG}} thought "This is a long thought that should be truncated in the header display" and then answered "I've considered my approach.". Perform the steps in order.
 1. Navigate to /c/{{SLUG}}.
 2. Wait until the page text contains "I've considered my approach." (allow 15s).
 3. The first ".thinking-content" element whose text contains "This is a long thought" is visible, and its text contains "This is a long thought".`, func(s *shelley) {
@@ -359,7 +359,7 @@ window.addEventListener('error', (e) => window.__pageErrors.push(String(e.messag
 window.addEventListener('unhandledrejection', (e) => window.__pageErrors.push(String(e.reason && e.reason.message || e.reason)));`
 
 func TestE2EToolComponentsPatchToggle(t *testing.T) {
-	e2e(t, `The patch card collapses and expands without errors. The conversation at /c/{{SLUG}} applied a patch to test-patch-success.txt. The page keeps its uncaught errors in window.__pageErrors. "The card" is the first '.patch-tool[data-testid="tool-call-completed"]' element whose text contains "test-patch-success.txt"; "the header" is its ".patch-tool-header" and "the details" its ".patch-tool-details". Perform the steps in order.
+	e2e(t, useful(0), `The patch card collapses and expands without errors. The conversation at /c/{{SLUG}} applied a patch to test-patch-success.txt. The page keeps its uncaught errors in window.__pageErrors. "The card" is the first '.patch-tool[data-testid="tool-call-completed"]' element whose text contains "test-patch-success.txt"; "the header" is its ".patch-tool-header" and "the details" its ".patch-tool-details". Perform the steps in order.
 1. Navigate to /c/{{SLUG}}. The card is visible (allow 15s).
 2. The card's ".patch-tool-toggle" is visible.
 3. Click the header: the details become hidden.

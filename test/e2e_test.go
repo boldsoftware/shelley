@@ -194,8 +194,9 @@ func e2eResults() []*lazycue.TestResult {
 }
 
 // e2e runs a browser test of description against a fresh shelley that setup
-// (which may be nil) prepares for every attempt.
-func e2e(t *testing.T, description string, setup func(s *shelley)) {
+// (which may be nil) prepares for every attempt. useful is how many times the
+// test has caught a real bug (see useful).
+func e2e(t *testing.T, useful lazycue.Useful, description string, setup func(s *shelley)) {
 	t.Helper()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run the LazyCue browser integration tests")
@@ -221,7 +222,7 @@ func e2e(t *testing.T, description string, setup func(s *shelley)) {
 	e2eHarnesses = append(e2eHarnesses, h)
 	e2eMu.Unlock()
 	t.Cleanup(writeSummary)
-	h.Test(t, description)
+	h.Test(t, useful, description)
 }
 
 // setUp starts a shelley that setup prepares.

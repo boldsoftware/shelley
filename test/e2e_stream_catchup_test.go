@@ -68,7 +68,7 @@ func (s *shelley) catchup() (a, b convo) {
 const catchupSetup = `The test seeds two conversations: A at /c/catchup-a, whose reply reads "Hello! I'm Shelley, your AI assistant.", and B at /c/catchup-b, whose reply reads "Well, hi there!". A conversation "shows" a text when document.querySelector(".messages-container")?.textContent includes it (wait for that with an eval expecting true, allowing 15s; do not look elsewhere on the page, as the conversation list previews messages too). To "select" a conversation with slug X: click the button[aria-label="Open conversations"]; wait for ".drawer.open" to be visible (allow 5s); wait for the ".drawer.open .conversation-title" whose text is exactly X to be visible (allow 15s) and click it; then wait for ".drawer.open" to be hidden (allow 10s). Perform the steps in order. `
 
 func TestE2EStreamCatchupSecondVisitHitsCache(t *testing.T) {
-	e2e(t, catchupSetup+`A → B → A: the second visit hits the cache, with no extra REST backfill. Call "track" starts counting the browser's GETs of A's full-load endpoint (/api/conversation/<A's id>, any query) and call "A loads" returns how many there have been since, as a number.
+	e2e(t, useful(0), catchupSetup+`A → B → A: the second visit hits the cache, with no extra REST backfill. Call "track" starts counting the browser's GETs of A's full-load endpoint (/api/conversation/<A's id>, any query) and call "A loads" returns how many there have been since, as a number.
 1. Navigate to /c/catchup-a; wait for the message input ([data-testid="message-input"]) to be visible (allow 30s); A shows "Hello! I'm Shelley, your AI assistant.".
 2. Call "track".
 3. Select catchup-b; it shows "Well, hi there!".
@@ -81,7 +81,7 @@ func TestE2EStreamCatchupSecondVisitHitsCache(t *testing.T) {
 }
 
 func TestE2EStreamCatchupOneEventSource(t *testing.T) {
-	e2e(t, catchupSetup+`Only one /api/stream2 EventSource exists, even after switching conversations. Call "stream requests" returns how many requests for /api/stream2 (any query) the browser has sent since the test began, as a number.
+	e2e(t, useful(0), catchupSetup+`Only one /api/stream2 EventSource exists, even after switching conversations. Call "stream requests" returns how many requests for /api/stream2 (any query) the browser has sent since the test began, as a number.
 1. Navigate to /c/catchup-a; wait for the message input ([data-testid="message-input"]) to be visible (allow 30s); A shows "Hello! I'm Shelley, your AI assistant.".
 2. Select catchup-b; it shows "Well, hi there!".
 3. Select catchup-a, then select catchup-b, then select catchup-a; it shows "Hello! I'm Shelley, your AI assistant.".
@@ -109,7 +109,7 @@ func TestE2EStreamCatchupBackgroundUpdate(t *testing.T) {
 	// cached.maxSequenceId on the first switch and trip a defensive REST
 	// catch-up). The contract that matters is that the background message
 	// becomes visible on switch.
-	e2e(t, catchupSetup+`A cross-conversation live update: B receives a message while A is viewed. Call "surprise" sends B the message "echo: surprise from background" through the API and returns once the server has finished B's reply to it.
+	e2e(t, useful(0), catchupSetup+`A cross-conversation live update: B receives a message while A is viewed. Call "surprise" sends B the message "echo: surprise from background" through the API and returns once the server has finished B's reply to it.
 1. Navigate to /c/catchup-a; wait for the message input ([data-testid="message-input"]) to be visible (allow 30s); A shows "Hello! I'm Shelley, your AI assistant.".
 2. Call "surprise".
 3. Select catchup-b; it shows "surprise from background".`, func(s *shelley) {
@@ -146,7 +146,7 @@ func TestE2EStreamCatchupReloadPreservesCache(t *testing.T) {
 	// defensive catch-up (the conversation list snapshot can advance
 	// maxSequenceIdKnown past the cached maxSequenceId), so counting starts
 	// after the reload settles.
-	e2e(t, catchupSetup+`A reload preserves the cache: no spinner, and no backfill after the reload. Call "track" starts counting the browser's GETs of A's full-load endpoint (/api/conversation/<A's id>, any query) and call "A loads" returns how many there have been since, as a number.
+	e2e(t, useful(0), catchupSetup+`A reload preserves the cache: no spinner, and no backfill after the reload. Call "track" starts counting the browser's GETs of A's full-load endpoint (/api/conversation/<A's id>, any query) and call "A loads" returns how many there have been since, as a number.
 1. Navigate to /c/catchup-a; wait for the message input ([data-testid="message-input"]) to be visible (allow 30s); A shows "Hello! I'm Shelley, your AI assistant.".
 2. Reload the page; wait for the message input to be visible (allow 30s); A shows "Hello! I'm Shelley, your AI assistant." (the IndexedDB cache rehydrates it).
 3. There must be exactly 0 ".spinner" elements.
@@ -224,13 +224,13 @@ const catchupCoalescedIdleDescription = `The page's /api/stream2 EventSource get
 5. The Stop button should become hidden.`
 
 func TestE2EStreamCatchupCoalescedIdleKnownRow(t *testing.T) {
-	e2e(t, `A coalesced idle patch clears optimistic Thinking for a conversation the list already had: the conversation list snapshot the page loads lists the conversation /c/{{SLUG}}, idle. `+catchupCoalescedIdleDescription, func(s *shelley) {
+	e2e(t, useful(0), `A coalesced idle patch clears optimistic Thinking for a conversation the list already had: the conversation list snapshot the page loads lists the conversation /c/{{SLUG}}, idle. `+catchupCoalescedIdleDescription, func(s *shelley) {
 		catchupCoalescedIdle(s, true)
 	})
 }
 
 func TestE2EStreamCatchupCoalescedIdleFirstRow(t *testing.T) {
-	e2e(t, `A coalesced idle patch clears optimistic Thinking when it brings the list's first row: the conversation list snapshot the page loads is empty, so the patch is the first the list hears of the conversation /c/{{SLUG}}. `+catchupCoalescedIdleDescription, func(s *shelley) {
+	e2e(t, useful(0), `A coalesced idle patch clears optimistic Thinking when it brings the list's first row: the conversation list snapshot the page loads is empty, so the patch is the first the list hears of the conversation /c/{{SLUG}}. `+catchupCoalescedIdleDescription, func(s *shelley) {
 		catchupCoalescedIdle(s, false)
 	})
 }

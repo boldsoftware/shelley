@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
+
+	"github.com/boldsoftware/shelley/lazycue"
 )
 
 // Ported from ui/e2e/token-cost-mode.spec.ts.
@@ -33,9 +35,9 @@ const tokenCostOpenGraph = `1. Navigate to /new.
 
 // Usage carries native model names and endpoints, not the picker's suffixed
 // IDs. Mixed integrations can contribute to the same model's cost breakdown.
-func tokenCostMode(t *testing.T, width int) {
+func tokenCostMode(t *testing.T, useful lazycue.Useful, width int) {
 	w := strconv.Itoa(width)
-	e2e(t, `The cost graph hides only zero cache writes for ChatGPT subscription models, at a `+w+`px-wide window. The model catalog and pricing are mocked, and the conversation at /c/{{SLUG}} serves usage on each of its agent messages from a mix of integrations. Perform the steps in order.
+	e2e(t, useful, `The cost graph hides only zero cache writes for ChatGPT subscription models, at a `+w+`px-wide window. The model catalog and pricing are mocked, and the conversation at /c/{{SLUG}} serves usage on each of its agent messages from a mix of integrations. Perform the steps in order.
 `+tokenCostOpenGraph+`6. The popup's [data-testid="token-cost-total"] text contains "≈$0.011".
 7. Wait (with an eval that has expect) until the breakdown is exactly as below. Compute it in one eval from the popup's element with role "table" and accessible name "Spend by model" (the legend): walk the legend's elements matching ".token-cost-model-row, .token-cost-legend-row" in document order; a ".token-cost-model-row" starts a model named by the trimmed textContent of its ".token-cost-model-name"; each ".token-cost-legend-row" adds [label, tokens] to the current model, from the trimmed textContent of its ".token-cost-legend-label" and ".token-cost-legend-tokens". Return JSON.stringify of the object mapping model names to their lists, with the models in this order (pick them by name; any other models in the legend are ignored):
 {"gpt-5.6-luna":[["Output","100"],["Input","1k"],["Cache read","2k"]],"gpt-6-astra":[["Output","100"],["Input","1k"],["Cache write","42"],["Cache read","2k"]],"gpt-5.6-sol":[["Output","200"],["Input","2k"],["Cache write","0"],["Cache read","4k"]],"gpt-5.6-terra":[["Output","100"],["Input","1k"],["Cache write","0"],["Cache read","2k"]],"unknown-mode":[["Output","100"],["Input","1k"],["Cache write","0"],["Cache read","2k"]],"removed-model":[["Output","100"],["Input","1k"],["Cache write","0"],["Cache read","2k"]],"gpt-5.5":[["Output","100"],["Input","1k"],["Cache write","0"],["Cache read","2k"]]}
@@ -98,6 +100,6 @@ The ChatGPT subscription model with no cache writes (gpt-5.6-luna) is the only o
 	})
 }
 
-func TestE2ETokenCostModeZeroCacheWrites768(t *testing.T) { tokenCostMode(t, 768) }
+func TestE2ETokenCostModeZeroCacheWrites768(t *testing.T) { tokenCostMode(t, useful(0), 768) }
 
-func TestE2ETokenCostModeZeroCacheWrites1280(t *testing.T) { tokenCostMode(t, 1280) }
+func TestE2ETokenCostModeZeroCacheWrites1280(t *testing.T) { tokenCostMode(t, useful(0), 1280) }

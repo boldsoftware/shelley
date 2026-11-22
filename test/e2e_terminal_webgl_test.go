@@ -26,7 +26,7 @@ const openWebGLTerminal = `1. Navigate to /c/term-webgl and ` + openTerminalPhon
 `
 
 func TestE2ETerminalWebGLFallsBackToDOM(t *testing.T) {
-	e2e(t, `The terminal renders with WebGL and falls back to the DOM on context loss. The test seeded a conversation at /c/term-webgl; terminals render with xterm.js, on a phone screen at device scale 1. window.__terminalCols lists the cols of every init and resize message the page's terminals sent their server, in order. "The WebGL canvas count" is the eval [...document.querySelector('`+visibleTerminal+`').querySelectorAll("canvas")].filter(c => c.getContext("webgl2")).length.
+	e2e(t, useful(0), `The terminal renders with WebGL and falls back to the DOM on context loss. The test seeded a conversation at /c/term-webgl; terminals render with xterm.js, on a phone screen at device scale 1. window.__terminalCols lists the cols of every init and resize message the page's terminals sent their server, in order. "The WebGL canvas count" is the eval [...document.querySelector('`+visibleTerminal+`').querySelectorAll("canvas")].filter(c => c.getContext("webgl2")).length.
 `+openWebGLTerminal+`3. The WebGL renderer replaces the DOM renderer's rows with a canvas: the WebGL canvas count should become 1, and the terminal should contain no ".xterm-rows" (count 0).
 4. The last entry of window.__terminalCols should become greater than 0. Record it in a window variable as the WebGL cols.
 5. A context that is not restored (too many live contexts) must not leave the terminal blank. Eval: for every canvas in the terminal, c.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext().
@@ -47,7 +47,7 @@ WebSocket.prototype.send = function (data) {
 }
 
 func TestE2ETerminalWebGLDOMWithoutWebGL2(t *testing.T) {
-	e2e(t, `The terminal renders with the DOM without WebGL2. The test seeded a conversation at /c/term-webgl; terminals render with xterm.js, on a phone screen at device scale 1, and the browser offers no WebGL2 (canvas getContext("webgl2") returns null).
+	e2e(t, useful(0), `The terminal renders with the DOM without WebGL2. The test seeded a conversation at /c/term-webgl; terminals render with xterm.js, on a phone screen at device scale 1, and the browser offers no WebGL2 (canvas getContext("webgl2") returns null).
 `+openWebGLTerminal+`3. The terminal's ".xterm-rows" should contain "$".`, func(s *shelley) {
 		s.initScript(`const getContext = HTMLCanvasElement.prototype.getContext;
 HTMLCanvasElement.prototype.getContext = function (type, ...args) {

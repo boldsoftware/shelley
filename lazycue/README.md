@@ -69,9 +69,38 @@ Or from Go tests:
 var app = lazycue.New(lazycue.Options{BaseURL: "http://localhost:3000"})
 
 func TestHomepage(t *testing.T) {
-    app.Test(t, `Navigate to / and verify the page title is "My App". The login button should be visible.`)
+    app.Test(t, lazycue.TimesUseful(0), `Navigate to / and verify the page title is "My App". The login button should be visible.`)
 }
 ```
+
+## Is It Working?
+
+Self-healing tests cost something (LLM spend, CI time, a cache to keep
+committed), and a test that heals around every change might never catch
+anything. So every Go test (`Harness.Test`) says how many times it has been
+**useful**: how many of its failures caught a real bug, as opposed to a flake
+or an intended change the test had to follow. That is the
+`lazycue.TimesUseful(0)` above.
+
+When a test's steps fail, its error says how useful the test has been so far
+and where the count is written, and asks whoever fixes the bug it caught to
+increment the count in the same commit:
+
+```
+lazycue: test failed: step 1 (assert_title) failed: ...
+
+Useful? This test has been useful 0 times so far. If this failure caught a real bug, even one in your own uncommitted change, rather than a flake or an intended change the test should follow, increment the count from 0 to 1 at shelley/test/e2e_smoke_test.go:8 in the commit that fixes the bug (every test that caught it counts). The counts tell us whether LazyCue tests earn their keep.
+```
+
+Failures that tested nothing (no cached script and no agent to write one, or
+an app, browser or agent error) don't ask. Each test keeps its own count;
+`Harness.Test` reports two tests that share one.
+
+The counts live in the test source, next to each description, so they survive
+edits to the description and regenerating the cache, and `git log -S` shows
+the commits that bumped them. `WriteSummary` records each test's count
+(`useful`, `useful_at`) and the total of those that ran. The CLI's tests have
+no source to keep a count in, so they have none.
 
 ## Workflow of a Run
 

@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/boldsoftware/shelley/lazycue"
 )
 
 // Ported from ui/e2e/live-delegation.spec.ts.
@@ -227,7 +229,7 @@ func (s *shelley) intercepting() *atomic.Bool {
 }
 
 func TestE2ELiveDelegationQuestionAndReply(t *testing.T) {
-	e2e(t, `A delegated question reaches the chat, and its reply reaches Live. `+liveTerms+`Call "sessions" describes the call starts (POST /api/conversation/<id>/live-session) as JSON; call "relayed session.started" says whether any event of type "session.started" was relayed to the server. Perform the steps in order.
+	e2e(t, useful(0), `A delegated question reaches the chat, and its reply reaches Live. `+liveTerms+`Call "sessions" describes the call starts (POST /api/conversation/<id>/live-session) as JSON; call "relayed session.started" says whether any event of type "session.started" was relayed to the server. Perform the steps in order.
 1. Navigate to /c/ready. data-testid "live-call-header" should have aria-label exactly "Start voice conversation".
 2. Click it. data-testid "live-bar" should contain "On call"; the header button's aria-label should become exactly "End voice call", and its computed color should equal the computed backgroundColor of data-testid "live-stop" (eval the comparison, expect true). data-testid "live-timer" should be visible.
 3. The strip sits by the composer, with a wide meter and no captions: the live bar's getBoundingClientRect().y should be >= that of ".message-input-container" (eval, expect true); data-testid "live-meter" should be at least 110px wide (eval, expect true); there should be no data-testid "live-transcript" (count 0).
@@ -264,7 +266,7 @@ func TestE2ELiveDelegationQuestionAndReply(t *testing.T) {
 }
 
 func TestE2ELiveDelegationSentExchangesStayFrozen(t *testing.T) {
-	e2e(t, `Sent exchanges stay frozen while new Live speech waits for the next handoff. `+liveTerms+`Call "snapshot" saves the conversation as the server has it; call "unchanged" says whether it is still exactly the same; call "user messages added" counts the user messages added since the snapshot. Perform the steps in order.
+	e2e(t, useful(0), `Sent exchanges stay frozen while new Live speech waits for the next handoff. `+liveTerms+`Call "snapshot" saves the conversation as the server has it; call "unchanged" says whether it is still exactly the same; call "user messages added" counts the user messages added since the snapshot. Perform the steps in order.
 1. Navigate to /c/transcript and start the call. Call "snapshot".
 2. Emit {type: "session.input_transcript.delta", delta: "Hello.", start_ms: 0, end_ms: 400}, then {type: "session.output_transcript.delta", delta: "Hi, I'm ", start_ms: 500, end_ms: 900}. The exchange should contain "Hi, I'm".
 3. Emit {type: "session.output_transcript.delta", delta: "here.", start_ms: 900, end_ms: 1100}. The exchange should contain "Hi, I'm here." and "Not sent to Shelley", and its className must not match /message-user/. Call "unchanged" should return exactly "true".
@@ -292,7 +294,7 @@ func TestE2ELiveDelegationSentExchangesStayFrozen(t *testing.T) {
 }
 
 func TestE2ELiveDelegationHangupKeepsSentRequest(t *testing.T) {
-	e2e(t, `Hangup does not append unsent captions to a sent request. `+liveTerms+`Once call "intercept" has run, the server's answer to a relay of events (POST .../live-session/<session>/events) carrying a delta "The live chat" is held back until call "release"; call "held" says whether one is being held. Perform the steps in order.
+	e2e(t, useful(0), `Hangup does not append unsent captions to a sent request. `+liveTerms+`Once call "intercept" has run, the server's answer to a relay of events (POST .../live-session/<session>/events) carrying a delta "The live chat" is held back until call "release"; call "held" says whether one is being held. Perform the steps in order.
 1. Navigate to /c/final and start the call.
 2. Call window.liveSpeak("hangup", "echo: save the whole transcript"). There should be exactly one message "Spoken request: echo: save the whole transcript" (the request).
 3. Call "intercept". Emit {type: "session.output_transcript.delta", delta: "The live chat", start_ms: 1000, end_ms: 1800}. Call "held" should come to return exactly "true".
@@ -319,7 +321,7 @@ func TestE2ELiveDelegationHangupKeepsSentRequest(t *testing.T) {
 }
 
 func TestE2ELiveDelegationBoundedExchange(t *testing.T) {
-	e2e(t, `Live groups overlapping thoughts and keeps the exchange bounded with optional scrollback. `+liveTerms+`"The turns" are the exchange's ".live-exchange-turn" elements; "the region" is the exchange's [role="region"][aria-label="Live exchange transcript"]; "the distance from the bottom" is the region's scrollHeight - clientHeight - scrollTop. Perform the steps in order.
+	e2e(t, useful(0), `Live groups overlapping thoughts and keeps the exchange bounded with optional scrollback. `+liveTerms+`"The turns" are the exchange's ".live-exchange-turn" elements; "the region" is the exchange's [role="region"][aria-label="Live exchange transcript"]; "the distance from the bottom" is the region's scrollHeight - clientHeight - scrollTop. Perform the steps in order.
 1. Navigate to /c/overlap and start the call.
 2. Emit {type: "session.input_transcript.delta", delta: "The transcript keeps", start_ms: 0, end_ms: 1200}, then {type: "session.output_transcript.delta", delta: "Mm-hmm.", start_ms: 900, end_ms: 1300}, then {type: "session.input_transcript.delta", delta: " splitting up.", start_ms: 1300, end_ms: 2500}. There should be exactly 2 turns, and the first should contain "The transcript keeps splitting up.".
 3. Emit {type: "session.output_transcript.delta", delta: "A long reply with room to scroll back. ".repeat(80), start_ms: 4000, end_ms: 20000}. The region should come to overflow (scrollHeight - clientHeight > 0, eval expect true); its clientHeight should be at most 192; the distance from the bottom should come to be at most 1.
@@ -333,7 +335,7 @@ func TestE2ELiveDelegationBoundedExchange(t *testing.T) {
 }
 
 func TestE2ELiveDelegationPausedThought(t *testing.T) {
-	e2e(t, `Live keeps a paused thought together without moving an answer before its question. `+liveTerms+`"The turns" are the exchange's ".live-exchange-turn" elements; check the nth one with an eval on document.querySelectorAll("[data-testid=live-exchange] .live-exchange-turn")[n]. Perform the steps in order.
+	e2e(t, useful(0), `Live keeps a paused thought together without moving an answer before its question. `+liveTerms+`"The turns" are the exchange's ".live-exchange-turn" elements; check the nth one with an eval on document.querySelectorAll("[data-testid=live-exchange] .live-exchange-turn")[n]. Perform the steps in order.
 1. Navigate to /c/boundaries and start the call.
 2. Emit {type: "session.input_transcript.delta", delta: "This is", start_ms: 0, end_ms: 1000}, then {type: "session.output_transcript.delta", delta: "Mm.", start_ms: 900, end_ms: 1200}, then {type: "session.input_transcript.delta", delta: " still one thought", start_ms: 3500, end_ms: 4500}, then {type: "session.input_transcript.delta", delta: "\n.", start_ms: 4500, end_ms: 4500} (a newline and a period). There should be exactly 2 turns, and the first turn's p element should have text exactly "This is still one thought.".
 3. Emit {type: "session.output_transcript.delta", delta: "Which panel?", start_ms: 5000, end_ms: 6000}, then {type: "session.input_transcript.delta", delta: "Sidebar.", start_ms: 6200, end_ms: 7000}. There should be exactly 4 turns; the third (index 2) should contain "Which panel?", the fourth (index 3) "Sidebar.", and the first must not contain "Sidebar.".
@@ -344,7 +346,7 @@ func TestE2ELiveDelegationPausedThought(t *testing.T) {
 }
 
 func TestE2ELiveDelegationLatePunctuation(t *testing.T) {
-	e2e(t, `Late punctuation neither amends a sent request nor creates another task. `+liveTerms+`Call "history" describes the conversation as the server has it. Perform the steps in order.
+	e2e(t, useful(0), `Late punctuation neither amends a sent request nor creates another task. `+liveTerms+`Call "history" describes the conversation as the server has it. Perform the steps in order.
 1. Navigate to /c/punctuation and start the call.
 2. Call window.liveSpeak("punctuation", "echo: keep the period"). There should be exactly one message "Spoken request: echo: keep the period" (the request).
 3. Emit {type: "session.input_transcript.delta", delta: ".", start_ms: 850, end_ms: 900}, then {type: "session.input_transcript.delta", delta: "Next thought.", start_ms: 5000, end_ms: 6000}. The exchange should contain "Next thought.", and must contain neither ".Next thought." nor ". Next thought.".
@@ -361,7 +363,7 @@ func TestE2ELiveDelegationLatePunctuation(t *testing.T) {
 }
 
 func TestE2ELiveDelegationBacklogDrains(t *testing.T) {
-	e2e(t, `A transcript backlog drains in order at hangup. `+liveTerms+`Once call "intercept" has run, every relay of events (POST .../live-session/<session>/events) is held back until call "release", and call "offsets" lists the start_ms of the events relayed so far, in order, as JSON. Call "hangup" says how the server answered the first hangup (DELETE .../live-session/<session>): "ok" for success. Call "saved transcript" says whether the transcript the server saved for call 1 contains the whole backlog. Perform the steps in order.
+	e2e(t, useful(0), `A transcript backlog drains in order at hangup. `+liveTerms+`Once call "intercept" has run, every relay of events (POST .../live-session/<session>/events) is held back until call "release", and call "offsets" lists the start_ms of the events relayed so far, in order, as JSON. Call "hangup" says how the server answered the first hangup (DELETE .../live-session/<session>): "ok" for success. Call "saved transcript" says whether the transcript the server saved for call 1 contains the whole backlog. Perform the steps in order.
 1. Navigate to /c/backlog and start the call.
 2. Call "intercept". Then in one eval, emit four events at once: for i from 0 to 3, window.liveEmit({type: "session.input_transcript.delta", delta: "声".repeat(16000), start_ms: i, end_ms: i + 1}).
 3. Call "offsets" should come to return exactly [0] (the first relay is held).
@@ -402,7 +404,7 @@ func TestE2ELiveDelegationBacklogDrains(t *testing.T) {
 
 // failedRelay is a failed pending relay test: endManually hangs up while the
 // relay is held.
-func failedRelay(t *testing.T, endManually bool) {
+func failedRelay(t *testing.T, useful lazycue.Useful, endManually bool) {
 	hangUp := ""
 	after := "automatic stop"
 	if endManually {
@@ -411,7 +413,7 @@ func failedRelay(t *testing.T, endManually bool) {
 	} else {
 		hangUp = `Call "release" (without hanging up).`
 	}
-	e2e(t, `A failed pending relay still ends the call after `+after+`. `+liveTerms+`Once call "intercept" has run, the server's answer to every relay of events (POST .../live-session/<session>/events) is held back until call "release" and is then 503 "Relay failed for test"; call "held" says whether one is being held. Call "hangup" says how the server answered the first hangup (DELETE .../live-session/<session>): "ok" for success. Perform the steps in order.
+	e2e(t, useful, `A failed pending relay still ends the call after `+after+`. `+liveTerms+`Once call "intercept" has run, the server's answer to every relay of events (POST .../live-session/<session>/events) is held back until call "release" and is then 503 "Relay failed for test"; call "held" says whether one is being held. Call "hangup" says how the server answered the first hangup (DELETE .../live-session/<session>): "ok" for success. Perform the steps in order.
 1. Navigate to /c/relay and start the call.
 2. Call "intercept". Emit {type: "session.input_transcript.delta", delta: "Already received words", start_ms: 0, end_ms: 1000}. Call "held" should come to return exactly "true".
 3. `+hangUp+`
@@ -439,15 +441,15 @@ func failedRelay(t *testing.T, endManually bool) {
 }
 
 func TestE2ELiveDelegationFailedRelayAutomaticStop(t *testing.T) {
-	failedRelay(t, false)
+	failedRelay(t, useful(0), false)
 }
 
 func TestE2ELiveDelegationFailedRelayManualHangup(t *testing.T) {
-	failedRelay(t, true)
+	failedRelay(t, useful(0), true)
 }
 
 func TestE2ELiveDelegationFailedHangup(t *testing.T) {
-	e2e(t, `A failed hangup remains visible alongside a failed final transcript. `+liveTerms+`Once call "intercept" has run, the server answers every relay of events (POST .../live-session/<session>/events) with 503 "Relay failed for test", and every hangup (DELETE .../live-session/<session>) with 503 "Hangup failed for test". Perform the steps in order.
+	e2e(t, useful(0), `A failed hangup remains visible alongside a failed final transcript. `+liveTerms+`Once call "intercept" has run, the server answers every relay of events (POST .../live-session/<session>/events) with 503 "Relay failed for test", and every hangup (DELETE .../live-session/<session>) with 503 "Hangup failed for test". Perform the steps in order.
 1. Navigate to /c/hangup and start the call.
 2. Call "intercept". Emit {type: "session.input_transcript.delta", delta: "Already received words", start_ms: 0, end_ms: 1000}.
 3. data-testid "live-error" should contain "Failed to relay the call to Shelley", "Could not end the call" and "Hangup failed for test".`, func(s *shelley) {
@@ -467,7 +469,7 @@ func TestE2ELiveDelegationFailedHangup(t *testing.T) {
 }
 
 func TestE2ELiveDelegationErrorsOnStrip(t *testing.T) {
-	e2e(t, `Shelley's errors about a call show on its strip. `+liveTerms+`Perform the steps in order.
+	e2e(t, useful(0), `Shelley's errors about a call show on its strip. `+liveTerms+`Perform the steps in order.
 1. Navigate to /c/ready and start the call.
 2. Emit {type: "session.delegation.created", offset_ms: -1, delegation: {id: "bad", target: "client"}}.
 3. data-testid "live-error" should have text exactly "Live returned an invalid delegation timestamp.".
@@ -481,7 +483,7 @@ func TestE2ELiveDelegationErrorsOnStrip(t *testing.T) {
 const navigateWithinAppDesc = `"Go within the app to P" means: in an eval, window.history.pushState({}, "", P) and then window.dispatchEvent(new PopStateEvent("popstate")); the page's URL should then end with P (eval location.href.endsWith(P), expect true). `
 
 func TestE2ELiveDelegationPinnedToOriginalChat(t *testing.T) {
-	e2e(t, `A call stays pinned to its original chat while browsing other chats. `+liveTerms+navigateWithinAppDesc+`There are two conversations, /c/kestrel (the original chat) and /c/other. Call "reply in other" sends "echo: unrelated private reply" to the other conversation through the API, and call "reply in origin" sends "echo: original background reply" to the original one; call "where delegated" says which conversations, as the server has them, mention "delegated to the original chat"; call "sessions" lists the conversations calls were started in (POST /api/conversation/<id>/live-session) as JSON; call "archive other" archives the other conversation. Perform the steps in order.
+	e2e(t, useful(0), `A call stays pinned to its original chat while browsing other chats. `+liveTerms+navigateWithinAppDesc+`There are two conversations, /c/kestrel (the original chat) and /c/other. Call "reply in other" sends "echo: unrelated private reply" to the other conversation through the API, and call "reply in origin" sends "echo: original background reply" to the original one; call "where delegated" says which conversations, as the server has them, mention "delegated to the original chat"; call "sessions" lists the conversations calls were started in (POST /api/conversation/<id>/live-session) as JSON; call "archive other" archives the other conversation. Perform the steps in order.
 1. Navigate to /c/kestrel and start the call. Emit {type: "session.output_transcript.delta", delta: "Still in the original call.", start_ms: 0, end_ms: 500}. The exchange should contain "Still in the original call.".
 2. Go within the app to /c/other. ".header-title" should have text exactly "other". data-testid "live-bar" should still be visible; the exchange should contain "Still in the original call." and "kestrel" (the original chat's name); data-testid "live-call-header" should have aria-label exactly "End voice call".
 3. Call "reply in other" (it should return "sent"). The last message containing "unrelated private reply" should become visible.
@@ -545,7 +547,7 @@ func TestE2ELiveDelegationPinnedToOriginalChat(t *testing.T) {
 }
 
 func TestE2ELiveDelegationCallOnNewStartsOneDraft(t *testing.T) {
-	e2e(t, `A call on /new starts one blank draft with the composer's selection, wherever the user browses meanwhile. `+liveTerms+navigateWithinAppDesc+`The composer has the profile VoicePersonal-test selected (model predictable). The microphone is held: getUserMedia answers only once window.__releaseVoiceMicrophone() is called in an eval. There is a conversation /c/other. Call "profiles loaded" says whether the page has loaded the profiles (/api/profiles answered successfully); call "drafts" counts the requests to /api/conversations/draft; call "session" checks the call start (POST /api/conversation/<id>/live-session) and returns "ok" when it is right; call "promoted" checks the call's conversation as the server has it and returns "ok" when it is right; call "next session" describes the latest call start as JSON. Perform the steps in order.
+	e2e(t, useful(0), `A call on /new starts one blank draft with the composer's selection, wherever the user browses meanwhile. `+liveTerms+navigateWithinAppDesc+`The composer has the profile VoicePersonal-test selected (model predictable). The microphone is held: getUserMedia answers only once window.__releaseVoiceMicrophone() is called in an eval. There is a conversation /c/other. Call "profiles loaded" says whether the page has loaded the profiles (/api/profiles answered successfully); call "drafts" counts the requests to /api/conversations/draft; call "session" checks the call start (POST /api/conversation/<id>/live-session) and returns "ok" when it is right; call "promoted" checks the call's conversation as the server has it and returns "ok" when it is right; call "next session" describes the latest call start as JSON. Perform the steps in order.
 1. Navigate to /new. Call "profiles loaded" should come to return exactly "true".
 2. Click data-testid "live-call-header". data-testid "live-bar" should contain "Connecting". Nothing is created before the microphone is granted: call "drafts" should return exactly "0".
 3. Go within the app to /c/other. ".header-title" should have text exactly "other".
@@ -633,7 +635,7 @@ func TestE2ELiveDelegationCallOnNewStartsOneDraft(t *testing.T) {
 }
 
 func TestE2ELiveDelegationCollapseKeepsListening(t *testing.T) {
-	e2e(t, `Live exchange collapse keeps listening and stays closed across handoffs. `+liveTerms+`"The toggle" is data-testid "live-exchange-toggle" (the exchange's summary); "the region" is the exchange's [role="region"][aria-label="Live exchange transcript"]. Call "snapshot" saves the conversation as the server has it; call "unchanged" says whether it is still exactly the same. Perform the steps in order.
+	e2e(t, useful(0), `Live exchange collapse keeps listening and stays closed across handoffs. `+liveTerms+`"The toggle" is data-testid "live-exchange-toggle" (the exchange's summary); "the region" is the exchange's [role="region"][aria-label="Live exchange transcript"]. Call "snapshot" saves the conversation as the server has it; call "unchanged" says whether it is still exactly the same. Perform the steps in order.
 1. Navigate to /c/collapse and start the call. Call "snapshot".
 2. Emit {type: "session.input_transcript.delta", delta: "echo: collapse me", start_ms: 0, end_ms: 1000}.
 3. Click the toggle. The exchange's JS property open should be false (eval, expect false), and the region should be hidden.
@@ -654,7 +656,7 @@ func TestE2ELiveDelegationCollapseKeepsListening(t *testing.T) {
 }
 
 func TestE2ELiveDelegationBriefView(t *testing.T) {
-	e2e(t, `Live delivery remains visible and replyable in brief view: the conversation lets the agent message the user (message_user on). `+liveTerms+`Call "snapshot turns" counts the conversation's messages that end a turn, as the server has them; call "more turns" says whether there are more now; call "reply" has the agent reply to the spoken request through the API, with message_user {"text": "On it.", "reply_to": <the spoken request's sequence_id>, "reaction": "👍", "end_turn": true}, and returns "sent" once done. Perform the steps in order.
+	e2e(t, useful(0), `Live delivery remains visible and replyable in brief view: the conversation lets the agent message the user (message_user on). `+liveTerms+`Call "snapshot turns" counts the conversation's messages that end a turn, as the server has them; call "more turns" says whether there are more now; call "reply" has the agent reply to the spoken request through the API, with message_user {"text": "On it.", "reply_to": <the spoken request's sequence_id>, "reaction": "👍", "end_turn": true}, and returns "sent" once done. Perform the steps in order.
 1. Navigate to /c/brief and start the call. Call "snapshot turns".
 2. Emit {type: "session.input_transcript.delta", delta: "Review the build", start_ms: 0, end_ms: 1000}, then {type: "session.delegation.created", offset_ms: 1000, delegation: {id: "brief", target: "client"}}.
 3. The message "Spoken request: Review the build" (the request) should be visible. Call "more turns" should come to return exactly "true".

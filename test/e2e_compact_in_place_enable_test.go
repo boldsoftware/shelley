@@ -33,7 +33,7 @@ func (s *shelley) compactInPlaceConversation(message string, on bool) convo {
 // nudges), marks that in the log, and then asks the agent to compact.
 
 func TestE2ECompactInPlaceEnableEnablesThenAsks(t *testing.T) {
-	e2e(t, `Compact in Place, in a conversation started with the compact_in_place tool off, enables the tool and then asks the agent to compact. Perform the steps in order.
+	e2e(t, useful(0), `Compact in Place, in a conversation started with the compact_in_place tool off, enables the tool and then asks the agent to compact. Perform the steps in order.
 1. Navigate to /c/{{SLUG}}.
 2. Click the ".context-usage-label" element, then click the [data-testid="compact-in-place-button"] button.
 3. The [data-testid="message-modelchange"] element has the aria-label exactly "Enabled the compact_in_place tool." and its text contains "+compact_in_place".
@@ -61,7 +61,7 @@ func TestE2ECompactInPlaceEnableEnablesThenAsks(t *testing.T) {
 }
 
 func TestE2ECompactInPlaceEnableWaitsForTurnEnd(t *testing.T) {
-	e2e(t, `Compact in Place, in a conversation started with the compact_in_place tool off, waits for the current turn to end. The agent is busy running "sleep 30" in the conversation at /c/{{SLUG}}. Perform the steps in order.
+	e2e(t, useful(0), `Compact in Place, in a conversation started with the compact_in_place tool off, waits for the current turn to end. The agent is busy running "sleep 30" in the conversation at /c/{{SLUG}}. Perform the steps in order.
 1. Navigate to /c/{{SLUG}}.
 2. Click the ".context-usage-label" element.
 3. The [data-testid="compact-in-place-button"] button is disabled, and an element with the text "Finish or stop the current turn to compact in place." is visible.
@@ -79,7 +79,7 @@ func TestE2ECompactInPlaceEnableWaitsForTurnEnd(t *testing.T) {
 
 // With the tool on, as it is by default, the button just asks the agent.
 func TestE2ECompactInPlaceEnableWithToolAsks(t *testing.T) {
-	e2e(t, `Compact in Place, in a conversation with the compact_in_place tool on (the default), just asks the agent. Perform the steps in order.
+	e2e(t, useful(0), `Compact in Place, in a conversation with the compact_in_place tool on (the default), just asks the agent. Perform the steps in order.
 1. Navigate to /c/{{SLUG}}.
 2. Click the ".context-usage-label" element, then click the [data-testid="compact-in-place-button"] button.
 3. An element with the text "Compact your context in place." is visible.
@@ -102,7 +102,7 @@ func TestE2ECompactInPlaceEnableWithToolAsks(t *testing.T) {
 // /compact runs the same in-place request, with any instructions appended
 // after a blank line.
 func TestE2ECompactInPlaceEnableSlashCompact(t *testing.T) {
-	e2e(t, `The /compact command asks the agent to compact in place, with its instructions appended after a blank line. Perform the steps in order.
+	e2e(t, useful(0), `The /compact command asks the agent to compact in place, with its instructions appended after a blank line. Perform the steps in order.
 1. Navigate to /c/{{SLUG}}.
 2. Call "chat": it returns the message of the first chat request (POST /api/conversation/<id>/chat) the page sent, as a JSON string, or "none" before there is one. It must return exactly "none" now.
 3. Fill the message input ([data-testid="message-input"]) with "/compact keep the API notes" and press Enter in it.

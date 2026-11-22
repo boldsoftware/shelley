@@ -8,7 +8,7 @@ import (
 // Ported from ui/e2e/tool-elapsed.spec.ts.
 
 func TestE2EToolElapsedRunningShowsLiveTime(t *testing.T) {
-	e2e(t, `Expanded running tools show a live elapsed time that stops on completion. The page runs on a fake clock that flows like real time until a step moves it: "fast-forward N ms" means an eval of exactly window.__clock.fastForward(N) (it returns a promise the eval awaits). "The tool" is the ".bash-tool" element; "the elapsed time" is the tool's [data-testid="tool-running-elapsed"] element; "the seconds" is the number in the elapsed time's text matched by /(\d+)s/. Perform the steps in order.
+	e2e(t, useful(0), `Expanded running tools show a live elapsed time that stops on completion. The page runs on a fake clock that flows like real time until a step moves it: "fast-forward N ms" means an eval of exactly window.__clock.fastForward(N) (it returns a promise the eval awaits). "The tool" is the ".bash-tool" element; "the elapsed time" is the tool's [data-testid="tool-running-elapsed"] element; "the seconds" is the number in the elapsed time's text matched by /(\d+)s/. Perform the steps in order.
 1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid="message-input"]) to be visible.
 2. Fill the message input with "bash: sleep 100" and click the send button ([data-testid="send-button"]).
 3. Wait until the tool's data-testid is exactly "tool-call-running" (allow 30s).
@@ -31,7 +31,7 @@ func TestE2EToolElapsedRunningShowsLiveTime(t *testing.T) {
 func TestE2EToolElapsedSubagentRunningRequests(t *testing.T) {
 	// Subagent calls return as soon as the child starts; the live link stays
 	// while the child works.
-	e2e(t, `A working subagent's running requests show their elapsed time. "The subagent card" is the ".tool" element that contains a ".subagent-tool-slug" element. "The child tool" is the ".bash-tool" element on the subagent's page. Perform the steps in order.
+	e2e(t, useful(0), `A working subagent's running requests show their elapsed time. "The subagent card" is the ".tool" element that contains a ".subagent-tool-slug" element. "The child tool" is the ".bash-tool" element on the subagent's page. Perform the steps in order.
 1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid="message-input"]) to be visible.
 2. Fill the message input with "subagent: helper bash: sleep 100" and click the send button ([data-testid="send-button"]).
 3. Wait until the subagent card's data-testid is exactly "tool-call-completed" (allow 30s): the subagent call returns as soon as the child starts.

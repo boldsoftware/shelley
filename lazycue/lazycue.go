@@ -141,6 +141,7 @@ const (
 	RunModeCached    RunMode = "cached"    // test ran from cache
 	RunModeGenerated RunMode = "generated" // agent generated fresh
 	RunModeHealed    RunMode = "healed"    // agent fixed a cached test
+	RunModeError     RunMode = "error"     // Run failed before the test could (setup, browser or agent errors); see Harness.Test
 )
 
 // TestResult is the result of running a lazy test.
@@ -160,6 +161,8 @@ type TestResult struct {
 	EstimatedCost  float64       // estimated USD cost
 	VideoPath      string        // path to the rendered MP4, if VideoDir was set
 	Heal           *HealInfo     // populated only when Mode == RunModeHealed: why/how the heal happened
+	Useful         int           // how many times the test has been useful (see Useful); set by Harness.Test
+	UsefulAt       string        // where that count is written, e.g. "shelley/test/e2e_smoke_test.go:8"; "" if unknown
 }
 
 // HealInfo records why a heal was triggered and how the agent behaved, so a
@@ -374,7 +377,21 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 				}, nil
 			}
 			if agentErr != nil {
-				return nil, fmt.Errorf("agent fix: %w", agentErr)
+				// The cached script failed, and still does: report that,
+				// not just the agent's trouble, since it may be a bug.
+				if collector != nil {
+					collector.attach(results)
+				}
+				return &TestResult{
+					Pass:          false,
+					Error:         summarizeFailure(results) + "; heal failed: " + agentErr.Error(),
+					Steps:         results,
+					CacheVersion:  version,
+					Description:   description,
+					Mode:          RunModeCached,
+					TotalDuration: time.Since(totalStart),
+					AgentDuration: agentDur,
+				}, nil
 			}
 
 			newVersion := version + 1
@@ -412,14 +429,20 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 				HealedStepCount:    healedStepCount(agentResult.StepsJSON),
 			}
 
+			// An agent that judged the app broken without running
+			// steps leaves the cached script's failure to show.
+			healSteps := agentResult.StepResults
+			if !agentResult.Success && len(healSteps) == 0 {
+				healSteps = results
+			}
 			if collector != nil {
-				collector.attach(agentResult.StepResults)
+				collector.attach(healSteps)
 			}
 			return &TestResult{
 				Pass:           agentResult.Success,
 				Error:          agentResult.Error,
 				ScreenshotPath: agentResult.ScreenshotPath,
-				Steps:          agentResult.StepResults,
+				Steps:          healSteps,
 				CacheVersion:   newVersion,
 				Description:    description,
 				Mode:           RunModeHealed,
@@ -628,7 +651,7 @@ func healedStepCount(stepsJSON []byte) int {
 //	var browser = lazycue.New(lazycue.Options{BaseURL: "http://localhost:3000"})
 //
 //	func TestLogin(t *testing.T) {
-//	    browser.Test(t, "Navigate to /login and verify the login form is visible")
+//	    browser.Test(t, lazycue.TimesUseful(0), "Navigate to /login and verify the login form is visible")
 //	}
 //
 // A Harness accumulates every TestResult it runs, so a TestMain can emit an
@@ -668,17 +691,35 @@ func (h *Harness) RenderVideos() error {
 }
 
 // Test runs a self-healing browser test described in plain English.
-// It calls t.Fatal if the test fails or encounters an error.
-func (h *Harness) Test(t testing.TB, description string) {
+// useful is how many times the test has been useful (see Useful); each test
+// has its own. Test calls t.Fatal if the test fails or encounters an error,
+// and if its steps failed, asks whoever fixes a bug the failure caught to
+// increment useful.
+func (h *Harness) Test(t testing.TB, useful Useful, description string) {
 	t.Helper()
+	start := time.Now()
+	usefulAt := useful.where()
+	if usefulAt != "" {
+		test, _, _ := strings.Cut(t.Name(), "/")
+		if other, ok := usefulOwners.LoadOrStore(usefulAt, test); ok && other != test {
+			t.Errorf("lazycue: %s and %s share the useful count at %s; give each test its own", other, test, usefulAt)
+		}
+	}
 	result, err := Run(t.Context(), h.opts, description)
 	if err != nil {
-		t.Fatalf("lazycue: %v", err)
+		// Record the error anyway, so that reports count the test (and
+		// its usefulness).
+		result = &TestResult{Error: err.Error(), Description: description, Mode: RunModeError, TotalDuration: time.Since(start)}
 	}
 	result.Name = t.Name()
+	result.Useful = useful.Times
+	result.UsefulAt = usefulAt
 	h.mu.Lock()
 	h.results = append(h.results, result)
 	h.mu.Unlock()
+	if err != nil {
+		t.Fatalf("lazycue: %v", err)
+	}
 
 	// Log step results.
 	var sb strings.Builder
@@ -702,7 +743,11 @@ func (h *Harness) Test(t testing.TB, description string) {
 	t.Logf("lazycue [%s]: %s\n%s", result.Mode, description, sb.String())
 
 	if !result.Pass {
-		t.Fatalf("lazycue: test failed: %s", result.Error)
+		hint := ""
+		if result.asksUseful() {
+			hint = "\n\n" + usefulHint(useful.Times, usefulAt)
+		}
+		t.Fatalf("lazycue: test failed: %s%s", result.Error, hint)
 	}
 }
 

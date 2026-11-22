@@ -18,17 +18,30 @@ them; edit the test description instead.
 ## Adding a test
 
 Most tests are `TestE2E*` functions in `shelley/test/e2e_*_test.go` that call
-`e2e(t, "<description>", setup)`. Each attempt at one runs against a shelley
+`e2e(t, useful(0), "<description>", setup)`. Each attempt at one runs against a shelley
 of its own (a fresh database, home and git working directory), which `setup`
 prepares: conversations, files, mocked requests, an init script for the page.
 The simpler `TestNewPage*` functions in `lazycue_test.go` call
-`lazyTest(t, "<description>")` and share one server (`lazyTestIsolated` gives
+`lazyTest(t, useful(0), "<description>")` and share one server (`lazyTestIsolated` gives
 one its own; `lazyRecordingTest` injects
 `shelley/test/testdata/recording-mock.js` before the application loads).
 
 Be specific about selectors (prefer `data-testid`), expected text, and
 expected states. The description is the source of truth; if the app diverges
 from it, the test fails.
+
+`useful(N)` is how many times the test has been useful: how many of its
+failures caught a real bug, rather than a flake or an intended change the test
+had to follow. A new test starts at `useful(0)`, in its Test function (helpers
+between take a `useful lazycue.Useful` and pass it on, so each test keeps its
+own). A failing test's error says where its count is; **if the failure caught
+a real bug, even one in your own uncommitted change, increment N in the commit
+that fixes it**, for every test that caught it. That is how we find out
+whether these tests earn their keep. To total them:
+
+```bash
+grep -rhoE '\buseful\([0-9]+\)' shelley/test | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}'
+```
 
 ## Running locally
 

@@ -5,7 +5,7 @@ import "testing"
 // Ported from ui/e2e/tool-card-mount.spec.ts.
 
 func TestE2EToolCardMountDefersOffscreenCards(t *testing.T) {
-	e2e(t, `Offscreen completed tool cards are deferred as placeholders and hydrate near the viewport. A 12-turn generated conversation with many tool calls is at /c/{{ID}}. "The placeholder" is the FIRST element matching ".tool-card-mount-placeholder". Check every assertion with an assert_* or wait_* step, or an eval that has "expect": an eval without "expect" asserts nothing. Perform the steps in order.
+	e2e(t, useful(0), `Offscreen completed tool cards are deferred as placeholders and hydrate near the viewport. A 12-turn generated conversation with many tool calls is at /c/{{ID}}. "The placeholder" is the FIRST element matching ".tool-card-mount-placeholder". Check every assertion with an assert_* or wait_* step, or an eval that has "expect": an eval without "expect" asserts nothing. Perform the steps in order.
 1. Navigate to /c/{{ID}} and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. Wait for the placeholder to exist in the DOM (allow 30s; it need not be visible).
 3. The placeholder is NOT in the viewport (assert_not_in_viewport).

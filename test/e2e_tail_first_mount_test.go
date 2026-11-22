@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => document.head.appendChild(st
 const tailFirstSetup = `The test shrinks the app's tail-first mounting so that a 15-turn conversation at /c/{{SLUG}} spans many chunks: on load only the last few chunks mount (as ".messages-chunk" elements) and older history renders as placeholders ([data-testid="pending-chunk"]). "The counts" are pending = document.querySelectorAll('[data-testid="pending-chunk"]').length and mounted = document.querySelectorAll('.messages-chunk').length. "The gap" is the messages container's (".messages-container") scrollHeight - scrollTop - clientHeight. To "open the conversation", navigate to /c/{{SLUG}}, wait for the message input ([data-testid="message-input"]) to be visible (allow 30s), then wait until the LAST element matching [data-testid="message"] is visible (its getBoundingClientRect() has a non-zero width and height; allow 30s). The test has already set the shelley.tailFirstTest knob; do not set it yourself. Check every assertion with an eval that has "expect" (or an assert_* or wait_* step): an eval without "expect" asserts nothing. Wait with such steps and a timeout, not with polling loops inside the expression. When a step says to record something, do it in one eval without "expect" that stores it in the named window variable, then check that variable in a separate eval with "expect". Perform the steps in order. `
 
 func TestE2ETailFirstMountsTailPinned(t *testing.T) {
-	e2e(t, tailFirstSetup+`Tail-first mounting mounts only the tail at load and keeps the bottom pinned; the background sweep is off.
+	e2e(t, useful(0), tailFirstSetup+`Tail-first mounting mounts only the tail at load and keeps the bottom pinned; the background sweep is off.
 1. Open the conversation.
 2. Right away, in a single eval (no expect), record window.__atLoad = JSON.stringify({pending: pending > 0, mounted: mounted > 0, bottom: gap < 5}) from the counts and the gap at that moment.
 3. window.__atLoad must be exactly {"pending":true,"mounted":true,"bottom":true}: placeholders stand in for older history, the tail is real content, and the viewport sits at the true bottom (not merely near it).
@@ -59,7 +59,7 @@ func TestE2ETailFirstMountsTailPinned(t *testing.T) {
 }
 
 func TestE2ETailFirstCachedRefreshKeepsHistoryUnmounted(t *testing.T) {
-	e2e(t, tailFirstSetup+`A cached refresh keeps history unmounted while waiting for the server; the background sweep is off and the conversation, {{ID}}, is archived. Once call "hold" has run, the server's answers to incremental loads of the conversation (a GET of /api/conversation/{{ID}} with a last_sequence_id query parameter) are held back until call "release"; call "incremental" says whether such a load has arrived ("true" or "false").
+	e2e(t, useful(0), tailFirstSetup+`A cached refresh keeps history unmounted while waiting for the server; the background sweep is off and the conversation, {{ID}}, is archived. Once call "hold" has run, the server's answers to incremental loads of the conversation (a GET of /api/conversation/{{ID}} with a last_sequence_id query parameter) are held back until call "release"; call "incremental" says whether such a load has arrived ("true" or "false").
 1. Navigate to /c/{{SLUG}}.
 2. Wait until window.__shelleyPerf?.loads().some((load) => load.conversationId === "{{ID}}") is true.
 3. Record the counts: window.__initial = {pending, mounted}. window.__initial.pending must be greater than 0.
@@ -96,7 +96,7 @@ func TestE2ETailFirstCachedRefreshKeepsHistoryUnmounted(t *testing.T) {
 }
 
 func TestE2ETailFirstSweepKeepsViewport(t *testing.T) {
-	e2e(t, tailFirstSetup+`The background sweep mounts everything without moving the viewport; the sweep is on.
+	e2e(t, useful(0), tailFirstSetup+`The background sweep mounts everything without moving the viewport; the sweep is on.
 1. Open the conversation.
 2. Record the worst scroll drift during the sweep, not just the endpoint (the follow machinery could mask a jump by re-pinning afterward): in one eval, set window.__maxDrift = 0 and add a "scroll" listener to the messages container that computes drift = Math.abs((el.scrollHeight - el.clientHeight) - el.scrollTop) and raises window.__maxDrift to it when larger.
 3. Wait until pending is exactly 0, with an eval whose "timeout" is "30s": the sweep replaced every placeholder.
@@ -108,7 +108,7 @@ func TestE2ETailFirstSweepKeepsViewport(t *testing.T) {
 }
 
 func TestE2ETailFirstScrollUpRevealsPlaceholders(t *testing.T) {
-	e2e(t, tailFirstSetup+`Scrolling up reveals placeholders so none is left in the viewport; the background sweep is off.
+	e2e(t, useful(0), tailFirstSetup+`Scrolling up reveals placeholders so none is left in the viewport; the background sweep is off.
 1. Open the conversation.
 2. Record the counts: window.__before = {pending, mounted}. window.__before.pending must be greater than 0.
 3. Scroll to the top of the transcript: eval document.querySelector(".messages-container").scrollTo({top: 0, behavior: "instant"}).
@@ -119,7 +119,7 @@ func TestE2ETailFirstScrollUpRevealsPlaceholders(t *testing.T) {
 }
 
 func TestE2ETailFirstTOCJumpMountsTarget(t *testing.T) {
-	e2e(t, tailFirstSetup+`A table-of-contents jump into unmounted history mounts the target chunk; the background sweep is off.
+	e2e(t, useful(0), tailFirstSetup+`A table-of-contents jump into unmounted history mounts the target chunk; the background sweep is off.
 1. Open the conversation.
 2. Record the counts: window.__before = {pending, mounted}. window.__before.pending must be greater than 0.
 3. Click the table of contents button (".toc-button"), then click the first TOC entry (".toc-entry") whose text contains "Turn 1:" (the first user turn, whose chunk is a placeholder).
@@ -130,7 +130,7 @@ func TestE2ETailFirstTOCJumpMountsTarget(t *testing.T) {
 }
 
 func TestE2ETailFirstAppendKeepsTailPinned(t *testing.T) {
-	e2e(t, tailFirstSetup+`A streaming append while history is unmounted keeps the tail pinned; the background sweep is off.
+	e2e(t, useful(0), tailFirstSetup+`A streaming append while history is unmounted keeps the tail pinned; the background sweep is off.
 1. Open the conversation.
 2. pending must be greater than 0.
 3. Fill the message input with "echo tail-first append" and click the send button ([data-testid="send-button"]).

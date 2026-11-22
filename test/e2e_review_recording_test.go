@@ -399,7 +399,7 @@ const reviewContentTop = `"Remember where the content starts" means an eval with
 const reviewSelectLine = `"Select across the line" means: hover the line at offset x 2, y 8 from its top-left, mouse down, hover it at x 160, y 8, mouse up. `
 
 func TestE2EReviewRecordingCapturesAndHandsOver(t *testing.T) {
-	e2e(t, `Narrated review recording captures what was pointed at and selected, then hands it to the conversation. `+reviewTerms+reviewOpenDiffs+reviewCommitMessage+reviewSent+reviewContentTop+reviewSelectLine+`The renamed line is ".diff-viewer-overlay .editor.modified .view-line" containing "renamedValue". To match where's text against a regular expression, eval the regex's test() on its textContent, expecting true. Perform the steps in order.
+	e2e(t, useful(0), `Narrated review recording captures what was pointed at and selected, then hands it to the conversation. `+reviewTerms+reviewOpenDiffs+reviewCommitMessage+reviewSent+reviewContentTop+reviewSelectLine+`The renamed line is ".diff-viewer-overlay .editor.modified .view-line" containing "renamedValue". To match where's text against a regular expression, eval the regex's test() on its textContent, expecting true. Perform the steps in order.
 1. Navigate to /c/review and open the diffs. Remember where the content starts.
 2. Click the start button. The stop button should become visible, and where's text should be exactly "commit message {{SHORT}} (new 1)".
 3. The live status takes over the header instead of adding a strip: the status should be visible inside ".diff-viewer-overlay .diff-viewer-header", and the content has not moved. There should be no data-testid "review-recording-bar" (count 0).
@@ -479,7 +479,7 @@ func TestE2EReviewRecordingCapturesAndHandsOver(t *testing.T) {
 }
 
 func TestE2EReviewRecordingBinaryViews(t *testing.T) {
-	e2e(t, `Binary views do not reuse the previous text selection or visible lines. `+reviewTerms+reviewOpenDiffs+reviewCommitMessage+reviewSent+reviewSelectLine+`The commit also adds a binary file, opaque.bin. The renamed line is ".diff-viewer-overlay .editor.modified .view-line" containing "renamedValue". Perform the steps in order.
+	e2e(t, useful(0), `Binary views do not reuse the previous text selection or visible lines. `+reviewTerms+reviewOpenDiffs+reviewCommitMessage+reviewSent+reviewSelectLine+`The commit also adds a binary file, opaque.bin. The renamed line is ".diff-viewer-overlay .editor.modified .view-line" containing "renamedValue". Perform the steps in order.
 1. Navigate to /c/review and open the diffs.
 2. Click the start button, then click the file tree item ([role="treeitem"] in the overlay) containing "app.ts"; the renamed line should become visible.
 3. Select across the renamed line. The status should contain "Selected".
@@ -514,7 +514,7 @@ func TestE2EReviewRecordingBinaryViews(t *testing.T) {
 }
 
 func TestE2EReviewRecordingNeedsTranscription(t *testing.T) {
-	e2e(t, `Offers no narrated review without transcription: the server says it cannot transcribe. `+reviewOpenDiffs+reviewCommitMessage+`Navigate to /c/review and open the diffs. Then there should be no start button: data-testid "review-record-start" count exactly 0.`, func(s *shelley) {
+	e2e(t, useful(0), `Offers no narrated review without transcription: the server says it cannot transcribe. `+reviewOpenDiffs+reviewCommitMessage+`Navigate to /c/review and open the diffs. Then there should be no start button: data-testid "review-record-start" count exactly 0.`, func(s *shelley) {
 		rv := newReview(s, false)
 		rv.conversation("review")
 		s.viewport(1500, 900)
@@ -522,7 +522,7 @@ func TestE2EReviewRecordingNeedsTranscription(t *testing.T) {
 }
 
 func TestE2EReviewRecordingCancel(t *testing.T) {
-	e2e(t, `Cancelling throws the recording away. `+reviewTerms+reviewOpenDiffs+reviewCommitMessage+`"The close button" is ".diff-viewer-overlay .diff-viewer-close". "Wait for the clock to tick" means: in an eval with no expectation set window.__tick = document.querySelector("[data-testid=review-record-stop] time").textContent, then wait until that text differs (eval document.querySelector("[data-testid=review-record-stop] time").textContent !== window.__tick, expect true). Perform the steps in order.
+	e2e(t, useful(0), `Cancelling throws the recording away. `+reviewTerms+reviewOpenDiffs+reviewCommitMessage+`"The close button" is ".diff-viewer-overlay .diff-viewer-close". "Wait for the clock to tick" means: in an eval with no expectation set window.__tick = document.querySelector("[data-testid=review-record-stop] time").textContent, then wait until that text differs (eval document.querySelector("[data-testid=review-record-stop] time").textContent !== window.__tick, expect true). Perform the steps in order.
 1. Navigate to /c/review and open the diffs.
 2. Click the start button; the stop button should become visible.
 3. Locked controls look it: the close button should have aria-disabled "true", computed opacity exactly "0.35" and computed cursor exactly "not-allowed".
@@ -545,7 +545,7 @@ func TestE2EReviewRecordingCancel(t *testing.T) {
 }
 
 func TestE2EReviewRecordingMobileHeader(t *testing.T) {
-	e2e(t, `Shows the live status in the mobile header. `+reviewTerms+reviewOpenDiffs+reviewCommitMessage+reviewContentTop+`Perform the steps in order.
+	e2e(t, useful(0), `Shows the live status in the mobile header. `+reviewTerms+reviewOpenDiffs+reviewCommitMessage+reviewContentTop+`Perform the steps in order.
 1. Navigate to /c/review and open the diffs (this phone hides the toolbar's buttons: click button[aria-label="More options"], then ".chat-overflow-popover button[aria-label^='Diffs']"). Remember where the content starts.
 2. Click the start button. where's text should be exactly "commit message {{SHORT}} (new 1)".
 3. The status should be visible inside ".diff-viewer-overlay .diff-viewer-header", and the content has not moved.
@@ -557,7 +557,7 @@ func TestE2EReviewRecordingMobileHeader(t *testing.T) {
 }
 
 func TestE2EReviewRecordingOutsideConversation(t *testing.T) {
-	e2e(t, `Outside a conversation, a recording starts one of its own. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`The server refuses audio uploads (/api/upload/raw answers 503 "unavailable") until call "accept uploads". Perform the steps in order.
+	e2e(t, useful(0), `Outside a conversation, a recording starts one of its own. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`The server refuses audio uploads (/api/upload/raw answers 503 "unavailable") until call "accept uploads". Perform the steps in order.
 1. Navigate to /new?{{QUERY}} and wait for the commit message.
 2. Hover the start button; the tooltip's text should be exactly "Record a narrated review for a new conversation".
 3. Click the start button. Hover the stop button; the tooltip's text should be exactly "Stop and send to a new conversation".
@@ -596,7 +596,7 @@ func TestE2EReviewRecordingOutsideConversation(t *testing.T) {
 const reviewComment = `"Comment on the commit message" means: click the commit message's line (".diff-viewer-overlay .editor.modified .view-line" containing "Rename value20"), fill ".diff-viewer-comment-input" with "Keep the old name.", and click the button named exactly "Add Comment". `
 
 func TestE2EReviewRecordingCommentSharesConversation(t *testing.T) {
-	e2e(t, `A comment made while recording on the new page shares the recording's conversation. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+reviewComment+`The server answers the recording's chat requests with 503 "unavailable" until call "accept chats". Call "drafts" counts the drafts the page made (POST /api/conversations/draft) and makes {{DRAFT_ID}} the first one's id; call "chats" returns the JSON list of the paths chat requests went to. To match the message input's (data-testid "message-input") value against a regular expression, eval the regex's test() on it, expecting true. Perform the steps in order.
+	e2e(t, useful(0), `A comment made while recording on the new page shares the recording's conversation. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+reviewComment+`The server answers the recording's chat requests with 503 "unavailable" until call "accept chats". Call "drafts" counts the drafts the page made (POST /api/conversations/draft) and makes {{DRAFT_ID}} the first one's id; call "chats" returns the JSON list of the paths chat requests went to. To match the message input's (data-testid "message-input") value against a regular expression, eval the regex's test() on it, expecting true. Perform the steps in order.
 1. Navigate to /new?{{QUERY}} and wait for the commit message.
 2. Click the start button; the stop button should become visible.
 3. Comment on the commit message.
@@ -625,7 +625,7 @@ func TestE2EReviewRecordingCommentSharesConversation(t *testing.T) {
 }
 
 func TestE2EReviewRecordingReloadKeepsCommentDraft(t *testing.T) {
-	e2e(t, `A reload mid-recording still sends it to the draft a comment made. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewComment+`Call "drafts" counts the drafts the page made (POST /api/conversations/draft) and makes {{DRAFT_ID}} the first one's id; call "chats" returns the JSON list of the paths chat requests went to. Perform the steps in order.
+	e2e(t, useful(0), `A reload mid-recording still sends it to the draft a comment made. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewComment+`Call "drafts" counts the drafts the page made (POST /api/conversations/draft) and makes {{DRAFT_ID}} the first one's id; call "chats" returns the JSON list of the paths chat requests went to. Perform the steps in order.
 1. Navigate to /new?{{QUERY}} and wait for the commit message.
 2. Click the start button; the stop button should become visible.
 3. Comment on the commit message. The page's URL should come to end with "/c/" and an id, nothing after it (eval /\/c\/[^/?]+$/.test(location.href), expect true). Call "drafts" should return exactly "1".
@@ -644,7 +644,7 @@ new Promise((resolve, reject) => { const open = indexedDB.open("shelley-review-r
 }
 
 func TestE2EReviewRecordingSentFromLiveConversation(t *testing.T) {
-	e2e(t, `A recording sent from a live conversation leaves the view there. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`There is a live conversation /c/live in the repository, whose drawer item is ".conversation-item[data-conversation-id='{{LIVE_ID}}']". The server refuses audio uploads (/api/upload/raw answers 503 "unavailable") until call "accept uploads". Perform the steps in order.
+	e2e(t, useful(0), `A recording sent from a live conversation leaves the view there. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`There is a live conversation /c/live in the repository, whose drawer item is ".conversation-item[data-conversation-id='{{LIVE_ID}}']". The server refuses audio uploads (/api/upload/raw answers 503 "unavailable") until call "accept uploads". Perform the steps in order.
 1. Navigate to /new?{{QUERY}} and wait for the commit message.
 2. Click the start button, wait for the clock to start, then click the stop button. data-testid "review-recording-error" should be visible.
 3. Call "accept uploads", then navigate to /c/live?{{QUERY}} and click data-testid "review-recording-send". It is sent.
@@ -667,7 +667,7 @@ func TestE2EReviewRecordingSentFromLiveConversation(t *testing.T) {
 }
 
 func TestE2EReviewRecordingDeletedDraft(t *testing.T) {
-	e2e(t, `A recording whose draft was deleted starts another. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`The server answers the recording's chat requests with 503 "unavailable" until call "accept chats". Perform the steps in order.
+	e2e(t, useful(0), `A recording whose draft was deleted starts another. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`The server answers the recording's chat requests with 503 "unavailable" until call "accept chats". Perform the steps in order.
 1. Navigate to /new?{{QUERY}} and wait for the commit message.
 2. Click the start button, wait for the clock to start, then click the stop button. data-testid "review-recording-error" should contain "unavailable".
 3. Call "delete draft" should return exactly "deleted": it checks the recording made exactly one draft and deletes it on the server (POST /api/conversation/<id>/delete).
@@ -715,7 +715,7 @@ func TestE2EReviewRecordingDeletedDraft(t *testing.T) {
 }
 
 func TestE2EReviewRecordingArchivedStartsNew(t *testing.T) {
-	e2e(t, `A recording on an archived conversation starts a new one. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`There is an archived conversation /c/archived in the repository. Perform the steps in order.
+	e2e(t, useful(0), `A recording on an archived conversation starts a new one. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`There is an archived conversation /c/archived in the repository. Perform the steps in order.
 1. Navigate to /c/archived?{{QUERY}} and wait for the commit message.
 2. Hover the start button; the tooltip's text should be exactly "Record a narrated review for a new conversation".
 3. Click the start button, wait for the clock to start, then click the stop button. It is sent.
@@ -745,7 +745,7 @@ func TestE2EReviewRecordingArchivedStartsNew(t *testing.T) {
 }
 
 func TestE2EReviewRecordingDraftKeepsText(t *testing.T) {
-	e2e(t, `A recording on a draft goes to it after a reload and keeps its text. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`There is a draft conversation {{DRAFT_ID}} in the repository, with the unsent text "Written elsewhere." and model predictable. The server refuses audio uploads (/api/upload/raw answers 503 "unavailable") until call "accept uploads". Perform the steps in order.
+	e2e(t, useful(0), `A recording on a draft goes to it after a reload and keeps its text. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`There is a draft conversation {{DRAFT_ID}} in the repository, with the unsent text "Written elsewhere." and model predictable. The server refuses audio uploads (/api/upload/raw answers 503 "unavailable") until call "accept uploads". Perform the steps in order.
 1. Navigate to /c/{{DRAFT_ID}}?{{QUERY}} and wait for the commit message.
 2. Click the start button, wait for the clock to start, then click the stop button. data-testid "review-recording-error" should be visible.
 3. The draft it began on still takes it after a reload: call "accept uploads", navigate to /c/{{DRAFT_ID}}?{{QUERY}} again, and click data-testid "review-recording-send". It is sent.
@@ -775,7 +775,7 @@ func TestE2EReviewRecordingDraftKeepsText(t *testing.T) {
 }
 
 func TestE2EReviewRecordingDiscardDeletesDraft(t *testing.T) {
-	e2e(t, `Discarding a recording deletes the empty draft it made. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewTick+`There is an archived conversation /c/archived in the repository. The server answers the recording's chat requests with 503 "unavailable". Perform the steps in order.
+	e2e(t, useful(0), `Discarding a recording deletes the empty draft it made. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewTick+`There is an archived conversation /c/archived in the repository. The server answers the recording's chat requests with 503 "unavailable". Perform the steps in order.
 1. Navigate to /c/archived?{{QUERY}} and wait for the commit message.
 2. Click the start button, wait for the clock to start, then click the stop button. data-testid "review-recording-error" should be visible.
 3. Call "chats" should return exactly "ok": it checks that exactly one chat request was made, to a conversation other than the archived one, which the server has. It makes {{NEW_ID}} that conversation's id.
@@ -810,7 +810,7 @@ func TestE2EReviewRecordingDiscardDeletesDraft(t *testing.T) {
 }
 
 func TestE2EReviewRecordingKeepsUnsent(t *testing.T) {
-	e2e(t, `Keeps an unsent recording across reloads until the conversation accepts it. `+reviewTerms+reviewOpenDiffs+reviewCommitMessage+reviewSent+reviewTick+reviewContentTop+`The server answers the recording's chat requests with 503 "unavailable" until call "accept chats". Call "requests" returns JSON counting the audio and review uploads (POST /api/upload/raw) and the accepted chat requests, and whether every accepted chat handed over a recording ("/transcription <path of a review-*.webm>"). Perform the steps in order.
+	e2e(t, useful(0), `Keeps an unsent recording across reloads until the conversation accepts it. `+reviewTerms+reviewOpenDiffs+reviewCommitMessage+reviewSent+reviewTick+reviewContentTop+`The server answers the recording's chat requests with 503 "unavailable" until call "accept chats". Call "requests" returns JSON counting the audio and review uploads (POST /api/upload/raw) and the accepted chat requests, and whether every accepted chat handed over a recording ("/transcription <path of a review-*.webm>"). Perform the steps in order.
 1. Navigate to /c/review and open the diffs.
 2. Click the start button; the stop button should become visible. Wait for the clock to start, then click the stop button.
 3. data-testid "review-recording-error" should contain "unavailable", and there should be exactly one data-testid "review-recording-pending". Call "requests" should return exactly {"uploads":2,"chats":0,"transcriptions":true}.

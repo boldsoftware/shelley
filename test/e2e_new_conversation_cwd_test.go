@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/boldsoftware/shelley/lazycue"
 )
 
 // Ported from ui/e2e/new-conversation-cwd.spec.ts.
@@ -112,8 +114,8 @@ const (
 // newCwdFrom is the spec's test of starting a new conversation from a
 // conversation in a worktree, a worktree's subdirectory, an archived
 // worktree conversation or an ordinary directory.
-func newCwdFrom(t *testing.T, location, cwdVar, expectedVar string) {
-	e2e(t, `A new conversation from a conversation in `+location+` chooses the right directory. {{DIR}} is a directory holding a git repository {{REPO}} and a worktree of it, {{WORKTREE}}, which has a subdirectory {{SUBDIR}}. Conversation {{ID}} runs in {{`+cwdVar+`}}`+map[bool]string{true: " and is archived", false: ""}[location == "an archived worktree"]+`. `+newCwdStart+newCwdControl+newCwdSend+`1. Navigate to /c/{{ID}}. 2. Start a new conversation. 3. The URL should become exactly /new (an exact path check). 4. Check and send in {{`+expectedVar+`}}.`, func(s *shelley) {
+func newCwdFrom(t *testing.T, useful lazycue.Useful, location, cwdVar, expectedVar string) {
+	e2e(t, useful, `A new conversation from a conversation in `+location+` chooses the right directory. {{DIR}} is a directory holding a git repository {{REPO}} and a worktree of it, {{WORKTREE}}, which has a subdirectory {{SUBDIR}}. Conversation {{ID}} runs in {{`+cwdVar+`}}`+map[bool]string{true: " and is archived", false: ""}[location == "an archived worktree"]+`. `+newCwdStart+newCwdControl+newCwdSend+`1. Navigate to /c/{{ID}}. 2. Start a new conversation. 3. The URL should become exactly /new (an exact path check). 4. Check and send in {{`+expectedVar+`}}.`, func(s *shelley) {
 		s.newCwdRepo()
 		s.newCwdConversation(s.vars[cwdVar], location == "an archived worktree")
 		s.newCwdSaved()
@@ -121,23 +123,23 @@ func newCwdFrom(t *testing.T, location, cwdVar, expectedVar string) {
 }
 
 func TestE2ENewConversationCwdFromWorktree(t *testing.T) {
-	newCwdFrom(t, "a worktree", "WORKTREE", "REPO")
+	newCwdFrom(t, useful(0), "a worktree", "WORKTREE", "REPO")
 }
 
 func TestE2ENewConversationCwdFromWorktreeSubdirectory(t *testing.T) {
-	newCwdFrom(t, "a worktree subdirectory", "SUBDIR", "REPO")
+	newCwdFrom(t, useful(0), "a worktree subdirectory", "SUBDIR", "REPO")
 }
 
 func TestE2ENewConversationCwdFromArchivedWorktree(t *testing.T) {
-	newCwdFrom(t, "an archived worktree", "WORKTREE", "REPO")
+	newCwdFrom(t, useful(0), "an archived worktree", "WORKTREE", "REPO")
 }
 
 func TestE2ENewConversationCwdFromOrdinaryDirectory(t *testing.T) {
-	newCwdFrom(t, "an ordinary directory", "DIR", "DIR")
+	newCwdFrom(t, useful(0), "an ordinary directory", "DIR", "DIR")
 }
 
 func TestE2ENewConversationCwdSelectedWorktreeStays(t *testing.T) {
-	e2e(t, `An explicitly selected worktree stays selected. {{REPO}} is a git repository with a worktree {{WORKTREE}}; an init script sets localStorage "shelley_selected_cwd" to {{REPO}} before the page's own scripts on every load (already in place: steps must not set it). "The dialog" is the dialog named "Select Directory". `+newCwdControl+newCwdSend+`1. Navigate to /new. 2. Click the directory control. 3. Fill the dialog's ".directory-picker-input" with "{{WORKTREE}}/" (the worktree path followed by a slash). 4. The dialog's ".directory-picker-current-path" should have exactly the text {{WORKTREE}}. 5. Click the dialog's button named exactly "Select". 6. Check and send in {{WORKTREE}}.`, func(s *shelley) {
+	e2e(t, useful(0), `An explicitly selected worktree stays selected. {{REPO}} is a git repository with a worktree {{WORKTREE}}; an init script sets localStorage "shelley_selected_cwd" to {{REPO}} before the page's own scripts on every load (already in place: steps must not set it). "The dialog" is the dialog named "Select Directory". `+newCwdControl+newCwdSend+`1. Navigate to /new. 2. Click the directory control. 3. Fill the dialog's ".directory-picker-input" with "{{WORKTREE}}/" (the worktree path followed by a slash). 4. The dialog's ".directory-picker-current-path" should have exactly the text {{WORKTREE}}. 5. Click the dialog's button named exactly "Select". 6. Check and send in {{WORKTREE}}.`, func(s *shelley) {
 		_, repo, _, _ := s.newCwdRepo()
 		s.initScript(fmt.Sprintf(`localStorage.setItem("shelley_selected_cwd", %q);`, repo))
 		s.newCwdSaved()
@@ -145,7 +147,7 @@ func TestE2ENewConversationCwdSelectedWorktreeStays(t *testing.T) {
 }
 
 func TestE2ENewConversationCwdSlashNewUsesMainRepo(t *testing.T) {
-	e2e(t, `/new with a prompt uses the main repository. {{REPO}} is a git repository with a worktree {{WORKTREE}}; conversation {{ID}} runs in the worktree. `+newCwdSend+`1. Navigate to /c/{{ID}}. 2. Send "/new echo: new conversation directory" and expect cwd {{REPO}}.`, func(s *shelley) {
+	e2e(t, useful(0), `/new with a prompt uses the main repository. {{REPO}} is a git repository with a worktree {{WORKTREE}}; conversation {{ID}} runs in the worktree. `+newCwdSend+`1. Navigate to /c/{{ID}}. 2. Send "/new echo: new conversation directory" and expect cwd {{REPO}}.`, func(s *shelley) {
 		_, _, worktree, _ := s.newCwdRepo()
 		s.newCwdConversation(worktree, false)
 		s.newCwdSaved()
@@ -153,7 +155,7 @@ func TestE2ENewConversationCwdSlashNewUsesMainRepo(t *testing.T) {
 }
 
 func TestE2ENewConversationCwdLookupFailureRetry(t *testing.T) {
-	e2e(t, `Directory lookup failures are visible and can be retried. Conversation {{ID}} runs in {{DIR}}, an empty directory that is not a git repository, and is archived; another conversation is in the list. Call "break lookups" makes the server's directory lookups (GET /api/list-directory) fail with HTTP 503 "Directory lookup unavailable"; call "fix lookups" lets them through again. `+newCwdStart+newCwdControl+newCwdSend+`1. Navigate to /c/{{ID}}. 2. Call "break lookups". 3. Start a new conversation. 4. The element with role "alert" should contain the text "Directory lookup unavailable". 5. The page must not have gone to /new: eval /\/new$/.test(location.href) must give false. 6. Call "fix lookups". 7. Click the button named "Dismiss" inside the alert. 8. Start a new conversation. 9. Check and send in {{DIR}}.`, func(s *shelley) {
+	e2e(t, useful(0), `Directory lookup failures are visible and can be retried. Conversation {{ID}} runs in {{DIR}}, an empty directory that is not a git repository, and is archived; another conversation is in the list. Call "break lookups" makes the server's directory lookups (GET /api/list-directory) fail with HTTP 503 "Directory lookup unavailable"; call "fix lookups" lets them through again. `+newCwdStart+newCwdControl+newCwdSend+`1. Navigate to /c/{{ID}}. 2. Call "break lookups". 3. Start a new conversation. 4. The element with role "alert" should contain the text "Directory lookup unavailable". 5. The page must not have gone to /new: eval /\/new$/.test(location.href) must give false. 6. Call "fix lookups". 7. Click the button named "Dismiss" inside the alert. 8. Start a new conversation. 9. Check and send in {{DIR}}.`, func(s *shelley) {
 		dir := s.mkdir(filepath.Join(s.dir, "newcwd"))
 		s.v("DIR", dir)
 		s.newCwdConversation(dir, true)

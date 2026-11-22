@@ -53,7 +53,7 @@ func (s *shelley) jobIDs(conversation string) []string {
 }
 
 func TestE2EBackgroundJobsRunningWork(t *testing.T) {
-	e2e(t, `Running work exposes long commands and output in one expansion and stops the command. The test seeded a conversation at /c/bg-running whose bash tool started the background job "echo ready; sleep 600", with job ID {{JOB_ID}}. The browser is told (by a rewritten background-jobs response) that the job's command is {{DISPLAY_COMMAND}}, a long multi-line python3 command. "The strip" is '[aria-label="Running work"]', "the toggle" is the strip's [data-testid="running-work-toggle"], and "the job" is the strip's [data-testid="background-job"]. The viewport starts at 1280x900.
+	e2e(t, useful(0), `Running work exposes long commands and output in one expansion and stops the command. The test seeded a conversation at /c/bg-running whose bash tool started the background job "echo ready; sleep 600", with job ID {{JOB_ID}}. The browser is told (by a rewritten background-jobs response) that the job's command is {{DISPLAY_COMMAND}}, a long multi-line python3 command. "The strip" is '[aria-label="Running work"]', "the toggle" is the strip's [data-testid="running-work-toggle"], and "the job" is the strip's [data-testid="background-job"]. The viewport starts at 1280x900.
 1. Navigate to /c/bg-running and wait up to 30s for [data-testid="message-input"] to be visible.
 2. [data-testid="bash-tool-running-indicator"] should become visible (wait up to 15s).
 3. The toggle should come to contain "python3" (wait up to 15s). The toggle's ".running-work-activity" should have exactly the text "ready", and the toggle must not contain "print(".
@@ -98,7 +98,7 @@ func TestE2EBackgroundJobsRunningWork(t *testing.T) {
 }
 
 func TestE2EBackgroundJobsHistoricalNotices(t *testing.T) {
-	e2e(t, `Historical background job notices render collapsed bash cards. The test seeded a conversation at /c/job-notices; the browser is shown (through rewritten responses, with live updates cut off) these messages instead of its real ones, with no agent working:
+	e2e(t, useful(0), `Historical background job notices render collapsed bash cards. The test seeded a conversation at /c/job-notices; the browser is shown (through rewritten responses, with live updates cut off) these messages instead of its real ones, with no agent working:
 - [data-message-id="job-abc12345"]: a notice that background job abc12345 finished (exit 0) with the command "bin/q --only 59e4fc203f" and the output "q: checking", a blank line, "q: passed";
 - [data-message-id="job-def67890"]: an older, unrecognized notice of job def67890 whose whole text is "Older, unrecognized job notice" and, on a second line, "its output must still be readable";
 - [data-message-id="job-1234abcd"]: a notice that background job 1234abcd was lost, with the command "cat /tmp/partial" and the output "one", "two" on two lines;

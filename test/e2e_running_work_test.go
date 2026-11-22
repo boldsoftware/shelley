@@ -85,7 +85,7 @@ func fakeAgent(parent, fields map[string]any) map[string]any {
 const runningWorkNames = `JSON.stringify([...document.querySelectorAll('[data-testid="running-work-toggle"] .running-work-name')].map(e => e.textContent.replace(/\s+/g, ' ').trim()))`
 
 func TestE2ERunningWorkLoneAgentName(t *testing.T) {
-	e2e(t, `Running work uses the full preview width for a lone agent name. The test seeded a conversation at /c/rw-lone; the browser is told (through a rewritten conversation list, with live updates cut off) that it has one working subagent, "background-worker-alpha". "The preview" is the ".running-work-name" inside [data-testid="running-work-toggle"].
+	e2e(t, useful(0), `Running work uses the full preview width for a lone agent name. The test seeded a conversation at /c/rw-lone; the browser is told (through a rewritten conversation list, with live updates cut off) that it has one working subagent, "background-worker-alpha". "The preview" is the ".running-work-name" inside [data-testid="running-work-toggle"].
 1. Navigate to /c/rw-lone.
 2. The preview should have exactly the text "background-worker-alpha".
 3. The preview's scrollWidth - clientWidth should become at most 1 (the name is not cut short).
@@ -110,7 +110,7 @@ func TestE2ERunningWorkLoneAgentName(t *testing.T) {
 }
 
 func TestE2ERunningWorkAgentFirstPreviews(t *testing.T) {
-	e2e(t, `Running work fits agent-first work previews to the available width. The test seeded a conversation at /c/rw-previews; the browser is told (through rewritten responses, with live updates cut off) that it has three idle subagents, "demo-index", "demo-assets" and "demo-build", each running one background job "printf preview-ready; tail -f /dev/null". "The toggle" is [data-testid="running-work-toggle"]. "The names" are the texts of the toggle's ".running-work-name" elements, in order, whitespace collapsed: eval `+"`"+runningWorkNames+"`"+`. "The overflow" is scrollWidth - clientWidth of the toggle's ".running-work-names".
+	e2e(t, useful(0), `Running work fits agent-first work previews to the available width. The test seeded a conversation at /c/rw-previews; the browser is told (through rewritten responses, with live updates cut off) that it has three idle subagents, "demo-index", "demo-assets" and "demo-build", each running one background job "printf preview-ready; tail -f /dev/null". "The toggle" is [data-testid="running-work-toggle"]. "The names" are the texts of the toggle's ".running-work-name" elements, in order, whitespace collapsed: eval `+"`"+runningWorkNames+"`"+`. "The overflow" is scrollWidth - clientWidth of the toggle's ".running-work-names".
 1. Navigate to /c/rw-previews.
 2. The names should be exactly ["demo-index","demo-assets"]. The toggle's ".running-work-more" should have exactly the text "and 4 more", and the toggle should contain "3 tasks · 3 subagents".
 3. Set the viewport to 1600x900. The names should become exactly ["demo-index","demo-assets","demo-build","printf preview-ready; tail -f /dev/null","printf preview-ready; tail -f /dev/null","printf preview-ready; tail -f /dev/null"], and there should be no ".running-work-more" in the toggle (count 0). The overflow should become at most 1.
@@ -150,7 +150,7 @@ func TestE2ERunningWorkAgentFirstPreviews(t *testing.T) {
 }
 
 func TestE2ERunningWorkSubagentWithBackgroundTask(t *testing.T) {
-	e2e(t, `Running work keeps a subagent visible while its background task runs. The test seeded a conversation at /c/rw-subagent (ID {{PARENT_ID}}) whose subagent "backgroundhelper" started the background job "printf agent-ready; tail -f /dev/null"; neither agent is working any more. "The strip" is '[aria-label="Running work"]', "the toggle" is its [data-testid="running-work-toggle"], "the names" are the texts of the toggle's ".running-work-name" elements, in order, whitespace collapsed (eval `+"`"+runningWorkNames+"`"+`), "the group" is the strip's '[role="group"][aria-label="Work by backgroundhelper"]', "the row" is the group's ".running-work-agent", and "the job" is the group's [data-testid="background-job"]. "The working indicator" is [data-testid="agent-thinking"], "the parent's dot" is '[data-conversation-id="{{PARENT_ID}}"] .drawer-working-indicator', and "the favicon" is 'link[rel="icon"]'; "dimmed" means the favicon's href contains "opacity%3D%220.35%22". The viewport starts at 1280x800.
+	e2e(t, useful(0), `Running work keeps a subagent visible while its background task runs. The test seeded a conversation at /c/rw-subagent (ID {{PARENT_ID}}) whose subagent "backgroundhelper" started the background job "printf agent-ready; tail -f /dev/null"; neither agent is working any more. "The strip" is '[aria-label="Running work"]', "the toggle" is its [data-testid="running-work-toggle"], "the names" are the texts of the toggle's ".running-work-name" elements, in order, whitespace collapsed (eval `+"`"+runningWorkNames+"`"+`), "the group" is the strip's '[role="group"][aria-label="Work by backgroundhelper"]', "the row" is the group's ".running-work-agent", and "the job" is the group's [data-testid="background-job"]. "The working indicator" is [data-testid="agent-thinking"], "the parent's dot" is '[data-conversation-id="{{PARENT_ID}}"] .drawer-working-indicator', and "the favicon" is 'link[rel="icon"]'; "dimmed" means the favicon's href contains "opacity%3D%220.35%22". The viewport starts at 1280x800.
 1. Navigate to /c/rw-subagent. The toggle should come to contain "1 subagent" (wait up to 30s), and contain "1 task".
 2. The names should be exactly ["backgroundhelper","printf agent-ready; tail -f /dev/null"]. The first ".running-work-name"'s scrollWidth - clientWidth should become at most 1. There should be no ".running-work-more" in the toggle (count 0).
 3. The working indicator and the parent's dot should be visible, and the favicon dimmed. There should be no ".status-ready" and no ".status-stop-button" (both count 0), and ".status-readout-model" should be enabled.
@@ -219,7 +219,7 @@ func TestE2ERunningWorkSubagentWithBackgroundTask(t *testing.T) {
 }
 
 func TestE2ERunningWorkMobileRetainsFinishedJobs(t *testing.T) {
-	e2e(t, `Running work keeps mobile work visible and retains finished jobs while others run. The test seeded a conversation at /c/rw-mobile that started two background jobs, "echo ready; sleep 600" and "sleep 601". "The strip" is '[aria-label="Running work"]', "the toggle" is its [data-testid="running-work-toggle"], "the items" is the strip's [data-testid="running-work-items"], "the jobs" are the items' [data-testid="background-job"] elements, and "the scroller" is ".messages-container". The viewport is 390x500.
+	e2e(t, useful(0), `Running work keeps mobile work visible and retains finished jobs while others run. The test seeded a conversation at /c/rw-mobile that started two background jobs, "echo ready; sleep 600" and "sleep 601". "The strip" is '[aria-label="Running work"]', "the toggle" is its [data-testid="running-work-toggle"], "the items" is the strip's [data-testid="running-work-items"], "the jobs" are the items' [data-testid="background-job"] elements, and "the scroller" is ".messages-container". The viewport is 390x500.
 1. Navigate to /c/rw-mobile and wait up to 30s for [data-testid="message-input"] to be visible.
 2. The toggle should come to contain "2 tasks" (wait up to 15s). The toggle's ".running-work-name" containing "echo ready; sleep 600" and the one containing "sleep 601" should both be visible. The toggle must not contain "Running:".
 3. The strip's nextElementSibling must have the class "messages-bottom-sentinel".
@@ -264,7 +264,7 @@ func finishedSubagent(name string) string {
 }
 
 func TestE2ERunningWorkFinishedSubagentOpensConversation(t *testing.T) {
-	e2e(t, `Running work keeps a finished subagent row and opens its conversation. The test seeded a conversation at /c/rw-statushelper. `+finishedSubagent("statushelper")+`, and come to contain "sleep" (wait up to 30s).
+	e2e(t, useful(0), `Running work keeps a finished subagent row and opens its conversation. The test seeded a conversation at /c/rw-statushelper. `+finishedSubagent("statushelper")+`, and come to contain "sleep" (wait up to 30s).
 5. Call "cancelSubagent" (cancels the subagent through the API); it should return "ok".
 6. The row's ".running-work-agent-time" should come to have exactly the text "Finished" (wait up to 15s). The toggle should still have aria-expanded "true".
 7. Click the row. The URL should come to contain "/c/statushelper" (wait up to 10s).`, func(s *shelley) {
@@ -274,7 +274,7 @@ func TestE2ERunningWorkFinishedSubagentOpensConversation(t *testing.T) {
 }
 
 func TestE2ERunningWorkDiscardsFinishedSubagentRows(t *testing.T) {
-	e2e(t, `Running work discards finished subagent rows when the panel closes. The test seeded a conversation at /c/rw-finishhelper. `+finishedSubagent("finishhelper")+`.
+	e2e(t, useful(0), `Running work discards finished subagent rows when the panel closes. The test seeded a conversation at /c/rw-finishhelper. `+finishedSubagent("finishhelper")+`.
 5. Call "cancelSubagent" (cancels the subagent through the API); it should return "ok".
 6. The row's ".running-work-agent-time" should come to have exactly the text "Finished" (wait up to 15s).
 7. Click the toggle. The strip should disappear (count 0).`, func(s *shelley) {

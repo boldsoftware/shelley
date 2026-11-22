@@ -1,6 +1,10 @@
 package test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/boldsoftware/shelley/lazycue"
+)
 
 // Ported from ui/e2e/terminal-mac-clipboard.spec.ts.
 
@@ -9,8 +13,8 @@ import "testing"
 // `<D-v>`) and cancels the event, so Safari never pastes. The terminal must
 // not answer, and Cmd+V must stay with the browser. So must other Cmd
 // shortcuts, the browser's and the app's (recorded where the app listens).
-func macCmdV(t *testing.T, renderer string) {
-	e2e(t, `macOS Cmd+V reaches the browser when an app asks for the kitty keyboard protocol (`+renderer+`). Terminals render with `+renderer+`; the browser says it runs on a Mac (navigator.platform "MacIntel"). window.cmdKeydowns records, in order, {key, prevented} for every keydown with the Meta key held (other than Meta itself), as the window saw it once handlers had run. The test seeded a conversation at /c/term-kitty, whose directory holds keys.sh, which asks for the kitty keyboard protocol the way nvim does, prints "kitty-ready", then reports raw input (the terminal's reply included) up to "q" as keys=<input, shell-quoted>. "The input" is [data-testid="message-input"]. `+termInput+termMenu+`
+func macCmdV(t *testing.T, useful lazycue.Useful, renderer string) {
+	e2e(t, useful, `macOS Cmd+V reaches the browser when an app asks for the kitty keyboard protocol (`+renderer+`). Terminals render with `+renderer+`; the browser says it runs on a Mac (navigator.platform "MacIntel"). window.cmdKeydowns records, in order, {key, prevented} for every keydown with the Meta key held (other than Meta itself), as the window saw it once handlers had run. The test seeded a conversation at /c/term-kitty, whose directory holds keys.sh, which asks for the kitty keyboard protocol the way nvim does, prints "kitty-ready", then reports raw input (the terminal's reply included) up to "q" as keys=<input, shell-quoted>. "The input" is [data-testid="message-input"]. `+termInput+termMenu+`
 1. Navigate to /c/term-kitty. Fill the input with "!bash keys.sh" and click [data-testid="send-button"].
 2. Retry the following steps as one block until they pass (timeout 15s): choose the terminal menu item "Insert all output into input" (both clicks inside the block); then the input's value must contain "kitty-ready" (eval with expect true).
 3. Fill the input with "".
@@ -38,6 +42,6 @@ printf 'keys=%q\n' "$keys"
 	})
 }
 
-func TestE2ETerminalMacCmdVGhostty(t *testing.T) { macCmdV(t, "ghostty") }
+func TestE2ETerminalMacCmdVGhostty(t *testing.T) { macCmdV(t, useful(0), "ghostty") }
 
-func TestE2ETerminalMacCmdVXterm(t *testing.T) { macCmdV(t, "xterm") }
+func TestE2ETerminalMacCmdVXterm(t *testing.T) { macCmdV(t, useful(0), "xterm") }

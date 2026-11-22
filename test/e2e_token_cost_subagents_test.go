@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
+
+	"github.com/boldsoftware/shelley/lazycue"
 )
 
 // Ported from ui/e2e/token-cost-subagents.spec.ts.
@@ -109,9 +111,9 @@ func (s *shelley) tokenCostSpend(direct, pricingFailed bool) {
 const tokenCostSpendSetup = `The conversation at /c/{{SLUG}} serves mocked usage and pricing. To "open the spend popup": navigate to /c/{{SLUG}}, then click the VISIBLE ".context-usage-label" element (a hidden one may exist too; pick the visible one). "The popup" is the ".chat-context-popup" element; "the table" is the element inside the popup with role "table" and accessible name "Spend by model". When a step says an element's text "matches" a regular expression, test the regular expression against the element's raw textContent in an eval that has "expect". Perform the steps in order. `
 
 // tokenCostPerModel checks main and sub-agent spend side by side at width.
-func tokenCostPerModel(t *testing.T, width int) {
+func tokenCostPerModel(t *testing.T, useful lazycue.Useful, width int) {
 	w := strconv.Itoa(width)
-	e2e(t, tokenCostSpendSetup+`The spend popup shows per-model main and sub-agent spend with subtotals at a `+w+`px-wide window.
+	e2e(t, useful, tokenCostSpendSetup+`The spend popup shows per-model main and sub-agent spend with subtotals at a `+w+`px-wide window.
 1. Open the spend popup. The table is visible.
 2. The table's column headers (role "columnheader" inside the table) have exactly these texts, in order: "Model / tokens", "Main conversation", "Sub-agents".
 3. The table's [data-testid="conversation-cost-subtotal"] text contains "$3.73"; its [data-testid="subagent-cost-row"] text contains "$8.25"; its [data-testid="token-cost-total"] text contains "≈$11.98".
@@ -128,12 +130,12 @@ func tokenCostPerModel(t *testing.T, width int) {
 	})
 }
 
-func TestE2ETokenCostSubagentsPerModel768(t *testing.T) { tokenCostPerModel(t, 768) }
+func TestE2ETokenCostSubagentsPerModel768(t *testing.T) { tokenCostPerModel(t, useful(0), 768) }
 
-func TestE2ETokenCostSubagentsPerModel1280(t *testing.T) { tokenCostPerModel(t, 1280) }
+func TestE2ETokenCostSubagentsPerModel1280(t *testing.T) { tokenCostPerModel(t, useful(0), 1280) }
 
 func TestE2ETokenCostSubagentsWithoutDirectUsage(t *testing.T) {
-	e2e(t, tokenCostSpendSetup+`The spend popup shows sub-agent models and totals for a conversation without direct usage.
+	e2e(t, useful(0), tokenCostSpendSetup+`The spend popup shows sub-agent models and totals for a conversation without direct usage.
 1. Open the spend popup.
 2. The popup's text contains "No direct usage data yet.".
 3. The table's text contains "review-model".
@@ -145,7 +147,7 @@ func TestE2ETokenCostSubagentsWithoutDirectUsage(t *testing.T) {
 }
 
 func TestE2ETokenCostSubagentsUnpricedNotFree(t *testing.T) {
-	e2e(t, tokenCostSpendSetup+`Unpriced sub-agent usage is not presented as free.
+	e2e(t, useful(0), tokenCostSpendSetup+`Unpriced sub-agent usage is not presented as free.
 1. Open the spend popup.
 2. The table's ".token-cost-model-breakdown" text contains "no pricing".
 3. The table's [data-testid="subagent-cost-row"] text contains "no pricing".
@@ -160,7 +162,7 @@ func TestE2ETokenCostSubagentsUnpricedNotFree(t *testing.T) {
 }
 
 func TestE2ETokenCostSubagentsCompactWithoutSubagents(t *testing.T) {
-	e2e(t, tokenCostSpendSetup+`The spend popup stays compact for a conversation without sub-agents.
+	e2e(t, useful(0), tokenCostSpendSetup+`The spend popup stays compact for a conversation without sub-agents.
 1. Open the spend popup.
 2. The popup's [data-testid="token-cost-total"] has exactly the text "Total≈$3.73".
 3. The popup has no element with role "columnheader" whose accessible name is exactly "Sub-agents" (count 0).
@@ -171,7 +173,7 @@ func TestE2ETokenCostSubagentsCompactWithoutSubagents(t *testing.T) {
 }
 
 func TestE2ETokenCostSubagentsZeroTotalWhenFree(t *testing.T) {
-	e2e(t, tokenCostSpendSetup+`The spend popup shows a zero total when sub-agent pricing is known and free.
+	e2e(t, useful(0), tokenCostSpendSetup+`The spend popup shows a zero total when sub-agent pricing is known and free.
 1. Open the spend popup.
 2. The popup's [data-testid="subagent-cost-row"] has exactly the text "$0".
 3. The popup's [data-testid="token-cost-total"] has exactly the text "Total≈$0".
@@ -187,7 +189,7 @@ func TestE2ETokenCostSubagentsZeroTotalWhenFree(t *testing.T) {
 }
 
 func TestE2ETokenCostSubagentsFetchFailureWarns(t *testing.T) {
-	e2e(t, tokenCostSpendSetup+`The spend popup warns when sub-agent details cannot be fetched (the sub-agent usage request fails with HTTP 500).
+	e2e(t, useful(0), tokenCostSpendSetup+`The spend popup warns when sub-agent details cannot be fetched (the sub-agent usage request fails with HTTP 500).
 1. Open the spend popup.
 2. The popup's [data-testid="token-cost-total"] has exactly the text "Total≈$3.73".
 3. The popup's text contains "Subagent cost unavailable; total may be incomplete.".
@@ -199,7 +201,7 @@ func TestE2ETokenCostSubagentsFetchFailureWarns(t *testing.T) {
 }
 
 func TestE2ETokenCostSubagentsMergesEndpointPrices(t *testing.T) {
-	e2e(t, tokenCostSpendSetup+`The spend popup merges endpoint-specific prices into one model row without inventing a shared rate.
+	e2e(t, useful(0), tokenCostSpendSetup+`The spend popup merges endpoint-specific prices into one model row without inventing a shared rate.
 1. Open the spend popup.
 2. "The model" is the popup's ".token-cost-model-breakdown" element whose text contains "review-model": there is exactly 1 such element.
 3. The model's '.token-cost-model-row [data-scope="subagents"]' has exactly the text "$19.00".
@@ -217,7 +219,7 @@ func TestE2ETokenCostSubagentsMergesEndpointPrices(t *testing.T) {
 }
 
 func TestE2ETokenCostSubagentsFailedPricingNotUnpriced(t *testing.T) {
-	e2e(t, tokenCostSpendSetup+`Failed pricing lookups (the model costs request fails with HTTP 503) are not counted as confirmed unpriced calls.
+	e2e(t, useful(0), tokenCostSpendSetup+`Failed pricing lookups (the model costs request fails with HTTP 503) are not counted as confirmed unpriced calls.
 1. Open the spend popup.
 2. The popup's text contains "Pricing lookup failed" and contains "1 call has no model pricing", and does not contain "3 calls have no model pricing".
 3. "The indirect row" is the element with role "row" in the popup that contains an element with role "rowheader" whose accessible name is exactly "compaction". Inside the indirect row's ".token-cost-cell" elements, find the element whose whole text is exactly "1 call" and the element whose whole text is exactly "no pricing" (the innermost such elements). In one eval with expect "true", their getBoundingClientRect() boxes do not overlap: one ends left of (or exactly where) the other starts, horizontally or vertically.`, func(s *shelley) {
@@ -228,7 +230,7 @@ func TestE2ETokenCostSubagentsFailedPricingNotUnpriced(t *testing.T) {
 }
 
 func TestE2ETokenCostSubagentsTallBreakdownAboveToggle(t *testing.T) {
-	e2e(t, tokenCostSpendSetup+`The spend popup keeps a tall breakdown above its toggle on a short (1280x720) desktop window.
+	e2e(t, useful(0), tokenCostSpendSetup+`The spend popup keeps a tall breakdown above its toggle on a short (1280x720) desktop window.
 1. Open the spend popup.
 2. The popup's [data-testid="token-cost-total"] text contains "$11.98".
 3. Wait (with an eval that has expect "true") until the popup's bottom edge (getBoundingClientRect().y + height) is at or above the top (y) of the visible ".context-usage-label": popup.y + popup.height - label.y <= 0.
@@ -241,9 +243,9 @@ func TestE2ETokenCostSubagentsTallBreakdownAboveToggle(t *testing.T) {
 
 // tokenCostShared checks that main and sub-agent usage of the same model
 // line up in one table at width.
-func tokenCostShared(t *testing.T, width int) {
+func tokenCostShared(t *testing.T, useful lazycue.Useful, width int) {
 	w := strconv.Itoa(width)
-	e2e(t, tokenCostSpendSetup+`The spend popup aligns a model's main and sub-agent usage in one table at a `+w+`px-wide window.
+	e2e(t, useful, tokenCostSpendSetup+`The spend popup aligns a model's main and sub-agent usage in one table at a `+w+`px-wide window.
 1. Open the spend popup. The table is visible.
 2. The table's column headers (role "columnheader" inside the table) have exactly these texts, in order: "Model / tokens", "Main conversation", "Sub-agents".
 3. "The model" is the table's ".token-cost-model-breakdown" element containing a ".token-cost-model-name" element whose text contains "main-model": there is exactly 1 such element.
@@ -257,6 +259,6 @@ func tokenCostShared(t *testing.T, width int) {
 	})
 }
 
-func TestE2ETokenCostSubagentsSharedModel768(t *testing.T) { tokenCostShared(t, 768) }
+func TestE2ETokenCostSubagentsSharedModel768(t *testing.T) { tokenCostShared(t, useful(0), 768) }
 
-func TestE2ETokenCostSubagentsSharedModel1280(t *testing.T) { tokenCostShared(t, 1280) }
+func TestE2ETokenCostSubagentsSharedModel1280(t *testing.T) { tokenCostShared(t, useful(0), 1280) }

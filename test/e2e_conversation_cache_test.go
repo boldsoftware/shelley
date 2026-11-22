@@ -99,7 +99,7 @@ func (s *shelley) cacheSwitchSetup() {
 }
 
 func TestE2EConversationCacheSwitchUsesCache(t *testing.T) {
-	e2e(t, conversationCacheTerms+`Switching back to a conversation uses the cache: no new fetch on the second visit. The conversation cache-one answered "Hello! I'm Shelley, your AI assistant."; cache-two answered "Well, hi there!". Perform the steps in order.
+	e2e(t, useful(0), conversationCacheTerms+`Switching back to a conversation uses the cache: no new fetch on the second visit. The conversation cache-one answered "Hello! I'm Shelley, your AI assistant."; cache-two answered "Well, hi there!". Perform the steps in order.
 1. Navigate to /c/cache-one and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. Wait for message "Hello! I'm Shelley, your AI assistant.".
 3. Select conversation cache-two, then wait for message "Well, hi there!".
@@ -111,7 +111,7 @@ func TestE2EConversationCacheSwitchUsesCache(t *testing.T) {
 }
 
 func TestE2EConversationCacheStreamingUpdates(t *testing.T) {
-	e2e(t, conversationCacheTerms+`A cached conversation shows the right messages after streaming updates. The conversation cache-one answered "Hello! I'm Shelley, your AI assistant.". Perform the steps in order.
+	e2e(t, useful(0), conversationCacheTerms+`A cached conversation shows the right messages after streaming updates. The conversation cache-one answered "Hello! I'm Shelley, your AI assistant.". Perform the steps in order.
 1. Navigate to /c/cache-one and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. Wait for message "Hello! I'm Shelley, your AI assistant.".
 3. Fill the message input with "echo: follow up message" and click the send button ([data-testid="send-button"]). Wait for the reply: a ".message-agent" [data-testid="message"] element whose text contains "follow up message" is visible (allow 15s). The user's own bubble contains that text too, so it does not count.
@@ -129,7 +129,7 @@ func TestE2EConversationCacheStreamingUpdates(t *testing.T) {
 }
 
 func TestE2EConversationCacheNoSpinner(t *testing.T) {
-	e2e(t, conversationCacheTerms+`The cache serves messages at once, without a loading spinner. The conversation cache-one answered "Hello! I'm Shelley, your AI assistant."; cache-two answered "Well, hi there!". Perform the steps in order.
+	e2e(t, useful(0), conversationCacheTerms+`The cache serves messages at once, without a loading spinner. The conversation cache-one answered "Hello! I'm Shelley, your AI assistant."; cache-two answered "Well, hi there!". Perform the steps in order.
 1. Navigate to /c/cache-one and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. Wait for message "Hello! I'm Shelley, your AI assistant.".
 3. Select conversation cache-two, then wait for message "Well, hi there!".
@@ -144,7 +144,7 @@ func TestE2EConversationCacheNoSpinner(t *testing.T) {
 // without reading IndexedDB, so every reload re-downloaded the whole
 // conversation.
 func TestE2EConversationCacheReloadServesFromIndexedDB(t *testing.T) {
-	e2e(t, conversationCacheTerms+`A page reload serves history from the IndexedDB cache. The conversation cache-one (ID {{ID}}) answered "Hello! I'm Shelley, your AI assistant.". Perform the steps in order.
+	e2e(t, useful(0), conversationCacheTerms+`A page reload serves history from the IndexedDB cache. The conversation cache-one (ID {{ID}}) answered "Hello! I'm Shelley, your AI assistant.". Perform the steps in order.
 1. Navigate to /c/cache-one and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. Wait for message "Hello! I'm Shelley, your AI assistant.".
 3. Wait until {{ID}} is cached (the write-behind persistence landed).
@@ -163,7 +163,7 @@ func TestE2EConversationCacheReloadServesFromIndexedDB(t *testing.T) {
 // list stream cannot delete the cache: its persisted metadata still says
 // archived:false when the conversation is opened again.
 func TestE2EConversationCacheArchiveWhileClosed(t *testing.T) {
-	e2e(t, conversationCacheTerms+`Archiving while the tab is closed refreshes the cached metadata. The conversation cache-one (ID {{ID}}) answered "Hello! I'm Shelley, your AI assistant.". Perform the steps in order.
+	e2e(t, useful(0), conversationCacheTerms+`Archiving while the tab is closed refreshes the cached metadata. The conversation cache-one (ID {{ID}}) answered "Hello! I'm Shelley, your AI assistant.". Perform the steps in order.
 1. Navigate to /c/cache-one and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. Wait for message "Hello! I'm Shelley, your AI assistant.".
 3. Wait until {{ID}} is cached.
@@ -184,7 +184,7 @@ func TestE2EConversationCacheArchiveWhileClosed(t *testing.T) {
 }
 
 func TestE2EConversationCacheReloadRestoresPosition(t *testing.T) {
-	e2e(t, conversationCacheTerms+`A page reload restores a reading position that is not the bottom. The conversation at /c/{{SLUG}} (ID {{ID}}) is a generated 15-turn conversation. Perform the steps in order.
+	e2e(t, useful(0), conversationCacheTerms+`A page reload restores a reading position that is not the bottom. The conversation at /c/{{SLUG}} (ID {{ID}}) is a generated 15-turn conversation. Perform the steps in order.
 1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. Wait (allow 15s) until there are more than 20 [data-testid="message"] elements (an eval with expect).
 3. In one eval: set the ".messages-container" element's scrollTop to 1000 and dispatch a "scroll" Event on it.
@@ -215,7 +215,7 @@ const cacheCaptureEventSources = `{
 }`
 
 func TestE2EConversationCacheStalledRefreshShowsHotHistory(t *testing.T) {
-	e2e(t, conversationCacheTerms+`A stalled incremental refresh still reveals the hot cached history, at the bottom. The generated 15-turn conversation at /c/{{SLUG}} has ID {{ID}}; the conversation cache-other (ID {{OTHER_ID}}) answered "Hello! I'm Shelley, your AI assistant.". The page keeps every EventSource it opens in window.__testEventSources. Perform the steps in order.
+	e2e(t, useful(0), conversationCacheTerms+`A stalled incremental refresh still reveals the hot cached history, at the bottom. The generated 15-turn conversation at /c/{{SLUG}} has ID {{ID}}; the conversation cache-other (ID {{OTHER_ID}}) answered "Hello! I'm Shelley, your AI assistant.". The page keeps every EventSource it opens in window.__testEventSources. Perform the steps in order.
 1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. Wait (allow 15s) until there are more than 20 [data-testid="message"] elements. Wait until {{ID}} is cached.
 3. In one eval: set the ".messages-container" element's scrollTop to 1000 and dispatch a "scroll" Event on it. Wait until localStorage.getItem("shelley_scroll_{{ID}}") is exactly "1000" (an eval with expect).
@@ -268,7 +268,7 @@ func TestE2EConversationCacheStalledRefreshShowsHotHistory(t *testing.T) {
 // With a complete cached history the page never downloads it again just to
 // find the tail: it asks for ?last_sequence_id=N instead.
 func TestE2EConversationCacheAddedWhileClosed(t *testing.T) {
-	e2e(t, conversationCacheTerms+`Messages added while the tab was closed arrive through an incremental fetch. The conversation cache-one (ID {{ID}}) answered "Hello! I'm Shelley, your AI assistant.". Perform the steps in order.
+	e2e(t, useful(0), conversationCacheTerms+`Messages added while the tab was closed arrive through an incremental fetch. The conversation cache-one (ID {{ID}}) answered "Hello! I'm Shelley, your AI assistant.". Perform the steps in order.
 1. Navigate to /c/cache-one and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. Wait for message "Hello! I'm Shelley, your AI assistant.".
 3. Wait until {{ID}} is cached (navigating away before the write-behind persistence lands would leave nothing cached).

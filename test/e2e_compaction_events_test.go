@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/boldsoftware/shelley/lazycue"
 	"github.com/google/uuid"
 )
 
@@ -98,9 +99,9 @@ func (s *shelley) compactionReplay(data map[string]any) {
 
 const compactionSetup = `The conversation at /c/{{SLUG}} is served as a replay (its live stream is cut off) that ends with a context nudge, the agent's compact_in_place tool call, its result and the in-place compaction event. "The result" is the [data-testid="message-inplacecompaction"] element (the compaction event). Perform the steps in order. `
 
-func compactionTOC(t *testing.T, width int) {
+func compactionTOC(t *testing.T, useful lazycue.Useful, width int) {
 	w := strconv.Itoa(width)
-	e2e(t, compactionSetup+`The compaction's table of contents entry navigates to its status at a `+w+`px-wide window. "The TOC" is the ".toc-popover" element.
+	e2e(t, useful, compactionSetup+`The compaction's table of contents entry navigates to its status at a `+w+`px-wide window. "The TOC" is the ".toc-popover" element.
 1. Navigate to /c/{{SLUG}}.
 2. The result's data-message-id attribute is exactly "{{RESULT_ID}}".
 3. Click the button with role "button" and accessible name exactly "Conversation table of contents".
@@ -114,12 +115,12 @@ func compactionTOC(t *testing.T, width int) {
 	})
 }
 
-func TestE2ECompactionEventsTOCEntry390(t *testing.T) { compactionTOC(t, 390) }
+func TestE2ECompactionEventsTOCEntry390(t *testing.T) { compactionTOC(t, useful(0), 390) }
 
-func TestE2ECompactionEventsTOCEntry1280(t *testing.T) { compactionTOC(t, 1280) }
+func TestE2ECompactionEventsTOCEntry1280(t *testing.T) { compactionTOC(t, useful(0), 1280) }
 
 func TestE2ECompactionEventsNoticesOpenDirectly(t *testing.T) {
-	e2e(t, compactionSetup+`Compaction notices open their index and audit table directly. "The nudge" is the [data-testid="message-context-nudge"] element and "the notice" is its direct child summary element (":scope > summary", i.e. selector '[data-testid="message-context-nudge"] > summary'); "the index" is the nudge's ".msg-context-nudge-index". "The status" is the result's direct child summary ('[data-testid="message-inplacecompaction"] > summary'); "the table" is the element inside the result with role "table" and accessible name "Compacted messages"; "the bookkeeping" is the element inside the result whose text contains "Hid 1 context nudge and 1 compaction call from the agent.".
+	e2e(t, useful(0), compactionSetup+`Compaction notices open their index and audit table directly. "The nudge" is the [data-testid="message-context-nudge"] element and "the notice" is its direct child summary element (":scope > summary", i.e. selector '[data-testid="message-context-nudge"] > summary'); "the index" is the nudge's ".msg-context-nudge-index". "The status" is the result's direct child summary ('[data-testid="message-inplacecompaction"] > summary'); "the table" is the element inside the result with role "table" and accessible name "Compacted messages"; "the bookkeeping" is the element inside the result whose text contains "Hid 1 context nudge and 1 compaction call from the agent.".
 1. Navigate to /c/{{SLUG}}.
 2. The notice has exactly the text "📏 Compaction threshold reached · 170k tokens", and the index is hidden.
 3. Click the notice at x=5, y=10 from its top-left corner (the row's empty left edge, not its text or chevron). The index becomes visible, and its text is exactly this (three lines; compare the raw textContent in an eval with expect): "## Index\n#4–#12  earlier exploration\n#15–#20  implementation" (with real newlines and two spaces after each range).
@@ -146,7 +147,7 @@ func TestE2ECompactionEventsMobileSingularLongSummary(t *testing.T) {
 	for range 200 {
 		summary += "long-summary-"
 	}
-	e2e(t, compactionSetup+`The compaction event handles singular counts and long summaries on a phone. The compaction has one group, whose summary is "long-summary-" repeated 200 times, and one trimmed tool output (#7). "The table" is the result's ".msg-compaction-table"; "the cells" are the "td" elements of the table's first "tbody tr".
+	e2e(t, useful(0), compactionSetup+`The compaction event handles singular counts and long summaries on a phone. The compaction has one group, whose summary is "long-summary-" repeated 200 times, and one trimmed tool output (#7). "The table" is the result's ".msg-compaction-table"; "the cells" are the "td" elements of the table's first "tbody tr".
 1. Navigate to /c/{{SLUG}}.
 2. The status ('[data-testid="message-inplacecompaction"] > summary') has exactly the text "Compacted context · 1 group, 1 tool output".
 3. Click the status. The result then contains no "details" element (count 0).
@@ -165,7 +166,7 @@ func TestE2ECompactionEventsMobileSingularLongSummary(t *testing.T) {
 }
 
 func TestE2ECompactionEventsMobileTrimsWithoutSummaries(t *testing.T) {
-	e2e(t, compactionSetup+`The compaction event handles trims without summaries on a phone. The compaction only trimmed one tool output (#7).
+	e2e(t, useful(0), compactionSetup+`The compaction event handles trims without summaries on a phone. The compaction only trimmed one tool output (#7).
 1. Navigate to /c/{{SLUG}}.
 2. The status ('[data-testid="message-inplacecompaction"] > summary') has exactly the text "Compacted context · 1 tool output".
 3. Click the status. The result then contains no "details" element (count 0).
@@ -180,7 +181,7 @@ func TestE2ECompactionEventsMobileTrimsWithoutSummaries(t *testing.T) {
 }
 
 func TestE2ECompactionEventsMobileSkips(t *testing.T) {
-	e2e(t, compactionSetup+`The compaction event handles a skipped compaction on a phone. The compaction only hid one message (the context nudge).
+	e2e(t, useful(0), compactionSetup+`The compaction event handles a skipped compaction on a phone. The compaction only hid one message (the context nudge).
 1. Navigate to /c/{{SLUG}}.
 2. The status ('[data-testid="message-inplacecompaction"] > summary') has exactly the text "Compaction skipped".
 3. Click the status. The result then contains no "details" element (count 0).

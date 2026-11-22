@@ -13,7 +13,7 @@ func inViewport(sel string) string {
 // Tabs are labelled with the window title the program sets (OSC 2), like any
 // terminal emulator, and the + button opens another shell.
 func TestE2ETerminalTabsFollowTitle(t *testing.T) {
-	e2e(t, `Terminal tabs follow the window title and + opens a shell. The test seeded a conversation at /c/term-tabs, whose directory holds title.sh, which sets the window title (OSC 2) to "a long window title that ends in tab-tail" (call it "the title"), prints "title-set" and then waits reading input. "The active tab" is ".terminal-panel-tab-active", and a tab's label is its ".terminal-panel-tab-label". `+termInput+`
+	e2e(t, useful(0), `Terminal tabs follow the window title and + opens a shell. The test seeded a conversation at /c/term-tabs, whose directory holds title.sh, which sets the window title (OSC 2) to "a long window title that ends in tab-tail" (call it "the title"), prints "title-set" and then waits reading input. "The active tab" is ".terminal-panel-tab-active", and a tab's label is its ".terminal-panel-tab-label". `+termInput+`
 1. Navigate to /c/term-tabs. Fill [data-testid="message-input"] with "!bash title.sh" and click [data-testid="send-button"].
 2. The active tab's label should have exactly the title as its text, and the active tab's ".terminal-panel-tab-label-tail" exactly "tab-tail". The tail must be in the viewport: eval `+"`"+inViewport(".terminal-panel-tab-active .terminal-panel-tab-label-tail")+"`"+` must be true. The active tab's title attribute should be exactly the title.
 3. Reload. The active tab's label should again be exactly the title (the replayed screen carries no title; the tab remembers it).

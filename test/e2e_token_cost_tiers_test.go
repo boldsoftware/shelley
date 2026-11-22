@@ -14,7 +14,7 @@ func TestE2ETokenCostTiersPricesByContextTier(t *testing.T) {
 	// input 150k*$0.5/M=$0.075, output 10k*$2.5/M=$0.025. Total $0.111. At
 	// base rate throughout it would be only $0.031, so the number itself
 	// proves the tier was applied.
-	e2e(t, `The cost graph prices calls by the context tier their prompt lands in. The model catalog and pricing are mocked: the model bills 5x once a call's prompt exceeds 100k tokens. The conversation at /c/{{SLUG}} serves usage for two calls, one below and one above the threshold. Perform the steps in order.
+	e2e(t, useful(0), `The cost graph prices calls by the context tier their prompt lands in. The model catalog and pricing are mocked: the model bills 5x once a call's prompt exceeds 100k tokens. The conversation at /c/{{SLUG}} serves usage for two calls, one below and one above the threshold. Perform the steps in order.
 `+tokenCostOpenGraph+`6. The popup's [data-testid="token-cost-total"] text contains "≈$0.111" (at the base rate throughout it would be only $0.031).
 7. The calls straddle the threshold, so each band was served at two rates: the first ".token-cost-legend-unit" element in the popup whose text contains "mixed rates" is visible.`, func(s *shelley) {
 		s.viewport(1280, 900)

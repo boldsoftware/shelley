@@ -135,7 +135,7 @@ func (s *shelley) readImage(name string, data []byte) string {
 const inlineImage = `Navigate to /c/inline. Wait (up to 30s) for the image ".markdown-content img[src*=\"shelley-inline-image-demo.png\"]" to be visible. `
 
 func TestE2EImageCommentsDragRegion(t *testing.T) {
-	e2e(t, `Drag a region, comment, and it lands in the message input. `+imageTerms+`Perform the steps in order.
+	e2e(t, useful(0), `Drag a region, comment, and it lands in the message input. `+imageTerms+`Perform the steps in order.
 1. `+inlineImage+`Click it.
 2. The overlay should be visible, and its ".image-comment-title" should have text exactly "shelley-inline-image-demo.png". Drawing is inert until the image reports its intrinsic size, so wait for the overlay's ".image-comment-hint" to contain "Drag a box".
 3. Drag the middle half.
@@ -148,7 +148,7 @@ func TestE2EImageCommentsDragRegion(t *testing.T) {
 }
 
 func TestE2EImageCommentsInsertedAsWritten(t *testing.T) {
-	e2e(t, `Each comment is inserted as it is written, without a staging step. `+imageTerms+`Perform the steps in order.
+	e2e(t, useful(0), `Each comment is inserted as it is written, without a staging step. `+imageTerms+`Perform the steps in order.
 1. `+inlineImage+`Click it. The overlay should be visible, and its ".image-comment-hint" should contain "Drag a box".
 2. Three regions in a row. Each one's comment appends to the message input as soon as it is written, so the composer is up to date throughout rather than at the end. For each (i, text, drag) of (0, "top left", from (0.05, 0.05) to (0.3, 0.3)), (1, "middle", from (0.4, 0.4) to (0.6, 0.6)), (2, "bottom right", from (0.7, 0.7) to (0.95, 0.95)), in order: make the drag in 8 steps; keep the geometry (Gi) once the dialog shows it (window.geometry() non-empty); fill the dialog's input with the text; click "Add Comment"; the message input's value should then be exactly the comments so far, each "> image shelley-inline-image-demo.png [region Gi of 48x48]\n<text>\n\n", concatenated in order; every commented region stays drawn and numbered in order: there should be exactly i + 1 ".image-comment-overlay .image-comment-region", and the (i+1)-th ".image-comment-overlay .image-comment-region-badge" should have text exactly i + 1.
 3. Focus must not follow the injected text into the composer behind the still-open view, or the next keystroke would go to the wrong place: the message input must not be focused, and ".image-comment-overlay .image-comment-container" should be (document.activeElement).
@@ -160,7 +160,7 @@ func TestE2EImageCommentsInsertedAsWritten(t *testing.T) {
 }
 
 func TestE2EImageCommentsWholeImageAndEscape(t *testing.T) {
-	e2e(t, `Comment on the whole image, and Escape discards. `+imageTerms+`Perform the steps in order.
+	e2e(t, useful(0), `Comment on the whole image, and Escape discards. `+imageTerms+`Perform the steps in order.
 1. `+inlineImage+`Click it. The overlay should be visible.
 2. Escape backs out of the open comment first, leaving the view up: the text being abandoned is the thing Escape is most likely meant for. Click the overlay's button "Comment on the whole image", fill the dialog's input with "abandoned", and press Escape. There should be no dialog input (count 0), the overlay should still be visible, and the message input's value should be exactly "".
 3. A second Escape closes the view, still without touching the composer: press Escape. The overlay should be gone (count 0), and the message input's value still exactly "".
@@ -172,7 +172,7 @@ func TestE2EImageCommentsWholeImageAndEscape(t *testing.T) {
 }
 
 func TestE2EImageCommentsScreenshot(t *testing.T) {
-	e2e(t, `Screenshot tool images are commentable and reference the file on disk. `+imageTerms+`Perform the steps in order.
+	e2e(t, useful(0), `Screenshot tool images are commentable and reference the file on disk. `+imageTerms+`Perform the steps in order.
 1. Navigate to /c/shot. Wait (up to 30s) for the first ".screenshot-tool .commentable-image" to be visible.
 2. The affordance that says the image is clickable at all: this browser emulates a Pixel 5, so (hover: none) applies and the badge is always shown. The first ".screenshot-tool .commentable-image-badge" should have computed opacity exactly "1".
 3. Click the image. The overlay should be visible. The header names the screenshot's on-disk path (Display.path), which the agent can crop, rather than the image endpoint URL: the overlay's ".image-comment-title" text should end with ".png".
@@ -195,7 +195,7 @@ func TestE2EImageCommentsSourcePixels(t *testing.T) {
 	// downscale's whole-pixel rounding shifts the aspect ratio by 2.5% (it
 	// becomes 2000x39). Nothing may key off that drift: only the scale differs,
 	// and the region still has to be reported in the source's own space.
-	e2e(t, `Regions are reported in the source file's pixels, not the downscaled copy's: the conversation read a 3001x60 PNG, {{IMAGE}}, with read_image, which serves a downscaled copy. `+imageTerms+`Perform the steps in order.
+	e2e(t, useful(0), `Regions are reported in the source file's pixels, not the downscaled copy's: the conversation read a 3001x60 PNG, {{IMAGE}}, with read_image, which serves a downscaled copy. `+imageTerms+`Perform the steps in order.
 1. `+readImage+`
 2. The served copy really is downscaled, and did load; otherwise this test proves nothing (predictable's MaxImageDimension is 2000): the image's naturalWidth should come (within 15s) to be greater than 0, and should then be less than 3001.
 3. Click the image. The overlay's ".image-comment-hint" should contain "Drag a box".
@@ -212,8 +212,8 @@ func TestE2EImageCommentsSourcePixels(t *testing.T) {
 // take different max-height rules, and a rule that clamped the frame while
 // letting the image overflow it made everything below the fold silently
 // unclickable on desktop only.
-func tallImage(t *testing.T, name string, width, height int) {
-	e2e(t, `A tall image on `+name+` viewport (`+strconv.Itoa(width)+`x`+strconv.Itoa(height)+`) still maps regions correctly: the conversation read a 400x1600 PNG with read_image. `+imageTerms+`Perform the steps in order.
+func tallImage(t *testing.T, useful lazycue.Useful, name string, width, height int) {
+	e2e(t, useful, `A tall image on `+name+` viewport (`+strconv.Itoa(width)+`x`+strconv.Itoa(height)+`) still maps regions correctly: the conversation read a 400x1600 PNG with read_image. `+imageTerms+`Perform the steps in order.
 1. `+readImage+`Click it.
 2. The hint that gates other tests is hidden at phone width, so wait on the whole-image button instead: it is disabled until the image reports its size, which is also when drawing becomes live. The overlay's button "Comment on the whole image" should be enabled.
 3. The frame shrink-wraps the image, which is what makes a fraction of the frame a fraction of the image; and the whole image is reachable without scrolling, so every part of it can be dragged on: window.shrinkWraps(`+strconv.Itoa(height)+`) should return exactly "ok".
@@ -224,11 +224,11 @@ func tallImage(t *testing.T, name string, width, height int) {
 }
 
 func TestE2EImageCommentsTallImagePhone(t *testing.T) {
-	tallImage(t, "a phone", 390, 844)
+	tallImage(t, useful(0), "a phone", 390, 844)
 }
 
 func TestE2EImageCommentsTallImageDesktop(t *testing.T) {
-	tallImage(t, "desktop", 1280, 800)
+	tallImage(t, useful(0), "desktop", 1280, 800)
 }
 
 // Images render at their intrinsic size unless styled, and a browser-tool
@@ -237,8 +237,8 @@ func TestE2EImageCommentsTallImageDesktop(t *testing.T) {
 // to fit the column and the message area, keep its aspect ratio, and keep the
 // comment badge on its own corner. The tall fixture is taller still, so it
 // is over the height cap on both viewports.
-func imagesFit(t *testing.T, name string, width, height int) {
-	e2e(t, `Images fit the conversation on `+name+` viewport (`+strconv.Itoa(width)+`x`+strconv.Itoa(height)+`). Markdown images carry no size; tool cards pass width/height attributes (of the downscaled copy) to reserve their space. /c/markdown shows a 1170x4000 tall.png and a 3000x200 wide.png as markdown images; /c/image read the same tall.png with read_image. window.fits(selector, W, H) returns "ok" if the first image matching selector, of a WxH source, fits the conversation: it fits the column (".messages-container") and the message area (the container's clientHeight), keeps its aspect ratio (within half a pixel), its ".commentable-image-link" hugs it (width within half a pixel), and the link's ".commentable-image-badge" is on the image; otherwise it says what is off. "Check that S of WxH fits" means: wait (up to 30s) for the first image matching S to be visible; wait (up to 15s) for its naturalWidth to be greater than 0, since before the bytes arrive a markdown image has no size; then window.fits(S, W, H) should return exactly "ok". Perform the steps in order.
+func imagesFit(t *testing.T, useful lazycue.Useful, name string, width, height int) {
+	e2e(t, useful, `Images fit the conversation on `+name+` viewport (`+strconv.Itoa(width)+`x`+strconv.Itoa(height)+`). Markdown images carry no size; tool cards pass width/height attributes (of the downscaled copy) to reserve their space. /c/markdown shows a 1170x4000 tall.png and a 3000x200 wide.png as markdown images; /c/image read the same tall.png with read_image. window.fits(selector, W, H) returns "ok" if the first image matching selector, of a WxH source, fits the conversation: it fits the column (".messages-container") and the message area (the container's clientHeight), keeps its aspect ratio (within half a pixel), its ".commentable-image-link" hugs it (width within half a pixel), and the link's ".commentable-image-badge" is on the image; otherwise it says what is off. "Check that S of WxH fits" means: wait (up to 30s) for the first image matching S to be visible; wait (up to 15s) for its naturalWidth to be greater than 0, since before the bytes arrive a markdown image has no size; then window.fits(S, W, H) should return exactly "ok". Perform the steps in order.
 1. Navigate to /c/markdown. Check that ".markdown-content img[src*=\"tall.png\"]" of 1170x4000 fits, then that ".markdown-content img[src*=\"wide.png\"]" of 3000x200 fits.
 2. Navigate to /c/image. Check that ".screenshot-tool .commentable-image" of 1170x4000 fits.`, func(s *shelley) {
 		s.viewport(width, height)
@@ -249,18 +249,18 @@ func imagesFit(t *testing.T, name string, width, height int) {
 }
 
 func TestE2EImageCommentsFitPhone(t *testing.T) {
-	imagesFit(t, "a phone", 390, 844)
+	imagesFit(t, useful(0), "a phone", 390, 844)
 }
 
 func TestE2EImageCommentsFitDesktop(t *testing.T) {
-	imagesFit(t, "desktop", 1280, 800)
+	imagesFit(t, useful(0), "desktop", 1280, 800)
 }
 
 func TestE2EImageCommentsTouchDrag(t *testing.T) {
 	// Touch is the drag path most likely to break: it is the one with pointer
 	// capture, cancellation, and more than one pointer in flight. The browser
 	// emulates a touch device, so drive real touch events.
-	e2e(t, `A touch drag draws a box, and a second finger cannot hijack it: the conversation read an 800x600 PNG with read_image. `+imageTerms+`Touch points below are fractions (a, b) of the frame: offsets (a × its width, b × its height) from its top-left; touch on the frame. "The draft is half the frame wide" means: in an eval, wait two animation frames (one for Vue to flush the style, one for layout: new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))), then check that the width of ".image-comment-overlay .image-comment-draft" is within 0.5px of half the frame's width (getBoundingClientRect), expect true. Perform the steps in order.
+	e2e(t, useful(0), `A touch drag draws a box, and a second finger cannot hijack it: the conversation read an 800x600 PNG with read_image. `+imageTerms+`Touch points below are fractions (a, b) of the frame: offsets (a × its width, b × its height) from its top-left; touch on the frame. "The draft is half the frame wide" means: in an eval, wait two animation frames (one for Vue to flush the style, one for layout: new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))), then check that the width of ".image-comment-overlay .image-comment-draft" is within 0.5px of half the frame's width (getBoundingClientRect), expect true. Perform the steps in order.
 1. `+readImage+`Tap it (touch start on it, then touch end).
 2. The overlay's button "Comment on the whole image" should be enabled.
 3. Finger one drags the middle half: touch start at (0.25, 0.25), then touch move to (0.75, 0.75). The draft should be half the frame wide (percentage layout plus coordinate quantization put this within a pixel; a hijacked drag would be off by a third of the image).
@@ -278,7 +278,7 @@ func TestE2EImageCommentsRotatedJPEG(t *testing.T) {
 	// as everyone sees it), and the comment carries the instruction to
 	// auto-orient -- croppers like `magick` ignore the tag too, and without it
 	// the crop would land on a different part of the picture.
-	e2e(t, `A rotated JPEG is commented on in the pixels that were rendered: the conversation read {{IMAGE}}, a 100x50 JPEG tagged to be rotated 90° for display, with read_image. `+imageTerms+`Perform the steps in order.
+	e2e(t, useful(0), `A rotated JPEG is commented on in the pixels that were rendered: the conversation read {{IMAGE}}, a 100x50 JPEG tagged to be rotated 90° for display, with read_image. `+imageTerms+`Perform the steps in order.
 1. `+readImage+`
 2. The premise: the browser really does rotate it. Without this the test would pass on a build that never had the bug to fix. The image's naturalWidth should come (within 15s) to be exactly 50, and its naturalHeight should then be exactly 100.
 3. Click the image. The overlay's ".image-comment-hint" should contain "Drag a box".
@@ -294,7 +294,7 @@ func TestE2EImageCommentsRotatedJPEG(t *testing.T) {
 // The default device is a phone, where (hover: none) keeps the badge visible;
 // a mouse-capable browser is the only place the reveal is testable.
 func TestE2EImageCommentsBadgeOnHover(t *testing.T) {
-	e2e(t, `With a mouse, the comment badge appears on hover. Perform the steps in order.
+	e2e(t, useful(0), `With a mouse, the comment badge appears on hover. Perform the steps in order.
 1. `+inlineImage+`
 2. The first ".markdown-content .commentable-image-badge" (the badge) should have computed opacity exactly "0".
 3. Hover the image. The badge's computed opacity should become exactly "1".`, func(s *shelley) {

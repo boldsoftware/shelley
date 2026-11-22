@@ -5,7 +5,7 @@ import "testing"
 // Ported from ui/e2e/bash-syntax-highlighting.spec.ts.
 
 func TestE2EBashSyntaxHighlighting(t *testing.T) {
-	e2e(t, `Bash commands are Shiki-tokenized without changing output rendering. The test seeded a conversation at /c/bash-syntax whose bash tool call ran the command "if true; then echo bash-output-plain; fi" (call it "the command"). "The card" is the first ".bash-tool" whose text contains the command, and "the summary" is the card's ".bash-tool-command".
+	e2e(t, useful(0), `Bash commands are Shiki-tokenized without changing output rendering. The test seeded a conversation at /c/bash-syntax whose bash tool call ran the command "if true; then echo bash-output-plain; fi" (call it "the command"). "The card" is the first ".bash-tool" whose text contains the command, and "the summary" is the card's ".bash-tool-command".
 1. Navigate to /c/bash-syntax. The summary's text should become exactly the command (wait up to 30s).
 2. The summary must have no title attribute (no native tooltip: the browser renders it in a system font, and expanding the card already shows the full command).
 3. The summary must contain at least one ".shelley-code-token" element (attached; it need not be visible).

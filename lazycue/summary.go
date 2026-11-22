@@ -19,6 +19,7 @@ type RunSummary struct {
 	InputTokens      int           `json:"input_tokens"`
 	OutputTokens     int           `json:"output_tokens"`
 	EstimatedCostUSD float64       `json:"estimated_cost_usd"`
+	Useful           int           `json:"useful"` // times the tests have been useful (see Useful), a count that tests share counted once
 	Tests            []TestSummary `json:"tests"`
 }
 
@@ -36,14 +37,24 @@ type TestSummary struct {
 	EstimatedCost float64   `json:"estimated_cost_usd"`
 	VideoPath     string    `json:"video_path,omitempty"`
 	Error         string    `json:"error,omitempty"`
-	Heal          *HealInfo `json:"heal,omitempty"` // why/how the test self-healed (only set when Mode == "healed")
+	Heal          *HealInfo `json:"heal,omitempty"`       // why/how the test self-healed (only set when Mode == "healed")
+	Useful        int       `json:"useful"`               // times the test has been useful (see Useful)
+	UsefulAt      string    `json:"useful_at,omitempty"`  // where that count is written
+	AskUseful     bool      `json:"ask_useful,omitempty"` // the test's steps failed, so it may have caught a bug: if so, increment its count
 }
 
 // Summarize aggregates results into a RunSummary.
 func Summarize(results []*TestResult) RunSummary {
 	var s RunSummary
 	s.Total = len(results)
+	// Tests that share a count (one call in a loop, or in a helper) add it
+	// once.
+	counted := make(map[string]bool)
 	for _, r := range results {
+		if r.UsefulAt == "" || !counted[r.UsefulAt] {
+			counted[r.UsefulAt] = true
+			s.Useful += r.Useful
+		}
 		if r.Pass {
 			s.Passed++
 		} else {
@@ -74,6 +85,9 @@ func Summarize(results []*TestResult) RunSummary {
 			VideoPath:     r.VideoPath,
 			Error:         r.Error,
 			Heal:          r.Heal,
+			Useful:        r.Useful,
+			UsefulAt:      r.UsefulAt,
+			AskUseful:     r.asksUseful(),
 		})
 	}
 	if s.Total > 0 {

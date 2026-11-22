@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/boldsoftware/shelley/lazycue"
 )
 
 // Ported from ui/e2e/terminal-ghostty.spec.ts.
@@ -63,7 +65,7 @@ func ghosttyDesc(title, slug, setup, steps string) string {
 // program, and leave focus where it was. The screen includes a gap, wide
 // characters and a multi-code-point cluster, which Copy/Insert must keep.
 func TestE2ETerminalGhosttyThemeSwitchKeys(t *testing.T) {
-	e2e(t, ghosttyDesc(`Survives theme switches and keeps Ctrl+V and Ctrl+Shift+C off paste and ^C.`, "gh-theme",
+	e2e(t, useful(0), ghosttyDesc(`Survives theme switches and keeps Ctrl+V and Ctrl+Shift+C off paste and ^C.`, "gh-theme",
 		`switches the terminal to raw mode without echo, prints the screen {{SCREEN}} (with a gap before the B, wide characters and a multi-code-point emoji), then reads raw input up to "q" and prints it as keys=<input, shell-quoted>.`,
 		`window.__sockets lists the page's websockets in the order they opened, each as {termId: its URL's term_id parameter or null, outputs: how many "output" messages it received}; this terminal is the only terminal session on the server. "The background" is the eval `+"`"+canvasBackground(visibleTerminal)+"`"+`.
 1. RUN_SCRIPT
@@ -110,7 +112,7 @@ window.WebSocket = class extends NativeWebSocket {
 // A hidden terminal can't be measured. Reopening it must keep its size, not
 // resize the program to the 80x24 default.
 func TestE2ETerminalGhosttyThemeSwitchHiddenSize(t *testing.T) {
-	e2e(t, ghosttyDesc(`A theme switch leaves a hidden terminal's size alone.`, "gh-hidden",
+	e2e(t, useful(0), ghosttyDesc(`A theme switch leaves a hidden terminal's size alone.`, "gh-hidden",
 		`prints "ready" and its size (stty size), prints "winch" and the new size whenever it is resized, and keeps running.`,
 		`"The first terminal" is the eval document.querySelector('.terminal-panel-content [data-terminal-id="' + window.__firstId + '"]') and "the first tab" is '.terminal-panel-tab[title="bash t.sh"]'. An element is hidden when it has no box (getClientRects().length === 0) or computed visibility "hidden".
 1. RUN_SCRIPT
@@ -129,7 +131,7 @@ func TestE2ETerminalGhosttyThemeSwitchHiddenSize(t *testing.T) {
 }
 
 func TestE2ETerminalGhosttyThemeSwitchWhileLoading(t *testing.T) {
-	e2e(t, ghosttyDesc(`A theme switch while ghostty-web loads still applies.`, "gh-loading",
+	e2e(t, useful(0), ghosttyDesc(`A theme switch while ghostty-web loads still applies.`, "gh-loading",
 		`prints "ghostty-ready" and then echoes what it reads. The server holds the page's request for /ghostty-web.js until call "release" lets it through; call "requested" says whether the page asked for it yet ("true" or "false").`,
 		`
 1. RUN_SCRIPT
@@ -166,7 +168,7 @@ func (s *shelley) ghosttyMissing(open string) {
 }
 
 func TestE2ETerminalGhosttyLoadFailure(t *testing.T) {
-	e2e(t, ghosttyDesc(`Says why when ghostty-web fails to load, and xterm.js can take over.`, "gh-404",
+	e2e(t, useful(0), ghosttyDesc(`Says why when ghostty-web fails to load, and xterm.js can take over.`, "gh-404",
 		`prints "xterm-took-over" and then echoes what it reads. The server answers 404 for /ghostty-web.js.`,
 		`
 1. RUN_SCRIPT
@@ -179,7 +181,7 @@ func TestE2ETerminalGhosttyLoadFailure(t *testing.T) {
 }
 
 func TestE2ETerminalGhosttyXtermChosenWhileLoading(t *testing.T) {
-	e2e(t, ghosttyDesc(`xterm.js chosen while ghostty-web loads takes over when the load fails.`, "gh-takeover",
+	e2e(t, useful(0), ghosttyDesc(`xterm.js chosen while ghostty-web loads takes over when the load fails.`, "gh-takeover",
 		`prints "xterm-took-over" and then echoes what it reads. The server holds the page's request for /ghostty-web.js until call "fail" has it answer 404.`,
 		`
 1. RUN_SCRIPT
@@ -193,7 +195,7 @@ func TestE2ETerminalGhosttyXtermChosenWhileLoading(t *testing.T) {
 }
 
 func TestE2ETerminalGhosttyHistory(t *testing.T) {
-	e2e(t, ghosttyDesc(`Keeps 10,000 lines of history, as xterm.js does.`, "gh-history",
+	e2e(t, useful(0), ghosttyDesc(`Keeps 10,000 lines of history, as xterm.js does.`, "gh-history",
 		`prints the numbers 1 to 10000, one per line, and then echoes what it reads.`,
 		`
 1. RUN_SCRIPT
@@ -208,7 +210,7 @@ func TestE2ETerminalGhosttyHistory(t *testing.T) {
 // output. Once the history is full, new output evicts the oldest lines,
 // which moves the viewed ones up.
 func TestE2ETerminalGhosttyScrolledBackOutput(t *testing.T) {
-	e2e(t, ghosttyDesc(`Output leaves a scrolled-back terminal where it is, typing doesn't.`, "gh-scrollback",
+	e2e(t, useful(0), ghosttyDesc(`Output leaves a scrolled-back terminal where it is, typing doesn't.`, "gh-scrollback",
 		`prints the numbers 1 to 30000, waits for the file "go" (call "go" creates it), prints 30001 to 33000 and "more-output", and then echoes what it reads.`,
 		settledRead+`The viewport is 1400x900 (wide, so fewer lines fill the history).
 1. RUN_SCRIPT
@@ -233,7 +235,7 @@ func TestE2ETerminalGhosttyScrolledBackOutput(t *testing.T) {
 
 // Repeated lines can't tell positions apart; the whole screen can.
 func TestE2ETerminalGhosttyRepeatedLinesView(t *testing.T) {
-	e2e(t, ghosttyDesc(`A view scrolled back among repeated lines stays put.`, "gh-repeated",
+	e2e(t, useful(0), ghosttyDesc(`A view scrolled back among repeated lines stays put.`, "gh-repeated",
 		`prints "repeat" 30000 times, then "marker-2", "marker-3", ... up to "marker-<rows>" (one line short of a screen), waits for the file "go" (call "go" creates it), prints "repeat" 3000 more times and "more-output", and then echoes what it reads.`,
 		`The viewport is 1400x900.
 1. RUN_SCRIPT
@@ -258,7 +260,7 @@ func TestE2ETerminalGhosttyRepeatedLinesView(t *testing.T) {
 // Terminals sharing a ghostty emulator reuse each other's freed memory
 // without clearing it.
 func TestE2ETerminalGhosttyNewTerminalClean(t *testing.T) {
-	e2e(t, ghosttyDesc(`A new terminal shows none of a closed one's text.`, "gh-closed",
+	e2e(t, useful(0), ghosttyDesc(`A new terminal shows none of a closed one's text.`, "gh-closed",
 		`prints 3000 lines "closed-terminal <n> zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz" (n from 1 to 3000) and then echoes what it reads; the directory also holds t2.sh, which prints the numbers 1 to 3000 and then echoes what it reads.`,
 		`"The tab" is '.terminal-panel-tab[title="bash t.sh"]'.
 1. RUN_SCRIPT
@@ -277,7 +279,7 @@ func TestE2ETerminalGhosttyNewTerminalClean(t *testing.T) {
 // Each terminal has an emulator of tens of MB, which ghostty-web's
 // leftover document listeners would keep after the terminal is gone.
 func TestE2ETerminalGhosttyFreesEmulators(t *testing.T) {
-	e2e(t, ghosttyDesc(`Reopened and closed terminals free their emulators.`, "gh-free",
+	e2e(t, useful(0), ghosttyDesc(`Reopened and closed terminals free their emulators.`, "gh-free",
 		`prints "ghostty-ready" and then echoes what it reads.`,
 		`window.__memories holds a WeakRef to the WebAssembly memory of every WebAssembly instance the page made (each emulator has one). "Watch the emulators" means: eval window.__watched = window.__memories.filter((ref) => ref.deref()) (those alive now). "Wait until a watched emulator is freed" means: retry the following steps as one block until they pass (timeout 15s): collect_garbage; then eval window.__watched.filter((ref) => !ref.deref()).length > 0 must be true. "The tab" is '.terminal-panel-tab[title="bash t.sh"]'.
 1. RUN_SCRIPT
@@ -304,9 +306,9 @@ WebAssembly.instantiate = async function (...args) {
 
 // tabSwitchesRetainOutput is the test of a hidden terminal keeping what it
 // was sent, on renderer.
-func tabSwitchesRetainOutput(t *testing.T, renderer, surface string) {
+func tabSwitchesRetainOutput(t *testing.T, useful lazycue.Useful, renderer, surface string) {
 	slug := "gh-tabs-" + renderer
-	e2e(t, ghosttyDesc(`Tab switches retain output written while hidden (`+renderer+`).`, slug,
+	e2e(t, useful, ghosttyDesc(`Tab switches retain output written while hidden (`+renderer+`).`, slug,
 		`counts COUNT-001 to COUNT-100 in four batches of 25 lines: it prints the first batch, and each later batch once the test releases it (calls "release50", "release75" and "release100" each release one batch; the FIFO keeps output stopped while a tab is inspected, so new output cannot conceal a lost screen by immediately repainting it). Then it echoes what it reads. Terminals render with `+renderer+`.`,
 		`window.__received is all the output the page's websocket for this script (the one whose URL has cmd "bash t.sh") received, decoded. Call "sockets" says how many terminal websockets the page has opened. "The first terminal" is the eval document.querySelector('[data-terminal-id="' + window.__firstId + '"]'), "the second terminal" the same with window.__secondId; "the first tab" is '.terminal-panel-tab[title="bash t.sh"]' and "the second tab" is the last ".terminal-panel-tab". An element is hidden when it has no box (getClientRects().length === 0) or computed visibility "hidden", visible otherwise. "The counts check for N" is the eval: JSON.stringify(document.querySelector('[data-testid="message-input"]').value.match(/COUNT-\d{3}/g)) === JSON.stringify(Array.from({length: N}, (_, i) => "COUNT-" + String(i + 1).padStart(3, "0"))).
 1. RUN_SCRIPT
@@ -373,11 +375,11 @@ window.WebSocket = class extends NativeWebSocket {
 }
 
 func TestE2ETerminalTabSwitchRetainsOutputGhostty(t *testing.T) {
-	tabSwitchesRetainOutput(t, "ghostty", "canvas")
+	tabSwitchesRetainOutput(t, useful(0), "ghostty", "canvas")
 }
 
 func TestE2ETerminalTabSwitchRetainsOutputXterm(t *testing.T) {
-	tabSwitchesRetainOutput(t, "xterm", ".xterm-screen")
+	tabSwitchesRetainOutput(t, useful(0), "xterm", ".xterm-screen")
 }
 
 // While a program tracks the mouse (Claude Code, tmux, vim with mouse=a), a
@@ -385,7 +387,7 @@ func TestE2ETerminalTabSwitchRetainsOutputXterm(t *testing.T) {
 // xterm.js. Stock ghostty-web reports the Shift+drag too, which clears the
 // selection before it can be copied.
 func TestE2ETerminalGhosttyShiftDragCopies(t *testing.T) {
-	e2e(t, ghosttyDesc(`Shift+drag selects and copies while the program tracks the mouse.`, "gh-shift-drag",
+	e2e(t, useful(0), ghosttyDesc(`Shift+drag selects and copies while the program tracks the mouse.`, "gh-shift-drag",
 		`switches the terminal to raw mode, turns on mouse tracking (SGR mouse reports), prints "select-me-please" and then reads (and discards) its input.`,
 		`window.__copied lists the texts the page wrote to the clipboard (navigator.clipboard.write or writeText). Offsets below are CSS pixels from the top-left corner of the terminal's canvas, whose width is W and height H.
 1. RUN_SCRIPT
@@ -426,9 +428,9 @@ func (s *shelley) serveFile(path, dir, name string) {
 
 // resizeBurst is the test of the grid fitting after a burst of resizes that
 // move the divider by delta pixels three times.
-func resizeBurst(t *testing.T, direction string, delta int) {
+func resizeBurst(t *testing.T, useful lazycue.Useful, direction string, delta int) {
 	slug := "gh-resize-" + direction
-	e2e(t, ghosttyDesc(`Fits the grid after a burst of resizes (`+direction+`).`, slug,
+	e2e(t, useful, ghosttyDesc(`Fits the grid after a burst of resizes (`+direction+`).`, slug,
 		`prints "ghostty-ready" and then echoes what it reads.`,
 		`"The handle" is ".terminal-panel-resize-handle". "The slack" is the eval (() => { const el = document.querySelector('`+visibleTerminal+`'); return el.firstElementChild.getBoundingClientRect().height - el.querySelector("canvas").getBoundingClientRect().height; })().
 1. RUN_SCRIPT
@@ -441,9 +443,13 @@ func resizeBurst(t *testing.T, direction string, delta int) {
 	})
 }
 
-func TestE2ETerminalGhosttyResizeBurstGrowing(t *testing.T) { resizeBurst(t, "growing", -60) }
+func TestE2ETerminalGhosttyResizeBurstGrowing(t *testing.T) {
+	resizeBurst(t, useful(0), "growing", -60)
+}
 
-func TestE2ETerminalGhosttyResizeBurstShrinking(t *testing.T) { resizeBurst(t, "shrinking", 60) }
+func TestE2ETerminalGhosttyResizeBurstShrinking(t *testing.T) {
+	resizeBurst(t, useful(0), "shrinking", 60)
+}
 
 // On a phone, a drag scrolls back through output instead of focusing the
 // terminal and summoning the keyboard.
@@ -452,9 +458,9 @@ func TestE2ETerminalGhosttyResizeBurstShrinking(t *testing.T) { resizeBurst(t, "
 //
 // touchDragScrolls is the test of a touch drag scrolling a terminal drawn by
 // renderer.
-func touchDragScrolls(t *testing.T, renderer string) {
+func touchDragScrolls(t *testing.T, useful lazycue.Useful, renderer string) {
 	slug := "gh-touch-" + renderer
-	e2e(t, ghosttyDesc(`A touch drag scrolls back as far as the finger moves, without focusing (`+renderer+`).`, slug,
+	e2e(t, useful, ghosttyDesc(`A touch drag scrolls back as far as the finger moves, without focusing (`+renderer+`).`, slug,
 		`writes the terminal's row count (stty size) to the file "rows", prints the numbers 1 to 300, one per line, and then echoes what it reads. Terminals render with `+renderer+`; fetching /e2e/rows returns the file "rows".`,
 		`"The top line" of a screen read is parseInt of the input's value (base 10).
 1. RUN_SCRIPT
@@ -472,9 +478,9 @@ func touchDragScrolls(t *testing.T, renderer string) {
 	})
 }
 
-func TestE2ETerminalTouchDragScrollsGhostty(t *testing.T) { touchDragScrolls(t, "ghostty") }
+func TestE2ETerminalTouchDragScrollsGhostty(t *testing.T) { touchDragScrolls(t, useful(0), "ghostty") }
 
-func TestE2ETerminalTouchDragScrollsXterm(t *testing.T) { touchDragScrolls(t, "xterm") }
+func TestE2ETerminalTouchDragScrollsXterm(t *testing.T) { touchDragScrolls(t, useful(0), "xterm") }
 
 // Long URLs (an OAuth sign-in link) soft-wrap over several rows. A click on
 // any of them opens the whole URL, as in xterm.js and desktop terminals;
@@ -482,7 +488,7 @@ func TestE2ETerminalTouchDragScrollsXterm(t *testing.T) { touchDragScrolls(t, "x
 // a truncated URL and the rest opened nothing. A URL that fills its row and
 // then ends with a newline is not joined to the next line.
 func TestE2ETerminalGhosttyCtrlClickWrappedURL(t *testing.T) {
-	e2e(t, ghosttyDesc(`Ctrl+click opens a URL that wraps over several rows.`, "gh-url",
+	e2e(t, useful(0), ghosttyDesc(`Ctrl+click opens a URL that wraps over several rows.`, "gh-url",
 		`prints "ghostty-ready"; once the file "go" exists (call "go" creates it) it writes the terminal size (stty size: "<rows> <cols>") to the file "size", clears the screen and homes the cursor, then prints: https://example.com/ followed by 2*cols "a"s and "/end" (a URL wrapping over three rows); https://example.org/ followed by cols-20 "b"s (exactly one row: the newline, not a wrap, ends it); "not-part-of-the-url"; and an OSC 8 hyperlink to https://target.example/ whose text is https://example.net/ followed by cols "c"s (two rows). Once the file "more" exists (call "more" creates it) it prints the numbers 1 to 2*rows, pushing it all into the scrollback, then echoes what it reads. Fetching /e2e/size returns the file "size".`,
 		`window.__opened lists the URLs the page opened (window.open). "Clear the opened list" means eval window.__opened.length = 0. "The opened list should be L" means: eval JSON.stringify(window.__opened) === JSON.stringify(L) should become true. "Cell (R, C)" is the point `+"`"+`(() => { const r = document.querySelector('`+visibleTerminal+` canvas').getBoundingClientRect(); return {x: r.left + (C + 0.5) * (r.width / window.__size.cols), y: r.top + (R + 0.5) * (r.height / window.__size.rows)}; })()`+"`"+`, with R and C written in as numbers or expressions (cols means window.__size.cols). "Ctrl+click cell (R, C)" means: hover cell (R, C); key_down Control; click cell (R, C); key_up Control.
 1. RUN_SCRIPT

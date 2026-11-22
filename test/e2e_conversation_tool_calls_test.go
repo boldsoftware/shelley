@@ -9,7 +9,7 @@ import "testing"
 // seeding a conversation via the API.
 
 func TestE2EConversationToolCallsShowsToolResult(t *testing.T) {
-	e2e(t, `Coalesced tool calls show the tool result with details. Perform the steps in order.
+	e2e(t, useful(0), `Coalesced tool calls show the tool result with details. Perform the steps in order.
 1. Navigate to /new.
 2. Fill the message input ([data-testid="message-input"]) with the text bash: echo "hello world" and click the send button ([data-testid="send-button"]).
 3. Wait for the first [data-testid="tool-call-completed"] element to be visible (allow 30s).
@@ -18,7 +18,7 @@ func TestE2EConversationToolCallsShowsToolResult(t *testing.T) {
 }
 
 func TestE2EConversationToolCallsAgentTextAndToolSeparate(t *testing.T) {
-	e2e(t, `Coalesced tool calls display the agent's text and the tool separately. Perform the steps in order.
+	e2e(t, useful(0), `Coalesced tool calls display the agent's text and the tool separately. Perform the steps in order.
 1. Navigate to /new.
 2. Fill the message input ([data-testid="message-input"]) with "bash: pwd" and click the send button ([data-testid="send-button"]).
 3. Wait for the first [data-testid="tool-call-completed"] element to be visible (allow 30s).
@@ -27,7 +27,7 @@ func TestE2EConversationToolCallsAgentTextAndToolSeparate(t *testing.T) {
 }
 
 func TestE2EConversationToolCallsSequential(t *testing.T) {
-	e2e(t, `Sequential tool calls are all displayed. Perform the steps in order.
+	e2e(t, useful(0), `Sequential tool calls are all displayed. Perform the steps in order.
 1. Navigate to /new.
 2. Fill the message input ([data-testid="message-input"]) with the text bash: echo "first" and click the send button ([data-testid="send-button"]).
 3. Wait for the first [data-testid="tool-call-completed"] element to be visible (allow 30s).
@@ -39,7 +39,7 @@ func TestE2EConversationToolCallsSequential(t *testing.T) {
 // substring match; the alert has no separate label, so it matched the error
 // text itself.
 func TestE2EConversationToolCallsLLMError(t *testing.T) {
-	e2e(t, `An LLM error message is displayed in the UI. Perform the steps in order.
+	e2e(t, useful(0), `An LLM error message is displayed in the UI. Perform the steps in order.
 1. Navigate to /new (a new conversation) and wait for the message input ([data-testid="message-input"]) to be visible (allow 30s).
 2. Fill the message input with "error: test error message" and click the send button ([data-testid="send-button"]); the predictable model fails on it.
 3. Wait until the page text contains "LLM request failed: predictable error: test error message" (allow 30s).

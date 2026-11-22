@@ -118,7 +118,7 @@ func (s *shelley) resourceDismiss(dismissed func(kind string) resourceStatus) {
 }
 
 func TestE2EResourceNoticeDiskDismissesEpisode(t *testing.T) {
-	e2e(t, `Resource notices: shows disk status and dismisses the current episode. The page's live stream (/api/stream2) reports low disk space (episode 7, 1.6 GB available), and dismissing it is faked; call "dismissals" lists every dismiss request as "<path> episode <episode_id in its body>", one per line, or "none". Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "disk-notice" (the notice) should be visible (allow 30s). 3. The notice's text should contain "Disk space is low". 4. The notice's text should contain "1.6 GB remaining". 5. The element with data-testid "disk-notice-title" must have the attribute role exactly "status". 6. Call "dismissals": it must return exactly "none". 7. Click the element with data-testid "disk-notice-dismiss". 8. Call "dismissals" until it returns exactly "/api/resources/disk/dismiss episode 7". 9. There must then be exactly 0 elements with data-testid "disk-notice".`, func(s *shelley) {
+	e2e(t, useful(0), `Resource notices: shows disk status and dismisses the current episode. The page's live stream (/api/stream2) reports low disk space (episode 7, 1.6 GB available), and dismissing it is faked; call "dismissals" lists every dismiss request as "<path> episode <episode_id in its body>", one per line, or "none". Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "disk-notice" (the notice) should be visible (allow 30s). 3. The notice's text should contain "Disk space is low". 4. The notice's text should contain "1.6 GB remaining". 5. The element with data-testid "disk-notice-title" must have the attribute role exactly "status". 6. Call "dismissals": it must return exactly "none". 7. Click the element with data-testid "disk-notice-dismiss". 8. Call "dismissals" until it returns exactly "/api/resources/disk/dismiss episode 7". 9. There must then be exactly 0 elements with data-testid "disk-notice".`, func(s *shelley) {
 		st := s.resourceNotices(lowDisk)
 		s.resourceDismiss(func(string) resourceStatus {
 			dismissed := lowDisk.with(resourceStatus{"revision": 4, "dismissed": true})
@@ -129,20 +129,20 @@ func TestE2EResourceNoticeDiskDismissesEpisode(t *testing.T) {
 }
 
 func TestE2EResourceNoticeExeDevResizeLink(t *testing.T) {
-	e2e(t, `Resource notices link disk, not memory, to an exe.dev resize on exe.dev hosts. The page believes it runs on exe.dev as host myvm.exe.xyz, and its live stream (/api/stream2) reports both low disk space and high memory pressure. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "disk-notice-link" should have exactly the text "Resize this VM" (allow 30s). 3. Its href attribute must be exactly "https://exe.dev/suggest?command=resize%20myvm%20--disk%3D90GB". 4. The element with data-testid "memory-notice" should be visible. 5. There must be exactly 0 elements with data-testid "memory-notice-link".`, func(s *shelley) {
+	e2e(t, useful(0), `Resource notices link disk, not memory, to an exe.dev resize on exe.dev hosts. The page believes it runs on exe.dev as host myvm.exe.xyz, and its live stream (/api/stream2) reports both low disk space and high memory pressure. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "disk-notice-link" should have exactly the text "Resize this VM" (allow 30s). 3. Its href attribute must be exactly "https://exe.dev/suggest?command=resize%20myvm%20--disk%3D90GB". 4. The element with data-testid "memory-notice" should be visible. 5. There must be exactly 0 elements with data-testid "memory-notice-link".`, func(s *shelley) {
 		s.patchInit(map[string]any{"is_exe_dev": true, "hostname": "myvm.exe.xyz"})
 		s.resourceNotices(lowDisk, highMemory)
 	})
 }
 
 func TestE2EResourceNoticeCriticalDiskAlert(t *testing.T) {
-	e2e(t, `Resource notices announce critical disk status as an alert. The page's live stream (/api/stream2) reports critically low disk space. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "disk-notice" should be visible (allow 30s). 3. Its text should contain "Disk space is critically low". 4. The element with data-testid "disk-notice-title" must have the attribute role exactly "alert".`, func(s *shelley) {
+	e2e(t, useful(0), `Resource notices announce critical disk status as an alert. The page's live stream (/api/stream2) reports critically low disk space. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "disk-notice" should be visible (allow 30s). 3. Its text should contain "Disk space is critically low". 4. The element with data-testid "disk-notice-title" must have the attribute role exactly "alert".`, func(s *shelley) {
 		s.resourceNotices(lowDisk.with(resourceStatus{"critical": true, "available_bytes": 400_000_000}))
 	})
 }
 
 func TestE2EResourceNoticeMemoryBesideDisk(t *testing.T) {
-	e2e(t, `Resource notices show memory pressure beside disk and dismiss it alone. The page's live stream (/api/stream2) reports low disk space and high memory pressure (1.2 GB available, 41.7% stalled), and dismissing a notice is faked; call "dismissals" lists every dismiss request as "<path> episode <episode_id in its body>", one per line, or "none". Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "memory-notice" (the notice) should be visible (allow 30s). 3. The notice's text should contain "Memory pressure is high". 4. It should contain "1.2 GB available". 5. It should contain "42% stalled". 6. The element with data-testid "memory-notice-title" must have the attribute role exactly "status". 7. Call "dismissals": it must return exactly "none". 8. Click the element with data-testid "memory-notice-dismiss". 9. Call "dismissals" until it returns exactly "/api/resources/memory/dismiss episode 2". 10. There must then be exactly 0 elements with data-testid "memory-notice". 11. The element with data-testid "disk-notice" should still be visible.`, func(s *shelley) {
+	e2e(t, useful(0), `Resource notices show memory pressure beside disk and dismiss it alone. The page's live stream (/api/stream2) reports low disk space and high memory pressure (1.2 GB available, 41.7% stalled), and dismissing a notice is faked; call "dismissals" lists every dismiss request as "<path> episode <episode_id in its body>", one per line, or "none". Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "memory-notice" (the notice) should be visible (allow 30s). 3. The notice's text should contain "Memory pressure is high". 4. It should contain "1.2 GB available". 5. It should contain "42% stalled". 6. The element with data-testid "memory-notice-title" must have the attribute role exactly "status". 7. Call "dismissals": it must return exactly "none". 8. Click the element with data-testid "memory-notice-dismiss". 9. Call "dismissals" until it returns exactly "/api/resources/memory/dismiss episode 2". 10. There must then be exactly 0 elements with data-testid "memory-notice". 11. The element with data-testid "disk-notice" should still be visible.`, func(s *shelley) {
 		st := s.resourceNotices(lowDisk, highMemory)
 		s.resourceDismiss(func(kind string) resourceStatus {
 			dismissed := highMemory.with(resourceStatus{"revision": 6, "dismissed": true})
@@ -153,14 +153,14 @@ func TestE2EResourceNoticeMemoryBesideDisk(t *testing.T) {
 }
 
 func TestE2EResourceNoticeCriticalMemoryAlert(t *testing.T) {
-	e2e(t, `Resource notices announce critical memory pressure as an alert. The page's live stream (/api/stream2) reports critical memory pressure with 300 MB available. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "memory-notice" should be visible (allow 30s). 3. Its text should contain "Memory pressure is critical". 4. It should contain "300 MB available". 5. The element with data-testid "memory-notice-title" must have the attribute role exactly "alert".`, func(s *shelley) {
+	e2e(t, useful(0), `Resource notices announce critical memory pressure as an alert. The page's live stream (/api/stream2) reports critical memory pressure with 300 MB available. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "memory-notice" should be visible (allow 30s). 3. Its text should contain "Memory pressure is critical". 4. It should contain "300 MB available". 5. The element with data-testid "memory-notice-title" must have the attribute role exactly "alert".`, func(s *shelley) {
 		s.resourceNotices(highMemory.with(resourceStatus{"critical": true, "available_bytes": 300_000_000}))
 	})
 }
 
 // E.g. a restarted server whose memory monitor could not start.
 func TestE2EResourceNoticeDropsUnreportedKind(t *testing.T) {
-	e2e(t, `Resource notices drop a notice whose kind a reconnect no longer reports. The page's live stream (/api/stream2) reports low disk space and high memory pressure; each connection ends at once and the page reconnects about a second later. Call "drop memory" makes later connections report only the low disk space, as a restarted server whose memory monitor could not start would. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "memory-notice" should be visible (allow 30s). 3. Call "drop memory". 4. There should then be exactly 0 elements with data-testid "memory-notice" (allow 30s). 5. The element with data-testid "disk-notice" should be visible.`, func(s *shelley) {
+	e2e(t, useful(0), `Resource notices drop a notice whose kind a reconnect no longer reports. The page's live stream (/api/stream2) reports low disk space and high memory pressure; each connection ends at once and the page reconnects about a second later. Call "drop memory" makes later connections report only the low disk space, as a restarted server whose memory monitor could not start would. Perform the steps in order. 1. Navigate to /. 2. The element with data-testid "memory-notice" should be visible (allow 30s). 3. Call "drop memory". 4. There should then be exactly 0 elements with data-testid "memory-notice" (allow 30s). 5. The element with data-testid "disk-notice" should be visible.`, func(s *shelley) {
 		st := s.resourceNotices(lowDisk, highMemory)
 		s.call("drop memory", func() string {
 			st.set(lowDisk)
@@ -172,7 +172,7 @@ func TestE2EResourceNoticeDropsUnreportedKind(t *testing.T) {
 // Kernels without PSI report zero, as does memory that is short but not yet
 // contended.
 func TestE2EResourceNoticeOmitsZeroStall(t *testing.T) {
-	e2e(t, `Resource notices omit the stall share when nothing is stalled. The page's live stream (/api/stream2) reports high memory pressure with 1.2 GB available and a stall share of only 0.4%. Perform the steps in order. 1. Navigate to /. 2. The text of the element with data-testid "memory-notice" should contain "1.2 GB available" (allow 30s). 3. Its text must not contain "stalled".`, func(s *shelley) {
+	e2e(t, useful(0), `Resource notices omit the stall share when nothing is stalled. The page's live stream (/api/stream2) reports high memory pressure with 1.2 GB available and a stall share of only 0.4%. Perform the steps in order. 1. Navigate to /. 2. The text of the element with data-testid "memory-notice" should contain "1.2 GB available" (allow 30s). 3. Its text must not contain "stalled".`, func(s *shelley) {
 		s.resourceNotices(highMemory.with(resourceStatus{"stall_percent": 0.4}))
 	})
 }
