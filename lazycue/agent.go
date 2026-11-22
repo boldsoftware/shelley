@@ -67,6 +67,11 @@ type AgentResult struct {
 // read the test harness and the tests themselves instead of trying steps.
 const maxGitCommands = 12
 
+// wrapUpTurns is how many turns before the end of its budget the agent is
+// told to stop probing and submit its test. Left to it, an agent can spend
+// every turn checking one more detail and never submit the test it has.
+const wrapUpTurns = 5
+
 // anthropicCallTimeout bounds a single LLM HTTP request. http.DefaultClient has
 // no timeout, so without this a hung request could block a heal indefinitely
 // (until agentBudget, or formerly the package deadline).
@@ -242,7 +247,7 @@ WORKFLOW:
 4. Use screenshot to see what the page looks like if you're unsure about selectors or page state.
 5. Use git_command sparingly (at most ` + strconv.Itoa(maxGitCommands) + ` calls) to look up the app's own source: selectors, data-testid attributes, labels. Placeholders, window helpers and calls a description names come from the test, not the app: try them with run_steps (eval) instead of searching for them, and don't look for other tests or their cached scripts.
 6. Your FINAL call to run_steps must be the COMPLETE, passing test that exercises every part of the description. Submit it by setting "final": true on that run_steps call (exploratory probes must NOT set final). The harness caches exactly the steps from your final submission, so it must contain all the assertions — never submit a bare navigation/probe as final.
-7. Minimize the number of tool calls. Aim for 1-3 run_steps calls total.
+7. Minimize the number of tool calls. Aim for 1-3 run_steps calls total. You have at most ` + strconv.Itoa(agentTurns) + ` turns (replies); if none of them submits a passing final test, the test fails, so submit one as soon as you have checked what you were unsure of.
 
 CRITICAL: WHEN FIXING A FAILING TEST:
 - The test DESCRIPTION is the source of truth for what the application SHOULD do.
@@ -807,6 +812,18 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 			}
 		}
 
+		if left := agentTurns - turnsTaken; left > 0 && left <= wrapUpTurns && len(toolResults) > 0 {
+			// Inside the last tool result, not after it: a model that sees
+			// user text after tool results learns to end its turn and wait.
+			note := fmt.Sprintf(`%d of your %d turns left. Stop probing: your next run_steps must be the complete test, with "final": true (or, if the app is broken, say so).`, left, agentTurns)
+			last := &toolResults[len(toolResults)-1]
+			switch c := last.Content.(type) {
+			case string:
+				last.Content = c + "\n\n" + note
+			case []apiContentBlock:
+				last.Content = append(c, apiContentBlock{Type: "text", Text: note})
+			}
+		}
 		messages = append(messages, apiMessage{
 			Role:    "user",
 			Content: toolResults,

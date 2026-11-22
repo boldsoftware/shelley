@@ -181,6 +181,68 @@ func TestAgentGitCommandsAreCapped(t *testing.T) {
 	}
 }
 
+// An agent knows its turn budget, and is told to submit its test when only a
+// few turns are left, rather than probing until it runs out.
+func TestAgentIsToldWhenTurnsRunOut(t *testing.T) {
+	prev := agentTurns
+	agentTurns = wrapUpTurns + 3
+	t.Cleanup(func() { agentTurns = prev })
+	var system string
+	var seen []string // what the fake model saw last on each turn
+	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			System []struct {
+				Text string `json:"text"`
+			} `json:"system"`
+			Messages []struct {
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		system = req.System[0].Text
+		seen = append(seen, string(req.Messages[len(req.Messages)-1].Content))
+		fmt.Fprintf(w, `{"content":[{"type":"tool_use","id":"t%d","name":"git_command","input":{"command":"git rev-parse --is-inside-work-tree"}}],"stop_reason":"tool_use","usage":{}}`, len(seen))
+	}))
+	t.Cleanup(model.Close)
+	opts := Options{
+		CacheDir:         t.TempDir(),
+		AnthropicBaseURL: model.URL,
+		AnthropicAPIKey:  "test-key",
+		Setup:            func(context.Context) (*Env, error) { return &Env{BaseURL: "http://127.0.0.1:1"}, nil },
+	}
+	r, err := Run(context.Background(), opts, "Probe forever.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Pass || !strings.Contains(r.Error, "exhausted maximum turns") {
+		t.Fatalf("pass=%v error=%q, want the turns exhausted", r.Pass, r.Error)
+	}
+	if want := fmt.Sprintf("at most %d turns", agentTurns); !strings.Contains(system, want) {
+		t.Errorf("system prompt does not say %q", want)
+	}
+	if len(seen) < agentTurns {
+		t.Fatalf("%d turns, want %d", len(seen), agentTurns)
+	}
+	// seen[k] is what the model saw on turn k, after k turns were taken.
+	for k, s := range seen[:agentTurns] {
+		left := agentTurns - k
+		note := fmt.Sprintf("%d of your %d turns left", left, agentTurns)
+		if told := strings.Contains(s, "turns left"); told != (left <= wrapUpTurns) {
+			t.Errorf("turn %d (%d left): told=%v, want a note only in the last %d turns; saw %q", k, left, told, wrapUpTurns, s)
+		} else if told && !strings.Contains(s, note) {
+			t.Errorf("turn %d: want %q; saw %q", k, note, s)
+		}
+		// The note rides in the tool result: text after tool results
+		// teaches the model to end its turn and wait for more.
+		var blocks []struct {
+			Type string `json:"type"`
+		}
+		if k > 0 && (json.Unmarshal([]byte(s), &blocks) != nil || len(blocks) != 1 || blocks[0].Type != "tool_result") {
+			t.Errorf("turn %d: want only the tool result; saw %q", k, s)
+		}
+	}
+}
+
 func TestEnvKnobs(t *testing.T) {
 	t.Setenv("LAZYCUE_TEST_KNOB", "")
 	if got := envInt("LAZYCUE_TEST_KNOB", 25); got != 25 {
