@@ -1,0 +1,109 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Typing a period in the phone file filter must not navigate away from the picker. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Click the row titled \"foo.txt\" in \".diff-rethink-mobile-files\", then click \".diff-rethink-file-jump\". The dialog \"Choose file\" is visible. Fill its textbox \"Filter files\" with \"foo\", then focus that textbox and press the period key. Its value is \"foo.\"; the picker remains visible and has the row \"foo.txt\" but not \"fooXtxt\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title=\"foo.txt\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-file-jump"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Choose file"
+    },
+    {
+      "action": "fill",
+      "role": "textbox",
+      "name": "Filter files",
+      "value": "foo"
+    },
+    {
+      "action": "assert_value",
+      "role": "textbox",
+      "name": "Filter files",
+      "value": "foo"
+    },
+    {
+      "action": "click",
+      "role": "textbox",
+      "name": "Filter files"
+    },
+    {
+      "action": "press_key",
+      "key": "."
+    },
+    {
+      "action": "assert_value",
+      "role": "textbox",
+      "name": "Filter files",
+      "value": "foo."
+    },
+    {
+      "action": "assert_visible",
+      "role": "dialog",
+      "name": "Choose file"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[role=dialog]",
+      "has_text": "foo.txt"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[role=dialog]",
+      "has_text": "fooXtxt"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T02:40:46.619141035Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 82964,
+    "output_tokens": 2062,
+    "estimated_cost_usd": 0.09519345,
+    "mode": "generated"
+  }
+}

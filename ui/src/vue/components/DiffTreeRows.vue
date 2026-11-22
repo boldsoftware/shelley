@@ -12,7 +12,7 @@
     <button
       v-if="row.kind === 'dir'"
       type="button"
-      class="diff-tree-row"
+      :class="['diff-tree-row', { mobile }]"
       :style="{ paddingLeft: `calc(0.375rem + ${row.depth} * 0.85rem)` }"
       :title="row.label"
       role="treeitem"
@@ -27,14 +27,14 @@
       v-else
       type="button"
       :ref="(el) => setFileRef(el, row.isSelected)"
-      :class="`diff-tree-row${row.isSelected ? ' active' : ''}`"
+      :class="['diff-tree-row', { active: row.isSelected, mobile, 'diff-tree-code-row': mobile && row.isPath }]"
       :style="{ paddingLeft: `calc(0.375rem + ${row.depth} * 0.85rem)` }"
       :title="row.label"
       role="treeitem"
       :aria-selected="row.isSelected"
       @click="emit('select', row.realPath)"
     >
-      <span class="diff-tree-icon" v-html="FILE_ICON" />
+      <span class="diff-tree-icon" v-html="row.isPath || !mobile ? FILE_ICON : MESSAGE_ICON" />
       <PathText v-if="row.isPath" class="diff-tree-label" :text="row.label" :title="row.realPath" />
       <span v-else class="diff-tree-label">{{ row.label }}</span>
       <span v-if="row.decoration" class="diff-tree-decoration" :title="row.decorationTitle">{{
@@ -77,6 +77,7 @@ import type { RenderedRow } from "./diffFileTree";
 defineProps<{
   rows: RenderedRow[];
   selectedRealPath: string | null;
+  mobile?: boolean;
 }>();
 const emit = defineEmits<{
   (e: "select", realPath: string): void;
@@ -90,6 +91,8 @@ const CHEVRON_CLOSED =
   '<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5 3l5 5-5 5V3z" /></svg>';
 const FILE_ICON =
   '<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.2" d="M3.5 1.5h6l3 3v10h-9v-13z M9.5 1.5v3h3" /></svg>';
+const MESSAGE_ICON =
+  '<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" d="M2 2.5h12v8H8l-3.5 3v-3H2z" /></svg>';
 
 // Report the selected file row's element to the parent so it can keep it in
 // view. `:ref` fires per row on each render; we only care about the selected
@@ -110,3 +113,28 @@ function changesLabel(additions?: number, deletions?: number): string {
   return parts.join(", ");
 }
 </script>
+
+<style scoped>
+.diff-tree-row.mobile {
+  border-radius: 0;
+  font-size: 13px;
+}
+.diff-tree-row.mobile.active {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-secondary) 16%, transparent);
+}
+.diff-tree-row.mobile.diff-tree-code-row {
+  display: grid;
+  grid-template-columns: 0.85rem minmax(0, 1fr) repeat(4, auto);
+  column-gap: 0.35rem;
+  row-gap: 0;
+}
+.diff-tree-code-row .diff-tree-label { grid-column: 2; }
+.diff-tree-code-row .diff-tree-decoration { grid-column: 3; }
+.diff-tree-code-row .diff-tree-highlight-count { grid-column: 4; }
+.diff-tree-code-row .diff-tree-changes { grid-column: 5; }
+.diff-tree-code-row .diff-tree-status { grid-column: 6; }
+.diff-tree-code-row > * { grid-row: 1; }
+.diff-tree-row.mobile.active .diff-tree-changes-added { color: #288349; }
+.diff-tree-row.mobile.active .diff-tree-changes-deleted { color: #b83f58; }
+</style>

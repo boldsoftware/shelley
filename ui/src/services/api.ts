@@ -13,6 +13,7 @@ import {
   GitDiffInfo,
   GitFileInfo,
   GitFileDiff,
+  GitCommitMessage,
   VersionInfo,
   CommitInfo,
   ConversationSettings,
@@ -888,7 +889,7 @@ class ApiService {
     conversationId: string | undefined,
     from: string,
     to?: string,
-  ): Promise<{ hash: string; subject: string; body: string; author: string; isHead: boolean }[]> {
+  ): Promise<GitCommitMessage[]> {
     const params = machineParams(conversationId, { cwd, from });
     if (to) params.set("to", to);
     return apiJSON(`/api/git/commit-messages?${params}`, "Failed to get commit messages");

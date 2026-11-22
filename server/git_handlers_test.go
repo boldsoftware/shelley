@@ -1002,6 +1002,7 @@ func TestHandleGitDiffFiles_ToParam(t *testing.T) {
 	run("init")
 	run("config", "user.name", "Test")
 	run("config", "user.email", "test@example.com")
+	run("remote", "add", "origin", "git@github.com:example/repo.git")
 
 	write := func(name, content string) {
 		if err := os.WriteFile(filepath.Join(gitDir, name), []byte(content), 0o644); err != nil {
@@ -1093,6 +1094,9 @@ func TestHandleGitDiffFiles_ToParam(t *testing.T) {
 	}
 	if len(msgs) != 1 || msgs[0].Hash != c2 {
 		t.Errorf("commit-messages self: got %+v, want only %s", msgs, c2)
+	}
+	if len(msgs) == 1 && msgs[0].GitHubURL != "https://github.com/example/repo/commit/"+c2 {
+		t.Errorf("commit-messages GitHub URL: got %q", msgs[0].GitHubURL)
 	}
 
 	// commit-messages default: c1 from..HEAD includes c2, c3 + c1.

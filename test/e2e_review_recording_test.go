@@ -545,14 +545,40 @@ func TestE2EReviewRecordingCancel(t *testing.T) {
 }
 
 func TestE2EReviewRecordingMobileHeader(t *testing.T) {
-	e2e(t, useful(0), `Shows the live status in the mobile header. `+reviewTerms+reviewOpenDiffs+reviewCommitMessage+reviewContentTop+`Perform the steps in order.
+	e2e(t, useful(0), `Shows the live status in the mobile header. `+reviewTerms+reviewOpenDiffs+reviewContentTop+`Wait for the commit message heading ".diff-commit-message-content > h2" to read "Rename value20". Perform the steps in order.
 1. Navigate to /c/review and open the diffs (this phone hides the toolbar's buttons: click button[aria-label="More options"], then ".chat-overflow-popover button[aria-label^='Diffs']"). Remember where the content starts.
-2. Click the start button. where's text should be exactly "commit message {{SHORT}} (new 1)".
+2. Click the start button. where's text should be exactly "Commit {{SHORT}} message".
 3. The status should be visible inside ".diff-viewer-overlay .diff-viewer-header", and the content has not moved.
 4. The pickers are covered rather than squeezed, and cannot be reached: ".diff-viewer-overlay .diff-viewer-mobile-selectors" should have the inert attribute with value exactly "" (eval getAttribute("inert") === "", expect true).`, func(s *shelley) {
 		rv := newReview(s, true)
 		rv.conversation("review")
 		s.viewport(390, 844)
+	})
+}
+
+func TestE2EReviewRecordingMobileRangeContext(t *testing.T) {
+	e2e(t, useful(0), `A phone review recording of a compared commit range names both endpoints in its saved view. `+reviewTerms+reviewOpenDiffs+reviewSent+`Navigate to /c/review and open the diffs. Click ".commit-picker-trigger", then click the button named "Select range" in ".git-graph-toolbar-mobile". Click its row containing "Base", then the row containing "Rename value20". The ".diff-rethink-range-overview" should be visible. Click the start button; wait for the stop button to be visible. Click the stop button and wait until it is sent. Call "range view"; it must return exactly "Files · {{BASE}} Base → {{SHORT}} · commit message {{SHORT}}".`, func(s *shelley) {
+		rv := newReview(s, true)
+		rv.conversation("review")
+		rv.routeChats(func() int { return chatAccept })
+		s.v("BASE", s.gitIn(rv.repo, "rev-parse", "HEAD^")[:8])
+		s.viewport(390, 844)
+		s.call("range view", func() string {
+			chats, _, _ := rv.recorded()
+			if len(chats) != 1 {
+				return fmt.Sprintf("%d chat requests", len(chats))
+			}
+			review, err := readSentReview(chats[0])
+			if err != nil {
+				return err.Error()
+			}
+			for _, event := range review.Events {
+				if event["type"] == "view" {
+					return fmt.Sprint(event["where"])
+				}
+			}
+			return "no view event"
+		})
 	})
 }
 

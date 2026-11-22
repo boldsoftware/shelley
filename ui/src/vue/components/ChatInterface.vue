@@ -769,18 +769,12 @@
       :is-open="showGitGraph"
       :covered="showDiffViewer"
       :can-open-diff="true"
-      @close="
-        showGitGraph = false;
-        focusMessageInputIfUnfocused();
-      "
-      @open-diff="
-        (commit, cwd, file) => {
-          diffViewerInitialCommit = commit;
-          diffViewerInitialFile = file;
-          diffViewerCwd = cwd;
-          showDiffViewer = true;
-        }
-      "
+      :mobile-diff="isMobile"
+      :selection-from="diffViewerTransfer?.diff ?? diffViewerInitialCommit"
+      :selection-to="diffViewerTransfer?.to ?? diffViewerInitialTo"
+      @close="onGitGraphClose"
+      @clear-selection="clearDiffViewerSelection"
+      @open-diff="onGitGraphOpenDiff"
     />
 
     <!-- Image annotation view. Opened by clicking any image in the
@@ -802,13 +796,16 @@
     />
 
     <!-- Diff Viewer -->
-    <DiffViewer
+    <component
+      ref="diffViewerRef"
+      :is="isMobile ? MobileDiffViewer : DiffViewer"
       :cwd="(diffViewerCwd || currentConversation?.cwd || selectedCwd) as string"
       :conversation-id="conversationId ?? undefined"
       :on-vm="onVm"
       :is-open="showDiffViewer"
-      :initial-commit="diffViewerInitialCommit"
-      :initial-file="diffViewerInitialFile"
+      :initial-commit="diffViewerTransfer?.diff ?? diffViewerInitialCommit"
+      :initial-file="diffViewerTransfer?.file ?? diffViewerInitialFile"
+      :initial-to="diffViewerTransfer?.to ?? diffViewerInitialTo"
       :recording-conversation-id="
         currentConversation && !currentConversation.archived && !currentConversation.is_draft
           ? (conversationId ?? undefined)
@@ -817,8 +814,9 @@
       :start-review-conversation="startReviewConversation"
       :follow-review-conversation="followReviewConversation"
       @close="onDiffViewerClose"
-      @comment-text-change="(text) => (diffCommentText = text)"
-      @cwd-change="(cwd) => (diffViewerCwd = cwd)"
+      @open-git-graph="onOpenGitGraphFromDiff"
+      @comment-text-change="(text: string) => (diffCommentText = text)"
+      @cwd-change="(cwd: string) => (diffViewerCwd = cwd)"
     />
 
     <!-- AGENTS.md Editor Modal -->
@@ -1010,6 +1008,7 @@ import ProfilesModal from "./ProfilesModal.vue";
 import ToolsModal from "./ToolsModal.vue";
 import MessageSelectionToolbar from "./MessageSelectionToolbar.vue";
 import DiffViewer from "./DiffViewer.vue";
+import MobileDiffViewer from "./MobileDiffViewer.vue";
 import type { ReviewConversationStart } from "./useReviewRecording";
 import ImageCommentModal from "./ImageCommentModal.vue";
 import MarkdownDocModal from "./MarkdownDocModal.vue";
@@ -1784,9 +1783,14 @@ async function applyPickedCwd(path: string) {
 }
 const isMobile = ref(window.innerWidth < 768);
 const showDiffViewer = ref(false);
+type DiffViewerSelection = { diff: string | null; to: string; file: string | null };
+const diffViewerRef = ref<{ getSelection: () => DiffViewerSelection } | null>(null);
+const diffViewerTransfer = ref<DiffViewerSelection | null>(null);
 const showGitGraph = ref(false);
+const returnToDiffFromGraph = ref(false);
 const showAgentsMdEditor = ref(false);
 const diffViewerInitialCommit = ref<string | undefined>(undefined);
+const diffViewerInitialTo = ref<string | undefined>(undefined);
 const diffViewerCwd = ref<string | undefined>(undefined);
 const diffViewerInitialFile = ref<string | undefined>(undefined);
 const diffCommentText = ref("");
@@ -4884,12 +4888,53 @@ function onTerminalCloseHandler(id: string) {
   }
 }
 
+function clearDiffViewerSelection() {
+  diffViewerTransfer.value = null;
+  diffViewerInitialCommit.value = undefined;
+  diffViewerInitialTo.value = undefined;
+  diffViewerInitialFile.value = undefined;
+}
+
 function onDiffViewerClose() {
   showDiffViewer.value = false;
-  diffViewerInitialCommit.value = undefined;
-  diffViewerInitialFile.value = undefined;
+  if (isMobile.value && showGitGraph.value) {
+    const selection = diffViewerRef.value?.getSelection();
+    if (selection?.diff) diffViewerTransfer.value = selection;
+    return;
+  }
+  clearDiffViewerSelection();
   diffViewerCwd.value = undefined;
   if (!showGitGraph.value) focusMessageInputIfUnfocused();
+}
+
+function onOpenGitGraphFromDiff() {
+  showGitGraph.value = true;
+  returnToDiffFromGraph.value = true;
+  onDiffViewerClose();
+}
+
+function onGitGraphOpenDiff(commit: string, cwd: string, file?: string, to?: string) {
+  returnToDiffFromGraph.value = false;
+  clearDiffViewerSelection();
+  diffViewerInitialCommit.value = commit;
+  diffViewerInitialTo.value = to ?? (commit === "working" ? "working" : "self");
+  diffViewerInitialFile.value = file;
+  diffViewerCwd.value = cwd;
+  showDiffViewer.value = true;
+}
+
+function onGitGraphClose() {
+  showGitGraph.value = false;
+  if (returnToDiffFromGraph.value) {
+    returnToDiffFromGraph.value = false;
+    showDiffViewer.value = true;
+  } else {
+    if (isMobile.value) {
+      clearDiffViewerSelection();
+      diffViewerCwd.value = undefined;
+    }
+    focusMessageInputIfUnfocused();
+  }
 }
 
 // Loading bar fill class/style mirror the React conditional.
@@ -5166,7 +5211,13 @@ watch(
 
 // Mobile media query.
 const mobileMq = window.matchMedia("(max-width: 767px)");
-const onMobileChange = (e: MediaQueryListEvent) => (isMobile.value = e.matches);
+const onMobileChange = (e: MediaQueryListEvent) => {
+  if (showDiffViewer.value && diffViewerRef.value) {
+    const selection = diffViewerRef.value.getSelection();
+    if (selection.diff) diffViewerTransfer.value = selection;
+  }
+  isMobile.value = e.matches;
+};
 mobileMq.addEventListener("change", onMobileChange);
 
 // Favicon working indicator; workspace mode's (App.vue) covers every task.

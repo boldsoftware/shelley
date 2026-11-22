@@ -1,0 +1,64 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a phone, navigate to /c/diff-fixture, a conversation in a repository with working-tree changes. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). Wait for the diff viewer (\".diff-viewer-overlay\"). Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Wait for the four file rows in \".diff-viewer-overlay .diff-rethink-mobile-files.is-overview .diff-tree-code-row\". For each row, read \".diff-tree-status\" aria-label and the trimmed \".diff-tree-label\" text. In an eval with expect, join each status and filename with a space, sort the entries and join with \"|\"; expect exactly \"Added untracked_added.txt|Deleted tracked_del.txt|Modified spaced name.txt|Modified tracked_mod.txt\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/diff-fixture"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-container .git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .diff-rethink-mobile-files.is-overview .diff-tree-code-row"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay .diff-rethink-mobile-files.is-overview .diff-tree-code-row",
+      "count": 4
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const rows = Array.from(document.querySelectorAll('.diff-viewer-overlay .diff-rethink-mobile-files.is-overview .diff-tree-code-row')); const entries = rows.map(row =\u003e { const status = row.querySelector('.diff-tree-status'); const label = row.querySelector('.diff-tree-label'); return (status ? status.getAttribute('aria-label') : '') + ' ' + (label ? label.textContent.trim() : ''); }); return entries.sort().join('|'); })()",
+      "expect": "Added untracked_added.txt|Deleted tracked_del.txt|Modified spaced name.txt|Modified tracked_mod.txt"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T04:33:38.30595099Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 60150,
+    "output_tokens": 1778,
+    "estimated_cost_usd": 0.05667359999999999,
+    "mode": "generated"
+  }
+}

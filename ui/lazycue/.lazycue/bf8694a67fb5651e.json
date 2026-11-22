@@ -1,0 +1,123 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A long mobile commit body hides its links until expanded. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. The \".diff-commit-message\" has a visible \"Show more\" button and no \".diff-commit-message-links\" element. Click \"Show more\". The body contains \"FINAL BODY MARKER\", \"Show less\" is visible, and \".diff-commit-message-links\" has a link \"Open on GitHub\" with href \"https://github.com/example/mobile-preview/commit/{{HASH}}\" and a button \"Open raw commit\". Verify with eval expecting true that the body precedes the links in document order. Click \"Show less\"; the links are absent again. Click \"Show more\", then \"Open raw commit\". The button \"View rendered\" is visible and the rendered \".diff-commit-message\" is absent. Click \"View rendered\"; the heading \"Long mobile message\" is visible again.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-commit-message .diff-commit-message-expand",
+      "has_text": "Show more"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-commit-message-links"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-commit-message .diff-commit-message-expand",
+      "has_text": "Show more"
+    },
+    {
+      "action": "wait_text",
+      "text": "FINAL BODY MARKER"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-commit-message .diff-commit-message-expand",
+      "has_text": "Show less"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-commit-message-links"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-commit-message-links a",
+      "has_text": "Open on GitHub",
+      "attribute": "href",
+      "value": "https://github.com/example/mobile-preview/commit/{{HASH}}"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-commit-message-links button",
+      "has_text": "Open raw commit"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const body = document.querySelector('.diff-commit-message-body'); const links = document.querySelector('.diff-commit-message-links'); if (!body || !links) return false; return !!(body.compareDocumentPosition(links) \u0026 Node.DOCUMENT_POSITION_FOLLOWING); })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-commit-message .diff-commit-message-expand",
+      "has_text": "Show less"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-commit-message-links"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-commit-message .diff-commit-message-expand",
+      "has_text": "Show more"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-commit-message-links"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-commit-message-links button",
+      "has_text": "Open raw commit"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "View rendered"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-commit-message"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-rethink-raw-toggle').click()"
+    },
+    {
+      "action": "wait_visible",
+      "role": "heading",
+      "name": "Long mobile message"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T02:18:52.599533575Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 367072,
+    "output_tokens": 8535,
+    "estimated_cost_usd": 0.3330783,
+    "mode": "generated"
+  }
+}

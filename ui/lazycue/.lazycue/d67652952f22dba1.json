@@ -1,0 +1,177 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A compare range is one navigation stop and shows its net changes. The graph rows for commits {{FIRST}} and {{LAST}} are identified by their seven-character hashes. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".commit-picker-trigger\". In \".git-graph-container\" click \"Select range\". The row containing \"Working changes\" has aria-disabled=\"true\" before a starting commit is selected. Click the row containing {{LAST}}, then the row containing {{FIRST}}. The \".diff-rethink-range-overview\" has heading \"2 commits\", exactly two details elements, none open. Click the last details' summary; heading \"Notes\" appears. Click that summary again. The overview has treeitem \"b.txt\" and no treeitem \"a.txt\" (net diff). Click the button \"Next file\"; \".diff-rethink-file-name\" reads \"b.txt\". Click \"Previous commit\"; the range overview is visible again. Click \"Show range in graph\". The row for {{FIRST}} has class \"git-graph-row-range-from\" and {{LAST}} has class \"git-graph-row-range-to\". Click \"Select range\", then row {{FIRST}}, then \"Working changes\". The overview heading reads \"2 commits\" and its \"Show range in graph\" button contains \"working\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label^=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select range"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".git-graph-container .git-graph-row",
+      "has_text": "Working changes",
+      "attribute": "aria-disabled",
+      "value": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-container .git-graph-row",
+      "has_text": "{{LAST}}"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-container .git-graph-row",
+      "has_text": "{{FIRST}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-range-overview"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-rethink-range-overview",
+      "text": "2 commits"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-rethink-range-overview details",
+      "count": 2
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-rethink-range-overview details[open]",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-range-overview details:last-of-type \u003e summary"
+    },
+    {
+      "action": "wait_visible",
+      "role": "heading",
+      "name": "Notes"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-range-overview details:last-of-type \u003e summary"
+    },
+    {
+      "action": "wait_hidden",
+      "role": "heading",
+      "name": "Notes"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-rethink-range-overview [role=treeitem]",
+      "has_text": "b.txt"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-rethink-range-overview [role=treeitem]",
+      "has_text": "a.txt"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Next file"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "b.txt"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Previous commit"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-range-overview"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Show range in graph"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".git-graph-container .git-graph-row-range-from",
+      "has_text": "{{FIRST}}"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".git-graph-container .git-graph-row-range-to",
+      "has_text": "{{LAST}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select range"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-container .git-graph-row",
+      "has_text": "{{FIRST}}"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-container .git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-range-overview"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-rethink-range-overview",
+      "text": "2 commits"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-rethink-range-link",
+      "text": "working"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T12:56:49.934891246Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 344770,
+    "output_tokens": 9895,
+    "estimated_cost_usd": 0.31518765,
+    "mode": "generated"
+  }
+}

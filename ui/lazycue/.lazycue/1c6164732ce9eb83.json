@@ -1,0 +1,82 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A pure deletion after a wrapped last line appears at the correct place in the phone overview ruler, not inside that surviving line. Use waits, never sleeps. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Click the row titled \"tail.txt\" in \".diff-rethink-mobile-files\". Wait for one \".diff-rethink-deletion-overview-mark\" and its \".inline-deleted-margin-view-zone\". Evaluate expecting true: the margin zone contains at least 16 direct \".delete-sign\" children, is visible with an offsetHeight of at least 250px and a style.top over 100px (the surviving line wraps), and the red marker has at least 4px height. Its offsetTop differs by at most 2px from that zone's own style.top multiplied by the marker's offsetHeight divided by the zone's offsetHeight.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label='More options']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label^='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title='tail.txt']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-deletion-overview-mark",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".inline-deleted-margin-view-zone",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const zone = document.querySelector('.inline-deleted-margin-view-zone'); const mark = document.querySelector('.diff-rethink-deletion-overview-mark'); if (!zone || !mark) return false; const signs = zone.querySelectorAll(':scope \u003e .delete-sign').length; const zoneHeight = zone.offsetHeight; const zoneTop = parseFloat(zone.style.top); const markHeight = mark.offsetHeight; const markTop = mark.offsetTop; const topDiff = Math.abs(markTop - zoneTop * markHeight / zoneHeight); return signs \u003e= 16 \u0026\u0026 zone.offsetHeight \u003e 0 \u0026\u0026 zoneHeight \u003e= 250 \u0026\u0026 zoneTop \u003e 100 \u0026\u0026 markHeight \u003e= 4 \u0026\u0026 topDiff \u003c= 2; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T12:58:47.826401507Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 99338,
+    "output_tokens": 2310,
+    "estimated_cost_usd": 0.0876168,
+    "mode": "generated"
+  }
+}

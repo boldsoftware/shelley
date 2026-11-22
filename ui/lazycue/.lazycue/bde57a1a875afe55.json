@@ -1,0 +1,139 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a phone, selecting rendered commit text offers a selection comment and adds its quote to the chat draft. window.selectTextIn(selector, text) selects text within an element. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. The heading \".diff-commit-message-content h2\" reads \"Polish mobile preview\". Eval window.selectTextIn('.diff-commit-message-content h2', 'mobile preview'). The button \"Comment selection\" becomes visible. Click it. The \".diff-viewer-comment-dialog\" is visible and its \".diff-viewer-selected-text\" reads \"mobile preview\". Fill \".diff-viewer-comment-input\" with \"Please clarify\" and press the comma and period keys while the input is focused; its value is \"Please clarify,.\". Click the dialog's \"Add Comment\" button. The dialog disappears. The value of [data-testid=\"message-input\"] contains \"\u003e mobile preview\" and \"Please clarify,.\", but does not contain \"\u003e Polish mobile preview\". Before making the second selection, wait for [data-testid=\"message-input\"]:focus to match and be visible, without focusing it manually: the app's deferred composer focus can clear a selection made before it runs. Select \"body excerpt\" in \".diff-commit-message-body\" with window.selectTextIn; \"Comment selection\" becomes visible. Click it and verify the dialog's selected text reads \"body excerpt\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label^='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-commit-message-content h2",
+      "text": "Polish mobile preview"
+    },
+    {
+      "action": "eval",
+      "expression": "window.selectTextIn('.diff-commit-message-content h2', 'mobile preview')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button",
+      "has_text": "Comment selection"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Comment selection"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-dialog"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-viewer-comment-dialog .diff-viewer-selected-text",
+      "text": "mobile preview"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-viewer-comment-input",
+      "value": "Please clarify"
+    },
+    {
+      "action": "press_key",
+      "key": ","
+    },
+    {
+      "action": "press_key",
+      "key": "."
+    },
+    {
+      "action": "assert_value",
+      "selector": ".diff-viewer-comment-input",
+      "value": "Please clarify,."
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-comment-dialog",
+      "role": "button",
+      "name": "Add Comment"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-comment-dialog"
+    },
+    {
+      "action": "assert_focused",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('\u003e mobile preview')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('Please clarify,.')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('\u003e Polish mobile preview')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "window.selectTextIn('.diff-commit-message-body', 'body excerpt')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button",
+      "has_text": "Comment selection"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Comment selection"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-dialog"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-viewer-comment-dialog .diff-viewer-selected-text",
+      "text": "body excerpt"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T05:02:20.056478854Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 190735,
+    "output_tokens": 5089,
+    "estimated_cost_usd": 0.18677505,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a phone, three separated edits in hunks.txt are three navigation stops. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". In \".diff-rethink-mobile-files\", the row with title \"hunks.txt\" has its added and deleted counts on the same horizontal line: their bounding-box y values differ by less than 2 pixels (eval with expect true). Click that row. \".diff-rethink-file-name\" should read \"hunks.txt\" and \".diff-rethink-file-position\" should contain \"File 1 of 1\". The bottom \".diff-rethink-bottom-change-label\" should read \"Change 1 of 3\"; the button \"Previous hunk (,)\" must not exist. Click \"Next hunk (.)\": label is \"Change 2 of 3\". Click it again: label is \"Change 3 of 3\" and the button \"Next hunk (.)\" must not exist. Click \"Previous hunk (,)\": label is \"Change 2 of 3\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-container .git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const rows = document.querySelectorAll('.diff-rethink-mobile-files [title=\"hunks.txt\"]'); if (!rows.length) return 'no row found'; const row = rows[0].closest('[class]'); const added = row.querySelector('.diff-added-count') || row.querySelector('[class*=\"added\"]'); const deleted = row.querySelector('.diff-deleted-count') || row.querySelector('[class*=\"deleted\"]'); if (!added || !deleted) return 'counts not found: ' + row.innerHTML.substring(0, 200); const ar = added.getBoundingClientRect(); const dr = deleted.getBoundingClientRect(); return Math.abs(ar.y - dr.y) \u003c 2; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title=\"hunks.txt\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "hunks.txt"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-rethink-file-position",
+      "text": "File 1 of 1"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 1 of 3"
+    },
+    {
+      "action": "assert_not_visible",
+      "role": "button",
+      "name": "Previous hunk (,)"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Next hunk (.)"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 2 of 3"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Next hunk (.)"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 3 of 3"
+    },
+    {
+      "action": "assert_not_visible",
+      "role": "button",
+      "name": "Next hunk (.)"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Previous hunk (,)"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 2 of 3"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T08:33:38.899918205Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 85026,
+    "output_tokens": 2710,
+    "estimated_cost_usd": 0.08410065,
+    "mode": "generated"
+  }
+}

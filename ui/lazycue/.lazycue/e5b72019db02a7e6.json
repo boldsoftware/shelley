@@ -1,0 +1,70 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Shows the live status in the mobile header. In the diff viewer (\".diff-viewer-overlay\"), \"the start button\" is data-testid \"review-record-start\", \"the stop button\" data-testid \"review-record-stop\", \"the cancel button\" data-testid \"review-record-cancel\", \"the status\" data-testid \"review-recording-status\", \"where\" data-testid \"review-recording-where\" (its textContent joins its crumbs with no separator) and \"said\" data-testid \"review-recording-said\"; \"the tooltip\" is \".p-tooltip\". \"Open the diffs\" means: wait (up to 30s) for the message input (data-testid \"message-input\") to be visible, click the \"Diffs\" button in \".chat-workspace-actions\" (if it is not visible, as on a phone, click the button \"More options\" instead and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"), and wait for the commit message. \"Remember where the content starts\" means an eval with no expectation that sets window.__contentTop = document.querySelector(\".diff-viewer-overlay .diff-viewer-content\").getBoundingClientRect().y; \"the content has not moved\" means eval document.querySelector(\".diff-viewer-overlay .diff-viewer-content\").getBoundingClientRect().y === window.__contentTop is true. Wait for the commit message heading \".diff-commit-message-content \u003e h2\" to read \"Rename value20\". Perform the steps in order.\n1. Navigate to /c/review and open the diffs (this phone hides the toolbar's buttons: click button[aria-label=\"More options\"], then \".chat-overflow-popover button[aria-label^='Diffs']\"). Remember where the content starts.\n2. Click the start button. where's text should be exactly \"Commit {{SHORT}} message\".\n3. The status should be visible inside \".diff-viewer-overlay .diff-viewer-header\", and the content has not moved.\n4. The pickers are covered rather than squeezed, and cannot be reached: \".diff-viewer-overlay .diff-viewer-mobile-selectors\" should have the inert attribute with value exactly \"\" (eval getAttribute(\"inert\") === \"\", expect true).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/review"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='More options']"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover button[aria-label^='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-commit-message-content \u003e h2",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_text",
+      "text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__contentTop = document.querySelector('.diff-viewer-overlay .diff-viewer-content').getBoundingClientRect().y"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid='review-recording-where']",
+      "text": "Commit {{SHORT}} message"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-viewer-overlay .diff-viewer-header [data-testid='review-recording-status']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-viewer-overlay .diff-viewer-content').getBoundingClientRect().y === window.__contentTop",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-viewer-overlay .diff-viewer-mobile-selectors').getAttribute('inert') === ''",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T03:44:21.07006603Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 89637,
+    "output_tokens": 1667,
+    "estimated_cost_usd": 0.07141215,
+    "mode": "generated"
+  }
+}

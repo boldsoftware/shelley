@@ -1,0 +1,103 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a phone, selecting the only changed file again must not offer a next arrow when it has one change. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Click the row titled \"only.txt\" in \".diff-rethink-mobile-files\". Wait until \".diff-rethink-bottom-change-label\" reads \"Change 1 of 1\" AND there is no \".diff-rethink-next-change\" button (the editor has finished loading). Click \".diff-rethink-file-jump\" to open the file picker, then click its row titled \"only.txt\" again. The picker closes, \".diff-rethink-file-position\" reads \"File 1 of 1\", the bottom still reads \"Change 1 of 1\", and there must still be no \".diff-rethink-next-change\" button.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-menu-wrapper"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options",
+      "within": {
+        "selector": ".chat-overflow-menu-wrapper"
+      }
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title=\"only.txt\"]"
+    },
+    {
+      "action": "wait_text",
+      "text": "Change 1 of 1"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-rethink-next-change"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-file-jump"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title=\"only.txt\"]"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-rethink-mobile-files"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-rethink-file-position",
+      "text": "File 1 of 1"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 1 of 1"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-rethink-next-change"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T02:18:30.539533902Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 264477,
+    "output_tokens": 4596,
+    "estimated_cost_usd": 0.18397949999999996,
+    "mode": "generated"
+  }
+}

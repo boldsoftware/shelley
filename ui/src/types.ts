@@ -414,6 +414,7 @@ export interface GitCommitMessage {
   body: string;
   author: string;
   isHead: boolean;
+  githubUrl?: string;
 }
 
 // Conversation list patch stream payload.

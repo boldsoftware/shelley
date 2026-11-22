@@ -1,10 +1,4 @@
-<!-- Vue port of components/CommitPicker.tsx. Single-select popover over commit
-     history. Preserves the commit-picker-* class contract and all aria text:
-     trigger aria-label "Commit", dialog aria-label "Choose commit", the
-     modal-header "Choose commit"/"Commits"/"Commit details" text where
-     present, the RangeToggle's "Diff range"/"Branch scope" arias, and
-     aria-haspopup="dialog". Closes on outside click / Escape (capture +
-     stopImmediatePropagation so Escape closes only the picker). -->
+<!-- Mobile opens the Git Graph; desktop keeps the commit popover. -->
 <template>
   <div class="commit-picker">
     <button
@@ -14,7 +8,7 @@
       aria-haspopup="dialog"
       :aria-expanded="open"
       aria-label="Commit"
-      @click="open = !open"
+      @click="togglePicker"
     >
       <div class="commit-picker-trigger-text">
         <div class="commit-picker-trigger-primary">
@@ -23,31 +17,6 @@
       </div>
       <span class="commit-picker-trigger-chevron" aria-hidden="true">{{ "\u25be" }}</span>
     </button>
-
-    <!-- Mobile modal -->
-    <div v-if="open && isMobile" class="commit-picker-modal-backdrop" @click="open = false">
-      <div
-        ref="popoverRef"
-        class="commit-picker-modal"
-        role="dialog"
-        aria-label="Choose commit"
-        @click.stop
-      >
-        <div class="commit-picker-modal-header">
-          <span>Choose commit</span>
-          <button
-            type="button"
-            class="commit-picker-modal-close"
-            aria-label="Close"
-            @click="open = false"
-          >
-            {{ "\u00d7" }}
-          </button>
-        </div>
-        <component :is="statusLine" />
-        <component :is="list" />
-      </div>
-    </div>
 
     <!-- Desktop popover -->
     <div
@@ -72,12 +41,14 @@ import RangeToggle from "./RangeToggle.vue";
 const props = defineProps<{
   diffs: GitDiffInfo[];
   selectedDiff: string | null;
-  selectedTo: "working" | "self";
+  selectedTo: string;
+  rangeHashes: Set<string>;
   isMobile: boolean;
 }>();
 const emit = defineEmits<{
-  (e: "change", selectedDiff: string, selectedTo: "working" | "self"): void;
+  (e: "change", selectedDiff: string, selectedTo: string): void;
   (e: "open"): void;
+  (e: "open-graph"): void;
 }>();
 
 const open = ref(false);
@@ -103,7 +74,7 @@ function commitLabel(diffs: GitDiffInfo[], id: string, maxLen = 40): string {
 function rangeSyntax(
   diffs: GitDiffInfo[],
   selectedDiff: string | null,
-  selectedTo: "working" | "self",
+  selectedTo: string,
 ): string {
   if (!selectedDiff) return "Choose\u2026";
   if (selectedDiff === "working") {
@@ -112,6 +83,7 @@ function rangeSyntax(
   }
   const from = commitLabel(diffs, selectedDiff);
   if (selectedTo === "self") return `${from} (Single Commit)`;
+  if (selectedTo !== "working") return `${shortHash(selectedDiff)} \u2192 ${shortHash(selectedTo)}`;
   return `${from} \u2192 Now`;
 }
 
@@ -130,7 +102,9 @@ function rowInRange(idx: number): boolean {
   if (props.selectedDiff === "working") return false;
   if (fromIdx.value < 0) return false;
   if (props.selectedTo === "self") return idx === fromIdx.value;
-  return idx <= fromIdx.value;
+  if (props.selectedTo === "working") return idx <= fromIdx.value;
+  const commit = commitDiffs.value[idx];
+  return !!commit && props.rangeHashes.has(commit.id);
 }
 
 const workingInRange = computed(
@@ -146,6 +120,10 @@ function pickCommit(id: string) {
 function pickWorking() {
   emit("change", "working", "working");
   open.value = false;
+}
+function togglePicker() {
+  if (props.isMobile) emit("open-graph");
+  else open.value = !open.value;
 }
 
 const triggerPrimary = computed(() =>

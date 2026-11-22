@@ -114,9 +114,9 @@ func TestE2ECommitHighlightsCalloutsKeepSpace(t *testing.T) {
 }
 
 func TestE2ECommitHighlightsPhoneFilePicker(t *testing.T) {
-	e2e(t, useful(0), `A phone's diff file picker follows the ranked order. `+commitHighlightsOpen+`3. "The picker" is the VISIBLE select element matching ".diff-viewer-file-selector-wrapper select" in the overlay; "the options" are its option elements. There are exactly 5 options: a placeholder, the commit message, then the ranked files.
-4. In one eval with expect "true" testing each option's raw textContent: the third option matches / src\/zeta\.ts .*★1$/, the fourth matches / README\.md .*★1$/ and the fifth matches / src\/alpha\.ts /.
-5. The narrow diff is inline; the comment still shows under its line: select the option with value "src/zeta.ts" in the picker. "The callout" is the overlay's ".diff-highlight-callout-text": it has exactly the text "The one line that matters." and is in the viewport.
+	e2e(t, useful(0), `A phone's diff file picker follows the ranked order. `+commitHighlightsOpen+`3. Click the first ".diff-rethink-message-files .diff-tree-code-row" in the overlay, then click ".diff-rethink-file-jump" to open the file picker.
+4. The labels of ".diff-rethink-mobile-files .diff-tree-code-row[aria-selected]" are in order "zeta.ts", "README.md", "alpha.ts". Click the first row; ".diff-rethink-file-name" reads "zeta.ts", and ".diff-rethink-file-position" contains "File 1 of 3".
+5. The narrow diff is inline; the comment still shows under its line: "the callout" is the overlay's ".diff-highlight-callout-text": it has exactly the text "The one line that matters." and is in the viewport.
 6. A tap on the callout's button opens the comment dialog, though Monaco claims touches inside the editor: tap (touch start, then touch end) the button with role "button" and name "Comment" inside the overlay's element with role "note". The ".diff-viewer-comment-dialog" text then contains "Add Comment (Line 160, new)".`, func(s *shelley) {
 		s.viewport(390, 844)
 		s.commitHighlightsRepo("header")

@@ -1,0 +1,108 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A working text file on a phone is review-only. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Click the row titled \"only.txt\" in \".diff-rethink-mobile-files\" and wait for the modified Monaco editor to show \"after\". There is no button named \"Edit\" in the viewer. Evaluate that \".diff-viewer-rethink .editor.modified textarea.inputarea\" has readOnly === true and tabIndex === -1. Tap the \"after\" line in the modified editor; the Comment dialog opens with quoted text \"after\". Close it without submitting. Call \"working-file-content\" and confirm it still returns \"after\\n\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-menu-wrapper"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title='only.txt']"
+    },
+    {
+      "action": "wait_text",
+      "text": "after",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-viewer-overlay",
+      "role": "button",
+      "name": "Edit"
+    },
+    {
+      "action": "eval",
+      "expression": "const el = document.querySelector('.diff-viewer-rethink .editor.modified textarea.inputarea'); el ? JSON.stringify({readOnly: el.readOnly, tabIndex: el.tabIndex}) : 'NOT FOUND'",
+      "expect": "{\"readOnly\":true,\"tabIndex\":-1}"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-rethink .editor.modified .view-line",
+      "has_text": "after"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-dialog",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-viewer-comment-dialog .diff-viewer-selected-text",
+      "text": "after"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Cancel"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-comment-dialog",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "working-file-content",
+      "expect": "after\n"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T02:48:38.422778639Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 523781,
+    "output_tokens": 8608,
+    "estimated_cost_usd": 0.37183275000000005,
+    "mode": "generated"
+  }
+}

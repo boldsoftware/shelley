@@ -1,0 +1,98 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A phone review recording of a compared commit range names both endpoints in its saved view. In the diff viewer (\".diff-viewer-overlay\"), \"the start button\" is data-testid \"review-record-start\", \"the stop button\" data-testid \"review-record-stop\", \"the cancel button\" data-testid \"review-record-cancel\", \"the status\" data-testid \"review-recording-status\", \"where\" data-testid \"review-recording-where\" (its textContent joins its crumbs with no separator) and \"said\" data-testid \"review-recording-said\"; \"the tooltip\" is \".p-tooltip\". \"Open the diffs\" means: wait (up to 30s) for the message input (data-testid \"message-input\") to be visible, click the \"Diffs\" button in \".chat-workspace-actions\" (if it is not visible, as on a phone, click the button \"More options\" instead and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"), and wait for the commit message. \"It is sent\" means data-testid \"review-recording-sent\" becomes visible (wait up to 30s: sending takes several requests). Navigate to /c/review and open the diffs. Click \".commit-picker-trigger\", then click the button named \"Select range\" in \".git-graph-toolbar-mobile\". Click its row containing \"Base\", then the row containing \"Rename value20\". The \".diff-rethink-range-overview\" should be visible. Click the start button; wait for the stop button to be visible. Click the stop button and wait until it is sent. Call \"range view\"; it must return exactly \"Files · {{BASE}} Base → {{SHORT}} · commit message {{SHORT}}\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/review"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Diffs",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      }
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-toolbar-mobile",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Select range",
+      "within": {
+        "selector": ".git-graph-toolbar-mobile"
+      }
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Base"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Rename value20"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-range-overview",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-start']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-record-stop']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='review-record-stop']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='review-recording-sent']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "range view",
+      "expect": "Files · {{BASE}} Base → {{SHORT}} · commit message {{SHORT}}"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T12:45:34.225994033Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 317846,
+    "output_tokens": 5011,
+    "estimated_cost_usd": 0.23477459999999997,
+    "mode": "generated"
+  }
+}

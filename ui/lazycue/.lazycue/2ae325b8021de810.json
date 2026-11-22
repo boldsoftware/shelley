@@ -1,0 +1,101 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "An unsaved desktop edit survives resizing to the review-only phone viewer. Navigate to /c/{{SLUG}} at 1280x900. Open Diffs: click the button with aria-label exactly \"Diffs\" in the header's workspace toolbar (\".chat-workspace-actions\"). Choose Working changes from the commit picker and select \"only.txt\" in the file tree or selector. Wait for its modified Monaco editor to show \"after\". Click \"Edit mode\", type \"resize-kept\" into the modified file, and immediately resize to 390x844 before its one-second autosave. The mobile viewer has no Edit button. Call \"working-file-content\" until the file on disk contains \"resize-kept\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 900,
+      "scale": 1,
+      "mobile": false,
+      "touch": false
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-workspace-actions"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions button[aria-label='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".commit-picker-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".commit-picker-row-working button"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".commit-picker-popover"
+    },
+    {
+      "action": "fill",
+      "selector": "select.diff-viewer-select",
+      "value": "only.txt"
+    },
+    {
+      "action": "wait_text",
+      "text": "after",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "button[aria-label='Edit mode']"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-editor .monaco-editor",
+      "nth": 1
+    },
+    {
+      "action": "press_key",
+      "key": "End"
+    },
+    {
+      "action": "type",
+      "value": "resize-kept"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 844,
+      "scale": 2,
+      "mobile": true,
+      "touch": true
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "button[aria-label='Edit mode']"
+    },
+    {
+      "action": "call",
+      "value": "working-file-content",
+      "expect": "after\nresize-kept",
+      "timeout": "30s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T02:44:37.418257115Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 411049,
+    "output_tokens": 7160,
+    "estimated_cost_usd": 0.3050925,
+    "mode": "generated"
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The conversation /c/{{SLUG}} runs in a git repository with uncommitted changes: image.png (a 16x16 PNG, changed), tone.mp3 (an MP3, changed), opaque.bin (binary bytes 00 01 ff, now 00 02 ff), added.bin (a new binary file), deleted.bin (a deleted binary file) and text.dat (a text file whose line \"before\" became \"after\"). \"The file select\" is the overlay's \"select.diff-viewer-select\" (pick a file by filling it with the file's name as the option value); \"the panel\" is the element with data-testid \"binary-file-panel\" in the overlay. Perform the steps in order. Images and audio have native previews without download links. 1. Navigate to /c/{{SLUG}}. 2. Open the Diffs tool: click the button with aria-label exactly \"Diffs\" in the header's workspace toolbar (\".chat-workspace-actions\"). 3. The overlay \".diff-viewer-overlay\" should be visible. 4. Pick image.png in the file select. 5. The panel should come to hold exactly 2 \"img\" elements. 6. Both images' naturalWidth should come to be exactly 16 (poll). 7. In one eval with expect true, both images are vertically centered in their parents: for each image, abs((img.top - parent.top) - (parent.height - img.height)/2) is less than 0.5, using getBoundingClientRect(). 8. The panel must hold exactly 0 links named \"Download\" and exactly 0 \".diff-viewer-binary-side-header\" elements. 9. Pick tone.mp3 in the file select. 10. The panel should come to hold exactly 2 \"audio\" elements. 11. Both players' duration should come to be greater than 0 (poll). 12. Each player must have the attribute controls with the value \"\" (empty string), and getComputedStyle(player.parentElement).paddingTop must be exactly \"12px\" for each. 13. The panel must hold exactly 0 links named \"Download\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-workspace-actions"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions [aria-label='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "fill",
+      "selector": "select.diff-viewer-select",
+      "value": "image.png"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"binary-file-panel\"] img').length",
+      "expect": "2",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('[data-testid=\"binary-file-panel\"] img')).every(img =\u003e img.naturalWidth === 16)",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const imgs = Array.from(document.querySelectorAll('[data-testid=\"binary-file-panel\"] img')); return imgs.every(img =\u003e { const ir = img.getBoundingClientRect(); const pr = img.parentElement.getBoundingClientRect(); return Math.abs((ir.top - pr.top) - (pr.height - ir.height)/2) \u003c 0.5; }); })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='binary-file-panel'] a",
+      "has_text": "Download",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='binary-file-panel'] .diff-viewer-binary-side-header",
+      "count": 0
+    },
+    {
+      "action": "fill",
+      "selector": "select.diff-viewer-select",
+      "value": "tone.mp3"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-testid=\"binary-file-panel\"] audio').length",
+      "expect": "2",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('[data-testid=\"binary-file-panel\"] audio')).every(a =\u003e a.duration \u003e 0)",
+      "expect": "true",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const players = Array.from(document.querySelectorAll('[data-testid=\"binary-file-panel\"] audio')); return players.every(p =\u003e p.hasAttribute('controls') \u0026\u0026 p.getAttribute('controls') === '' \u0026\u0026 getComputedStyle(p.parentElement).paddingTop === '12px'); })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='binary-file-panel'] a",
+      "has_text": "Download",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T22:34:32.888393147Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 156144,
+    "output_tokens": 2715,
+    "estimated_cost_usd": 0.12488400000000002,
+    "mode": "generated"
+  }
+}

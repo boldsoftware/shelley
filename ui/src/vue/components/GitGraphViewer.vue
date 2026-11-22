@@ -12,7 +12,7 @@
 <template>
   <div v-if="isOpen" class="diff-viewer-overlay" @click="emit('close')">
     <div class="diff-viewer-container git-graph-container" @click.stop>
-      <div class="git-graph-toolbar">
+      <div class="git-graph-toolbar" :class="{ 'git-graph-toolbar-mobile': mobileDiff && canOpenDiff }">
         <div
           class="git-graph-scope"
           role="group"
@@ -24,6 +24,7 @@
             type="button"
             :class="`git-graph-scope-btn${scope === 'all' ? ' git-graph-scope-btn-active' : ''}`"
             :aria-pressed="scope === 'all'"
+            aria-label="All branches"
             @click="setScope('all')"
           >
             All branches
@@ -33,11 +34,22 @@
             type="button"
             :class="`git-graph-scope-btn${scope === 'current' ? ' git-graph-scope-btn-active' : ''}`"
             :aria-pressed="scope === 'current'"
+            aria-label="Current branch"
             @click="setScope('current')"
           >
             Current branch
           </button>
         </div>
+        <button
+          v-if="mobileDiff && canOpenDiff"
+          type="button"
+          class="git-graph-compare-tool"
+          :aria-label="comparing ? 'Cancel compare' : 'Select range'"
+          :aria-pressed="comparing"
+          @click="toggleCompare"
+        >
+          {{ comparing ? "Cancel" : "Select range" }}
+        </button>
         <button
           v-if="!onVm"
           v-tooltip.top="`Pick repository (current: ${cwd})`"
@@ -79,13 +91,37 @@
           </div>
           <template v-if="commits.length > 0">
             <div
+              v-if="mobileDiff && canOpenDiff"
+              :class="['git-graph-row', {
+                'git-graph-row-range-to': selectionFrom === 'working' || selectionTo === 'working',
+                'git-graph-row-compare-disabled': workingDisabled,
+              }]"
+              :aria-disabled="workingDisabled ? true : undefined"
+              :title="comparing && !compareFrom ? 'Choose a start commit first' : workingDisabled ? 'Selected commit is not in the working tree history' : undefined"
+              :style="{ height: `${ROW_H}px` }"
+              @click="selectWorking"
+            >
+              <span class="git-graph-hash" />
+              <span class="git-graph-main">Working changes</span>
+              <span v-if="selectionFrom === 'working' || selectionTo === 'working'" class="git-graph-range-tag">{{ selectionFrom === 'working' ? 'Selected' : 'To' }}</span>
+            </div>
+            <div
               v-for="(c, i) in commits"
               :key="c.hash"
               :ref="(el) => setRowRef(el, c.hash)"
-              :class="`git-graph-row${c.hash === selected ? ' git-graph-row-selected' : ''}`"
+              :class="['git-graph-row', {
+                'git-graph-row-selected': c.hash === selected && (!mobileDiff || (!comparing && !selectionFrom)),
+                'git-graph-row-compare-from': mobileDiff && c.hash === compareFrom,
+                'git-graph-row-compare-disabled': comparableHashes && !comparableHashes.has(c.hash),
+                'git-graph-row-range': selectedRangeHashes.has(c.hash) && c.hash !== selectionFrom && c.hash !== selectionTo,
+                'git-graph-row-range-from': mobileDiff && c.hash === selectionFrom,
+                'git-graph-row-range-to': mobileDiff && c.hash === selectionTo && selectionTo !== selectionFrom,
+              }]"
+              :aria-disabled="comparableHashes && !comparableHashes.has(c.hash) ? true : undefined"
+              :title="comparableHashes && !comparableHashes.has(c.hash) ? 'Not in the same history as the selected commit' : undefined"
               :style="{ height: `${ROW_H}px` }"
               @click="selectCommit(c.hash)"
-              @dblclick="canOpenDiff && emit('open-diff', c.hash, cwd)"
+              @dblclick="canOpenDiff && !(mobileDiff && comparing) && emit('open-diff', c.hash, cwd)"
             >
               <span class="git-graph-hash">{{ c.shortHash }}</span>
               <svg
@@ -136,6 +172,7 @@
               </span>
               <span class="git-graph-author">{{ c.author }}</span>
               <span class="git-graph-time">{{ formatRelative(c.timestamp) }}</span>
+              <span v-if="mobileDiff && (c.hash === selectionFrom || c.hash === selectionTo)" class="git-graph-range-tag">{{ c.hash === selectionFrom ? selectionTo && selectionTo !== 'self' ? 'From' : 'Selected' : 'To' }}</span>
             </div>
             <LoadMoreRow
               :limit="limit"
@@ -328,6 +365,7 @@ import {
   LEFT_PAD,
   DOT_R,
   INITIAL_LIMIT,
+  ALL_LIMIT,
   DETAIL_MIN_PX,
   DETAIL_DEFAULT_PX,
   type Scope,
@@ -348,13 +386,17 @@ const props = withDefaults(
     // Mirrors the presence of React's optional onOpenDiff callback, which
     // gates whether "Open diff" is enabled.
     canOpenDiff?: boolean;
+    mobileDiff?: boolean;
+    selectionFrom?: string | null;
+    selectionTo?: string;
   }>(),
   { covered: false },
 );
 
 const emit = defineEmits<{
   (e: "close"): void;
-  (e: "open-diff", commit: string, cwd: string, file?: string): void;
+  (e: "clear-selection"): void;
+  (e: "open-diff", commit: string, cwd: string, file?: string, to?: string): void;
 }>();
 
 // Internal override so the user can switch directories without re-opening.
@@ -368,6 +410,14 @@ const selected = ref<string | null>(null);
 const limit = ref(INITIAL_LIMIT);
 const scope = ref<Scope>(loadScope());
 function setScope(s: Scope) {
+  if (s === scope.value) return;
+  if (props.mobileDiff) {
+    comparing.value = false;
+    compareFrom.value = null;
+    selected.value = null;
+    sheetOpen.value = false;
+    emit("clear-selection");
+  }
   scope.value = s;
   storeScope(s);
 }
@@ -379,6 +429,23 @@ const detailCache = new Map<string, GitCommitDetail>();
 // On mobile (<=768px) the sidebar is a bottom sheet that only shows after
 // the user taps a row.
 const sheetOpen = ref(false);
+const comparing = ref(false);
+const compareFrom = ref<string | null>(null);
+
+function toggleCompare() {
+  comparing.value = !comparing.value;
+  compareFrom.value = null;
+}
+
+function selectWorking() {
+  if (comparing.value) {
+    if (!compareFrom.value || !workingComparable.value) return;
+    emit("open-diff", compareFrom.value, cwd.value, undefined, "working");
+    toggleCompare();
+  } else {
+    emit("open-diff", "working", cwd.value);
+  }
+}
 
 // Desktop-only: width of the commit-detail pane, controlled by the draggable
 // divider. Persisted in localStorage so it survives reloads.
@@ -394,6 +461,12 @@ else mq.addListener(onMqChange);
 onUnmounted(() => {
   if (mq.removeEventListener) mq.removeEventListener("change", onMqChange);
   else mq.removeListener(onMqChange);
+});
+watch(() => props.mobileDiff, (mobile) => {
+  if (!mobile) {
+    comparing.value = false;
+    compareFrom.value = null;
+  }
 });
 
 const bodyRef = ref<HTMLDivElement | null>(null);
@@ -480,6 +553,9 @@ watch(
   (open) => {
     if (!open) {
       selected.value = null;
+      if (props.mobileDiff) data.value = null;
+      comparing.value = false;
+      compareFrom.value = null;
       limit.value = INITIAL_LIMIT;
       detail.value = null;
       sheetOpen.value = false;
@@ -494,6 +570,11 @@ watch(
 // selection/detail (React effect on [cwd]).
 watch(cwd, () => {
   selected.value = null;
+  compareFrom.value = null;
+  if (props.mobileDiff && props.isOpen) {
+    comparing.value = false;
+    emit("clear-selection");
+  }
   data.value = null;
   detail.value = null;
   limit.value = INITIAL_LIMIT;
@@ -541,6 +622,57 @@ watch(
 );
 
 const commits = computed(() => data.value?.commits ?? []);
+function ancestors(start: string[]): Set<string> {
+  const byHash = new Map(commits.value.map((commit) => [commit.hash, commit]));
+  const seen = new Set<string>();
+  const stack = [...start];
+  while (stack.length) {
+    const hash = stack.pop()!;
+    if (seen.has(hash)) continue;
+    seen.add(hash);
+    stack.push(...(byHash.get(hash)?.parents ?? []));
+  }
+  return seen;
+}
+const comparableHashes = computed(() => {
+  if (!props.mobileDiff || !comparing.value || !compareFrom.value) return null;
+  const children = new Map<string, string[]>();
+  for (const commit of commits.value) {
+    for (const parent of commit.parents) {
+      const siblings = children.get(parent) ?? [];
+      siblings.push(commit.hash);
+      children.set(parent, siblings);
+    }
+  }
+  const comparable = ancestors([compareFrom.value]);
+  const stack = [compareFrom.value];
+  while (stack.length) {
+    const hash = stack.pop()!;
+    for (const child of children.get(hash) ?? []) {
+      if (comparable.has(child)) continue;
+      comparable.add(child);
+      stack.push(child);
+    }
+  }
+  return comparable;
+});
+const workingComparable = computed(() => {
+  if (!compareFrom.value) return true;
+  const head = commits.value.find((commit) => commit.isHead);
+  return !!head && ancestors([head.hash]).has(compareFrom.value);
+});
+const workingDisabled = computed(() => comparing.value && (!compareFrom.value || !workingComparable.value));
+const selectedRangeHashes = computed(() => {
+  const from = props.selectionFrom;
+  const to = props.selectionTo;
+  if (!props.mobileDiff || !from || !to || to === "self") return new Set<string>();
+  const byHash = new Map(commits.value.map((commit) => [commit.hash, commit]));
+  const end = to === "working" ? commits.value.find((commit) => commit.isHead)?.hash : to;
+  if (!byHash.has(from) || !end || !byHash.has(end)) return new Set<string>();
+  const included = ancestors([end]);
+  for (const hash of ancestors(byHash.get(from)!.parents)) included.delete(hash);
+  return included;
+});
 const layout = computed(() => computeLayout(commits.value));
 
 // Per-row width: just wide enough to cover that row's rightmost lane, so
@@ -557,7 +689,25 @@ function rowWidth(i: number): number {
 }
 
 function selectCommit(hash: string) {
+  if (comparing.value && props.mobileDiff) {
+    if (!compareFrom.value) {
+      compareFrom.value = hash;
+    } else {
+      if (hash === compareFrom.value || !comparableHashes.value?.has(hash)) return;
+      const first = compareFrom.value;
+      const firstIsAncestor = ancestors([hash]).has(first);
+      const [from, to] = firstIsAncestor ? [first, hash] : [hash, first];
+      emit("open-diff", from, cwd.value, undefined, to);
+      toggleCompare();
+    }
+    return;
+  }
   selected.value = hash;
+  if (props.mobileDiff && props.canOpenDiff) {
+    sheetOpen.value = false;
+    emit("open-diff", hash, cwd.value);
+    return;
+  }
   sheetOpen.value = true;
 }
 
@@ -600,7 +750,7 @@ function onNavKey(e: KeyboardEvent) {
     e.preventDefault();
     const prev = commits.value[Math.max(0, idx - 1)];
     if (prev) selectCommit(prev.hash);
-  } else if (e.key === "Enter" && selected.value && props.canOpenDiff) {
+  } else if (e.key === "Enter" && selected.value && props.canOpenDiff && !(props.mobileDiff && comparing.value)) {
     e.preventDefault();
     emit("open-diff", selected.value, cwd.value);
   }
@@ -628,11 +778,31 @@ function setRowRef(el: Element | { $el: Element } | null, hash: string) {
 }
 watch(selected, async (sel) => {
   await nextTick();
-  if (sel) {
+  if (sel && !(props.mobileDiff && props.selectionFrom && (props.selectionTo === sel || (props.selectionTo === "working" && props.selectionFrom === sel)))) {
     const el = rowRefs.get(sel);
     if (el) el.scrollIntoView({ block: "nearest" });
   }
 });
+watch(
+  [() => props.isOpen, () => props.covered, () => props.selectionFrom, () => props.selectionTo, () => props.mobileDiff, commits, loading],
+  async () => {
+    const from = props.selectionFrom;
+    const to = props.selectionTo;
+    if (!props.mobileDiff || !props.isOpen || props.covered || loading.value || !data.value ||
+        !from || from === "working" || !to || to === "self") return;
+    const hashes = new Set(commits.value.map((commit) => commit.hash));
+    const target = to === "working" ? from : to;
+    const end = to === "working" ? commits.value.find((commit) => commit.isHead)?.hash : to;
+    if (!hashes.has(from) || !end || !hashes.has(end)) {
+      if (commits.value.length >= limit.value && limit.value < ALL_LIMIT)
+        limit.value = Math.min(limit.value * 2, ALL_LIMIT);
+      return;
+    }
+    selected.value = target;
+    await nextTick();
+    rowRefs.get(target)?.scrollIntoView({ block: "center" });
+  },
+);
 
 function diffHref(hash: string, file?: string): string {
   const params = new URLSearchParams();

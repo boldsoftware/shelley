@@ -1,0 +1,751 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The header\" is \".header\"; \"the toolbar\" is \".header .chat-workspace-actions\"; \"the menu\" is \".chat-overflow-popover\"; \"More options\" is the header's button named exactly \"More options\". \"The VM link\" is the header's link a[aria-label=\"vm.example\"]. Names of buttons are accessible names: use role and name. \"Hidden\" means hidden or absent. Links open in a popup (tab \"popup\"); \"it opens P\" means: tab \"popup\" should come to have exactly the URL P (assert_url with value P), and show an element whose whole text is exactly \"Local link fixture\"; then close tab \"popup\". The compact workspace toolbar and overflow menu work at 393px (a phone: the toolbar moves into the menu). Perform the steps in order. 1. Navigate to /c/{{SLUG}} and wait for the header. 2. The header's [data-testid=\"live-call-header\"] should be enabled, and its background-color \"rgba(0, 0, 0, 0)\" (getComputedStyle, exactly). 3. Eval window.toolbarCounts() with expect \"{\\\"buttons\\\":3,\\\"links\\\":1}\". There should be exactly one \".header .chat-workspace-divider\", and it should be hidden. 4. The header should have no buttons named exactly \"Command menu\", \"Edit File…\" or \"MCP Servers\" (count 0 each). 5. The VM link should have exactly these attributes: href \"https://vm.example/website\", target \"_blank\", rel \"noopener noreferrer\", aria-label \"vm.example\" and title \"vm.example\". 6. The toolbar's buttons named \"Diffs\", \"Git Graph\" and \"Terminal\", and the VM link, should be hidden. The header's [data-testid=\"live-call-header\"] should have aria-label exactly \"Start voice conversation\". 7. The header's button named exactly \"New Conversation\" should be visible. Eval window.toolbarLayout(393) with expect \"ok\". 8. Click More options. The menu should be visible; eval window.menuLayout(393, 851) with expect \"ok\". The menu's \".overflow-menu-item\" button named exactly \"MCP Servers\" should be visible. 9. The menu should have no button whose name contains \"New Conversation\" (count 0). In the menu's icon row \".overflow-menu-toolbar\", the buttons named exactly \"Diffs\", \"Git Graph\", \"Terminal\", \"Edit File…\" and \"Command menu\", and the button whose name contains \"vm.example\", should be visible. 10. Eval window.menuRow(\"Command menu\") and window.menuRow(\"Edit File…\"), each with expect \"hidden\", and window.menuRow(\"Archive Conversation\") with expect \"shortcut hidden\". 11. Scroll the menu's \"Change Language\" row into view: eval [...document.querySelectorAll('.chat-overflow-popover .overflow-menu-item')].find(b =\u003e b.textContent.includes('Change Language')).scrollIntoView({block: 'center'}). The menu's button whose name contains \"Change Language\" should then be in the viewport. Press Escape. 12. For each link name in turn, \"Manage on exe.dev\" (it opens https://exe.example/vm/vm), then \"vm.example\" (it opens https://vm.example/website), then \"Documentation\" (it opens https://docs.example/documentation): click More options; click the menu's button named exactly that name; it opens its page; the menu should then be hidden. 13. Open the command menu: click More options, then click the button named exactly \"Command menu\" inside \".chat-overflow-popover .overflow-menu-toolbar\". \".command-palette-input\" should be visible; fill it with \"notification\"; the first \".command-palette-item\" should be visible. Press Escape; the input should become hidden. 14. Click More options, then the menu's button named exactly \"MCP Servers\". The dialog named exactly \"MCP Servers\" (role dialog) should be visible, and the menu hidden. Click the dialog's button named exactly \"Close modal\"; the dialog should become hidden. 15. Open the terminal: click More options, then click the button named exactly \"Terminal\" inside \".chat-overflow-popover .overflow-menu-toolbar\". \".terminal-panel\" should be visible. \"The active terminal\" is \".terminal-panel-content [data-terminal-id][style*=\\\"display: block\\\"]\"; inside it, the textbox named exactly \"Terminal input\" should be visible. Remember it: eval (window.__terminal = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]')?.getAttribute('data-terminal-id')) ? \"ok\" : \"none\" with expect \"ok\". Click the button named exactly \"Close active terminal\". Eval document.querySelectorAll('[data-terminal-id=\"' + window.__terminal + '\"]').length with expect \"0\". 16. Open the diffs: click More options, then click the button named exactly \"Diffs\" inside \".chat-overflow-popover .overflow-menu-toolbar\". \".diff-viewer-rethink\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Click \".diff-viewer-rethink .diff-rethink-mobile-files.is-overview .diff-tree-row[title='toolbar-fixture.txt']\"; \".diff-rethink-file-name\" should read \"toolbar-fixture.txt\". Press Escape once; wait for \".diff-viewer-rethink\" to become hidden and \".git-graph-container\" visible (both share the \".diff-viewer-overlay\" class on their wrapper). Press Escape to close Git Graph and wait for \".git-graph-container\" to become hidden. Use waits, not sleeps. 17. Open the git graph: click More options, then click the button named exactly \"Git Graph\" inside \".chat-overflow-popover .overflow-menu-toolbar\". \".git-graph-container\" should be visible, and one of its \".git-graph-subject\" elements should contain \"Toolbar fixture commit\". Press Escape; it should become hidden. 18. Open the file finder: click More options, then click the button named exactly \"Edit File…\" inside \".chat-overflow-popover .overflow-menu-toolbar\". The textbox named \"Filter files\" should be visible; fill it with \"toolbar-fixture\"; there should be exactly one \".grp-row\". Press Enter in the textbox. The dialog named exactly \"Edit {{FILE}}\" (role dialog) should be visible, with a visible \".view-line\" in it containing \"after toolbar edit\". Click the dialog's button named exactly \"Close (Esc)\"; the dialog should become hidden. 19. Click the header's button named exactly \"New Conversation\". The URL path should become exactly \"/new\", the message input should be visible, and the VM link should be hidden. ",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": ".header [data-testid=\"live-call-header\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.header [data-testid=\"live-call-header\"]')).backgroundColor",
+      "expect": "rgba(0, 0, 0, 0)"
+    },
+    {
+      "action": "eval",
+      "expression": "window.toolbarCounts()",
+      "expect": "{\"buttons\":3,\"links\":1}"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".header .chat-workspace-divider",
+      "count": 1
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".header .chat-workspace-divider"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "Command menu",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "Edit File…",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "MCP Servers",
+      "exact": true,
+      "count": 0
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".header a[aria-label=\"vm.example\"]",
+      "attribute": "href",
+      "value": "https://vm.example/website"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".header a[aria-label=\"vm.example\"]",
+      "attribute": "target",
+      "value": "_blank"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".header a[aria-label=\"vm.example\"]",
+      "attribute": "rel",
+      "value": "noopener noreferrer"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".header a[aria-label=\"vm.example\"]",
+      "attribute": "aria-label",
+      "value": "vm.example"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".header a[aria-label=\"vm.example\"]",
+      "attribute": "title",
+      "value": "vm.example"
+    },
+    {
+      "action": "assert_not_visible",
+      "within": {
+        "selector": ".header .chat-workspace-actions"
+      },
+      "role": "button",
+      "name": "Diffs",
+      "exact": true
+    },
+    {
+      "action": "assert_not_visible",
+      "within": {
+        "selector": ".header .chat-workspace-actions"
+      },
+      "role": "button",
+      "name": "Git Graph",
+      "exact": true
+    },
+    {
+      "action": "assert_not_visible",
+      "within": {
+        "selector": ".header .chat-workspace-actions"
+      },
+      "role": "button",
+      "name": "Terminal",
+      "exact": true
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".header a[aria-label=\"vm.example\"]"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".header [data-testid=\"live-call-header\"]",
+      "attribute": "aria-label",
+      "value": "Start voice conversation"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "New Conversation",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "window.toolbarLayout(393)",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "eval",
+      "expression": "window.menuLayout(393, 851)",
+      "expect": "ok"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      },
+      "role": "button",
+      "name": "MCP Servers",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      },
+      "role": "button",
+      "name": "New Conversation",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".chat-overflow-popover .overflow-menu-toolbar"
+      },
+      "role": "button",
+      "name": "Diffs",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".chat-overflow-popover .overflow-menu-toolbar"
+      },
+      "role": "button",
+      "name": "Git Graph",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".chat-overflow-popover .overflow-menu-toolbar"
+      },
+      "role": "button",
+      "name": "Terminal",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".chat-overflow-popover .overflow-menu-toolbar"
+      },
+      "role": "button",
+      "name": "Edit File…",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".chat-overflow-popover .overflow-menu-toolbar"
+      },
+      "role": "button",
+      "name": "Command menu",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".chat-overflow-popover .overflow-menu-toolbar"
+      },
+      "role": "button",
+      "name": "vm.example"
+    },
+    {
+      "action": "eval",
+      "expression": "window.menuRow('Command menu')",
+      "expect": "hidden"
+    },
+    {
+      "action": "eval",
+      "expression": "window.menuRow('Edit File…')",
+      "expect": "hidden"
+    },
+    {
+      "action": "eval",
+      "expression": "window.menuRow('Archive Conversation')",
+      "expect": "shortcut hidden"
+    },
+    {
+      "action": "eval",
+      "expression": "[...document.querySelectorAll('.chat-overflow-popover .overflow-menu-item')].find(b =\u003e b.textContent.includes('Change Language')).scrollIntoView({block: 'center'})"
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": ".chat-overflow-popover .overflow-menu-item",
+      "has_text": "Change Language"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      },
+      "role": "button",
+      "name": "Manage on exe.dev",
+      "exact": true
+    },
+    {
+      "action": "assert_url",
+      "tab": "popup",
+      "value": "https://exe.example/vm/vm"
+    },
+    {
+      "action": "assert_text",
+      "tab": "popup",
+      "selector": "body",
+      "text": "Local link fixture"
+    },
+    {
+      "action": "close_tab",
+      "tab": "popup"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      },
+      "role": "button",
+      "name": "vm.example",
+      "exact": true
+    },
+    {
+      "action": "assert_url",
+      "tab": "popup",
+      "value": "https://vm.example/website"
+    },
+    {
+      "action": "assert_text",
+      "tab": "popup",
+      "selector": "body",
+      "text": "Local link fixture"
+    },
+    {
+      "action": "close_tab",
+      "tab": "popup"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      },
+      "role": "button",
+      "name": "Documentation",
+      "exact": true
+    },
+    {
+      "action": "assert_url",
+      "tab": "popup",
+      "value": "https://docs.example/documentation"
+    },
+    {
+      "action": "assert_text",
+      "tab": "popup",
+      "selector": "body",
+      "text": "Local link fixture"
+    },
+    {
+      "action": "close_tab",
+      "tab": "popup"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-overflow-popover .overflow-menu-toolbar"
+      },
+      "role": "button",
+      "name": "Command menu",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "notification"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-item"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      },
+      "role": "button",
+      "name": "MCP Servers",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "MCP Servers",
+      "exact": true
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "dialog",
+        "name": "MCP Servers",
+        "exact": true
+      },
+      "role": "button",
+      "name": "Close modal",
+      "exact": true
+    },
+    {
+      "action": "wait_hidden",
+      "role": "dialog",
+      "name": "MCP Servers",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-overflow-popover .overflow-menu-toolbar"
+      },
+      "role": "button",
+      "name": "Terminal",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"]"
+      },
+      "role": "textbox",
+      "name": "Terminal input",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "(window.__terminal = document.querySelector('.terminal-panel-content [data-terminal-id][style*=\"display: block\"]')?.getAttribute('data-terminal-id')) ? 'ok' : 'none'",
+      "expect": "ok"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close active terminal",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('[data-terminal-id=\"' + window.__terminal + '\"]').length",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-overflow-popover .overflow-menu-toolbar"
+      },
+      "role": "button",
+      "name": "Diffs",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-rethink"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".git-graph-container"
+      },
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-rethink .diff-rethink-mobile-files.is-overview .diff-tree-row[title='toolbar-fixture.txt']"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-rethink .diff-rethink-mobile-files.is-overview .diff-tree-row[title='toolbar-fixture.txt']"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "toolbar-fixture.txt"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-rethink"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-overflow-popover .overflow-menu-toolbar"
+      },
+      "role": "button",
+      "name": "Git Graph",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".git-graph-container .git-graph-subject",
+      "has_text": "Toolbar fixture commit"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-overflow-popover .overflow-menu-toolbar"
+      },
+      "role": "button",
+      "name": "Edit File…",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "role": "textbox",
+      "name": "Filter files"
+    },
+    {
+      "action": "fill",
+      "role": "textbox",
+      "name": "Filter files",
+      "value": "toolbar-fixture"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".grp-row",
+      "count": 1
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Edit {{FILE}}"
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "role": "dialog",
+        "name": "Edit {{FILE}}"
+      },
+      "selector": ".view-line",
+      "has_text": "after toolbar edit"
+    },
+    {
+      "action": "click",
+      "within": {
+        "role": "dialog",
+        "name": "Edit {{FILE}}"
+      },
+      "role": "button",
+      "name": "Close (Esc)",
+      "exact": true
+    },
+    {
+      "action": "wait_hidden",
+      "role": "dialog",
+      "name": "Edit {{FILE}}"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".header"
+      },
+      "role": "button",
+      "name": "New Conversation",
+      "exact": true
+    },
+    {
+      "action": "assert_url",
+      "value": "/new"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "textarea"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".header a[aria-label=\"vm.example\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T04:53:34.269829842Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 855186,
+    "output_tokens": 22022,
+    "estimated_cost_usd": 0.7062216,
+    "mode": "generated"
+  }
+}

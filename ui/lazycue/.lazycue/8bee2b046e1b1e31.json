@@ -1,0 +1,108 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a 320px phone, the mobile Git Graph fits All branches, Current branch, Select range, repository, and Close on one rail, without a title or second bar. Use waits, never sleep steps. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".commit-picker-trigger\". Wait for \".git-graph-toolbar-mobile\". Its buttons have aria-labels \"All branches\", \"Current branch\", \"Select range\", \"Pick repository\", and \"Close\"; their visible text matches those first three labels. Evaluate expecting true that the rail's scrollWidth is at most clientWidth, its buttons' bounding boxes lie within the viewport, and there is no \".git-graph-compare-bar\" or \"Git graph\" title. Click \".git-graph-toolbar-mobile .git-graph-compare-tool\"; evaluate expecting true that this same button now has visible text \"Cancel\" and aria-pressed=\"true\" (not the All scope button). Click it again; its visible text is \"Select range\" and aria-pressed=\"false\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover-trigger, [aria-label='More options']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-toolbar-mobile"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".git-graph-toolbar-mobile [aria-label='All branches']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".git-graph-toolbar-mobile [aria-label='Current branch']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".git-graph-toolbar-mobile [aria-label='Select range']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".git-graph-toolbar-mobile [aria-label='Pick repository']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".git-graph-toolbar-mobile [aria-label='Close']"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".git-graph-toolbar-mobile [aria-label='All branches']",
+      "text": "All branches"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".git-graph-toolbar-mobile [aria-label='Current branch']",
+      "text": "Current branch"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".git-graph-toolbar-mobile [aria-label='Select range']",
+      "text": "Select range"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const rail = document.querySelector('.git-graph-toolbar-mobile'); if (!rail) return false; const scrollOk = rail.scrollWidth \u003c= rail.clientWidth; const vw = window.innerWidth; const vh = window.innerHeight; const buttons = Array.from(rail.querySelectorAll('button')); const inViewport = buttons.every(b =\u003e { const r = b.getBoundingClientRect(); return r.left \u003e= 0 \u0026\u0026 r.right \u003c= vw \u0026\u0026 r.top \u003e= 0 \u0026\u0026 r.bottom \u003c= vh; }); const noCompareBar = !document.querySelector('.git-graph-compare-bar'); const noTitle = !Array.from(document.querySelectorAll('.git-graph-toolbar-mobile')).some(el =\u003e el.textContent.includes('Git graph')); return scrollOk \u0026\u0026 inViewport \u0026\u0026 noCompareBar \u0026\u0026 noTitle; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-toolbar-mobile .git-graph-compare-tool"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const btn = document.querySelector('.git-graph-toolbar-mobile .git-graph-compare-tool'); if (!btn) return false; const textOk = btn.textContent.trim() === 'Cancel'; const pressedOk = btn.getAttribute('aria-pressed') === 'true'; return textOk \u0026\u0026 pressedOk; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-toolbar-mobile .git-graph-compare-tool"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const btn = document.querySelector('.git-graph-toolbar-mobile .git-graph-compare-tool'); if (!btn) return false; const textOk = btn.textContent.trim() === 'Select range'; const pressedOk = btn.getAttribute('aria-pressed') === 'false'; return textOk \u0026\u0026 pressedOk; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T12:46:18.961529547Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 87895,
+    "output_tokens": 4551,
+    "estimated_cost_usd": 0.12447270000000002,
+    "mode": "generated"
+  }
+}

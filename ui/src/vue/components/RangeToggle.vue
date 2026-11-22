@@ -26,7 +26,7 @@ import { computed } from "vue";
 
 const props = defineProps<{
   selectedDiff: string | null;
-  selectedTo: "working" | "self";
+  selectedTo: string;
 }>();
 const emit = defineEmits<{
   (e: "change", selectedDiff: string, selectedTo: "working" | "self"): void;

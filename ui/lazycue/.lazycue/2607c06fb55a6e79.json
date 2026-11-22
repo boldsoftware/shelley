@@ -1,0 +1,49 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a phone, a ?diff=working link opens the diff viewer on the working changes. Perform the steps in order. 1. Navigate to /c/diff-fixture?diff=working. 2. The overlay (\".diff-viewer-overlay\") should become visible (allow 30s). 3. Wait for the four file rows in \".diff-viewer-overlay .diff-rethink-mobile-files.is-overview .diff-tree-code-row\". For each row, read \".diff-tree-status\" aria-label and the trimmed \".diff-tree-label\" text. In an eval with expect, join each status and filename with a space, sort the entries and join with \"|\"; expect exactly \"Added untracked_added.txt|Deleted tracked_del.txt|Modified spaced name.txt|Modified tracked_mod.txt\". 4. The overlay must show no error: there is no \".diff-viewer-error\" element in it (count 0, checked once now that the files show). 5. The link's query is spent: the URL must be exactly /c/diff-fixture, with no query.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/diff-fixture?diff=working"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .diff-rethink-mobile-files.is-overview .diff-tree-code-row",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay .diff-rethink-mobile-files.is-overview .diff-tree-code-row",
+      "count": 4
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const rows = Array.from(document.querySelectorAll('.diff-viewer-overlay .diff-rethink-mobile-files.is-overview .diff-tree-code-row')); const entries = rows.map(row =\u003e { const status = row.querySelector('.diff-tree-status')?.getAttribute('aria-label') || ''; const label = (row.querySelector('.diff-tree-label')?.textContent || '').trim(); return status + ' ' + label; }); entries.sort(); return entries.join('|'); })()",
+      "expect": "Added untracked_added.txt|Deleted tracked_del.txt|Modified spaced name.txt|Modified tracked_mod.txt"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-overlay .diff-viewer-error",
+      "count": 0
+    },
+    {
+      "action": "assert_url",
+      "value": "/c/diff-fixture"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T04:31:10.374354659Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 15617,
+    "output_tokens": 912,
+    "estimated_cost_usd": 0.0233757,
+    "mode": "generated"
+  }
+}

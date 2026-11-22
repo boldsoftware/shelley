@@ -56,6 +56,7 @@
               :diffs="diffs"
               :selected-diff="selectedDiff"
               :selected-to="selectedTo"
+              :range-hashes="rangeHashes"
               :is-mobile="isMobile"
               @change="onCommitChange"
               @open="loadCommitStats"
@@ -163,6 +164,7 @@
                   :diffs="diffs"
                   :selected-diff="selectedDiff"
                   :selected-to="selectedTo"
+                  :range-hashes="rangeHashes"
                   :is-mobile="isMobile"
                   @change="onCommitChange"
                   @open="loadCommitStats"
@@ -662,6 +664,7 @@ const props = defineProps<{
   onVm?: boolean;
   isOpen: boolean;
   initialCommit?: string;
+  initialTo?: string;
   // File to select once initialCommit's file list loads (e.g. from the git
   // graph diffstat). Consumed on the first load only.
   initialFile?: string;
@@ -722,9 +725,16 @@ const diffs = ref<GitDiffInfo[]>([]);
 const gitRoot = ref<string | null>(null);
 const showDirPicker = ref(false);
 const selectedDiff = ref<string | null>(null);
-const selectedTo = ref<"working" | "self">("working");
+const selectedTo = ref("working");
 const files = ref<GitFileInfo[]>([]);
 const selectedFile = ref<string | null>(null);
+defineExpose({
+  getSelection: () => ({
+    diff: selectedDiff.value,
+    to: selectedTo.value,
+    file: selectedFile.value,
+  }),
+});
 // Highlights for the selected single commit, if it has any; they order
 // `files` and annotate lines in the editor.
 const highlights = ref<CommitHighlights | null>(null);
@@ -814,6 +824,9 @@ const mainRef = ref<HTMLDivElement | null>(null);
 let diffEditor: Monaco.editor.IStandaloneDiffEditor | null = null;
 let saveTimeout: number | null = null;
 let amendTimeout: number | null = null;
+let pendingSave: { path: string; content: string; conversationId?: string } | null = null;
+let pendingAmend: { cwd: string; content: string; conversationId?: string } | null = null;
+let saveInFlight: Promise<void> = Promise.resolve();
 let hasShownKeyboardHint = false;
 let keyboardHintTimer: number | null = null;
 const navOrderRef = ref<string[]>([]);
@@ -1101,6 +1114,8 @@ watch(
       pendingInitialFile = props.initialFile;
       loadDiffs();
     } else if (!props.isOpen) {
+      if (saveTimeout) saveImmediately();
+      if (amendTimeout) amendImmediately();
       loadDiffsRequestId++;
       loadFilesRequestId++;
       loadFileDiffRequestId++;
@@ -1116,10 +1131,6 @@ watch(
       resetComments();
       commitMessages.value = [];
       amendStatus.value = "idle";
-      if (amendTimeout) {
-        clearTimeout(amendTimeout);
-        amendTimeout = null;
-      }
     }
   },
   { immediate: true },
@@ -1205,20 +1216,14 @@ function createEditor() {
   // Single content change listener; branches on current file context.
   modEditor.onDidChangeModelContent(() => {
     if (currentFileIsHeadCommit) {
+      const model = modEditor.getModel();
+      if (!model) return;
+      if (pendingAmend && (pendingAmend.cwd !== cwdVal || pendingAmend.conversationId !== props.conversationId)) amendImmediately();
+      pendingAmend = { cwd: cwdVal, content: model.getValue(), conversationId: props.conversationId };
       if (amendTimeout) clearTimeout(amendTimeout);
       amendStatus.value = "saving";
-      amendTimeout = window.setTimeout(async () => {
-        const model = modEditor.getModel();
-        if (!model) return;
-        const newMessage = model.getValue();
-        try {
-          await api.amendGitMessage(cwdVal, props.conversationId, newMessage);
-          amendStatus.value = "saved";
-          setTimeout(() => (amendStatus.value = "idle"), 2000);
-        } catch {
-          amendStatus.value = "error";
-          setTimeout(() => (amendStatus.value = "idle"), 3000);
-        }
+      amendTimeout = window.setTimeout(() => {
+        amendImmediately();
       }, 1500);
     } else {
       scheduleSaveFn?.();
@@ -1227,6 +1232,25 @@ function createEditor() {
 }
 let commentsCleanup: (() => void) | null = null;
 let highlightsCleanup: (() => void) | null = null;
+
+function amendImmediately() {
+  if (amendTimeout) clearTimeout(amendTimeout);
+  amendTimeout = null;
+  const amend = pendingAmend;
+  pendingAmend = null;
+  if (amend) void amendCurrentMessage(amend);
+}
+
+async function amendCurrentMessage(amend: NonNullable<typeof pendingAmend>) {
+  try {
+    await api.amendGitMessage(amend.cwd, amend.conversationId, amend.content);
+    amendStatus.value = "saved";
+    setTimeout(() => (amendStatus.value = "idle"), 2000);
+  } catch {
+    amendStatus.value = "error";
+    setTimeout(() => (amendStatus.value = "idle"), 3000);
+  }
+}
 
 function disposeEditor() {
   if (!diffEditor) return;
@@ -1426,7 +1450,7 @@ async function loadDiffs() {
     const selection = defaultDiffSelection(response.diffs, initialCommit);
     if (selection) {
       selectedDiff.value = selection.selectedDiff;
-      selectedTo.value = selection.selectedTo;
+      selectedTo.value = props.initialTo ?? selection.selectedTo;
     }
   } catch (err) {
     if (requestId !== loadDiffsRequestId) return;
@@ -1548,6 +1572,9 @@ async function loadFileDiff(diffId: string, filePath: string, asText = false) {
   try {
     loading.value = true;
     error.value = null;
+    if (saveTimeout) saveImmediately();
+    await saveInFlight;
+    if (requestId !== loadFileDiffRequestId) return;
     if (isCommitMessageFile(filePath)) {
       const hash = commitHashFromPath(filePath);
       const msg = commitMessages.value.find((m) => m.hash === hash);
@@ -1660,7 +1687,7 @@ function goToPreviousChange() {
 }
 
 // --- Save (edit mode) ---
-async function saveCurrentFile() {
+function captureSave() {
   const isWorkingView = selectedDiff.value === "working" || selectedTo.value === "working";
   if (
     !diffEditor ||
@@ -1668,23 +1695,29 @@ async function saveCurrentFile() {
     isCommitMessageFile(selectedFile.value) ||
     !fileDiff.value ||
     fileDiff.value.binary ||
+    fileDiff.value.path !== selectedFile.value ||
     modeVal !== "edit" ||
     !gitRoot.value ||
     !isWorkingView
   ) {
-    return;
+    return null;
   }
-  const modEditor = diffEditor.getModifiedEditor();
-  const model = modEditor.getModel();
-  if (!model) return;
-  const content = model.getValue();
-  const fullPath = gitRoot.value + "/" + selectedFile.value;
+  const model = diffEditor.getModifiedEditor().getModel();
+  if (!model) return null;
+  return {
+    path: gitRoot.value + "/" + selectedFile.value,
+    content: model.getValue(),
+    conversationId: props.conversationId,
+  };
+}
+
+async function saveCurrentFile(save: NonNullable<typeof pendingSave>) {
   try {
     saveStatus.value = "saving";
-    const response = await fetch(onMachine("/api/write-file", props.conversationId), {
+    const response = await fetch(onMachine("/api/write-file", save.conversationId), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: fullPath, content }),
+      body: JSON.stringify({ path: save.path, content: save.content }),
     });
     if (response.ok) {
       saveStatus.value = "saved";
@@ -1701,11 +1734,13 @@ async function saveCurrentFile() {
 }
 
 function scheduleSave() {
-  if (modeVal !== "edit") return;
+  const save = captureSave();
+  if (!save) return;
+  if (pendingSave && (pendingSave.path !== save.path || pendingSave.conversationId !== save.conversationId)) saveImmediately();
+  pendingSave = save;
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = window.setTimeout(() => {
-    saveCurrentFile();
-    saveTimeout = null;
+    saveImmediately();
   }, 1000);
 }
 scheduleSaveFn = scheduleSave;
@@ -1715,7 +1750,10 @@ function saveImmediately() {
     clearTimeout(saveTimeout);
     saveTimeout = null;
   }
-  saveCurrentFile();
+  const save = pendingSave ?? captureSave();
+  pendingSave = null;
+  if (save) saveInFlight = saveInFlight.then(() => saveCurrentFile(save));
+  return saveInFlight;
 }
 
 // --- Theme observer ---
@@ -1969,9 +2007,15 @@ const sidebarCommits = computed<GitDiffInfo[]>(() => {
 const sidebarSelIdx = computed(() =>
   selectedDiff.value ? sidebarCommits.value.findIndex((d) => d.id === selectedDiff.value) : -1,
 );
+const rangeHashes = computed(() => new Set(commitMessages.value.map((message) => message.hash)));
 function inSidebarRange(idx: number): boolean {
-  if (sidebarSelIdx.value < 0) return false;
+  if (!selectedDiff.value) return false;
   if (selectedDiff.value === "working") return idx === sidebarSelIdx.value;
+  if (selectedTo.value !== "self" && selectedTo.value !== "working") {
+    const commit = sidebarCommits.value[idx];
+    return !!commit && rangeHashes.value.has(commit.id);
+  }
+  if (sidebarSelIdx.value < 0) return false;
   if (selectedTo.value === "self") return idx === sidebarSelIdx.value;
   return idx >= 0 && idx <= sidebarSelIdx.value;
 }
@@ -2006,7 +2050,7 @@ function selectSidebarFile(path: string) {
   selectedFile.value = path;
 }
 
-function onCommitChange(diff: string, to: "working" | "self") {
+function onCommitChange(diff: string, to: string) {
   selectedDiff.value = diff;
   selectedTo.value = to;
 }
@@ -2029,12 +2073,12 @@ onMounted(() => {
   window.addEventListener("resize", handleResize);
 });
 onUnmounted(() => {
+  if (saveTimeout) saveImmediately();
+  if (amendTimeout) amendImmediately();
   window.removeEventListener("resize", handleResize);
   window.removeEventListener("keydown", handleKeyDown, true);
   themeObserver?.disconnect();
   diffUpdateDisposable?.dispose();
-  if (saveTimeout) clearTimeout(saveTimeout);
-  if (amendTimeout) clearTimeout(amendTimeout);
   if (keyboardHintTimer) clearTimeout(keyboardHintTimer);
   disposeEditor();
 });

@@ -95,7 +95,8 @@ func TestE2EDiffViewerBinaryOptInReadOnly(t *testing.T) {
 }
 
 func TestE2EDiffViewerBinaryNativeMediaPreviews(t *testing.T) {
-	e2e(t, useful(0), binaryDiffSetup+`Images and audio have native previews without download links. 1. Navigate to /c/{{SLUG}}. 2. Open the Diffs tool: `+fmt.Sprintf(openToolPhone, "Diffs")+`. 3. The overlay ".diff-viewer-overlay" should be visible. 4. Pick image.png in the file select. 5. The panel should come to hold exactly 2 "img" elements. 6. Both images' naturalWidth should come to be exactly 16 (poll). 7. For each image, its top inset, img.getBoundingClientRect().top - img.parentElement.getBoundingClientRect().top, must be within 0.5 of 12. 8. The panel must hold exactly 0 links named "Download" and exactly 0 ".diff-viewer-binary-side-header" elements. 9. Pick tone.mp3 in the file select. 10. The panel should come to hold exactly 2 "audio" elements. 11. Both players' duration should come to be greater than 0 (poll). 12. Each player must have the attribute controls with the value "" (empty string), and getComputedStyle(player.parentElement).paddingTop must be exactly "12px" for each. 13. The panel must hold exactly 0 links named "Download".`, func(s *shelley) {
+	e2e(t, useful(0), binaryDiffSetup+`Images and audio have native previews without download links. 1. Navigate to /c/{{SLUG}}. 2. Open the Diffs tool: `+fmt.Sprintf(openToolWide, "Diffs")+`. 3. The overlay ".diff-viewer-overlay" should be visible. 4. Pick image.png in the file select. 5. The panel should come to hold exactly 2 "img" elements. 6. Both images' naturalWidth should come to be exactly 16 (poll). 7. In one eval with expect true, both images are vertically centered in their parents: for each image, abs((img.top - parent.top) - (parent.height - img.height)/2) is less than 0.5, using getBoundingClientRect(). 8. The panel must hold exactly 0 links named "Download" and exactly 0 ".diff-viewer-binary-side-header" elements. 9. Pick tone.mp3 in the file select. 10. The panel should come to hold exactly 2 "audio" elements. 11. Both players' duration should come to be greater than 0 (poll). 12. Each player must have the attribute controls with the value "" (empty string), and getComputedStyle(player.parentElement).paddingTop must be exactly "12px" for each. 13. The panel must hold exactly 0 links named "Download".`, func(s *shelley) {
+		s.viewport(1280, 900)
 		binaryDiffFixture(s)
 	})
 }
@@ -104,5 +105,13 @@ func TestE2EDiffViewerBinaryAddedDeletedHatched(t *testing.T) {
 	e2e(t, useful(0), binaryDiffSetup+`Added and deleted binaries shrink and hatch the missing side like text diffs. 1. Navigate to /c/{{SLUG}}. 2. Open the Diffs tool: `+fmt.Sprintf(openToolWide, "Diffs")+`. 3. The overlay ".diff-viewer-overlay" should be visible. Then do steps 4-9 first for added.bin, whose missing side is the FIRST ".diff-viewer-binary-side" in the panel (index 0), and then for deleted.bin, whose missing side is the SECOND (index 1): 4. Pick the file in the file select. 5. The panel should be visible. 6. The missing side should have the class "diff-viewer-binary-side-empty" and be empty (its textContent.trim() is ""). 7. Its width relative to its parent's, el.getBoundingClientRect().width / el.parentElement.getBoundingClientRect().width, should come to be within 0.005 of 0.1 (poll: reduced motion still gives every property a 0.01ms transition, so the new split settles a frame after the class changes). 8. getComputedStyle(missingSide).backgroundImage must contain "linear-gradient". 9. The panel must hold exactly 1 link named exactly "Download".`, func(s *shelley) {
 		s.viewport(1280, 900)
 		binaryDiffFixture(s)
+	})
+}
+
+func TestE2EDiffViewerBinaryMobileReadOnly(t *testing.T) {
+	e2e(t, useful(0), `On a phone, binary-as-text cannot be edited or saved. Navigate to /c/{{SLUG}}. Open Diffs: `+fmt.Sprintf(openToolPhone, "Diffs")+`. The overlay ".diff-viewer-overlay" should be visible. `+mobileDiffWorking+`In its working-changes overview click ".diff-rethink-mobile-files .diff-tree-code-row[title='opaque.bin']". The panel with data-testid "binary-file-panel" is visible. There is no button named exactly "Edit". Click "View as text"; the ".diff-viewer-editor" becomes visible and there is still no button named exactly "Edit". Click the last ".editor.modified .view-lines" and insert_text "must-not-write". It must not contain that text. Press Control+s, then call "opaque.bin": it returns exactly "0002ff".`, func(s *shelley) {
+		s.viewport(390, 844)
+		cwd := binaryDiffFixture(s)
+		s.call("opaque.bin", func() string { return hex.EncodeToString([]byte(s.read(filepath.Join(cwd, "opaque.bin")))) })
 	})
 }

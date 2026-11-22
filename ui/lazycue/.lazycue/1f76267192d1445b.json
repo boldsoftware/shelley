@@ -1,0 +1,114 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A short mobile commit message shows its links after the body without an expand control, and its metadata Comment action quotes the whole message. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. The \".diff-commit-message-body\" contains \"Short body note\". There is no \"Show more\" button in \".diff-commit-message\". The \".diff-commit-message-links\" contains \"Open on GitHub\" and \"Open raw commit\"; verify with eval expecting true that the body precedes the links in document order. Click the \"Comment\" button in \".diff-commit-message-mobile-meta\". The comment dialog's selected text contains both \"Short mobile message\" and \"Short body note\". Fill its input with \"Whole message feedback\" and click \"Add Comment\". The [data-testid=\"message-input\"] value contains \"\u003e Short mobile message\", \"\u003e Short body note\", and \"Whole message feedback\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label='More options']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-toolbar-action[aria-label^=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-commit-message-body",
+      "text": "Short body note"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-commit-message .diff-commit-message-expand"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-commit-message-links",
+      "text": "Open on GitHub"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-commit-message-links",
+      "text": "Open raw commit"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const body = document.querySelector('.diff-commit-message-body'); const links = document.querySelector('.diff-commit-message-links'); if (!body || !links) return false; return !!(body.compareDocumentPosition(links) \u0026 Node.DOCUMENT_POSITION_FOLLOWING); })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-commit-message-mobile-meta button",
+      "has_text": "Comment"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-dialog"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-viewer-selected-text",
+      "text": "Short mobile message"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-viewer-selected-text",
+      "text": "Short body note"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-viewer-comment-input",
+      "value": "Whole message feedback"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add Comment"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-comment-dialog"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]')?.value?.includes('\u003e Short mobile message') || false",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]')?.value?.includes('\u003e Short body note') || false",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]')?.value?.includes('Whole message feedback') || false",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T02:19:37.439123314Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 170683,
+    "output_tokens": 4518,
+    "estimated_cost_usd": 0.16091295,
+    "mode": "generated"
+  }
+}

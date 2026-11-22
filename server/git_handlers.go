@@ -898,11 +898,12 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 
 // CommitMessage represents a commit's full message for display in the diff viewer.
 type CommitMessage struct {
-	Hash    string `json:"hash"`
-	Subject string `json:"subject"`
-	Body    string `json:"body"`
-	Author  string `json:"author"`
-	IsHead  bool   `json:"isHead"`
+	Hash      string `json:"hash"`
+	Subject   string `json:"subject"`
+	Body      string `json:"body"`
+	Author    string `json:"author"`
+	IsHead    bool   `json:"isHead"`
+	GitHubURL string `json:"githubUrl,omitempty"`
 }
 
 // handleGitCommitMessages returns the full commit messages for commits in a range.
@@ -1020,6 +1021,12 @@ func (s *Server) handleGitCommitMessages(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	remoteOut, _ := m.git(gitRoot, "config", "--get", "remote.origin.url").Output()
+	if base := githubBaseURL(strings.TrimSpace(string(remoteOut))); base != "" {
+		for i := range messages {
+			messages[i].GitHubURL = base + "/commit/" + messages[i].Hash
+		}
+	}
 	writeJSON(w, http.StatusOK, messages)
 }
 

@@ -1,0 +1,193 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The phone diff highlights only the active hunk's plus and minus signs, including on first load and after navigation. Use waits, never sleep steps. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Wait for \".diff-viewer-rethink\" (the graph container persists; do not wait for it to hide), then click the row \".diff-rethink-mobile-files [title='hunks.txt']\" (not the graph's diffstat). Wait for \".diff-rethink-bottom-change-label\" to read \"Change 1 of 3\" and for the first \".diff-current-hunk-gutter\" decoration. In the modified Monaco editor, evaluate expecting true: there are three \".inline-deleted-margin-view-zone\" elements; exactly the first has class \"diff-current-hunk-deleted\"; its \".delete-sign\" and the active \".margin-view-overlays \u003e div:has(.diff-current-hunk-gutter) .insert-sign\" both have computed background-color alpha 0.25. Click \"Next hunk (.)\"; the single marked deleted zone is now the second one, with alpha 0.25. Click \"Next hunk (.)\" again; the single marked zone is the third one. Click \"Previous hunk (,)\"; the single marked zone is again the second one.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-rethink"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title='hunks.txt']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-bottom-change-label"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 1 of 3"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-current-hunk-gutter"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone').length",
+      "expect": "3"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[0].classList.contains('diff-current-hunk-deleted')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[1].classList.contains('diff-current-hunk-deleted')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[2].classList.contains('diff-current-hunk-deleted')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "parseFloat(getComputedStyle(document.querySelector('.inline-deleted-margin-view-zone.diff-current-hunk-deleted .delete-sign')).backgroundColor.match(/([\\d.]+)\\)?$/)[1])",
+      "expect": "0.25"
+    },
+    {
+      "action": "eval",
+      "expression": "parseFloat(getComputedStyle(document.querySelector('.margin-view-overlays \u003e div:has(.diff-current-hunk-gutter) .insert-sign')).backgroundColor.match(/([\\d.]+)\\)?$/)[1])",
+      "expect": "0.25"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Next hunk (.)"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 2 of 3"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-current-hunk-gutter"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[0].classList.contains('diff-current-hunk-deleted')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[1].classList.contains('diff-current-hunk-deleted')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[2].classList.contains('diff-current-hunk-deleted')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "parseFloat(getComputedStyle(document.querySelector('.inline-deleted-margin-view-zone.diff-current-hunk-deleted .delete-sign')).backgroundColor.match(/([\\d.]+)\\)?$/)[1])",
+      "expect": "0.25"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Next hunk (.)"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 3 of 3"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-current-hunk-gutter"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[0].classList.contains('diff-current-hunk-deleted')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[1].classList.contains('diff-current-hunk-deleted')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[2].classList.contains('diff-current-hunk-deleted')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Previous hunk (,)"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 2 of 3"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-current-hunk-gutter"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[0].classList.contains('diff-current-hunk-deleted')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[1].classList.contains('diff-current-hunk-deleted')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.inline-deleted-margin-view-zone')[2].classList.contains('diff-current-hunk-deleted')",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T09:03:15.752928116Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 598466,
+    "output_tokens": 16243,
+    "estimated_cost_usd": 0.5447361,
+    "mode": "generated"
+  }
+}

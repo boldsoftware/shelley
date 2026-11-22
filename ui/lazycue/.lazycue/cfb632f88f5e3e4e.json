@@ -1,0 +1,46 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A selected desktop Git Graph row keeps its selection background when hovered. Navigate to /c/{{SLUG}}, then open Git Graph: click the button with aria-label exactly \"Git Graph\" in the header's workspace toolbar (\".chat-workspace-actions\"). Wait for \".git-graph-container .git-graph-row-selected\" to be visible. Eval window.__selectedColor = getComputedStyle(document.querySelector(\".git-graph-container .git-graph-row-selected\")).backgroundColor without an expectation. Hover that same selected row. Eval getComputedStyle(document.querySelector(\".git-graph-container .git-graph-row-selected\")).backgroundColor === window.__selectedColor, expecting true.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-workspace-actions"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-workspace-actions [aria-label='Git Graph']",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container .git-graph-row-selected"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__selectedColor = getComputedStyle(document.querySelector('.git-graph-container .git-graph-row-selected')).backgroundColor"
+    },
+    {
+      "action": "hover",
+      "selector": ".git-graph-container .git-graph-row-selected"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.querySelector('.git-graph-container .git-graph-row-selected')).backgroundColor === window.__selectedColor",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T03:43:22.886518473Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 34065,
+    "output_tokens": 826,
+    "estimated_cost_usd": 0.05631225,
+    "mode": "generated"
+  }
+}

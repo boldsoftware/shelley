@@ -1,0 +1,81 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A wrapped replacement aligns the red deletion marker with the green addition in the phone overview ruler. Use waits, never sleeps. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Click the row titled \"wrap.txt\" in \".diff-rethink-mobile-files\". Wait for \".diff-rethink-deletion-overview-mark\" and \"Change 1 of 1\". Evaluate expecting true: the only \".inline-deleted-margin-view-zone\" is over 250px tall, the only red marker is over 30px tall, and the original overview canvas has computed visibility \"hidden\". The red marker's offsetTop differs by at most 2px from that deletion margin zone's own style.top multiplied by the marker's offsetHeight divided by the zone's offsetHeight (the exact wrapped zone height). Read the pixels at x=20 from \".diffOverview canvas.modified\" using getImageData; the first row with alpha \u003e 0 and green \u003e red * 1.15, divided by devicePixelRatio, is within 5px of the red marker's offsetTop + offsetHeight. Also evaluate expecting true: the \".diff-viewer-editor\" top minus \".diff-rethink-file-jump\" bottom is 6px (rounded), the \".diff-viewer-main\" background matches \".diff-rethink-change-nav\", and the change nav is 50px high.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title=\"wrap.txt\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-deletion-overview-mark"
+    },
+    {
+      "action": "wait_text",
+      "text": "Change 1 of 1"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const zones = document.querySelectorAll('.inline-deleted-margin-view-zone'); const marks = document.querySelectorAll('.diff-rethink-deletion-overview-mark'); const origCanvas = document.querySelector('.diffOverview canvas.original'); if (zones.length !== 1) return 'zone count is ' + zones.length; if (marks.length !== 1) return 'mark count is ' + marks.length; const zone = zones[0]; const mark = marks[0]; if (zone.offsetHeight \u003c= 250) return 'zone height ' + zone.offsetHeight + ' not \u003e 250'; if (mark.offsetHeight \u003c= 30) return 'mark height ' + mark.offsetHeight + ' not \u003e 30'; const origVis = origCanvas ? getComputedStyle(origCanvas).visibility : 'no-canvas'; if (origVis !== 'hidden') return 'original canvas visibility is ' + origVis; const zoneTop = parseFloat(zone.style.top); const expectedMarkTop = zoneTop * mark.offsetHeight / zone.offsetHeight; const diff = Math.abs(mark.offsetTop - expectedMarkTop); if (diff \u003e 2) return 'mark offsetTop ' + mark.offsetTop + ' differs by ' + diff + ' from expected ' + expectedMarkTop; return true; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const canvas = document.querySelector('.diffOverview canvas.modified'); const dpr = window.devicePixelRatio; const ctx = canvas.getContext('2d'); const mark = document.querySelector('.diff-rethink-deletion-overview-mark'); const data = ctx.getImageData(20, 0, 1, canvas.height); const pixels = data.data; let firstGreen = -1; for (let y = 0; y \u003c canvas.height; y++) { const i = y * 4; const r = pixels[i], g = pixels[i+1], b = pixels[i+2], a = pixels[i+3]; if (a \u003e 0 \u0026\u0026 g \u003e r * 1.15) { firstGreen = y; break; } } if (firstGreen \u003c 0) return 'no green row found'; const greenCss = firstGreen / dpr; const target = mark.offsetTop + mark.offsetHeight; const diff = Math.abs(greenCss - target); if (diff \u003e 5) return 'green row CSS ' + greenCss + ' differs by ' + diff + ' from markTop+markH=' + target; return true; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const editor = document.querySelector('.diff-viewer-editor'); const fileJump = document.querySelector('.diff-rethink-file-jump'); const main = document.querySelector('.diff-viewer-main'); const changeNav = document.querySelector('.diff-rethink-change-nav'); if (!editor || !fileJump || !main || !changeNav) return 'missing: editor=' + !!editor + ' fileJump=' + !!fileJump + ' main=' + !!main + ' changeNav=' + !!changeNav; const editorRect = editor.getBoundingClientRect(); const fileJumpRect = fileJump.getBoundingClientRect(); const gap = Math.round(editorRect.top - fileJumpRect.bottom); if (gap !== 6) return 'gap is ' + gap + ' not 6'; const mainBg = getComputedStyle(main).backgroundColor; const navBg = getComputedStyle(changeNav).backgroundColor; if (mainBg !== navBg) return 'bg mismatch: main=' + mainBg + ' nav=' + navBg; const navH = changeNav.offsetHeight; if (navH !== 50) return 'changeNav height is ' + navH + ' not 50'; return true; })()",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T13:00:59.107848839Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 307897,
+    "output_tokens": 9323,
+    "estimated_cost_usd": 0.28975665000000006,
+    "mode": "generated"
+  }
+}

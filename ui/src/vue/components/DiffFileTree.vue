@@ -20,6 +20,7 @@
     <div class="diff-tree-scroll" role="tree" aria-label="Files">
       <DiffTreeRows
         :rows="renderedRows"
+        :mobile="mobile"
         :selected-real-path="selectedRealPath"
         @select="onSelect"
         @toggle="toggle"
@@ -38,6 +39,7 @@ const props = defineProps<{
   entries: DiffFileTreeEntry[];
   selectedRealPath: string | null;
   ordered?: boolean;
+  mobile?: boolean;
 }>();
 const emit = defineEmits<{ (e: "select", realPath: string): void }>();
 

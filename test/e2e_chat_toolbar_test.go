@@ -141,7 +141,7 @@ func chatToolbarLinks(s *shelley, includeVM bool) []serverLink {
 // tools in the overflow menu.
 func chatToolbarOpen(mobile bool, tool string) string {
 	if mobile {
-		return `click More options, then click the visible button in the menu whose name contains "` + tool + `"`
+		return `click More options, then click the button named exactly "` + tool + `" inside ".chat-overflow-popover .overflow-menu-toolbar"`
 	}
 	if tool == "Diffs" || tool == "Git Graph" || tool == "Terminal" {
 		return `click the toolbar's button named exactly "` + tool + `"`
@@ -149,8 +149,8 @@ func chatToolbarOpen(mobile bool, tool string) string {
 	return `click More options, then click the button in the menu whose name contains "` + tool + `"`
 }
 
-func TestE2EChatToolbarCompact320(t *testing.T)  { chatToolbarCompact(t, useful(0), 0) }
-func TestE2EChatToolbarCompact393(t *testing.T)  { chatToolbarCompact(t, useful(0), 1) }
+func TestE2EChatToolbarCompact320(t *testing.T)  { chatToolbarCompact(t, useful(1), 0) }
+func TestE2EChatToolbarCompact393(t *testing.T)  { chatToolbarCompact(t, useful(1), 1) }
 func TestE2EChatToolbarCompact768(t *testing.T)  { chatToolbarCompact(t, useful(0), 2) }
 func TestE2EChatToolbarCompact1280(t *testing.T) { chatToolbarCompact(t, useful(0), 3) }
 
@@ -179,11 +179,12 @@ func chatToolbarCompact(t *testing.T, useful lazycue.Useful, i int) {
 	if !mobile {
 		step(`Click the VM link; it opens https://vm.example/website, and before closing it, eval window.opener === null in tab "popup" with expect "true".`)
 	}
-	step(`Click More options. The menu should be visible; eval window.menuLayout(%d, %d) with expect "ok". In the menu, buttons whose names contain "Command menu", "Edit File…" and "MCP Servers" should each be visible.`, W, H)
 	if mobile {
+		step(`Click More options. The menu should be visible; eval window.menuLayout(%d, %d) with expect "ok". The menu's ".overflow-menu-item" button named exactly "MCP Servers" should be visible.`, W, H)
 		step(`The menu should have no button whose name contains "New Conversation" (count 0). In the menu's icon row ".overflow-menu-toolbar", the buttons named exactly "Diffs", "Git Graph", "Terminal", "Edit File…" and "Command menu", and the button whose name contains "vm.example", should be visible.`)
 		step(`Eval window.menuRow("Command menu") and window.menuRow("Edit File…"), each with expect "hidden", and window.menuRow("Archive Conversation") with expect "shortcut hidden".`)
 	} else {
+		step(`Click More options. The menu should be visible; eval window.menuLayout(%d, %d) with expect "ok". In the menu, buttons whose names contain "Command menu", "Edit File…" and "MCP Servers" should each be visible.`, W, H)
 		step(`The menu should have no button whose name contains "Diffs", "Git Graph", "Terminal", "vm.example" or "New Conversation" (count 0 each). ".overflow-menu-toolbar" should be hidden.`)
 		step(`Eval window.menuRow("Command menu"), window.menuRow("Edit File…") and window.menuRow("Archive Conversation"), each with expect "shortcut visible".`)
 	}
@@ -202,7 +203,11 @@ func chatToolbarCompact(t *testing.T, useful lazycue.Useful, i int) {
 	if W == 1280 {
 		step(`The tab ".terminal-panel-tab[title=\"printf toolbar-background\"]" should still be visible. Click its button named exactly "Close terminal"; the tab should be gone (count 0).`)
 	}
-	step(`Open the diffs: %s. ".diff-viewer-overlay" should be visible, and the first "select.diff-viewer-select" in it should have the value exactly "toolbar-fixture.txt". Press Escape; the overlay should become hidden.`, chatToolbarOpen(mobile, "Diffs"))
+	if mobile {
+		step(`Open the diffs: %s. ".diff-viewer-rethink" should be visible. `+mobileDiffWorking+`Click ".diff-viewer-rethink .diff-rethink-mobile-files.is-overview .diff-tree-row[title='toolbar-fixture.txt']"; ".diff-rethink-file-name" should read "toolbar-fixture.txt". Press Escape once; wait for ".diff-viewer-rethink" to become hidden and ".git-graph-container" visible (both share the ".diff-viewer-overlay" class on their wrapper). Press Escape to close Git Graph and wait for ".git-graph-container" to become hidden. Use waits, not sleeps.`, chatToolbarOpen(mobile, "Diffs"))
+	} else {
+		step(`Open the diffs: %s. ".diff-viewer-overlay" should be visible, and the first "select.diff-viewer-select" in it should have the value exactly "toolbar-fixture.txt". Press Escape; the overlay should become hidden.`, chatToolbarOpen(mobile, "Diffs"))
+	}
 	step(`Open the git graph: %s. ".git-graph-container" should be visible, and one of its ".git-graph-subject" elements should contain "Toolbar fixture commit". Press Escape; it should become hidden.`, chatToolbarOpen(mobile, "Git Graph"))
 	step(`Open the file finder: %s. The textbox named "Filter files" should be visible; fill it with "toolbar-fixture"; there should be exactly one ".grp-row". Press Enter in the textbox. The dialog named exactly "Edit {{FILE}}" (role dialog) should be visible, with a visible ".view-line" in it containing "after toolbar edit". Click the dialog's button named exactly "Close (Esc)"; the dialog should become hidden.`, chatToolbarOpen(mobile, "Edit File…"))
 	if mobile {

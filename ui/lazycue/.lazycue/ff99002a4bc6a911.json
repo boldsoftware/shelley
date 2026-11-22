@@ -1,0 +1,194 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The phone file picker fills the content width and height beneath its 48px toolbar, scrolls, and dismisses without closing the viewer. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Click the row with title \"change-01.txt\" in \".diff-rethink-mobile-files\". The file position reads \"File 1 of 35\"; the bottom \".diff-rethink-bottom-change-label\" reads \"Change 1 of 1\" without a file count. The \".diff-rethink-file-jump\" spans the phone width with 8px side gutters (compare its bounding box with innerWidth). Click it. The dialog named \"Choose file\" is visible. Compare its getBoundingClientRect() with \".diff-viewer-content\": left and right edges coincide, its top is 48px below content top and its bottom coincides with content bottom (round differences; eval expecting true). Its \".diff-tree-scroll\" has scrollHeight greater than clientHeight. Scroll the row titled \"change-35.txt\" into view and click it. The file name is \"change-35.txt\", the position is \"File 35 of 35\", and the dialog is hidden. Open the picker again, resize viewport to 390x500, and repeat the edge and 48px geometry assertion. Press Escape: picker hidden, overlay still visible. Open picker again, click its button named exactly \"Close\": picker hidden and overlay visible.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover, button[aria-label='More options']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label^=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title='change-01.txt']"
+    },
+    {
+      "action": "wait_text",
+      "text": "File 1 of 35"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-rethink-file-jump .diff-rethink-file-position",
+      "text": "File 1 of 35"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 1 of 1"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "File"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('.diff-rethink-file-jump'); const r = btn.getBoundingClientRect(); const iw = window.innerWidth; return Math.abs(r.left - 8) \u003c= 1 \u0026\u0026 Math.abs(iw - r.right - 8) \u003c= 1; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-file-jump"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Choose file"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const dialog = document.querySelector('.diff-rethink-mobile-files'); const content = document.querySelector('.diff-viewer-content'); const dr = dialog.getBoundingClientRect(); const cr = content.getBoundingClientRect(); return Math.round(dr.left) === Math.round(cr.left) \u0026\u0026 Math.round(dr.right) === Math.round(cr.right) \u0026\u0026 Math.round(dr.top - cr.top) === 48 \u0026\u0026 Math.round(dr.bottom) === Math.round(cr.bottom); })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const scroll = document.querySelector('.diff-rethink-mobile-files .diff-tree-scroll'); return scroll.scrollHeight \u003e scroll.clientHeight; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[title=\"change-35.txt\"]').scrollIntoView()"
+    },
+    {
+      "action": "click",
+      "selector": "[title='change-35.txt']"
+    },
+    {
+      "action": "wait_text_gone",
+      "text": "File 1 of 35"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-rethink-file-jump .diff-rethink-file-name",
+      "text": "change-35.txt"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-rethink-file-jump .diff-rethink-file-position",
+      "text": "File 35 of 35"
+    },
+    {
+      "action": "assert_not_visible",
+      "role": "dialog",
+      "name": "Choose file"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-file-jump"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Choose file"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 500
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const dialog = document.querySelector('.diff-rethink-mobile-files'); const content = document.querySelector('.diff-viewer-content'); const dr = dialog.getBoundingClientRect(); const cr = content.getBoundingClientRect(); return Math.round(dr.left) === Math.round(cr.left) \u0026\u0026 Math.round(dr.right) === Math.round(cr.right) \u0026\u0026 Math.round(dr.top - cr.top) === 48 \u0026\u0026 Math.round(dr.bottom) === Math.round(cr.bottom); })()",
+      "expect": "true"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_not_visible",
+      "role": "dialog",
+      "name": "Choose file"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-file-jump"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Choose file"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close",
+      "exact": true,
+      "within": {
+        "role": "dialog",
+        "name": "Choose file"
+      }
+    },
+    {
+      "action": "assert_not_visible",
+      "role": "dialog",
+      "name": "Choose file"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-viewer-overlay"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T02:26:38.367448688Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 193368,
+    "output_tokens": 3969,
+    "estimated_cost_usd": 0.17954595,
+    "mode": "generated"
+  }
+}
