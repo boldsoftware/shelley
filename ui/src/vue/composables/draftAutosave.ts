@@ -12,6 +12,8 @@ export interface DraftAutosaveControls {
   schedule(value: string): void;
   cancel(): void;
   flush(): void;
+  // Whether a value waits to be saved, or is being saved.
+  pending(): boolean;
 }
 
 export function useDraftAutosave(
@@ -89,5 +91,5 @@ export function useDraftAutosave(
 
   // Keep a setter parity hook (no-op for most callers).
   void saveFn;
-  return { schedule, cancel, flush };
+  return { schedule, cancel, flush, pending: () => pendingValue !== null };
 }

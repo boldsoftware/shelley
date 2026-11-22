@@ -6,7 +6,7 @@
 // Any site can run the bookmarklet's code or fake it, so Shelley starts one
 // only for sites the user allowed to, by the origin the browser vouches for.
 // Allowing a site trusts every script on it, bookmarklet or not, to start
-// recordings. Behind the "bookmarklet" feature flag.
+// recordings.
 import { ref, shallowRef } from "vue";
 import type { ReviewEvent } from "../components/reviewCapture";
 import {
@@ -23,8 +23,6 @@ import {
 const STORAGE_KEY = "shelley-bookmarklet-page";
 // Origins the user let start recordings.
 const SITES_KEY = "shelley-bookmarklet-sites";
-
-export const bookmarkletEnabled = window.__SHELLEY_INIT__?.bookmarklet === true;
 
 export const bookmarkletPage = shallowRef<PageContext | null>(null);
 export const bookmarkletLinked = ref(false);
@@ -77,8 +75,19 @@ function onMessage(event: MessageEvent) {
   }
 }
 
+// initBookmarklet runs before the app mounts, so reading what's stored must
+// not throw, whatever it is, nor if storage is blocked.
+function stored(storage: () => Storage, key: string): unknown {
+  try {
+    return JSON.parse(storage().getItem(key) ?? "null");
+  } catch {
+    return null;
+  }
+}
+
 function storedSites(): string[] {
-  return JSON.parse(localStorage.getItem(SITES_KEY) ?? "[]");
+  const sites = stored(() => localStorage, SITES_KEY);
+  return Array.isArray(sites) ? sites.filter((site) => typeof site === "string") : [];
 }
 
 function storeSites(sites: string[]) {
@@ -110,7 +119,7 @@ export function forgetBookmarkletSite(site: string) {
 // Call once before mounting the app. The bookmarklet opens Shelley in a
 // window of its own; a page framing Shelley must not fill in its composer.
 export function initBookmarklet() {
-  if (!bookmarkletEnabled || window.parent !== window) return;
+  if (window.parent !== window) return;
   bookmarkletSites.value = storedSites();
   // Other Shelley windows may allow or forget sites.
   window.addEventListener("storage", (event) => {
@@ -118,7 +127,9 @@ export function initBookmarklet() {
   });
   const hash = location.hash.slice(1);
   let page: PageContext | null = null;
-  if (hash.startsWith(FRAGMENT)) {
+  // The bookmarklet opens /new; elsewhere, the fragment would add to a chat
+  // or draft the user has.
+  if (hash.startsWith(FRAGMENT) && location.pathname === "/new") {
     try {
       page = parsePageContext(JSON.parse(decodeURIComponent(hash.slice(FRAGMENT.length))));
     } catch {
@@ -126,13 +137,16 @@ export function initBookmarklet() {
     }
     history.replaceState(history.state, "", location.pathname + location.search);
     if (page) {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(page));
+      try {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(page));
+      } catch {
+        // Then a reload forgets the page.
+      }
       bookmarkletInserts.value = [pageText(page)];
     }
   } else {
     // A reload keeps the link, but not a second copy of the page text.
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    page = stored ? parsePageContext(JSON.parse(stored)) : null;
+    page = parsePageContext(stored(() => sessionStorage, STORAGE_KEY));
   }
   bookmarkletPage.value = page;
   if (!page || !window.opener) return;

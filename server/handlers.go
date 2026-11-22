@@ -635,16 +635,10 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 		s.internalError(w, "Failed to read feature flags", err)
 		return
 	}
-	bookmarklet, err := s.flagOn(r.Context(), FlagBookmarklet)
-	if err != nil {
-		s.internalError(w, "Failed to read feature flags", err)
-		return
-	}
 	initData := map[string]interface{}{
 		// workspace mode: see FlagWorkspace.
 		"workspace":                 s.workspaceMode(),
 		"dev_prod_tabs":             devProdTabs,
-		"bookmarklet":               bookmarklet,
 		"models":                    modelList,
 		"model_upgrade_prompt_done": promptDone != "",
 		"default_model":             defaultModel,

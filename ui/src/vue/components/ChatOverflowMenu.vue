@@ -163,7 +163,6 @@
       </button>
       <!-- Drag it to the bookmarks bar, or click for the modal. -->
       <a
-        v-if="bookmarkletLink"
         class="overflow-menu-item"
         :href="bookmarkletLink"
         aria-haspopup="dialog"
@@ -346,7 +345,6 @@
       </div>
     </Modal>
     <BookmarkletModal
-      v-if="bookmarkletLink"
       :is-open="bookmarkletOpen"
       :href="bookmarkletLink"
       @close="bookmarkletOpen = false"
@@ -365,7 +363,6 @@ import WorkspaceActionIcon, { type WorkspaceAction } from "./WorkspaceActionIcon
 import type { Link } from "../../types";
 import type { Locale } from "../../i18n/types";
 import { useI18n } from "../composables/i18n";
-import { bookmarkletEnabled } from "../composables/bookmarklet";
 import { bookmarkletHref } from "../../bookmarklet/href";
 import { BOOKMARKLET_SOURCE } from "../../bookmarklet/source";
 import { useConversationView } from "../composables/conversationView";
@@ -441,9 +438,7 @@ const onEditAgentsMd = () => (emit("edit-agents-md"), hide());
 const onEditFile = () => (emit("edit-file"), hide());
 const onMcpServers = () => (emit("open-mcp-servers"), hide());
 const onCheckVersion = () => (emit("check-version"), hide());
-const bookmarkletLink = bookmarkletEnabled
-  ? bookmarkletHref(BOOKMARKLET_SOURCE, location.origin)
-  : null;
+const bookmarkletLink = bookmarkletHref(BOOKMARKLET_SOURCE, location.origin);
 const bookmarkletOpen = ref(false);
 function onBookmarklet() {
   hide();

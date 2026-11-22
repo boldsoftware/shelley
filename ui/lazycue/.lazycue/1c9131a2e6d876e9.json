@@ -1,0 +1,52 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A chat from the bookmarklet is not saved as a draft until the user edits it, as any page, even a link, can open one. {{CHAT}} is Shelley's new conversation page with a chat from the bookmarklet about http://host.test/ (\"Host Page\"), nothing selected. Call \"drafts\" lists the text of each draft the server keeps, one per line (\"none\" when there are none). Perform the steps in order. 1. Navigate to {{CHAT}}. 2. [data-testid=\"message-input\"] must have the value exactly \"Page: Host Page — http://host.test/\". 3. Wait longer than the composer takes to save a draft: eval new Promise((resolve) =\u003e setTimeout(() =\u003e resolve('waited'), 1500)) expecting \"waited\". 4. Call \"drafts\": it must return exactly \"none\". 5. Click the message input, press End, and type \" Why?\". 6. Call \"drafts\" should come to return exactly \"Page: Host Page — http://host.test/ Why?\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "{{CHAT}}"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Page: Host Page — http://host.test/"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve) =\u003e setTimeout(() =\u003e resolve('waited'), 1500))",
+      "expect": "waited"
+    },
+    {
+      "action": "call",
+      "value": "drafts",
+      "expect": "none"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "press_key",
+      "key": "End"
+    },
+    {
+      "action": "type",
+      "value": " Why?"
+    },
+    {
+      "action": "call",
+      "value": "drafts",
+      "expect": "Page: Host Page — http://host.test/ Why?"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T23:48:26.032354888Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 7572,
+    "output_tokens": 275,
+    "estimated_cost_usd": 0.00944145,
+    "mode": "generated"
+  }
+}

@@ -27,6 +27,7 @@ func TestFeatureFlagsHandlers(t *testing.T) {
 		"tool-pills":               `true`,
 		"reflection-emoji-favicon": `false`,
 		"patch-simple":             `true`,
+		"bookmarklet":              `true`,
 	} {
 		if err := database.SetFeatureFlagOverride(ctx, name, value); err != nil {
 			t.Fatal(err)
@@ -46,7 +47,7 @@ func TestFeatureFlagsHandlers(t *testing.T) {
 	var found *FeatureFlagDTO
 	for i := range list {
 		switch list[i].Name {
-		case "stale-unknown", "tool-pills", "reflection-emoji-favicon", "patch-simple":
+		case "stale-unknown", "tool-pills", "reflection-emoji-favicon", "patch-simple", "bookmarklet":
 			t.Fatalf("removed or unknown flag %q leaked into response", list[i].Name)
 		case "test-handlers-flag":
 			found = &list[i]
@@ -68,7 +69,7 @@ func TestFeatureFlagsHandlers(t *testing.T) {
 	}
 
 	// POST: unknown and removed flags are rejected.
-	for _, name := range []string{"definitely-not-registered", "tool-pills", "reflection-emoji-favicon", "patch-simple"} {
+	for _, name := range []string{"definitely-not-registered", "tool-pills", "reflection-emoji-favicon", "patch-simple", "bookmarklet"} {
 		w = httptest.NewRecorder()
 		body := fmt.Sprintf(`{"name":%q,"value":true}`, name)
 		srv.handleSetFeatureFlag(w, httptest.NewRequest("POST", "/feature-flags", strings.NewReader(body)))

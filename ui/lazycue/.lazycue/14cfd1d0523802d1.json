@@ -1,0 +1,49 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Shelley in a frame ignores the bookmarklet's chats. {{CHAT}} is Shelley's new conversation page with a chat from the bookmarklet about http://host.test/ (\"Host Page\"), nothing selected. Perform the steps in order. 1. Navigate to /new. 2. Frame it: eval (() =\u003e { const frame = document.createElement('iframe'); frame.src = '{{CHAT}}'; document.body.append(frame); return 'framed'; })(). 3. In the frame (steps with \"frame\": \"iframe\"), [data-testid=\"message-input\"] should be visible. 4. In the frame, it must have the value exactly \"\" (empty). 5. Shelley's own window takes the same chat (the frame goes first, as the new conversation composer's text is shared across windows): navigate to about:blank, then to {{CHAT}}. 6. [data-testid=\"message-input\"] must have the value exactly \"Page: Host Page — http://host.test/\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const frame = document.createElement('iframe'); frame.src = '{{CHAT}}'; document.body.append(frame); return 'framed'; })()",
+      "expect": "framed"
+    },
+    {
+      "action": "wait_visible",
+      "frame": "iframe",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "assert_value",
+      "frame": "iframe",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "navigate",
+      "url": "about:blank"
+    },
+    {
+      "action": "navigate",
+      "url": "{{CHAT}}"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "Page: Host Page — http://host.test/"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T23:21:52.0149017Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 15736,
+    "output_tokens": 628,
+    "estimated_cost_usd": 0.042356099999999994,
+    "mode": "generated"
+  }
+}

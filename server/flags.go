@@ -40,15 +40,6 @@ var FlagNextPromptSuggestions = featureflags.Register(featureflags.Flag{
 	Default:     true,
 })
 
-// FlagBookmarklet offers, in the overflow menu, a bookmarklet that opens a
-// chat linked to the page it is clicked on (see ui/src/bookmarklet). Off,
-// Shelley also ignores chats opened that way.
-var FlagBookmarklet = featureflags.Register(featureflags.Flag{
-	Name:        "bookmarklet",
-	Description: "Overflow menu offers a bookmarklet that opens a chat about any page, linked to it to pick elements and record what you do there. Applies on reload.",
-	Default:     false,
-})
-
 // flagOn reports whether the boolean flag f is on: its stored override, or
 // else its default.
 func (s *Server) flagOn(ctx context.Context, f featureflags.Flag) (bool, error) {

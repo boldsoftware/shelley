@@ -4693,9 +4693,11 @@ function reportComposer(value: string) {
   if (props.conversationId && !props.currentConversation?.is_draft) return;
   props.onComposerInput?.(value, selectedCwd.value || null);
 }
-function appendToComposer(text: string) {
+// autosave false: text the user hasn't touched makes no draft by itself (see
+// handleDraftChange).
+function appendToComposer(text: string, autosave = true) {
   const value = draftText ? `${draftText}\n\n${text}` : text;
-  handleDraftChange(value);
+  handleDraftChange(value, autosave);
   draftSeed.value = { value };
 }
 const lazyDraftId = ref<string | null>(null);
@@ -4786,7 +4788,7 @@ async function saveDraft(value: string) {
 }
 
 const draftAutosave = useDraftAutosave(saveDraft);
-function handleDraftChange(value: string) {
+function handleDraftChange(value: string, autosave = true) {
   perfCount("chat.draftChange");
   draftText = value;
   if (inflightDraft) inflightDraft.text = value;
@@ -4802,7 +4804,12 @@ function handleDraftChange(value: string) {
   // updated_at for draft/new sessions and "" for non-draft ones (nothing to
   // reconcile against; the cache is authoritative).
   saveCachedDraft(draftConvId, value, draftSyncedAt);
-  draftAutosave.schedule(value);
+  // Text that makes no draft by itself still joins a draft that exists, is
+  // being created, or has a save pending; else that save would carry the
+  // older text, and keep it.
+  if (autosave || draftConvId || inflightCreate || draftAutosave.pending()) {
+    draftAutosave.schedule(value);
+  }
   reportComposer(value);
 }
 function handleDraftSendStarted() {
@@ -5526,7 +5533,6 @@ watch(
   },
 );
 
-// Text from the bookmarklet's page: the page itself, then picked elements.
 const bookmarkletStatusKey = computed(() =>
   bookmarkletTracing.value
     ? "bookmarkletTracking"
@@ -5537,12 +5543,16 @@ const bookmarkletStatusKey = computed(() =>
 const bookmarkletHost = computed(() =>
   bookmarkletPage.value ? new URL(bookmarkletPage.value.url).host : "",
 );
+// Text from the bookmarklet's page: the page itself, then picked elements.
+// Any page can send it, even by a link to Shelley, so it isn't saved as a
+// draft until the user edits it or starts a recording, here or by letting the
+// page's site start them.
 watch(
   bookmarkletInserts,
   (inserts) => {
     if (!inserts.length) return;
     bookmarkletInserts.value = [];
-    for (const text of inserts) appendToComposer(text);
+    for (const text of inserts) appendToComposer(text, false);
   },
   { immediate: true },
 );

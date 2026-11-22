@@ -38,12 +38,11 @@ const (
 )
 
 // bookmarkletSetup sets up what the spec's openFromBookmarklet did: the
-// media mocks, the bookmarklet feature flag, the message log, and the host
-// page, which also keeps the bookmarklet a step hands it (POST
-// http://host.test/bookmarklet) and gives it back (GET).
+// media mocks, the message log, and the host page, which also keeps the
+// bookmarklet a step hands it (POST http://host.test/bookmarklet) and gives
+// it back (GET).
 func (s *shelley) bookmarkletSetup() {
 	s.mediaMocks(true, true)
-	s.patchInit(map[string]any{"bookmarklet": true})
 	s.initScript(bookmarkletMessagesJS)
 	s.v("PAGE", bookmarkletPage)
 	var mu sync.Mutex
@@ -246,14 +245,44 @@ func TestE2EBookmarkletRecordingPermission(t *testing.T) {
 }
 
 func TestE2EBookmarkletFramedShelleyIgnoresChats(t *testing.T) {
-	e2e(t, useful(0), `Shelley in a frame ignores the bookmarklet's chats. The bookmarklet feature flag is on. {{CHAT}} is Shelley's new conversation page with a chat from the bookmarklet about http://host.test/ ("Host Page"), nothing selected. Perform the steps in order. 1. Navigate to /new. 2. Frame it: eval (() => { const frame = document.createElement('iframe'); frame.src = '{{CHAT}}'; document.body.append(frame); return 'framed'; })(). 3. In the frame (steps with "frame": "iframe"), [data-testid="message-input"] should be visible. 4. In the frame, it must have the value exactly "" (empty). 5. Shelley's own window takes the same chat (the frame goes first, as the new conversation composer's text is shared across windows): navigate to about:blank, then to {{CHAT}}. 6. [data-testid="message-input"] must have the value exactly "Page: Host Page — http://host.test/".`, func(s *shelley) {
-		s.patchInit(map[string]any{"bookmarklet": true})
+	e2e(t, useful(0), `Shelley in a frame ignores the bookmarklet's chats. {{CHAT}} is Shelley's new conversation page with a chat from the bookmarklet about http://host.test/ ("Host Page"), nothing selected. Perform the steps in order. 1. Navigate to /new. 2. Frame it: eval (() => { const frame = document.createElement('iframe'); frame.src = '{{CHAT}}'; document.body.append(frame); return 'framed'; })(). 3. In the frame (steps with "frame": "iframe"), [data-testid="message-input"] should be visible. 4. In the frame, it must have the value exactly "" (empty). 5. Shelley's own window takes the same chat (the frame goes first, as the new conversation composer's text is shared across windows): navigate to about:blank, then to {{CHAT}}. 6. [data-testid="message-input"] must have the value exactly "Page: Host Page — http://host.test/".`, func(s *shelley) {
 		s.v("CHAT", bookmarkletChat)
 	})
 }
 
-func TestE2EBookmarkletWithoutFlag(t *testing.T) {
-	e2e(t, useful(0), `Without the bookmarklet feature flag there's no bookmarklet, and Shelley ignores its chats. {{CHAT}} is Shelley's new conversation page with a chat from the bookmarklet about http://host.test/ ("Host Page"), nothing selected. Perform the steps in order. 1. Navigate to {{CHAT}}. 2. Click the button whose accessible name contains "More options". 3. An element with the text "MCP Servers" should be visible. 4. There must be exactly 0 [data-testid="bookmarklet-menu-item"] elements. 5. [data-testid="message-input"] must have the value exactly "" (empty). 6. There must be exactly 0 [data-testid="bookmarklet-status"] elements.`, func(s *shelley) {
+func TestE2EBookmarkletChatSavesNoDraftUntilEdited(t *testing.T) {
+	e2e(t, useful(0), `A chat from the bookmarklet is not saved as a draft until the user edits it, as any page, even a link, can open one. {{CHAT}} is Shelley's new conversation page with a chat from the bookmarklet about http://host.test/ ("Host Page"), nothing selected. Call "drafts" lists the text of each draft the server keeps, one per line ("none" when there are none). Perform the steps in order. 1. Navigate to {{CHAT}}. 2. [data-testid="message-input"] must have the value exactly "Page: Host Page — http://host.test/". 3. Wait longer than the composer takes to save a draft: eval new Promise((resolve) => setTimeout(() => resolve('waited'), 1500)) expecting "waited". 4. Call "drafts": it must return exactly "none". 5. Click the message input, press End, and type " Why?". 6. Call "drafts" should come to return exactly "Page: Host Page — http://host.test/ Why?".`, func(s *shelley) {
 		s.v("CHAT", bookmarkletChat)
+		s.bookmarkletDrafts()
+	})
+}
+
+func TestE2EBookmarkletPicksJoinTheDraft(t *testing.T) {
+	e2e(t, useful(0), `Once the user edits a chat from the bookmarklet, what they pick goes into its draft too. Call "drafts" lists the text of each draft the server keeps ("none" when there are none). `+bookmarkletOpen(false)+`1. In the Shelley window, [data-testid="message-input"] must have the value exactly {{PAGE}}. 2. In the Shelley window, click the message input, press Control+End, and type " Why?". 3. In tab "host", click the toolbar's "Pick" button, then click the page's h1. 4. In the Shelley window, the message input's value must be exactly {{EDITED}}. 5. Call "drafts" should come to return exactly {{EDITED}}.`, func(s *shelley) {
+		s.bookmarkletSetup()
+		s.bookmarkletDrafts()
+		s.v("EDITED", bookmarkletPage+" Why?"+bookmarkletPickedH1)
+	})
+}
+
+// bookmarkletDrafts adds call "drafts": the text of each draft the server
+// keeps, one per line, or "none".
+func (s *shelley) bookmarkletDrafts() {
+	s.call("drafts", func() string {
+		var list []struct {
+			IsDraft bool   `json:"is_draft"`
+			Draft   string `json:"draft"`
+		}
+		s.api("GET", "/api/conversations", nil, &list)
+		var drafts []string
+		for _, c := range list {
+			if c.IsDraft {
+				drafts = append(drafts, c.Draft)
+			}
+		}
+		if len(drafts) == 0 {
+			return "none"
+		}
+		return strings.Join(drafts, "\n")
 	})
 }

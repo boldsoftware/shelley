@@ -302,8 +302,6 @@ export interface InitData {
   workspace?: boolean;
   // workspace mode's sidebar dev/prod tabs: see services/exeVms.ts.
   dev_prod_tabs?: boolean;
-  // The bookmarklet feature flag: see vue/composables/bookmarklet.ts.
-  bookmarklet?: boolean;
   // True once the "upgrade your other conversations too?" offer has been
   // answered, so it is never made again.
   model_upgrade_prompt_done?: boolean;

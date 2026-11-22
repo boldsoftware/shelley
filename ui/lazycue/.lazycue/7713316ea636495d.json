@@ -1,0 +1,39 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "At 393px wide, the overflow menu follows the requested four groups. The server presents itself as host vm.example with links \"Manage on exe.dev\", \"vm.example\" and \"Documentation\". 1. Navigate to /c/{{SLUG}} and click the button with aria-label exactly \"More options\". 2. \".overflow-menu-panel\" should be visible. 3. This eval lists its visible rows: Array.from(document.querySelector('.overflow-menu-panel').children).filter((child) =\u003e child.checkVisibility()).map((child) =\u003e { if (child.classList.contains('overflow-menu-divider')) return 'separator'; if (child.classList.contains('overflow-quick-controls')) return 'preferences'; if (child.classList.contains('overflow-menu-toolbar')) return 'icons: ' + [...child.querySelectorAll('button')].map((b) =\u003e b.ariaLabel).join(', '); const row = child.cloneNode(true); row.querySelectorAll('.overflow-menu-shortcut, .overflow-menu-cwd, .overflow-menu-language, .version-menu-dot').forEach((extra) =\u003e extra.remove()); return row.textContent.trim().replace(/\\s+/g, ' '); }). Its result must be exactly [\"icons: Diffs, Git Graph, Terminal, Edit File…, Command menu, vm.example\",\"Manage on exe.dev\",\"Documentation\",\"separator\",\"Model\",\"Directory\",\"Export Conversation\",\"Archive Conversation\",\"separator\",\"Edit User AGENTS.md\",\"MCP Servers\",\"Bookmarklet\",\"separator\",\"preferences\",\"Change Language\",\"Check for New Version\"]. 4. There should be exactly 3 \".overflow-menu-divider\" elements in the panel.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label='More options']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".overflow-menu-panel",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelector('.overflow-menu-panel').children).filter((child) =\u003e child.checkVisibility()).map((child) =\u003e { if (child.classList.contains('overflow-menu-divider')) return 'separator'; if (child.classList.contains('overflow-quick-controls')) return 'preferences'; if (child.classList.contains('overflow-menu-toolbar')) return 'icons: ' + [...child.querySelectorAll('button')].map((b) =\u003e b.ariaLabel).join(', '); const row = child.cloneNode(true); row.querySelectorAll('.overflow-menu-shortcut, .overflow-menu-cwd, .overflow-menu-language, .version-menu-dot').forEach((extra) =\u003e extra.remove()); return row.textContent.trim().replace(/\\s+/g, ' '); })",
+      "expect": "[\"icons: Diffs, Git Graph, Terminal, Edit File…, Command menu, vm.example\",\"Manage on exe.dev\",\"Documentation\",\"separator\",\"Model\",\"Directory\",\"Export Conversation\",\"Archive Conversation\",\"separator\",\"Edit User AGENTS.md\",\"MCP Servers\",\"Bookmarklet\",\"separator\",\"preferences\",\"Change Language\",\"Check for New Version\"]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".overflow-menu-panel .overflow-menu-divider",
+      "count": 3
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T23:45:47.143693877Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 113088,
+    "output_tokens": 3656,
+    "estimated_cost_usd": 0.13719195,
+    "mode": "generated"
+  }
+}
