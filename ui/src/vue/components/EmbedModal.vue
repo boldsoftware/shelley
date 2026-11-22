@@ -1,17 +1,17 @@
-<!-- Edit with Shelley: the snippet that puts embed.js's button on the
-     user's own pages, and the sites whose pages may frame Shelley
-     (/api/embed-origins). On exe.dev, its proxy serves the script and
-     decides which pages may frame Shelley. -->
+<!-- Edit with Shelley: the snippet (embed/edit-with-shelley.html) that
+     puts a button on the user's own pages to open Shelley beside them, and
+     the sites whose pages may frame Shelley (/api/embed-origins). On
+     exe.dev, its proxy decides which pages may frame Shelley. -->
 <template>
   <Modal
     :is-open="isOpen"
     :title="t('editWithShelley')"
-    class-name="embed-modal"
+    class-name="embed-modal modal-wide"
     @close="emit('close')"
   >
     <p class="embed-help">{{ t("embedHelp") }}</p>
     <div class="embed-snippet">
-      <code data-testid="embed-snippet">{{ snippet }}</code>
+      <pre data-testid="embed-snippet">{{ snippet }}</pre>
       <button
         type="button"
         :aria-label="copied ? t('copied') : t('copy')"

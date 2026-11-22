@@ -1,0 +1,130 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The command palette's Edit with Shelley gives the snippet and the sites that may frame Shelley. \"The dialog\" is \".embed-modal\". Perform the steps in order. 1. Navigate to /new. 2. [data-testid=\"message-input\"] should be visible. 3. Press Control+k. 4. Fill \".command-palette-input\" with \"edit with shelley\". 5. Click the first \".command-palette-item\". 6. The dialog's \".modal-title\" should have exactly the text \"Edit with Shelley\". 7. The snippet is this Shelley's: eval document.querySelector('.embed-modal [data-testid=embed-snippet]').textContent.includes('\u003ciframe src=\"{{ORIGIN}}/\" title=\"Shelley\"') expecting true. 8. It starts with the advice on whom to show it to: eval document.querySelector('.embed-modal [data-testid=embed-snippet]').textContent.startsWith('\u003c!-- Edit with Shelley: a button that opens Shelley beside this page.\\n     Only people who can sign in to your Shelley can use it,') expecting true. 9. The list named \"Sites whose pages can open Shelley\" (role list) must contain the text \"http://app.test\". 10. In the dialog, fill the textbox named \"Sites whose pages can open Shelley\" with \"app.example.com\" and click the button named exactly \"Add\". 11. The dialog's alert (role alert) should contain the text \"as https://app.example.com\". 12. Fill that textbox with \"HTTP://OTHER.TEST/\" and click \"Add\". 13. The list should contain the text \"http://other.test\"; the textbox must have the value exactly \"\"; there must be exactly 0 elements with role alert in the dialog. 14. Click the button named exactly \"Remove http://other.test\". 15. The list must not contain the text \"http://other.test\". 16. Call \"csp\": it must return exactly \"http://app.test, not http://other.test\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "edit with shelley"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item",
+      "nth": 0
+    },
+    {
+      "action": "assert_text",
+      "selector": ".embed-modal .modal-title",
+      "text": "Edit with Shelley"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.embed-modal [data-testid=embed-snippet]').textContent.includes('\u003ciframe src=\"{{ORIGIN}}/\" title=\"Shelley\"')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.embed-modal [data-testid=embed-snippet]').textContent.startsWith('\u003c!-- Edit with Shelley: a button that opens Shelley beside this page.\\n     Only people who can sign in to your Shelley can use it,')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text_contains",
+      "role": "list",
+      "name": "Sites whose pages can open Shelley",
+      "text": "http://app.test"
+    },
+    {
+      "action": "fill",
+      "selector": ".embed-modal",
+      "role": "textbox",
+      "name": "Sites whose pages can open Shelley",
+      "value": "app.example.com"
+    },
+    {
+      "action": "click",
+      "selector": ".embed-modal",
+      "role": "button",
+      "name": "Add",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".embed-modal",
+      "role": "alert",
+      "text": "as https://app.example.com"
+    },
+    {
+      "action": "fill",
+      "selector": ".embed-modal",
+      "role": "textbox",
+      "name": "Sites whose pages can open Shelley",
+      "value": "HTTP://OTHER.TEST/"
+    },
+    {
+      "action": "click",
+      "selector": ".embed-modal",
+      "role": "button",
+      "name": "Add",
+      "exact": true
+    },
+    {
+      "action": "assert_text_contains",
+      "role": "list",
+      "name": "Sites whose pages can open Shelley",
+      "text": "http://other.test"
+    },
+    {
+      "action": "assert_value",
+      "selector": ".embed-modal",
+      "role": "textbox",
+      "name": "Sites whose pages can open Shelley",
+      "value": ""
+    },
+    {
+      "action": "assert_count",
+      "selector": ".embed-modal [role=alert]",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".embed-modal",
+      "role": "button",
+      "name": "Remove http://other.test",
+      "exact": true
+    },
+    {
+      "action": "assert_text_not_contains",
+      "role": "list",
+      "name": "Sites whose pages can open Shelley",
+      "text": "http://other.test"
+    },
+    {
+      "action": "call",
+      "value": "csp",
+      "expect": "http://app.test, not http://other.test"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T00:34:11.836173326Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 16683,
+    "output_tokens": 1639,
+    "estimated_cost_usd": 0.0374088,
+    "mode": "generated"
+  }
+}

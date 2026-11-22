@@ -285,6 +285,9 @@ func TestEnvPromptNamesTheHosts(t *testing.T) {
 	if !strings.Contains(got, "OTHER HOSTS the test answers for in every tab: https://docs.example, https://vm.example\nAny origin may fetch from them. Their pages cannot load anything from the app") {
 		t.Errorf("hosts prompt = %q", got)
 	}
+	if got := envPrompt(&Env{Launch: Launch{Hosts: map[string]http.Handler{"https://vm.example": h}, LocalNetwork: true}}); !strings.Contains(got, "Their pages may load from the app") {
+		t.Errorf("hosts prompt with LocalNetwork = %q", got)
+	}
 	if got := envPrompt(&Env{}); strings.Contains(got, "OTHER HOSTS") {
 		t.Errorf("prompt without hosts = %q", got)
 	}

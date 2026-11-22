@@ -122,8 +122,11 @@ type Launch struct {
 	// response unless it names one in Access-Control-Allow-Origin. A page gets
 	// a response once its handler returns. Chrome's local network access
 	// checks stay on, as with Playwright, so these pages cannot load
-	// anything from an app on 127.0.0.1.
+	// anything from an app on 127.0.0.1, unless LocalNetwork.
 	Hosts map[string]http.Handler
+	// LocalNetwork turns Chrome's local network access checks off, so that
+	// pages of Hosts, to Chrome public ones, may frame or fetch the app.
+	LocalNetwork bool
 }
 
 func (l Launch) device() Device {
@@ -192,6 +195,10 @@ func NewBrowser(parentCtx context.Context, launch Launch) (*Browser, error) {
 		chromedp.CombinedOutput(devtoolsURL(devtools)),
 	)
 
+	if launch.LocalNetwork {
+		// chromedp's own, plus Local Network Access.
+		opts = append(opts, chromedp.Flag("disable-features", "site-per-process,Translate,BlinkGenPropertyTrees,LocalNetworkAccessChecks"))
+	}
 	allocCtx, allocCancel := chromedp.NewExecAllocator(parentCtx, opts...)
 	ctx, ctxCancel := chromedp.NewContext(allocCtx)
 	b := &Browser{

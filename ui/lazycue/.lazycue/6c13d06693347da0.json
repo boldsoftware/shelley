@@ -1,0 +1,82 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a wide page, the snippet docks Shelley on the right. The page http://app.test/ (title \"App\", an h1 \"App\") has the Edit with Shelley snippet: a details element \".edit-with-shelley\" whose summary \"Edit with Shelley\" opens Shelley in an iframe with title \"Shelley\" (\"the frame\"), loaded lazily. Call \"frame loads\" counts the requests for Shelley's page / so far. A new frame loads all of Shelley, which can take a while: wait for it. Perform the steps in order. 1. Navigate to http://app.test/. 2. The summary \".edit-with-shelley summary\" should be visible with exactly the text \"Edit with Shelley\". 3. Call \"frame loads\": it must return exactly \"0\" (closed, the frame loads nothing). 4. The button is at the top right: eval (() =\u003e { const r = document.querySelector('.edit-with-shelley summary').getBoundingClientRect(); return r.top \u003c 24 \u0026\u0026 innerWidth - r.right \u003c 24; })() expecting true. 5. Click the summary. 6. In the frame, [data-testid=\"message-input\"] should be visible. 7. The page makes room for the frame: eval getComputedStyle(document.documentElement).marginRight expecting \"480px\". 8. The frame fills the right edge, 480px wide: eval (() =\u003e { const r = document.querySelector('iframe[title=Shelley]').getBoundingClientRect(); return [r.top, r.right === innerWidth, r.width, r.height === innerHeight].join(' '); })() expecting \"0 true 480 true\". 9. The button sits just left of the frame: eval (() =\u003e { const b = document.querySelector('.edit-with-shelley summary').getBoundingClientRect(); const f = document.querySelector('iframe[title=Shelley]').getBoundingClientRect(); return b.right \u003c= f.left \u0026\u0026 f.left - b.right \u003c 24; })() expecting true. 10. Click the summary again. 11. The frame must not be visible, and eval getComputedStyle(document.documentElement).marginRight expecting \"0px\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "http://app.test/"
+    },
+    {
+      "action": "assert_title",
+      "text": "App"
+    },
+    {
+      "action": "assert_visible",
+      "role": "heading",
+      "name": "App"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".edit-with-shelley summary",
+      "text": "Edit with Shelley"
+    },
+    {
+      "action": "call",
+      "value": "frame loads",
+      "expect": "0"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const r = document.querySelector('.edit-with-shelley summary').getBoundingClientRect(); return r.top \u003c 24 \u0026\u0026 innerWidth - r.right \u003c 24; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".edit-with-shelley summary"
+    },
+    {
+      "action": "wait_visible",
+      "frame": "iframe[title=Shelley]",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "60s"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.documentElement).marginRight",
+      "expect": "480px"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const r = document.querySelector('iframe[title=Shelley]').getBoundingClientRect(); return [r.top, r.right === innerWidth, r.width, r.height === innerHeight].join(' '); })()",
+      "expect": "0 true 480 true"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const b = document.querySelector('.edit-with-shelley summary').getBoundingClientRect(); const f = document.querySelector('iframe[title=Shelley]').getBoundingClientRect(); return b.right \u003c= f.left \u0026\u0026 f.left - b.right \u003c 24; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".edit-with-shelley summary"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "iframe[title=Shelley]"
+    },
+    {
+      "action": "eval",
+      "expression": "getComputedStyle(document.documentElement).marginRight",
+      "expect": "0px"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-22T00:40:43.764799204Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 35290,
+    "output_tokens": 1319,
+    "estimated_cost_usd": 0.0424674,
+    "mode": "generated"
+  }
+}

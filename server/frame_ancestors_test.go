@@ -72,9 +72,9 @@ func TestTCPHandlerForbidsCrossOriginFraming(t *testing.T) {
 }
 
 // Pages of the embed origins, which the user lists in Shelley, may frame
-// it, too, as embed.js does. X-Frame-Options stays: browsers ignore it
-// where the CSP has frame-ancestors (embed.spec.ts frames Shelley so), and
-// older browsers keep refusing every other site.
+// it, too, as the Edit with Shelley snippet does. X-Frame-Options stays:
+// browsers ignore it where the CSP has frame-ancestors (TestE2EEmbed
+// frames Shelley so), and older browsers keep refusing every other site.
 func TestEmbedOrigins(t *testing.T) {
 	t.Parallel()
 	database, cleanup := setupTestDB(t)
@@ -160,47 +160,6 @@ func TestEmbedOrigins(t *testing.T) {
 	do("DELETE", "/api/embed-origins?origin=app.example.com", "", http.StatusBadRequest)
 	do("DELETE", "/api/embed-origins?origin="+url.QueryEscape("HTTPS://App.example.com:443/"), "", http.StatusOK)
 	framing("iframe", "frame-ancestors 'self'")
-}
-
-// Any page may load embed.js, even without the header -require-header
-// names; whether it may frame Shelley is up to the framing policy.
-func TestEmbedJS(t *testing.T) {
-	t.Parallel()
-	database, cleanup := setupTestDB(t)
-	t.Cleanup(cleanup)
-	srv := NewServer(database, &twoModelLLMManager{service: predictable.NewService()}, claudetool.ToolSetConfig{},
-		slog.New(slog.DiscardHandler), false, "model-a", "X-Exedev-Userid")
-	mux := http.NewServeMux()
-	srv.RegisterRoutes(mux)
-	ts := httptest.NewServer(srv.tcpHandler(mux))
-	t.Cleanup(ts.Close)
-
-	resp, err := http.Get(ts.URL + "/embed.js")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d", resp.StatusCode)
-	}
-	if got := resp.Header.Get("Content-Type"); got != "text/javascript; charset=utf-8" {
-		t.Errorf("Content-Type = %q", got)
-	}
-	if !strings.Contains(string(body), "Edit with Shelley") {
-		t.Errorf("body is not embed.js:\n%s", body)
-	}
-	etag := resp.Header.Get("ETag")
-	req, _ := http.NewRequest("GET", ts.URL+"/embed.js", nil)
-	req.Header.Set("If-None-Match", etag)
-	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if etag == "" || resp.StatusCode != http.StatusNotModified {
-		t.Errorf("revalidating ETag %q: status = %d, want 304", etag, resp.StatusCode)
-	}
 }
 
 func TestParseEmbedOrigin(t *testing.T) {

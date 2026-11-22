@@ -1196,7 +1196,8 @@ export const faviconEmojiApi = {
   },
 };
 
-// The origins whose pages may frame Shelley with embed.js. Each call
+// The origins whose pages may frame Shelley, as the Edit with Shelley
+// snippet does. Each call
 // returns the list as it stands after it.
 export const embedOriginsApi = {
   async list(): Promise<string[]> {

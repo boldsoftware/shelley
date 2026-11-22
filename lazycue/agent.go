@@ -409,7 +409,11 @@ func envPrompt(env *Env) string {
 	}
 	if len(env.Launch.Hosts) > 0 {
 		sb.WriteString("\n\nOTHER HOSTS the test answers for in every tab: " + strings.Join(slices.Sorted(maps.Keys(env.Launch.Hosts)), ", ") + "\n")
-		sb.WriteString("Any origin may fetch from them. Their pages cannot load anything from the app: Chrome keeps public pages off the local network.\n")
+		if env.Launch.LocalNetwork {
+			sb.WriteString("Any origin may fetch from them. Their pages may load from the app: Chrome's local network checks are off.\n")
+		} else {
+			sb.WriteString("Any origin may fetch from them. Their pages cannot load anything from the app: Chrome keeps public pages off the local network.\n")
+		}
 	}
 	if len(env.Calls) > 0 {
 		sb.WriteString("\n\nCALLS available to call steps: " + strings.Join(slices.Sorted(maps.Keys(env.Calls)), ", ") + "\n")
