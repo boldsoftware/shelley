@@ -137,6 +137,7 @@ import BrowserEmulateTool from "./tools/BrowserEmulateTool.vue";
 import BrowserNetworkTool from "./tools/BrowserNetworkTool.vue";
 import BrowserAccessibilityTool from "./tools/BrowserAccessibilityTool.vue";
 import BrowserProfileTool from "./tools/BrowserProfileTool.vue";
+import ReadCodeTool from "./tools/ReadCodeTool.vue";
 import GenericToolWarning from "./tools/GenericToolWarning.vue";
 import RunningToolTime from "./tools/RunningToolTime.vue";
 import KeywordSearchTool from "./tools/KeywordSearchTool.vue";
@@ -203,6 +204,7 @@ usePerfLifecycle("toolCall");
 const TOOL_COMPONENTS: Record<string, any> = {
   openai_audio_transcription: AudioTranscriptionTool,
   bash: BashTool,
+  read_code: ReadCodeTool,
   patch: PatchTool,
   apply_patch: PatchTool,
   browser: BrowserTool,

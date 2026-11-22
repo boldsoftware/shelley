@@ -213,6 +213,24 @@ func TestSystemPromptExplainsSandboxDownloadLinks(t *testing.T) {
 	}
 }
 
+func TestSystemPromptReadCodeGuidance(t *testing.T) {
+	t.Parallel()
+	for _, generate := range []func(string) (string, error){
+		func(dir string) (string, error) { return GenerateSystemPrompt(dir) },
+		func(dir string) (string, error) { return GenerateSubagentSystemPrompt(dir, "parent") },
+	} {
+		prompt, err := generate(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, text := range []string{"When the `read_code` tool is available", "Batch independent searches and reads", "Use the normal patch tool"} {
+			if !strings.Contains(prompt, text) {
+				t.Errorf("missing read_code guidance %q", text)
+			}
+		}
+	}
+}
+
 // TestSystemPromptDeduplicatesIdenticalGuidanceFiles verifies that when multiple
 // user-level AGENTS.md files have identical content (or are symlinks to the same
 // file), only one copy appears in the system prompt.

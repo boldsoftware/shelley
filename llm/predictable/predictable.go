@@ -268,6 +268,9 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 	case "web search without results":
 		return s.makeWebSearchWithoutResultsResponse(inputTokens), nil
 
+	case "demo read_code":
+		return s.makeToolResponse("read_code", json.RawMessage(`{"searches":[{"query":"readCodeName","path":"claudetool/read_code.go","context":2}],"reads":[{"path":"go.mod","from":1,"to":5}]}`), inputTokens), nil
+
 	case "tool smorgasbord":
 		// Return a response with all tool types for testing
 		return s.makeToolSmorgasbordResponse(inputTokens), nil
@@ -1187,6 +1190,8 @@ func (s *Service) makeToolSmorgasbordResponse(inputTokens uint64) *llm.Response 
 		ToolName:  "bash",
 		ToolInput: json.RawMessage(bashInput),
 	})
+
+	content = append(content, llm.Content{ID: "demo-read-code", Type: llm.ContentTypeToolUse, ToolName: "read_code", ToolInput: json.RawMessage(`{"searches":[{"query":"readCodeName","path":"claudetool/read_code.go","context":2}],"reads":[{"path":"go.mod","from":1,"to":5}]}`)})
 
 	// extended thinking content (not a tool)
 	content = append(content, llm.Content{

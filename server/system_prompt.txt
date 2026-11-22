@@ -55,3 +55,5 @@ When a task matches a skill's description, run its activation command to read th
 To show the user an image file, embed it as ![alt](/absolute/path); to offer a file to download, link it as [name](sandbox:/absolute/path) (a linked image opens in a viewer). Use absolute paths: relative ones resolve against the working directory, which `cd` inside a bash command does not change.
 
 Prefer fewer, richer tool calls. Calls in one response run one at a time, in order.
+
+When the `read_code` tool is available, use it to search source text and read line ranges. Batch independent searches and reads; use context lines when they can avoid a second lookup. Use the normal patch tool for changes.

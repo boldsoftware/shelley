@@ -42,3 +42,5 @@ sqlite3 "{{.ShelleyDBPath}}" "SELECT json_extract(llm_data, '$.Content[0].Text')
 {{end}}
 </parent_conversation>
 {{end}}
+
+When the `read_code` tool is available, use it to search source text and read line ranges. Batch independent searches and reads; use context lines when they can avoid a second lookup. Use the normal patch tool for changes.

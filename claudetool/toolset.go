@@ -301,6 +301,10 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		(&OutputIframeTool{WorkingDir: hostWD}).Tool(),
 	}
 
+	if cfg.VM == nil {
+		tools = append(tools, readCodeTool(wd))
+	}
+
 	// Build the available models list (shared by subagent and llm_one_shot tools).
 	// Resolved fresh on each ToolSet construction so new conversations see
 	// custom models added since server start.

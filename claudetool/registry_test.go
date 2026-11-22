@@ -47,6 +47,10 @@ func TestIsToolEnabled(t *testing.T) {
 		{"compact_in_place default on", "compact_in_place", nil, false, true},
 		{"output_html default on", "output_html", nil, false, true},
 		{"output_iframe default off", "output_iframe", nil, false, false},
+		{"read_code default off", "read_code", nil, false, false},
+		{"read_code opt in", "read_code", map[string]string{"read_code": "on"}, false, true},
+		{"read_code opt in trumps disable-all", "read_code", map[string]string{"read_code": "on"}, true, true},
+		{"read_code explicit off", "read_code", map[string]string{"read_code": "off"}, false, false},
 		{"unknown tool permissive", "new_experimental_tool", nil, false, true},
 		{"unknown tool under disable-all is off", "new_experimental_tool", nil, true, false},
 	}
@@ -55,6 +59,32 @@ func TestIsToolEnabled(t *testing.T) {
 			got := IsToolEnabled(tc.tool, tc.overrides, tc.disableAll)
 			if got != tc.wantEnabled {
 				t.Fatalf("IsToolEnabled(%q) = %v, want %v", tc.tool, got, tc.wantEnabled)
+			}
+		})
+	}
+}
+
+func TestNewToolSetReadCodeOptIn(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		overrides map[string]string
+		vm        VM
+		want      bool
+	}{
+		{name: "default"},
+		{name: "enabled", overrides: map[string]string{"read_code": "on"}, want: true},
+		{name: "disabled", overrides: map[string]string{"read_code": "off"}},
+		{name: "remote VM", overrides: map[string]string{"read_code": "on"}, vm: localVM{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := NewToolSet(t.Context(), ToolSetConfig{ToolOverrides: tc.overrides, VM: tc.vm})
+			defer ts.Cleanup()
+			found := false
+			for _, tool := range ts.Tools() {
+				found = found || tool.Name == readCodeName
+			}
+			if found != tc.want {
+				t.Fatalf("read_code present = %v, want %v", found, tc.want)
 			}
 		})
 	}
