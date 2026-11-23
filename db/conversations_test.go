@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -1703,6 +1704,112 @@ func TestConversationListCounts(t *testing.T) {
 		if got := items[i]; got.SubagentCount != 3 || got.RunningBackgroundJobs != 2 {
 			t.Errorf("%s: subagents %d, running jobs %d; want 3, 2", name, got.SubagentCount, got.RunningBackgroundJobs)
 		}
+	}
+}
+
+func TestCreateSubagentConversationInheritsToolSettings(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		tools   map[string]string
+		noTools bool
+	}{
+		{name: "defaults"},
+		{name: "overrides", tools: map[string]string{"read_code": "on", "bash": "off"}},
+		{name: "disable all", noTools: true},
+		{name: "disable all with opt in", noTools: true, tools: map[string]string{"read_code": "on"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			database := setupTestDB(t)
+			defer database.Close()
+			ctx := t.Context()
+			parent, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{
+				ToolOverrides:        tc.tools,
+				DisableAllTools:      tc.noTools,
+				ThinkingLevel:        "high",
+				Profile:              "Research",
+				SystemPrompt:         "Parent only",
+				DisableNotifications: true,
+				EndOfTurnHooks:       []ConversationHook{{URL: "https://example.com/hook"}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			child, err := database.CreateSubagentConversation(ctx, "helper", parent.ConversationID, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := ConversationOptions{ToolOverrides: tc.tools, DisableAllTools: tc.noTools}
+			if got := ParseConversationOptions(child.ConversationOptions); !reflect.DeepEqual(got, want) {
+				t.Fatalf("child options = %+v, want %+v", got, want)
+			}
+			stored, err := database.GetConversationByID(ctx, child.ConversationID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stored.ConversationOptions != child.ConversationOptions {
+				t.Fatalf("stored options = %s, returned %s", stored.ConversationOptions, child.ConversationOptions)
+			}
+		})
+	}
+}
+
+func TestGetOrCreateSubagentConversationPreservesToolSettings(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	ctx := t.Context()
+	adapter := &SubagentDBAdapter{DB: database}
+	parent, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{
+		ToolOverrides: map[string]string{"read_code": "on"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, slug, err := adapter.GetOrCreateSubagentConversation(ctx, "helper", parent.ConversationID, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.UpdateConversationOptions(ctx, parent.ConversationID, ConversationOptions{
+		ToolOverrides: map[string]string{"read_code": "off"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, edited := range []bool{false, true} {
+		want := ConversationOptions{ToolOverrides: map[string]string{"read_code": "on"}}
+		if edited {
+			want = ConversationOptions{
+				ToolOverrides:   map[string]string{"bash": "on"},
+				DisableAllTools: true,
+				ThinkingLevel:   "high",
+			}
+			if err := database.UpdateConversationOptions(ctx, id, want); err != nil {
+				t.Fatal(err)
+			}
+		}
+		reused, _, err := adapter.GetOrCreateSubagentConversation(ctx, slug, parent.ConversationID, "/tmp")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reused != id {
+			t.Fatalf("reused ID = %s, want %s", reused, id)
+		}
+		child, err := database.GetConversationByID(ctx, reused)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := ParseConversationOptions(child.ConversationOptions); !reflect.DeepEqual(got, want) {
+			t.Fatalf("edited=%v: child options = %+v, want %+v", edited, got, want)
+		}
+	}
+	fresh, _, err := adapter.GetOrCreateSubagentConversation(ctx, "fresh", parent.ConversationID, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := database.GetConversationByID(ctx, fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ParseConversationOptions(child.ConversationOptions).ToolOverrides["read_code"]; got != "off" {
+		t.Fatalf("fresh child read_code = %q, want off", got)
 	}
 }
 

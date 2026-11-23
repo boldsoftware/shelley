@@ -2417,7 +2417,7 @@ func (db *DB) ForkConversation(ctx context.Context, sourceConversationID string,
 	return &conversation, err
 }
 
-// CreateSubagentConversation creates a new subagent conversation with a parent
+// CreateSubagentConversation creates a subagent with a snapshot of its parent's tool settings.
 func (db *DB) CreateSubagentConversation(ctx context.Context, slug, parentID string, cwd *string) (*generated.Conversation, error) {
 	conversationID, err := GenerateConversationID()
 	if err != nil {
@@ -2425,12 +2425,38 @@ func (db *DB) CreateSubagentConversation(ctx context.Context, slug, parentID str
 	}
 	var conversation generated.Conversation
 	conversation, err = db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
-		return q.CreateSubagentConversation(ctx, generated.CreateSubagentConversationParams{
+		raw, err := q.GetConversationOptions(ctx, parentID)
+		if err != nil {
+			return generated.Conversation{}, err
+		}
+		var parent ConversationOptions
+		if err := json.Unmarshal([]byte(raw), &parent); err != nil {
+			return generated.Conversation{}, fmt.Errorf("invalid parent conversation options: %w", err)
+		}
+		options, err := json.Marshal(ConversationOptions{
+			ToolOverrides:   parent.ToolOverrides,
+			DisableAllTools: parent.DisableAllTools,
+		})
+		if err != nil {
+			return generated.Conversation{}, err
+		}
+		child, err := q.CreateSubagentConversation(ctx, generated.CreateSubagentConversationParams{
 			ConversationID:       conversationID,
 			Slug:                 &slug,
 			Cwd:                  cwd,
 			ParentConversationID: &parentID,
 		})
+		if err != nil {
+			return generated.Conversation{}, err
+		}
+		if err := q.UpdateConversationOptions(ctx, generated.UpdateConversationOptionsParams{
+			ConversationID:      conversationID,
+			ConversationOptions: string(options),
+		}); err != nil {
+			return generated.Conversation{}, err
+		}
+		child.ConversationOptions = string(options)
+		return child, nil
 	})
 	return &conversation, err
 }
