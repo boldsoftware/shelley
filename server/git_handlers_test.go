@@ -1583,6 +1583,9 @@ func TestHandleGitDiffFiles_RenamedFile(t *testing.T) {
 	if files[0].Additions != 0 || files[0].Deletions != 0 {
 		t.Errorf("rename stats = +%d/-%d, want +0/-0", files[0].Additions, files[0].Deletions)
 	}
+	if files[0].Status != "modified" || files[0].OldPath != "old.txt" {
+		t.Errorf("rename status %q from %q, want modified from old.txt", files[0].Status, files[0].OldPath)
+	}
 }
 
 // TestParseNameStatusZ covers the NUL-separated --name-status -z parser,

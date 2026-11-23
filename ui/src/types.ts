@@ -356,6 +356,8 @@ export interface GitFileInfo {
   additions: number;
   deletions: number;
   isGenerated: boolean;
+  // Where a renamed file came from.
+  oldPath?: string;
 }
 
 export interface GitFileDiff {

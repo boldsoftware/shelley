@@ -43,6 +43,9 @@ type GitFileInfo struct {
 	Additions   int    `json:"additions"`
 	Deletions   int    `json:"deletions"`
 	IsGenerated bool   `json:"isGenerated"`
+	// OldPath is where a renamed file came from. Its Status stays
+	// "modified", as clients before OldPath expect.
+	OldPath string `json:"oldPath,omitempty"`
 }
 
 // GitFileDiff represents the content of a file diff
@@ -706,12 +709,17 @@ func (s *Server) handleGitDiffFiles(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		var oldPath string
+		if e.code[0] == 'R' {
+			oldPath = e.from
+		}
 		files = append(files, GitFileInfo{
 			Path:        path,
 			Status:      status,
 			Additions:   stat.additions,
 			Deletions:   stat.deletions,
 			IsGenerated: isGenerated,
+			OldPath:     oldPath,
 		})
 	}
 
