@@ -15,6 +15,7 @@ type RunSummary struct {
 	Cached           int           `json:"cached"`    // ran from cache, no agent
 	Generated        int           `json:"generated"` // agent generated fresh (cache miss)
 	Healed           int           `json:"healed"`    // cached but self-healed
+	Retried          int           `json:"retried"`   // cached, passed only on a retry: flaky
 	CacheHitPct      float64       `json:"cache_hit_pct"`
 	InputTokens      int           `json:"input_tokens"`
 	OutputTokens     int           `json:"output_tokens"`
@@ -37,10 +38,12 @@ type TestSummary struct {
 	EstimatedCost float64   `json:"estimated_cost_usd"`
 	VideoPath     string    `json:"video_path,omitempty"`
 	Error         string    `json:"error,omitempty"`
-	Heal          *HealInfo `json:"heal,omitempty"`       // why/how the test self-healed (only set when Mode == "healed")
-	Useful        int       `json:"useful"`               // times the test has been useful (see Useful)
-	UsefulAt      string    `json:"useful_at,omitempty"`  // where that count is written
-	AskUseful     bool      `json:"ask_useful,omitempty"` // the test's steps failed, so it may have caught a bug: if so, increment its count
+	Heal          *HealInfo `json:"heal,omitempty"`        // why/how the test self-healed (only set when Mode == "healed")
+	Retries       int       `json:"retries,omitempty"`     // times its cached script ran again after failing, before passing
+	RetryError    string    `json:"retry_error,omitempty"` // why its cached script failed the first time
+	Useful        int       `json:"useful"`                // times the test has been useful (see Useful)
+	UsefulAt      string    `json:"useful_at,omitempty"`   // where that count is written
+	AskUseful     bool      `json:"ask_useful,omitempty"`  // the test's steps failed, so it may have caught a bug: if so, increment its count
 }
 
 // Summarize aggregates results into a RunSummary.
@@ -68,6 +71,9 @@ func Summarize(results []*TestResult) RunSummary {
 		case RunModeHealed:
 			s.Healed++
 		}
+		if r.Retries > 0 {
+			s.Retried++
+		}
 		s.InputTokens += r.InputTokens
 		s.OutputTokens += r.OutputTokens
 		s.EstimatedCostUSD += r.EstimatedCost
@@ -85,6 +91,8 @@ func Summarize(results []*TestResult) RunSummary {
 			VideoPath:     r.VideoPath,
 			Error:         r.Error,
 			Heal:          r.Heal,
+			Retries:       r.Retries,
+			RetryError:    r.RetryError,
 			Useful:        r.Useful,
 			UsefulAt:      r.UsefulAt,
 			AskUseful:     r.asksUseful(),

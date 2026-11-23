@@ -161,6 +161,8 @@ type TestResult struct {
 	EstimatedCost  float64       // estimated USD cost
 	VideoPath      string        // path to the rendered MP4, if VideoDir was set
 	Heal           *HealInfo     // populated only when Mode == RunModeHealed: why/how the heal happened
+	Retries        int           // times a cached script that passed ran again after failing: a flake, if not 0
+	RetryError     string        // why the cached script failed its first run, when Retries is not 0
 	Useful         int           // how many times the test has been useful (see Useful); set by Harness.Test
 	UsefulAt       string        // where that count is written, e.g. "shelley/test/e2e_smoke_test.go:8"; "" if unknown
 }
@@ -330,6 +332,10 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 			// path.
 			const maxRetriesBeforeHeal = 2
 			retriesBeforeHeal := 0
+			var firstFailure string
+			if !allPassed {
+				firstFailure = summarizeFailure(results)
+			}
 			for ; !allPassed && retriesBeforeHeal < maxRetriesBeforeHeal && ctx.Err() == nil; retriesBeforeHeal++ {
 				logf("[lazycue] cached test failed (%s); retry %d/%d", summarizeFailure(results), retriesBeforeHeal+1, maxRetriesBeforeHeal)
 				if results, allPassed, err = attempt(steps, true); err != nil {
@@ -348,6 +354,8 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 					Description:   description,
 					Mode:          RunModeCached,
 					TotalDuration: time.Since(totalStart),
+					Retries:       retriesBeforeHeal,
+					RetryError:    firstFailure,
 				}, nil
 			}
 
@@ -739,6 +747,9 @@ func (h *Harness) Test(t testing.TB, useful Useful, description string) {
 	}
 	if h := result.Heal; h != nil {
 		fmt.Fprintf(&sb, "  🩹 %s\n", h.Summary())
+	}
+	if result.Retries > 0 {
+		fmt.Fprintf(&sb, "  🔁 flaky: passed on retry %d; first failure: %s\n", result.Retries, result.RetryError)
 	}
 	t.Logf("lazycue [%s]: %s\n%s", result.Mode, description, sb.String())
 
