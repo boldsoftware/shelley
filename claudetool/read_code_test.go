@@ -44,7 +44,7 @@ func readCodeTestText(out llm.ToolOut) string {
 
 func readCodeTestWrite(t *testing.T, dir, name, text string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }

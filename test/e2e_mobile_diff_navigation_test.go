@@ -7,14 +7,18 @@ import (
 	"testing"
 )
 
-const mobileDiffOpen = `Navigate to /c/{{SLUG}}. Open Diffs: ` + openToolPhone + `. The ".diff-viewer-overlay" should be visible. `
-const mobileDiffWorking = `Click ".diff-viewer-overlay .commit-picker-trigger"; in ".git-graph-container" click the ".git-graph-row" containing "Working changes". `
+const (
+	mobileDiffOpen    = `Navigate to /c/{{SLUG}}. Open Diffs: ` + openToolPhone + `. The ".diff-viewer-overlay" should be visible. `
+	mobileDiffWorking = `Click ".diff-viewer-overlay .commit-picker-trigger"; in ".git-graph-container" click the ".git-graph-row" containing "Working changes". `
+)
 
 func mobileDiffRepo(s *shelley) string {
 	s.viewport(390, 844)
 	return s.gitRepo(s.tempDir("mobile-diff"))
 }
+
 func mobileDiffConversation(s *shelley, dir string) { s.v("SLUG", s.conversationIn(dir, "Hello").Slug) }
+
 func mobileDiffCommit(s *shelley, dir, message string) {
 	s.gitIn(dir, "add", ".")
 	s.gitIn(dir, "commit", "-m", message)
