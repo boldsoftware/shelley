@@ -209,3 +209,37 @@ func TestGeminiProviderLifecycle(t *testing.T) {
 		t.Fatal("deleted Gemini provider remained in the registry")
 	}
 }
+
+func TestGeminiInteractionsConnectionAndOperationURL(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1beta/models" || r.Header.Get("x-goog-api-key") != "secret" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		fmt.Fprint(w, `{"models":[{"name":"models/gemini-3.8-flash","displayName":"Gemini 3.8 Flash","supportedGenerationMethods":["generateContent"]}]}`)
+	}))
+	defer upstream.Close()
+
+	manager, _ := testManager(t, upstream.Client())
+	if _, err := manager.Check(t.Context(), "", Input{
+		ProviderType: "gemini-interactions",
+		Endpoint:     upstream.URL + "/v1beta/interactions",
+		APIKey:       "secret",
+	}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("expected ErrInvalid for /interactions operation URL, got %v", err)
+	}
+
+	created, err := manager.Create(t.Context(), Input{
+		ProviderType: "gemini-interactions",
+		Endpoint:     upstream.URL + "/v1beta",
+		APIKey:       "secret",
+	})
+	if err != nil || created.ProviderType != "gemini-interactions" || created.ModelCount != 1 {
+		t.Fatalf("create: %+v, %v", created, err)
+	}
+	id := models.ProviderRouteID(created.ProviderID, "gemini-3.8-flash")
+	info := manager.registry.GetModelInfo(id)
+	if info == nil || info.Provider != models.ProviderGemini || info.APIType != string(models.APITypeGeminiInteractions) {
+		t.Fatalf("incorrect Gemini Interactions route: %+v", info)
+	}
+}

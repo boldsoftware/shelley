@@ -352,3 +352,43 @@ func TestSavedProviderReasoningDoesNotOverrideInternalRequests(t *testing.T) {
 		})
 	}
 }
+
+func TestGeminiInteractionsProviderEntry(t *testing.T) {
+	manager, err := NewManager(&Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := manager.providerEntry(db.ModelProvider{
+		ProviderID: "google-inter", ProviderType: "gemini-interactions", APIKey: "secret",
+		Endpoint: "https://generativelanguage.googleapis.com/v1beta",
+	}, "gemini-3.8-flash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.provider != ProviderGemini || entry.apiType != APITypeGeminiInteractions {
+		t.Fatalf("incorrect Gemini Interactions metadata: provider=%q apiType=%q", entry.provider, entry.apiType)
+	}
+	rs, ok := entry.service.(*reasoningService)
+	if !ok {
+		t.Fatalf("service type = %T, want *reasoningService", entry.service)
+	}
+	if _, ok := rs.Service.(*gem.InteractionsService); !ok {
+		t.Fatalf("inner service type = %T, want *gem.InteractionsService", rs.Service)
+	}
+	if !rs.SupportsServerSideWebSearch() {
+		t.Errorf("expected server-side web search support for gemini-3.8-flash")
+	}
+	if got := workhorseThinkingLevel(entry.service); got != llm.ThinkingLevelLow {
+		t.Errorf("workhorseThinkingLevel = %v, want low", got)
+	}
+	neonEntry, err := manager.providerEntry(db.ModelProvider{
+		ProviderID: "google-inter", ProviderType: "gemini-interactions", APIKey: "secret",
+		Endpoint: "https://generativelanguage.googleapis.com/v1beta",
+	}, "gemini-4-neon")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !neonEntry.service.(*reasoningService).SupportsServerSideWebSearch() {
+		t.Errorf("expected server-side web search support for gemini-4-neon")
+	}
+}

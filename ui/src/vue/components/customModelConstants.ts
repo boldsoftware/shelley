@@ -1,13 +1,19 @@
 // Shared constants + form types for the custom-model UI, used by both
 // ModelsModal.vue (the list) and ModelFormModal.vue (the add/edit dialog).
 
-export type ProviderType = "anthropic" | "openai" | "openai-responses" | "gemini";
+export type ProviderType =
+  | "anthropic"
+  | "openai"
+  | "openai-responses"
+  | "gemini"
+  | "gemini-interactions";
 
 export const DEFAULT_ENDPOINTS: Record<ProviderType, string> = {
   anthropic: "https://api.anthropic.com/v1/messages",
   openai: "https://api.openai.com/v1",
   "openai-responses": "https://api.openai.com/v1",
   gemini: "https://generativelanguage.googleapis.com/v1beta",
+  "gemini-interactions": "https://generativelanguage.googleapis.com/v1beta",
 };
 
 export const ENDPOINT_PRESETS: Record<ProviderType, { name: string; url: string }[]> = {
@@ -28,6 +34,9 @@ export const ENDPOINT_PRESETS: Record<ProviderType, { name: string; url: string 
     { name: "Groq", url: "https://api.groq.com/openai/v1" },
   ],
   gemini: [{ name: "Google Gemini", url: DEFAULT_ENDPOINTS.gemini }],
+  "gemini-interactions": [
+    { name: "Google Gemini", url: DEFAULT_ENDPOINTS["gemini-interactions"] },
+  ],
 };
 
 export function endpointPresetsFor(provider: ProviderType, connection = false) {
@@ -43,6 +52,7 @@ export const PROVIDER_LABELS: Record<ProviderType, string> = {
   openai: "OpenAI (Chat API)",
   "openai-responses": "OpenAI (Responses API)",
   gemini: "Google Gemini",
+  "gemini-interactions": "Google Gemini (Interactions API)",
 };
 
 export const PROVIDER_TAB_LABELS: Record<ProviderType, string> = {
@@ -50,6 +60,7 @@ export const PROVIDER_TAB_LABELS: Record<ProviderType, string> = {
   openai: "OpenAI Chat",
   "openai-responses": "OpenAI Responses",
   gemini: "Gemini",
+  "gemini-interactions": "Gemini Interactions",
 };
 
 // Autocomplete suggestions offered for the model-name field, per provider.
@@ -89,6 +100,12 @@ export const DEFAULT_MODELS: Record<ProviderType, { name: string; model_name: st
     { name: "Gemini 3.6 Flash", model_name: "gemini-3.6-flash" },
     { name: "Gemini 3 Flash", model_name: "gemini-3-flash-preview" },
   ],
+  "gemini-interactions": [
+    { name: "Gemini 4 Neon", model_name: "gemini-4-neon" },
+    { name: "Gemini 4 Carbon", model_name: "gemini-4-carbon" },
+    { name: "Gemini 4 Hydrogen", model_name: "gemini-4-hydrogen" },
+    { name: "Gemini 3.8 Flash", model_name: "gemini-3.8-flash" },
+  ],
 };
 
 // Maps the server-reported api_type of built-in models to a display label.
@@ -97,6 +114,7 @@ export const API_TYPE_LABELS: Record<string, string> = {
   "openai-chat-completions": "OpenAI (Chat API)",
   "openai-responses": "OpenAI (Responses API)",
   gemini: "Google Gemini",
+  "gemini-interactions": "Google Gemini (Interactions API)",
   builtin: "Built-in",
 };
 
@@ -125,7 +143,13 @@ export const DEFAULT_REASONING_MAP: ReasoningMap = Object.fromEntries(
   REASONING_LEVELS.map((level) => [level, level]),
 ) as ReasoningMap;
 
-export const providerTypes: ProviderType[] = ["anthropic", "openai", "openai-responses", "gemini"];
+export const providerTypes: ProviderType[] = [
+  "anthropic",
+  "openai",
+  "openai-responses",
+  "gemini",
+  "gemini-interactions",
+];
 
 export interface FormData {
   display_name: string;

@@ -15,13 +15,49 @@ import (
 
 var modelDateSuffix = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}$`)
 
-func (s *Service) modelName() string {
-	return strings.TrimPrefix(cmp.Or(s.Model, DefaultModel), "models/")
+func normalizeModelName(model string) string {
+	return strings.TrimPrefix(cmp.Or(model, DefaultModel), "models/")
 }
 
-func (s *Service) modelKey() string {
-	return modelDateSuffix.ReplaceAllString(strings.ToLower(path.Base(s.modelName())), "")
+func modelKeyFor(modelName string) string {
+	return modelDateSuffix.ReplaceAllString(strings.ToLower(path.Base(modelName)), "")
 }
+
+func supportsServerSideWebSearch(key string) bool {
+	return strings.HasPrefix(key, "gemini-3.") || strings.HasPrefix(key, "gemini-3-") ||
+		strings.HasPrefix(key, "gemini-4-") || strings.HasPrefix(key, "gemini-4.")
+}
+
+func maxOutputTokensFor(url, modelName string, configuredMax, fallback int) int {
+	limit, found := modelsdev.LookupOutputLimit(url, modelName)
+	if modelKeyFor(modelName) == "gemini-4-argon" {
+		// The catalog's 32K limit is non-streaming; these adapters always stream.
+		limit, found = 65536, true
+	}
+	if !found {
+		return cmp.Or(configuredMax, fallback)
+	}
+	return min(cmp.Or(configuredMax, limit), limit)
+}
+
+func documentedDefaultReasoningLevel(key string, found, supported bool) string {
+	if found && !supported {
+		return "off"
+	}
+	switch key {
+	case "gemini-4-argon", "gemini-3.8-flash", "gemini-3.6-flash":
+		return "medium"
+	case "gemini-3-flash-preview":
+		return "high"
+	case "gemini-2.5-flash-lite":
+		return "off"
+	}
+	return ""
+}
+
+func (s *Service) modelName() string { return normalizeModelName(s.Model) }
+
+func (s *Service) modelKey() string { return modelKeyFor(s.modelName()) }
 
 type modelThinkingCapabilities struct {
 	modelsdev.ReasoningCapabilities
@@ -50,8 +86,10 @@ func (s *Service) SupportsThinkingOff() bool {
 	return found && (!caps.Supported || slices.Contains(caps.Levels, llm.ThinkingLevelOff))
 }
 
-// Request effort > request generic level > service effort > service generic level.
-func (s *Service) thinkingConfig(req *llm.Request) (*gemini.ThinkingConfig, error) {
+// resolveThinking resolves request/service reasoning overrides against model capabilities.
+// Returns (resolvedLevel, verbatimEffort, active, err). When verbatimEffort != "", the model's
+// controls are unknown and the effort string should be forwarded as-is.
+func resolveThinking(modelName string, caps modelsdev.ReasoningCapabilities, found bool, req *llm.Request, svcEffort string, svcLevel llm.ThinkingLevel) (llm.ThinkingLevel, string, bool, error) {
 	var level llm.ThinkingLevel
 	var effort string
 	switch {
@@ -59,28 +97,26 @@ func (s *Service) thinkingConfig(req *llm.Request) (*gemini.ThinkingConfig, erro
 		effort = req.ReasoningEffort
 	case req != nil && req.ThinkingLevel != llm.ThinkingLevelDefault:
 		level = req.ThinkingLevel
-	case s.ReasoningEffort != "":
-		effort = s.ReasoningEffort
+	case svcEffort != "":
+		effort = svcEffort
 	default:
-		level = s.ThinkingLevel
+		level = svcLevel
 	}
 	if level == llm.ThinkingLevelDefault && effort == "" {
-		return nil, nil
+		return llm.ThinkingLevelDefault, "", false, nil
 	}
-	caps, found := s.thinkingCapabilities()
 	if !found || caps.Supported && len(caps.Levels) == 0 {
 		if effort != "" {
-			return &gemini.ThinkingConfig{ThinkingLevel: effort, IncludeThoughts: effort != "off" && effort != "none"}, nil
+			return llm.ThinkingLevelDefault, effort, true, nil
 		}
-		return nil, fmt.Errorf("unknown thinking controls for %s; use its provider default or an explicit reasoning effort", s.modelName())
+		return llm.ThinkingLevelDefault, "", false, fmt.Errorf("unknown thinking controls for %s; use its provider default or an explicit reasoning effort", modelName)
 	}
 	if !caps.Supported {
 		if level == llm.ThinkingLevelOff || effort == "off" || effort == "none" {
-			return nil, nil
+			return llm.ThinkingLevelDefault, "", false, nil
 		}
-		return nil, fmt.Errorf("%s does not support thinking", s.modelName())
+		return llm.ThinkingLevelDefault, "", false, fmt.Errorf("%s does not support thinking", modelName)
 	}
-
 	if effort != "" {
 		level = llm.ParseThinkingLevel(effort)
 		if effort == "none" {
@@ -88,14 +124,27 @@ func (s *Service) thinkingConfig(req *llm.Request) (*gemini.ThinkingConfig, erro
 		}
 	}
 	if level == llm.ThinkingLevelOff && !slices.Contains(caps.Levels, level) {
-		return nil, fmt.Errorf("%s cannot disable thinking", s.modelName())
+		return llm.ThinkingLevelDefault, "", false, fmt.Errorf("%s cannot disable thinking", modelName)
 	}
 	if effort != "" {
 		if !slices.Contains(caps.Levels, level) || effort != level.Name() && effort != "none" {
-			return nil, fmt.Errorf("thinking level %q is not supported by %s", effort, s.modelName())
+			return llm.ThinkingLevelDefault, "", false, fmt.Errorf("thinking level %q is not supported by %s", effort, modelName)
 		}
 	} else {
 		level = llm.ClampThinkingLevel(level, caps.Levels)
+	}
+	return level, "", true, nil
+}
+
+// Request effort > request generic level > service effort > service generic level.
+func (s *Service) thinkingConfig(req *llm.Request) (*gemini.ThinkingConfig, error) {
+	caps, found := s.thinkingCapabilities()
+	level, verbatim, active, err := resolveThinking(s.modelName(), caps.ReasoningCapabilities, found, req, s.ReasoningEffort, s.ThinkingLevel)
+	if err != nil || !active {
+		return nil, err
+	}
+	if verbatim != "" {
+		return &gemini.ThinkingConfig{ThinkingLevel: verbatim, IncludeThoughts: verbatim != "off" && verbatim != "none"}, nil
 	}
 	if caps.budget {
 		budget := level.ThinkingBudgetTokens()

@@ -58,11 +58,12 @@ const (
 type APIType string
 
 const (
-	APITypeAnthropicMessages APIType = "anthropic-messages"
-	APITypeOpenAIResponses   APIType = "openai-responses"
-	APITypeOpenAIChat        APIType = "openai-chat-completions"
-	APITypeGemini            APIType = "gemini"
-	APITypeBuiltIn           APIType = "builtin"
+	APITypeAnthropicMessages  APIType = "anthropic-messages"
+	APITypeOpenAIResponses    APIType = "openai-responses"
+	APITypeOpenAIChat         APIType = "openai-chat-completions"
+	APITypeGemini             APIType = "gemini"
+	APITypeGeminiInteractions APIType = "gemini-interactions"
+	APITypeBuiltIn            APIType = "builtin"
 )
 
 // Model is one entry in Shelley's catalog of built-in models.
@@ -907,9 +908,27 @@ func (s *reasoningService) SupportedReasoningLevels() []llm.ThinkingLevel {
 	return append([]llm.ThinkingLevel(nil), s.levels...)
 }
 
+type nativeGeminiService interface {
+	llm.Service
+	SupportsReasoning() bool
+	SupportedReasoningLevels() []llm.ThinkingLevel
+	SupportsThinkingOff() bool
+}
+
+func asNativeGemini(service llm.Service) (nativeGeminiService, bool) {
+	switch s := service.(type) {
+	case *gem.Service:
+		return s, true
+	case *gem.InteractionsService:
+		return s, true
+	default:
+		return nil, false
+	}
+}
+
 func (s *reasoningService) DefaultReasoningLevel() string {
 	if s.forceOff {
-		if native, ok := s.Service.(*gem.Service); ok && !native.SupportsThinkingOff() {
+		if native, ok := asNativeGemini(s.Service); ok && !native.SupportsThinkingOff() {
 			return ""
 		}
 		return "off"
@@ -947,7 +966,7 @@ func (s *reasoningService) mapRequest(req *llm.Request) (*llm.Request, error) {
 	if !s.supported {
 		if s.forceOff {
 			copyReq.ThinkingLevel = llm.ThinkingLevelOff
-			if _, native := s.Service.(*gem.Service); native {
+			if _, native := asNativeGemini(s.Service); native {
 				copyReq.ReasoningEffort = ""
 			}
 		}
@@ -976,7 +995,7 @@ func WrapReasoningConfig(service llm.Service, endpoint, modelName, support, rawM
 	supported := ResolveSupportsReasoning(endpoint, modelName, support)
 	mapping, levels := parseReasoningMap(rawMap)
 	forceOff := !supported
-	if native, ok := service.(*gem.Service); ok {
+	if native, ok := asNativeGemini(service); ok {
 		// A full identity map inherits native controls, not every generic level.
 		identity := true
 		for level := llm.ThinkingLevelOff; level <= llm.ThinkingLevelMax; level++ {

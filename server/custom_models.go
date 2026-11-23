@@ -188,8 +188,8 @@ func (s *Server) handleCreateModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate provider type
-	if req.ProviderType != "anthropic" && req.ProviderType != "openai" && req.ProviderType != "openai-responses" && req.ProviderType != "gemini" {
-		http.Error(w, "provider_type must be 'anthropic', 'openai', 'openai-responses', or 'gemini'", http.StatusBadRequest)
+	if req.ProviderType != "anthropic" && req.ProviderType != "openai" && req.ProviderType != "openai-responses" && req.ProviderType != "gemini" && req.ProviderType != "gemini-interactions" {
+		http.Error(w, "provider_type must be 'anthropic', 'openai', 'openai-responses', 'gemini', or 'gemini-interactions'", http.StatusBadRequest)
 		return
 	}
 

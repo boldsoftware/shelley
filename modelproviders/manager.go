@@ -228,8 +228,12 @@ func (m *Manager) prepare(ctx context.Context, p *db.ModelProvider) error {
 	return nil
 }
 
+func isGeminiProvider(providerType string) bool {
+	return providerType == "gemini" || providerType == "gemini-interactions"
+}
+
 func candidate(input Input, old *db.ModelProvider) (db.ModelProvider, error) {
-	if input.ProviderType != "anthropic" && input.ProviderType != "openai" && input.ProviderType != "openai-responses" && input.ProviderType != "gemini" {
+	if input.ProviderType != "anthropic" && input.ProviderType != "openai" && input.ProviderType != "openai-responses" && !isGeminiProvider(input.ProviderType) {
 		return db.ModelProvider{}, fmt.Errorf("%w: unsupported provider_type", ErrInvalid)
 	}
 	endpoint, err := canonicalEndpoint(input.Endpoint)
@@ -275,7 +279,7 @@ func canonicalEndpoint(raw string) (string, error) {
 		return "", fmt.Errorf("%w: endpoint path is not canonical", ErrInvalid)
 	}
 	path := strings.TrimRight(u.Path, "/")
-	for _, suffix := range []string{"/models", "/messages", "/chat/completions", "/responses"} {
+	for _, suffix := range []string{"/models", "/messages", "/chat/completions", "/responses", "/interactions"} {
 		if strings.HasSuffix(strings.ToLower(path), suffix) {
 			return "", fmt.Errorf("%w: endpoint must be an API base, not an operation URL", ErrInvalid)
 		}
