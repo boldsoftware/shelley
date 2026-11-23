@@ -58,6 +58,35 @@ func TestHandleGitMoved(t *testing.T) {
 	}
 }
 
+// TestHandleGitMovedRename: a renamed file's moved lines are all under
+// its new path, the path the file list gives it, old side included.
+func TestHandleGitMovedRename(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+	dir, run, write := gitRepo(t)
+	run("config", "diff.renames", "true")
+	first := "func first() {\n\tdoTheFirstThing()\n}\n"
+	second := "func second() {\n\tdoTheSecondThing()\n\tdoMore()\n}\n"
+	rest := "\nvar a = 1\nvar b = 2\nvar c = 3\nvar d = 4\nvar e = 5\nvar f = 6\n"
+	write("old.go", "package a\n\n"+first+"\n"+second+rest)
+	run("add", "old.go")
+	run("commit", "-qm", "base")
+	run("mv", "old.go", "new.go")
+	write("new.go", "package a\n\n"+second+"\n"+first+rest)
+	run("add", "new.go")
+	run("commit", "-qm", "rename and swap")
+
+	got := getMoved(t, h, dir)
+	if len(got) != 1 || got[0].Path != "new.go" || len(got[0].Old) == 0 || len(got[0].New) == 0 {
+		t.Fatalf("want old and new moved lines under new.go, got %+v", got)
+	}
+	for _, b := range append(got[0].Old, got[0].New...) {
+		if b.OtherPath != "new.go" {
+			t.Errorf("block %+v: other copy should be in new.go", b)
+		}
+	}
+}
+
 // TestParseMovedDiffZebra: adjacent blocks are told apart by their
 // stripes, and each finds its own copy. A color in a line's text doesn't
 // count.

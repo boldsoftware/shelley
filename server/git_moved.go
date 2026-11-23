@@ -123,7 +123,9 @@ func (s *Server) handleGitMoved(w http.ResponseWriter, r *http.Request) {
 	for name, c := range movedColors {
 		args = append(args, "-c", fmt.Sprintf("color.diff.%s=%d", name, c.n))
 	}
-	args = append(args, "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-relative",
+	// Renames are found as the file list finds them, so a renamed file's
+	// old lines are under its new path, as the app shows them.
+	args = append(args, "diff", "--no-ext-diff", "--no-textconv", "--no-relative",
 		"--submodule=short", "--src-prefix=a/", "--dst-prefix=b/", "--color=always",
 		"--color-moved=zebra", "--color-moved-ws=no", "--ws-error-highlight=none")
 	revs, err := m.diffRange(gitRoot, diffID, toRef)
