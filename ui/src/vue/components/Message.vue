@@ -68,7 +68,14 @@
         :on-fork="hasForkAction ? handleFork : undefined"
       />
       <div class="message-content" data-testid="message-content">
-        <div class="whitespace-pre-wrap break-words">{{ displayedErrorText }}</div>
+        <div class="whitespace-pre-wrap break-words">
+          <template v-for="(part, i) in parseLinks(displayedErrorText)" :key="i">
+            <a v-if="isExeDevLink(part.href)" class="text-link" :href="part.href" target="_blank" rel="noopener noreferrer">
+              {{ part.content }}
+            </a>
+            <template v-else>{{ part.content }}</template>
+          </template>
+        </div>
         <RefusalContinueButton
           v-if="isRefusal && isLastMessage"
           :conversation-id="message.conversation_id"
@@ -326,6 +333,7 @@ import RefusalContinueButton from "./RefusalContinueButton.vue";
 import { RefusalContinueKey } from "./refusalContinue";
 import { messageUserContextKey, type MessageReaction } from "./messageUserContext";
 import { prettyModelLabels, prettyModelName } from "../../utils/modelNames";
+import { parseLinks } from "../../utils/linkify";
 import MessageContentBlock from "./MessageContentBlock.vue";
 import CitedText from "./CitedText.vue";
 import { coalesceContent, splitContentEntities } from "../../utils/coalesceContent";
@@ -614,6 +622,17 @@ const displayedErrorText = computed(() => {
   return text;
 });
 const errorRetryable = computed(() => errorMeta.value.retryable);
+
+function isExeDevLink(href?: string): boolean {
+  if (!href) return false;
+  try {
+    const url = new URL(href);
+    return url.hostname === "exe.dev";
+  } catch {
+    return false;
+  }
+}
+
 // A refusal (stop_reason=refusal) is non-retryable on the same model, but the
 // user can choose another model and continue. Only the bottom-most refusal
 // error offers the affordance.
