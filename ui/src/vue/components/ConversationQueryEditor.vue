@@ -4,7 +4,7 @@
 
 <script setup lang="ts">
 import { mergeAttributes, Node } from "@tiptap/core";
-import type { JSONContent } from "@tiptap/core";
+import type { FocusPosition, JSONContent } from "@tiptap/core";
 import Document from "@tiptap/extension-document";
 import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
@@ -257,7 +257,7 @@ const editor = new Editor({
         if (target.closest(".conversation-query-token-delete")) return true;
         const position = view.posAtCoords({ left: event.clientX, top: event.clientY })?.inside;
         if (position !== undefined && view.state.doc.nodeAt(position)?.type.name === "queryToken") {
-          editor.commands.focus(afterTokenSeparator(view.state.doc, position));
+          focusAt(afterTokenSeparator(view.state.doc, position));
         }
         return true;
       },
@@ -271,7 +271,7 @@ const editor = new Editor({
         view.dispatch(
           view.state.tr.delete(position, afterTokenSeparator(view.state.doc, position)),
         );
-        editor.commands.focus(position);
+        focusAt(position);
         return true;
       },
     },
@@ -300,9 +300,7 @@ const editor = new Editor({
           // A trailing partial term shifted left with the removal; re-derive
           // the active edit now so the drawer never parses stale offsets.
           updateActiveEdit();
-          void nextTick(() =>
-            editor.commands.focus(rawPositionToDocument(editor.state.doc, removed.caret)),
-          );
+          void nextTick(() => focusAt(rawPositionToDocument(editor.state.doc, removed.caret)));
           return true;
         }
       }
@@ -333,6 +331,16 @@ const editor = new Editor({
   },
 });
 
+// focusAt puts the caret at position and focuses the editor now. TipTap's
+// focus command focuses it only on the next animation frame; until then, keys
+// go to whatever had focus (the button just clicked), and the DOM caret is
+// not yet where the editor's is. Its frame still comes, and focuses a view
+// that was not yet in the page.
+function focusAt(position: FocusPosition) {
+  editor.commands.focus(position);
+  editor.view.focus();
+}
+
 function completeStructuredTerm(term: string): boolean {
   updateActiveEdit();
   if (!activeEdit) return false;
@@ -343,9 +351,7 @@ function completeStructuredTerm(term: string): boolean {
     focus: completed.caret,
   });
   emit("update:modelValue", completed.query);
-  void nextTick(() =>
-    editor.commands.focus(rawPositionToDocument(editor.state.doc, completed.caret)),
-  );
+  void nextTick(() => focusAt(rawPositionToDocument(editor.state.doc, completed.caret)));
   return true;
 }
 
@@ -354,7 +360,7 @@ function finishStructuredEdit() {
 }
 
 function focusEnd() {
-  editor.commands.focus("end");
+  focusAt("end");
   updateActiveEdit();
 }
 

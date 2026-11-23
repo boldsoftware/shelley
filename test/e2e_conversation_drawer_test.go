@@ -893,6 +893,21 @@ func TestE2EDrawerExactMatchOutranks(t *testing.T) {
 	})
 }
 
+// drawerFocusOnClick clicks the button whose aria-label is name with the next
+// animation frame held back, as on a loaded machine, then records in
+// window.__focusedAtOnce "true" if the editor has focus with a caret at the
+// end of the query, or else where focus and the caret are.
+func drawerFocusOnClick(name string) string {
+	return `(async () => { const frame = window.requestAnimationFrame; const held = []; window.requestAnimationFrame = (callback) => held.push(callback); try { document.activeElement?.blur(); const button = document.querySelector('[aria-label="` + name + `"]'); button.focus(); button.click(); await new Promise((resolve) => setTimeout(resolve, 0)); const editor = document.querySelector('[data-testid="conversation-query-editor"]'); const selection = getSelection(); const before = document.createRange(); before.selectNodeContents(editor); const inside = selection.isCollapsed && editor.contains(selection.focusNode); if (inside) before.setEnd(selection.focusNode, selection.focusOffset); window.__focusedAtOnce = document.activeElement !== editor ? 'focus on ' + document.activeElement?.getAttribute('aria-label') : !inside ? 'no caret in the editor' : before.toString() !== editor.textContent ? 'caret after ' + JSON.stringify(before.toString()) : 'true'; } finally { window.requestAnimationFrame = frame; held.forEach((callback) => frame(callback)); } })()`
+}
+
+func TestE2EDrawerFilterButtonsFocusAtOnce(t *testing.T) {
+	drawerTest(t, useful(0), `A filter button focuses the editor at once, the caret at the end of the query, so keys typed right after the click land there, even before the next frame. `+drawerAsMe+drawerStubbed+`The list is "shared", written in by me@example.com and other@example.com. `+drawerQuery+drawerSteps+drawerDirect+`1. Navigate to /new. 2. Click the button "Search conversations...". 3. The query should be "user:me@example.com ". 4. Eval this once, without expect (it clicks the button "Add user filter"): `+drawerFocusOnClick("Add user filter")+`. 5. Eval "window.__focusedAtOnce" should be "true". 6. The query should be "user:me@example.com user:". 7. Set the query to "user:me@example.com ". 8. Eval this once, without expect (it clicks the button "Add tag filter"): `+drawerFocusOnClick("Add tag filter")+`. 9. Eval "window.__focusedAtOnce" should be "true". 10. The query should be "user:me@example.com tag:".`, func(s *shelley) {
+		drawerMe(s)
+		s.stubDrawerList(drawerConversation("shared", false).participants("me@example.com", "other@example.com"))
+	})
+}
+
 func TestE2EDrawerMultiplayerFollowsActiveList(t *testing.T) {
 	drawerTest(t, useful(0), `Multiplayer capability follows the active list, not search results. `+drawerAsMe+drawerStubbed+`The list is "mine" (written in by me@example.com alone). Searches answer with "foreign", an archived conversation written in by me@example.com and other@example.com: a hit like that must not switch the participant UI on mid-session. `+drawerQuery+drawerSteps+drawerDirect+`1. Navigate to /new. 2. Click the button "Search conversations...". 3. The query is "". 4. There is no button "Add user filter". 5. Set the query to "foreign". 6. [data-conversation-id="foreign"] should be visible. 7. There is no button "Add user filter" and no ".conversation-participant-badge". 8. Clear the query. 9. The query is "".`, func(s *shelley) {
 		drawerMe(s)
