@@ -2192,6 +2192,12 @@ func (db *DB) ListTypedUserMessages(ctx context.Context, conversationID string) 
 	})
 }
 
+func (db *DB) ListChapterAnswerText(ctx context.Context, id string, before int64) ([]generated.ListChapterAnswerTextRow, error) {
+	return db.QueriesRes(ctx, func(q *generated.Queries) ([]generated.ListChapterAnswerTextRow, error) {
+		return q.ListChapterAnswerText(ctx, generated.ListChapterAnswerTextParams{ConversationID: id, SequenceID: before})
+	})
+}
+
 // GetAgentMessageBefore returns the newest agent message of a conversation
 // before sequenceID.
 func (db *DB) GetAgentMessageBefore(ctx context.Context, conversationID string, sequenceID int64) (*generated.Message, error) {

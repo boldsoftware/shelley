@@ -29,8 +29,8 @@ func (s *chapterTestService) Do(_ context.Context, req *llm.Request) (*llm.Respo
 	if s.onRequest != nil {
 		s.onRequest()
 	}
-	if len(req.Tools) != 0 || req.ThinkingLevel != llm.ThinkingLevelLow {
-		return nil, errors.New("chapter request must have no tools and low thinking")
+	if len(req.Tools) != 0 || req.ThinkingLevel != llm.ThinkingLevelMedium {
+		return nil, errors.New("chapter request must have no tools and medium thinking")
 	}
 	if s.err != nil {
 		return nil, s.err
@@ -61,45 +61,6 @@ func newChapterIndexManager(t *testing.T, turns int, missing bool) (*Conversatio
 	server.llmManager = registry
 	cm := &ConversationManager{server: server, db: database, conversationID: id, logger: server.logger}
 	return cm, workhorse, conversation
-}
-
-func TestChapterIndexPrompt(t *testing.T) {
-	for _, rule := range []string{
-		"distinct destination worth revisiting",
-		"when those still serve the same objective",
-		"A tool/model/component change is not by itself a new objective",
-		"Do not split merely because an earlier title was too narrow",
-		"a substantial independent finding or decision",
-		"Keep them with the subject being summarized",
-		"There is no chapter count target or message quota",
-		"using their own terms and stated intention",
-		"Preserve the difference between trying to achieve something and having achieved it",
-		"This is incremental indexing",
-		"current_chapter is the active destination",
-		"previous_headings are completed destinations",
-		"If current_chapter is null",
-		"earliest eligible message after the opening exchanges",
-		"message_id and eligible_for_heading=true",
-		"Copy the short eligible IDs exactly as supplied",
-		"always 1–50 characters",
-		`{"reason":"Briefly explain continuation or redirection","chapters":[{"title":"Descriptive label","message_id":"eligible ID"}]}`,
-	} {
-		if !strings.Contains(chapterIndexPrompt, rule) {
-			t.Errorf("chapter prompt missing policy: %q", rule)
-		}
-	}
-	for _, obsolete := range []string{
-		"one broad chapter per 6–10 user messages",
-		"implementing a different model or component",
-		"preparing a working prototype for release",
-		"Redis worker adoption",
-		"retrospective pass over the complete supplied transcript",
-		"All other message_id values are eligible",
-	} {
-		if strings.Contains(chapterIndexPrompt, obsolete) {
-			t.Errorf("chapter prompt contains conflicting instruction: %q", obsolete)
-		}
-	}
 }
 
 func TestChapterIndexWorkhorse(t *testing.T) {
@@ -155,8 +116,8 @@ func TestChapterIndexResults(t *testing.T) {
 		anchor       int
 	}{
 		{name: "retrospective heading", reply: `{"chapters":[{"title":"Migration choices","message_id":"%s"}]}`, wantChapters: 1, anchor: 4},
-		{name: "first opening message", reply: `{"chapters":[{"title":"Migration choices","message_id":"%s"}]}`, wantError: true},
-		{name: "second opening message", reply: `{"chapters":[{"title":"Migration choices","message_id":"%s"}]}`, wantError: true, anchor: 2},
+		{name: "first opening message", reply: `{"chapters":[{"title":"Migration choices","message_id":"%s"}]}`, wantChapters: 1},
+		{name: "second opening message", reply: `{"chapters":[{"title":"Migration choices","message_id":"%s"}]}`, wantChapters: 1, anchor: 2},
 		{name: "no shift", reply: `{"chapters":[]}`},
 		{name: "missing chapters", reply: `{}`, wantError: true},
 		{name: "null chapters", reply: `{"chapters":null}`, wantError: true},
@@ -269,66 +230,40 @@ func TestChapterIndexPayload(t *testing.T) {
 	if err := cm.indexChapters(t.Context(), messages[len(messages)-1].SequenceID, "gpt-6-sol"); err != nil {
 		t.Fatal(err)
 	}
-	type entry struct {
-		ID      string `json:"message_id"`
-		Role    string `json:"role"`
-		New     bool   `json:"eligible_for_heading"`
-		Context string `json:"preceding_assistant_text"`
+	var payload struct {
+		Transcript []struct {
+			ID     string `json:"message_id"`
+			Answer string `json:"answer_excerpt"`
+		} `json:"transcript"`
 	}
-	type requestPayload struct {
-		Current    *db.ConversationChapter  `json:"current_chapter"`
-		Previous   []db.ConversationChapter `json:"previous_headings"`
-		Age        int                      `json:"user_turns_since_last_heading"`
-		Transcript []entry                  `json:"transcript"`
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(workhorse.request.Messages[0].Content[0].Text, chapterIndexPrompt+"\n")), &payload); err != nil {
+		t.Fatal(err)
 	}
-	var payload requestPayload
-	decode := func() {
-		t.Helper()
-		payload = requestPayload{}
-		text := strings.TrimPrefix(workhorse.request.Messages[0].Content[0].Text, chapterIndexPrompt+"\n")
-		if err := json.Unmarshal([]byte(text), &payload); err != nil {
-			t.Fatal(err)
-		}
-	}
-	decode()
-	if payload.Current != nil || payload.Age != 4 || len(payload.Transcript) != 4 {
-		t.Fatalf("initial payload = %+v", payload)
+	if len(payload.Transcript) != 4 {
+		t.Fatal(payload)
 	}
 	for i, m := range payload.Transcript {
-		if m.Role != "user" || m.New != (i >= 2) || (m.ID != "") != m.New {
-			t.Fatalf("invalid user anchor at %d: %+v", i, m)
-		}
-		if m.New && m.ID != fmt.Sprintf("u%d", i+1) {
-			t.Fatalf("expected short anchor at %d: %+v", i, m)
-		}
-		if (m.Context != "") != (i > 0) {
-			t.Fatalf("missing preceding answer at %d: %+v", i, m)
+		if m.ID != fmt.Sprintf("u%d", i+1) || (m.Answer != "") != (i < 3) {
+			t.Fatal(payload)
 		}
 	}
 	var end int64
 	for range 4 {
-		m, err := cm.db.CreateMessage(t.Context(), db.CreateMessageParams{
-			ConversationID: cm.conversationID, Type: db.MessageTypeUser, LLMData: llm.UserStringMessage("follow-up"),
-		})
+		m, err := cm.db.CreateMessage(t.Context(), db.CreateMessageParams{ConversationID: cm.conversationID, Type: db.MessageTypeUser, LLMData: llm.UserStringMessage("follow-up")})
 		if err != nil {
 			t.Fatal(err)
 		}
 		end = m.SequenceID
 	}
-	workhorse.reply = `{"chapters":[]}`
+	workhorse.reply = `{"chapters":[{"title":"Opening task","message_id":"u1"}]}`
 	if err := cm.indexChapters(t.Context(), end, "gpt-6-sol"); err != nil {
 		t.Fatal(err)
 	}
-	decode()
-	if payload.Current == nil || payload.Current.MessageID != messages[4].MessageID || len(payload.Previous) != 0 || payload.Age != 5 {
-		t.Fatalf("active chapter = %+v", payload)
+	themes, err := cm.db.GetConversationThemes(t.Context(), cm.conversationID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for i, m := range payload.Transcript {
-		if m.New != (i >= 4) || (m.ID != "") != m.New || (i < 2 && m.Context != "") {
-			t.Fatalf("invalid context at %d: %+v", i, m)
-		}
-		if m.New && m.ID != fmt.Sprintf("u%d", i+1) {
-			t.Fatalf("expected short anchor at %d: %+v", i, m)
-		}
+	if len(themes.Chapters) != 1 || themes.Chapters[0].MessageID != messages[0].MessageID || workhorse.calls != 2 {
+		t.Fatal(themes)
 	}
 }

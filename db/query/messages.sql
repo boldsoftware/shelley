@@ -309,3 +309,10 @@ SELECT type, COUNT(*) AS count FROM messages GROUP BY type ORDER BY COUNT(*) DES
 SELECT message_id FROM messages
 WHERE conversation_id = @conversation_id AND substr(external_message_id, 1, length(CAST(@prefix AS TEXT))) = CAST(@prefix AS TEXT)
 ORDER BY sequence_id DESC LIMIT 1;
+
+-- name: ListChapterAnswerText :many
+SELECT m.sequence_id, CAST(substr(json_extract(c.value, '$.Text'), 1, 401) AS TEXT) AS excerpt
+FROM messages m, json_each(m.llm_data, '$.Content') c
+WHERE m.conversation_id = ? AND m.type = 'agent' AND m.sequence_id < ?
+  AND json_extract(c.value, '$.Type') = 2 AND json_extract(c.value, '$.Text') <> ''
+ORDER BY m.sequence_id, CAST(c.key AS INTEGER);

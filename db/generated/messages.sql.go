@@ -569,6 +569,47 @@ func (q *Queries) ListAgentMessagesSinceLastUser(ctx context.Context, arg ListAg
 	return items, nil
 }
 
+const listChapterAnswerText = `-- name: ListChapterAnswerText :many
+SELECT m.sequence_id, CAST(substr(json_extract(c.value, '$.Text'), 1, 401) AS TEXT) AS excerpt
+FROM messages m, json_each(m.llm_data, '$.Content') c
+WHERE m.conversation_id = ? AND m.type = 'agent' AND m.sequence_id < ?
+  AND json_extract(c.value, '$.Type') = 2 AND json_extract(c.value, '$.Text') <> ''
+ORDER BY m.sequence_id, CAST(c.key AS INTEGER)
+`
+
+type ListChapterAnswerTextParams struct {
+	ConversationID string `json:"conversation_id"`
+	SequenceID     int64  `json:"sequence_id"`
+}
+
+type ListChapterAnswerTextRow struct {
+	SequenceID int64  `json:"sequence_id"`
+	Excerpt    string `json:"excerpt"`
+}
+
+func (q *Queries) ListChapterAnswerText(ctx context.Context, arg ListChapterAnswerTextParams) ([]ListChapterAnswerTextRow, error) {
+	rows, err := q.db.QueryContext(ctx, listChapterAnswerText, arg.ConversationID, arg.SequenceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChapterAnswerTextRow{}
+	for rows.Next() {
+		var i ListChapterAnswerTextRow
+		if err := rows.Scan(&i.SequenceID, &i.Excerpt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listConversationMessageSizes = `-- name: ListConversationMessageSizes :many
 SELECT COUNT(*) AS messages,
     CAST(COALESCE(SUM(COALESCE(LENGTH(llm_data), 0) + COALESCE(LENGTH(user_data), 0) + COALESCE(LENGTH(display_data), 0)), 0) AS INTEGER) AS bytes
