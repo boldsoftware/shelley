@@ -1,0 +1,109 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Checks that text this tab picked up from tab B while B was typing leaves this tab's composer once B sends it to a working agent, which queues it. Perform these steps in order, exactly as described; do not add extra steps.\n1. Navigate to /new.\n2. Wait for the message input (data-testid \"message-input\") to be visible.\n3. Fill the message input with the value \"delay: 30\" and click the send button (data-testid \"send-button\").\n4. Wait for the URL to contain \"/c/\".\n5. Wait for the agent to be working ([data-testid=\"agent-thinking\"] visible).\n6. Open a second tab, \"B\", on the same page this tab is on (navigate in tab B with no URL).\n7. In tab B, wait for the message input (data-testid \"message-input\") to be visible.\n8. In tab B, eval: install a fetch shim that lets the chat POST reach the server but holds its response until released. Expression: \"(function(){var o=window.fetch;window.fetch=function(u,opt){var s=(typeof u==='string')?u:u.url;if(/\\/api\\/conversation\\/[^\\/]+\\/chat$/.test(s)\u0026\u0026opt\u0026\u0026opt.method==='POST'){return o(u,opt).then(function(r){return new Promise(function(res){window.__release=function(){res(r);};});});}return o(u,opt);};return 'held';})()\". Expect \"held\".\n9. In tab B, fill the message input with the value \"echo: queued-pickup\". Do not send it yet.\n10. In tab B, eval: wait for the next second to begin. Expression: \"(async function(){await new Promise(function(r){setTimeout(r,1010-Date.now()%1000);});return 'begun';})()\". Expect \"begun\".\n11. In tab B, eval: rename the conversation through the API, so the server echoes an update to both tabs. Expression: \"(async function(){var slug=decodeURIComponent(location.pathname.split('/c/')[1]);var c=await (await fetch('/api/conversation-by-slug/'+encodeURIComponent(slug))).json();var r=await fetch('/api/conversation/'+c.conversation_id+'/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:'queued-pickup-'+Date.now()})});return String(r.status);})()\". Expect \"200\".\n12. In the first tab, eval, polling until it matches: the echo carried tab B's unsent text into this tab's idle composer. Expression: \"(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()\". Expect \"[echo: queued-pickup]\".\n13. In tab B, click the send button (data-testid \"send-button\").\n14. In the first tab, eval, polling until it matches, for at most 5 seconds: the text tab B sent has left this tab's composer. Expression: \"(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()\". Expect \"[]\".\n15. In tab B, eval: release the held response. Expression: \"(function(){window.__release();return 'released';})()\". Expect \"released\".\n16. In tab B, eval, polling until it matches: its composer cleared once its send completed. Expression: \"(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()\". Expect \"[]\".\n17. In the first tab, eval: its composer is still empty. Expression: \"(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()\". Expect \"[]\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 30"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_url",
+      "text": "/c/"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']"
+    },
+    {
+      "action": "navigate",
+      "tab": "B"
+    },
+    {
+      "action": "wait_visible",
+      "tab": "B",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "tab": "B",
+      "expression": "(function(){var o=window.fetch;window.fetch=function(u,opt){var s=(typeof u==='string')?u:u.url;if(/\\/api\\/conversation\\/[^\\/]+\\/chat$/.test(s)\u0026\u0026opt\u0026\u0026opt.method==='POST'){return o(u,opt).then(function(r){return new Promise(function(res){window.__release=function(){res(r);};});});}return o(u,opt);};return 'held';})() ",
+      "expect": "held"
+    },
+    {
+      "action": "fill",
+      "tab": "B",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: queued-pickup"
+    },
+    {
+      "action": "eval",
+      "tab": "B",
+      "expression": "(async function(){await new Promise(function(r){setTimeout(r,1010-Date.now()%1000);});return 'begun';})() ",
+      "expect": "begun"
+    },
+    {
+      "action": "eval",
+      "tab": "B",
+      "expression": "(async function(){var slug=decodeURIComponent(location.pathname.split('/c/')[1]);var c=await (await fetch('/api/conversation-by-slug/'+encodeURIComponent(slug))).json();var r=await fetch('/api/conversation/'+c.conversation_id+'/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:'queued-pickup-'+Date.now()})});return String(r.status);})() ",
+      "expect": "200"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})() ",
+      "expect": "[echo: queued-pickup]",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "tab": "B",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})() ",
+      "expect": "[]",
+      "timeout": "5s"
+    },
+    {
+      "action": "eval",
+      "tab": "B",
+      "expression": "(function(){window.__release();return 'released';})() ",
+      "expect": "released"
+    },
+    {
+      "action": "eval",
+      "tab": "B",
+      "expression": "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})() ",
+      "expect": "[]",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})() ",
+      "expect": "[]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T16:14:31.414206621Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 34044,
+    "output_tokens": 2101,
+    "estimated_cost_usd": 0.07450635,
+    "mode": "generated"
+  }
+}

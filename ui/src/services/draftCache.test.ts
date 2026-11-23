@@ -439,6 +439,33 @@ run("reconcile ignores a pending entry on a same-session echo", () => {
   assert(promoted !== null && promoted.value === "", "promotion echo clears the composer");
 });
 
+run("reconcile on new messages alone clears text sent elsewhere, never seeds", () => {
+  // This composer picked up tab B's unsent "picked up" from an echo. B sent it
+  // in the same second, so only the message (or queued one) shows up here.
+  const picked = {
+    conversationId: "sent2",
+    isDraft: false,
+    composerValue: "picked up",
+    lastSeededSession: "sent2",
+    lastSeededValue: "picked up",
+    messagesOnly: true,
+  };
+  for (const cached of [{ value: "picked up", basedOn: "", pending: true }, null]) {
+    const r = reconcileComposerDraft(reconcileInput({ ...picked, cached }));
+    assert(r !== null && r.value === "", "sent text leaves, in flight or accepted");
+  }
+  // What B has typed since is no message: it waits for a row echo.
+  const typed = reconcileComposerDraft(
+    reconcileInput({ ...picked, cached: { value: "picked up, and more", basedOn: "" } }),
+  );
+  assert(typed === null, "new mirror text is not seeded");
+  // Nor is text typed here cleared.
+  const mine = reconcileComposerDraft(
+    reconcileInput({ ...picked, composerValue: "picked up, mine", cached: null }),
+  );
+  assert(mine === null, "this tab's typing stays");
+});
+
 run("reconcile keeps the sending tab's own pending text on its echo", () => {
   // The sender's composer was seeded (restored after a reload) and sent
   // unedited; its own acceptance/promotion echo must not blank it while the

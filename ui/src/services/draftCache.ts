@@ -161,7 +161,7 @@ export function keepDraftThroughPromotion(draft: {
 
 // reconcileComposerDraft decides what (if anything) the message composer should
 // be (re)seeded with when the focused conversation, its draft text, or its
-// server `updated_at` changes. It is the pure core of ChatInterface's draft
+// server `updated_at` changes, and whether new messages clear it. It is the pure core of ChatInterface's draft
 // reconcile watch, extracted so the ordering-sensitive logic can be unit tested.
 //
 // The bug this guards against: on a slow network the autosave round-trip (PUT
@@ -196,6 +196,11 @@ export interface ComposerReconcileInput {
   // sending tab's POST is in flight its pending entry is the more exact record
   // of what went (the server draft may lag its last keystrokes).
   promotedFrom: string | null;
+  // Whether only the conversation's messages or queue changed. That carries
+  // no draft, but may be text leaving another tab's composer (its row echo can
+  // miss it: updated_at has one-second resolution), so this run may clear such
+  // text from this composer and never seeds any.
+  messagesOnly?: boolean;
   // The composer's live value right now (latest keystrokes).
   composerValue: string;
   // The session id we last seeded the composer for (undefined before any seed).
@@ -283,6 +288,7 @@ export function reconcileComposerDraft(
   // stale next-message draft. Text the other tab replaced, or that this tab
   // typed beyond what went, was never sent and stays.
   if (value === composerValue) return null;
+  if (input.messagesOnly && value !== "") return null;
   let sentText = promotedFrom;
   if (sentText !== null && foreignPending && input.cached) sentText = input.cached.value;
   const sentAsTyped = sentText !== null && composerValue !== "" && sentText.includes(composerValue);

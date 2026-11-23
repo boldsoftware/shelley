@@ -382,6 +382,58 @@ func TestNewPageCrossTabSendStaysOutOfOtherComposer(t *testing.T) {
 15. In the first tab, eval: its composer is still empty. Expression: "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()". Expect "[]".`)
 }
 
+// Tabs on one conversation share its composer mirror, so a server echo
+// while tab B types carries B's unsent text into this tab's idle composer.
+// When B then sent in the same second as that echo, the text stayed: the
+// composer reconciled only when the row's updated_at changed, and that has
+// one-second resolution. A renamed conversation stands in for the echo (a
+// late slug or title update did it in CI), timed just after a second turns so
+// the send lands in the same one.
+func TestNewPageCrossTabSendClearsTextPickedUpWhileTyping(t *testing.T) {
+	lazyTest(t, useful(0), `Checks that text this tab picked up from tab B while B was typing leaves this tab's composer once B sends it. Perform these steps in order, exactly as described; do not add extra steps.
+1. Navigate to /new.
+2. Wait for the message input (data-testid "message-input") to be visible.
+3. Fill the message input with the value "echo: pickup seed" and click the send button (data-testid "send-button").
+4. Wait for the URL to contain "/c/".
+5. Eval, polling until it matches: the agent's reply has rendered. Expression: "(function(){var ms=document.querySelectorAll('.message-agent');for(var i=0;i<ms.length;i++){if(ms[i].innerText.indexOf('pickup seed')>=0)return 'replied';}return 'waiting';})()". Expect "replied".
+6. Open a second tab, "B", on the same page this tab is on (navigate in tab B with no URL).
+7. In tab B, wait for the message input (data-testid "message-input") to be visible.
+8. In tab B, eval: install a fetch shim that lets the chat POST reach the server but holds its response until released. Expression: "(function(){var o=window.fetch;window.fetch=function(u,opt){var s=(typeof u==='string')?u:u.url;if(/\/api\/conversation\/[^\/]+\/chat$/.test(s)&&opt&&opt.method==='POST'){return o(u,opt).then(function(r){return new Promise(function(res){window.__release=function(){res(r);};});});}return o(u,opt);};return 'held';})()". Expect "held".
+9. In tab B, fill the message input with the value "echo: picked-up-text". Do not send it yet.
+10. In tab B, eval: wait for the next second to begin. Expression: "(async function(){await new Promise(function(r){setTimeout(r,1010-Date.now()%1000);});return 'begun';})()". Expect "begun".
+11. In tab B, eval: rename the conversation through the API, so the server echoes an update to both tabs. Expression: "(async function(){var slug=decodeURIComponent(location.pathname.split('/c/')[1]);var c=await (await fetch('/api/conversation-by-slug/'+encodeURIComponent(slug))).json();var r=await fetch('/api/conversation/'+c.conversation_id+'/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:'picked-up-'+Date.now()})});return String(r.status);})()". Expect "200".
+12. In the first tab, eval, polling until it matches: the echo carried tab B's unsent text into this tab's idle composer. Expression: "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()". Expect "[echo: picked-up-text]".
+13. In tab B, click the send button (data-testid "send-button").
+14. In the first tab, eval, polling until it matches: the agent's reply to the message sent from tab B has rendered. Expression: "(function(){var ms=document.querySelectorAll('.message-agent');for(var i=0;i<ms.length;i++){if(ms[i].innerText.indexOf('picked-up-text')>=0)return 'replied';}return 'waiting';})()". Expect "replied".
+15. In the first tab, eval, polling until it matches, for at most 5 seconds: the text tab B sent has left this tab's composer. Expression: "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()". Expect "[]".
+16. In tab B, eval: release the held response. Expression: "(function(){window.__release();return 'released';})()". Expect "released".
+17. In tab B, eval, polling until it matches: its composer cleared once its send completed. Expression: "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()". Expect "[]".
+18. In the first tab, eval: its composer is still empty. Expression: "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()". Expect "[]".`)
+}
+
+// The same, with the agent at work: B's message is queued, so no message
+// arrives here; the queue changing must clear the text instead.
+func TestNewPageCrossTabQueuedSendClearsTextPickedUpWhileTyping(t *testing.T) {
+	lazyTest(t, useful(0), `Checks that text this tab picked up from tab B while B was typing leaves this tab's composer once B sends it to a working agent, which queues it. Perform these steps in order, exactly as described; do not add extra steps.
+1. Navigate to /new.
+2. Wait for the message input (data-testid "message-input") to be visible.
+3. Fill the message input with the value "delay: 30" and click the send button (data-testid "send-button").
+4. Wait for the URL to contain "/c/".
+5. Wait for the agent to be working ([data-testid="agent-thinking"] visible).
+6. Open a second tab, "B", on the same page this tab is on (navigate in tab B with no URL).
+7. In tab B, wait for the message input (data-testid "message-input") to be visible.
+8. In tab B, eval: install a fetch shim that lets the chat POST reach the server but holds its response until released. Expression: "(function(){var o=window.fetch;window.fetch=function(u,opt){var s=(typeof u==='string')?u:u.url;if(/\/api\/conversation\/[^\/]+\/chat$/.test(s)&&opt&&opt.method==='POST'){return o(u,opt).then(function(r){return new Promise(function(res){window.__release=function(){res(r);};});});}return o(u,opt);};return 'held';})()". Expect "held".
+9. In tab B, fill the message input with the value "echo: queued-pickup". Do not send it yet.
+10. In tab B, eval: wait for the next second to begin. Expression: "(async function(){await new Promise(function(r){setTimeout(r,1010-Date.now()%1000);});return 'begun';})()". Expect "begun".
+11. In tab B, eval: rename the conversation through the API, so the server echoes an update to both tabs. Expression: "(async function(){var slug=decodeURIComponent(location.pathname.split('/c/')[1]);var c=await (await fetch('/api/conversation-by-slug/'+encodeURIComponent(slug))).json();var r=await fetch('/api/conversation/'+c.conversation_id+'/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:'queued-pickup-'+Date.now()})});return String(r.status);})()". Expect "200".
+12. In the first tab, eval, polling until it matches: the echo carried tab B's unsent text into this tab's idle composer. Expression: "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()". Expect "[echo: queued-pickup]".
+13. In tab B, click the send button (data-testid "send-button").
+14. In the first tab, eval, polling until it matches, for at most 5 seconds: the text tab B sent has left this tab's composer. Expression: "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()". Expect "[]".
+15. In tab B, eval: release the held response. Expression: "(function(){window.__release();return 'released';})()". Expect "released".
+16. In tab B, eval, polling until it matches: its composer cleared once its send completed. Expression: "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()". Expect "[]".
+17. In the first tab, eval: its composer is still empty. Expression: "(function(){return '['+document.querySelector('[data-testid=message-input]').value+']';})()". Expect "[]".`)
+}
+
 // Same race for a draft: this tab types the draft, tab B opens it and sends
 // it. The promotion echo must clear this tab's composer even though tab B's
 // POST has not returned yet (before the fix, the still-populated mirror kept

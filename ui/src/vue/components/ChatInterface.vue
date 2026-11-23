@@ -5461,13 +5461,17 @@ watch(
     () => props.currentConversation?.draft,
     () => props.currentConversation?.updated_at,
     lazyDraftId,
+    // A new message or queued one may be text leaving another tab's composer,
+    // one this composer picked up from the shared mirror (see messagesOnly).
+    () => messages.value.at(-1)?.sequence_id,
+    () => props.currentConversation?.queued_messages,
   ],
-  ([id, isDraft], prev) => {
+  ([id, isDraft, draft, updatedAt, lazyId], prev) => {
     perfCount("chat.draftReconcileWatch");
     const sessionId = props.conversationId ?? null;
     const cached = loadCachedDraft(sessionId);
     // The row flipping is_draft true->false in place is the draft being sent.
-    const [prevId, prevIsDraft, prevDraft] = prev ?? [];
+    const [prevId, prevIsDraft, prevDraft, prevUpdatedAt, prevLazyId] = prev ?? [];
     const promotedFrom =
       prev && id === prevId && prevIsDraft === true && isDraft === false ? prevDraft || "" : null;
     const result = reconcileComposerDraft({
@@ -5479,6 +5483,13 @@ watch(
       cached,
       ownsPending: sessionId !== null && ownSends.has(sessionId),
       promotedFrom,
+      messagesOnly:
+        !!prev &&
+        id === prevId &&
+        isDraft === prevIsDraft &&
+        draft === prevDraft &&
+        updatedAt === prevUpdatedAt &&
+        lazyId === prevLazyId,
       composerValue: draftText,
       lastSeededSession,
       lastSeededValue,
