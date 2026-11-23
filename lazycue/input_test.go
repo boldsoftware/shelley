@@ -46,6 +46,7 @@ const blankPage = `<!doctype html><html><head><meta name="viewport" content="wid
 // that prefers reduced motion, may use the clipboard, and draws WebGL in
 // software, as Playwright's Chrome does without a GPU.
 func TestDefaultDeviceIsAPixel5(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, blankPage)}
 	runSteps(t, br, env,
@@ -67,6 +68,7 @@ func TestDefaultDeviceIsAPixel5(t *testing.T) {
 }
 
 func TestLaunchSettings(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
@@ -101,6 +103,7 @@ func TestLaunchSettings(t *testing.T) {
 // declares a const at the top: evals run through an indirect eval, as
 // Playwright's do, which works under a CSP that bars the page's own.
 func TestEvalRunsTwice(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><body>
 <iframe srcdoc="<p>x</p>"></iframe>
@@ -133,6 +136,7 @@ func TestEvalRunsTwice(t *testing.T) {
 }
 
 func TestEvalAwaitsPromisesAndRendersJSON(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, blankPage)}
 	results := runSteps(t, br, env,
@@ -163,6 +167,7 @@ func TestEvalAwaitsPromisesAndRendersJSON(t *testing.T) {
 // elements, whose offsetParent is null, are visible too, and a display:
 // contents element, which has no box, is when a child is.
 func TestVisibility(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <div id="fixed" style="position: fixed; top: 0; width: 50px; height: 50px"></div>
@@ -200,6 +205,7 @@ func TestVisibility(t *testing.T) {
 }
 
 func TestHasText(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"><title>Inner - app</title><script>window.x = 'Inner'</script></head><body>
 <p style="display: none">Hidden note</p>
@@ -245,6 +251,7 @@ func TestHasText(t *testing.T) {
 // role and name pick elements as Playwright's getByRole does, from Chrome's
 // accessibility tree; exact and visible narrow any element step.
 func TestRoles(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <nav><button>Archive</button><a href="#all">Archive all</a></nav>
@@ -344,6 +351,7 @@ setTimeout(() => document.querySelector('main').insertAdjacentHTML('beforeend', 
 // within scopes a step to the elements inside what it picks out, as
 // Playwright's chained locators do.
 func TestWithin(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <div data-testid="card" style="display: none"><span data-testid="status">Hidden</span></div>
@@ -403,6 +411,7 @@ document.addEventListener('click', e => document.title = e.target.closest('.msg,
 // has keeps the matches with an element inside them that it picks out, as
 // Playwright's filter({has}), shadow roots included.
 func TestHas(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <section><h2>Profiles</h2><ul>
@@ -461,6 +470,7 @@ document.addEventListener('click', e => document.title = e.target.closest('li').
 // nth picks one of a step's matches, counting from 0, or back from the last
 // at -1, after every other field has narrowed them, as Playwright's nth.
 func TestNth(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <ul>
@@ -508,6 +518,7 @@ document.addEventListener('click', e => document.title = e.target.closest('li').
 // document's matches first, then each shadow root's, hosts in document
 // order, nested ones under theirs. A closed shadow root stays shut.
 func TestShadowSelectors(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <x-picker></x-picker>
@@ -566,6 +577,7 @@ customElements.define('x-embed', class extends HTMLElement {
 // document: same-origin, sandboxed without scripts, or cross-origin, and at
 // an offset in the page.
 func TestFrames(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
@@ -640,6 +652,7 @@ func TestFrames(t *testing.T) {
 // page or a frame, as Playwright's download event and suggestedFilename,
 // and takes it and those before it.
 func TestDownloads(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	// The frame's begins later than the page's.
 	save := func(name, delay string) string {
@@ -704,6 +717,7 @@ func TestDownloads(t *testing.T) {
 // A frame's eval runs in the frame's own world, as Playwright's do, so it
 // sees the globals the frame's scripts define and waits for their promises.
 func TestFrameEvalSeesTheFramesGlobals(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
@@ -734,6 +748,7 @@ func TestFrameEvalSeesTheFramesGlobals(t *testing.T) {
 // read and its elements wait for frames, is whether the frame intersects
 // the viewport through every scroller around it.
 func TestCrossOriginFrameInView(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
@@ -775,6 +790,7 @@ func TestCrossOriginFrameInView(t *testing.T) {
 // Chrome names elements from their rendered text, text-transform and all;
 // Playwright, as the DOM has it. An exact name matches the DOM's.
 func TestExactNamesIgnoreTextTransform(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <h3 id="h" style="text-transform: uppercase">Auto compaction</h3>
@@ -805,6 +821,7 @@ func TestExactNamesIgnoreTextTransform(t *testing.T) {
 
 // Thousands of matches take under a second (one by one, they took 7s).
 func TestManyRoles(t *testing.T) {
+	t.Parallel()
 	if raceEnabled {
 		t.Skip("too slow to time with -race")
 	}
@@ -817,6 +834,7 @@ func TestManyRoles(t *testing.T) {
 }
 
 func TestFormStateAssertions(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <input id="name" value="attr">
@@ -875,6 +893,7 @@ customElements.define('x-picker', class extends HTMLElement {
 // Dialogs close as Playwright closes them when no test listens: the page
 // may be left on beforeunload, and alerts, confirms and prompts cancel.
 func TestDialogsClose(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <button id="b">b</button>
@@ -902,6 +921,7 @@ for (const type of ['mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu'])
 </body></html>`
 
 func TestClick(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, clickPage)}
 	runSteps(t, br, env,
@@ -950,6 +970,7 @@ func TestClick(t *testing.T) {
 // the events does not land on what took its place: as with Playwright's
 // hit-target interceptor, the events are blocked and the step tries again.
 func TestHitTarget(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0">
 <button id="near" style="position: absolute; left: 20px; top: 20px; width: 100px; height: 40px">Near</button>
@@ -1013,6 +1034,7 @@ for (const type of ['click', 'touchstart']) {
 // A page that fakes its clock, freezing requestAnimationFrame, can still be
 // clicked: the check that an element holds still uses the browser's frames.
 func TestClickWithFrozenFrames(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
@@ -1031,6 +1053,7 @@ func TestClickWithFrozenFrames(t *testing.T) {
 // A drag selects text natively and starts HTML drag and drop, which need
 // moves that name the held button.
 func TestNativeDrag(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0">
 <p id="p" style="font: 20px monospace; margin: 0">hello world</p>
@@ -1058,6 +1081,7 @@ document.addEventListener('dragover', e => e.preventDefault());
 }
 
 func TestDragAndWheel(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0; height: 3000px">
 <div id="a" style="width: 50px; height: 50px"></div><div id="z" style="width: 50px; height: 50px"></div>
@@ -1087,6 +1111,7 @@ document.addEventListener('wheel', e => log.push('wheel:' + e.deltaY));
 }
 
 func TestTouch(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0">
 <div id="pad" style="margin: 20px; width: 200px; height: 200px; touch-action: none"></div>
@@ -1127,6 +1152,7 @@ for (const type of ['touchstart', 'touchmove', 'touchend']) {
 }
 
 func TestTypeAndFill(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <textarea id="t"></textarea>
@@ -1173,6 +1199,7 @@ document.addEventListener('change', e => log.push('change:' + e.target.id));
 // Playwright's locator.press and pressSequentially do: an input they were
 // not focused on gets its caret at the start.
 func TestKeysIntoElement(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <input id="a" aria-label="First">
@@ -1218,6 +1245,7 @@ func TestKeysIntoElement(t *testing.T) {
 // Pointer and key steps carry the modifiers they name and those key_down
 // holds, as Playwright's do.
 func TestModifiers(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, clickPage)}
 	runSteps(t, br, env,
@@ -1277,6 +1305,7 @@ func TestModifiers(t *testing.T) {
 }
 
 func TestPlaceholdersAndCalls(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	var n atomic.Int32
 	env := &Env{
@@ -1309,6 +1338,7 @@ func TestPlaceholdersAndCalls(t *testing.T) {
 // An eval's save keeps its result as a placeholder for the steps after it,
 // so a value in the page can be looked for in a frame.
 func TestSave(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{
 		BaseURL: serveHTML(t, `<!doctype html><html><head><style>:root { --bg-base: #123456 }</style></head><body>
@@ -1324,7 +1354,9 @@ func TestSave(t *testing.T) {
 		// same pass.
 		Step{Action: ActionRetry, Steps: []Step{
 			{Action: ActionEval, Expression: `window.n = (window.n || 0) + 1`, Save: "N"},
-			{Action: ActionEval, Expression: `{{N}} >= 2`, Expect: ptr("true"), Timeout: "100ms"},
+			// Room for a slow probe on a loaded host: one cut short would
+			// start the block over and count past 2.
+			{Action: ActionEval, Expression: `{{N}} >= 2`, Expect: ptr("true"), Timeout: "500ms"},
 		}},
 		Step{Action: ActionEval, Expression: `{{N}}`, Expect: ptr("2")},
 	)
@@ -1351,6 +1383,7 @@ func TestSave(t *testing.T) {
 // A retry block starts its steps over until a whole pass succeeds, as
 // Playwright's expect.poll and toPass do.
 func TestRetry(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <button id="copy">Copy</button><textarea id="t"></textarea>
@@ -1360,7 +1393,8 @@ func TestRetry(t *testing.T) {
 		Step{Action: ActionNavigate, URL: "/"},
 		Step{Action: ActionRetry, Steps: []Step{
 			{Action: ActionClick, Selector: "#copy"},
-			{Action: ActionAssertValue, Selector: "#t", Value: "output", Timeout: "100ms"},
+			// As in TestSave, a probe cut short would click a fourth time.
+			{Action: ActionAssertValue, Selector: "#t", Value: "output", Timeout: "500ms"},
 		}},
 		Step{Action: ActionEval, Expression: "n", Expect: ptr("3")},
 	)
@@ -1398,6 +1432,7 @@ func TestRetry(t *testing.T) {
 }
 
 func TestListAndTextAssertions(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
 <ul><li> One </li><li>Two
@@ -1446,6 +1481,7 @@ func TestListAndTextAssertions(t *testing.T) {
 }
 
 func TestViewportAssertions(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin: 0; height: 5000px">
 <div id="top" style="height: 10px"></div>
@@ -1481,6 +1517,7 @@ func TestViewportAssertions(t *testing.T) {
 // A point computed when the step runs aims the pointer without checking
 // any element, as Playwright's page.mouse does.
 func TestPoint(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	env := &Env{BaseURL: serveHTML(t, clickPage), Vars: map[string]string{"DX": "10"}}
 	runSteps(t, br, env,

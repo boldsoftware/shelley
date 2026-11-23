@@ -48,6 +48,7 @@ func serveHTML(t *testing.T, html string) string {
 }
 
 func TestInitScriptRunsBeforePageScripts(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
@@ -75,6 +76,7 @@ func TestInitScriptRunsBeforePageScripts(t *testing.T) {
 // which is the flake this change fixes). The spinner is present when the step
 // first runs, so a non-polling assert would fail immediately.
 func TestAssertPollsUntilSettled(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	url := serveHTML(t, `<!doctype html><html><body>
 <div class="spinner">loading</div>
@@ -102,6 +104,7 @@ func TestAssertPollsUntilSettled(t *testing.T) {
 // regression the test guards against — polling only tolerates LATE settling, it
 // never turns a never-true assertion into a pass.
 func TestAssertStillFailsWhenNeverTrue(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	url := serveHTML(t, `<!doctype html><html><body>
 <div class="spinner">loading forever</div>
@@ -129,6 +132,7 @@ func TestAssertStillFailsWhenNeverTrue(t *testing.T) {
 // not-yet-satisfied state and becoming satisfied ~500ms later. Guards against a
 // future edit to one case's closure quietly dropping the polling wrapper.
 func TestAssertVariantsPollUntilSettled(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	// The target starts hidden+empty; a timer reveals it and fills its text.
 	url := serveHTML(t, `<!doctype html><html><body>
@@ -184,6 +188,7 @@ func TestAssertVariantsPollUntilSettled(t *testing.T) {
 // Each of these steps targets a selector that never appears, so each must
 // return an error in roughly its own timeout, not hang.
 func TestBlockingStepsHonorTheirTimeout(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	url := serveHTML(t, `<!doctype html><html><body><p>no such target here</p></body></html>`)
 
@@ -226,6 +231,7 @@ func TestBlockingStepsHonorTheirTimeout(t *testing.T) {
 // letters one by one ("Enter" -> E, n, t, e, r), so no cached script could
 // exercise Enter/Tab/Escape handling.
 func TestPressKeyNamedKeys(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	url := serveHTML(t, `<!doctype html><html><body>
 <textarea id="t"></textarea>
@@ -271,6 +277,7 @@ document.addEventListener('keydown', function (e) {
 // so both pointer events (mouseenter, which tooltips listen for) and CSS :hover
 // apply, and leaves without clicking.
 func TestHoverMovesTheMouse(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	url := serveHTML(t, `<!doctype html><html><head><style>
 #b { width: 20px; height: 20px; margin-top: 2000px; }
@@ -305,6 +312,7 @@ b.addEventListener('click', function () { window.log.push('click'); });
 // pixels from the element's top-left corner, like Playwright's
 // hover({position}), so a test can probe a button's edges.
 func TestHoverAtOffset(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	url := serveHTML(t, `<!doctype html><html><head><style>
 #b { width: 28px; height: 28px; margin: 40px; border: 0; padding: 0; }
@@ -345,6 +353,7 @@ b.addEventListener('mousemove', function (e) {
 // Enter still inserts one; Control/Alt/Meta chords type nothing; plain
 // characters and Space type themselves.
 func TestPressKeyTypesLikeAKeyboard(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	url := serveHTML(t, `<!doctype html><html><body>
 <textarea id="t"></textarea>
@@ -411,6 +420,7 @@ func TestPressKeyRejectsUnknownKeysAndModifiers(t *testing.T) {
 // visible. (headless-shell, which runs these tests, reports every tab visible;
 // the new window openTab asks for matters only under full Chrome.)
 func TestTabsShareProfile(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	url := serveHTML(t, `<!doctype html><html><body><p id="o">nothing yet</p>
 <script>window.addEventListener('storage', function(e){document.getElementById('o').textContent = e.newValue;});</script>
@@ -438,6 +448,7 @@ func TestTabsShareProfile(t *testing.T) {
 // TestTabsGetTheInitScript: the init script (the recording tests' media mock)
 // is installed per tab in Chrome, so a tab opened by a step needs it too.
 func TestTabsGetTheInitScript(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
@@ -464,6 +475,7 @@ func TestTabsGetTheInitScript(t *testing.T) {
 // the end of the script: the next script in the same browser starts with only
 // the first tab.
 func TestTabMustBeOpenedByNavigate(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	url := serveHTML(t, `<!doctype html><html><body><p id="o">hi</p></body></html>`)
 
@@ -499,6 +511,7 @@ func TestTabMustBeOpenedByNavigate(t *testing.T) {
 // TestNavigateWithoutURL: for another tab it means the first tab's current
 // page, which must exist; for the first tab it is the base URL, as before tabs.
 func TestNavigateWithoutURL(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	url := serveHTML(t, `<!doctype html><html><body><p id="o">hi</p></body></html>`)
 
@@ -516,6 +529,7 @@ func TestNavigateWithoutURL(t *testing.T) {
 
 // A URL with a scheme is absolute; any other is relative to the base URL.
 func TestNavigateURLs(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	base := serveHTML(t, blankPage)
 	runSteps(t, br, &Env{BaseURL: base},
@@ -533,6 +547,7 @@ func TestNavigateURLs(t *testing.T) {
 // TestScreenshotsFollowTheStepsTab: the per-step screenshot shows the tab the
 // step acted on, so a trace of a two-tab test shows what each step saw.
 func TestScreenshotsFollowTheStepsTab(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	red := serveHTML(t, `<!doctype html><html><body style="margin:0;background:#f00"><div id="d" style="height:100vh"></div></body></html>`)
 	blue := serveHTML(t, `<!doctype html><html><body style="margin:0;background:#00f"><div id="d" style="height:100vh"></div></body></html>`)
@@ -607,6 +622,7 @@ func dominantHue(t *testing.T, png []byte) string {
 // reload, go_back and go_forward wait for a new document to load, but not
 // for a same-document (pushState) entry, which never fires load.
 func TestHistory(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	var hold atomic.Bool
 	done := make(chan struct{})
@@ -680,6 +696,7 @@ func TestHistory(t *testing.T) {
 
 // collect_garbage frees what only a WeakRef holds.
 func TestCollectGarbage(t *testing.T) {
+	t.Parallel()
 	br := newBrowserOrSkip(t)
 	runSteps(t, br, &Env{BaseURL: serveHTML(t, blankPage)},
 		Step{Action: ActionNavigate, URL: "/"},
@@ -702,6 +719,7 @@ func TestCollectGarbage(t *testing.T) {
 // A page a page opens becomes tab "popup" (then "popup2", ...), set up as
 // the launch says before it runs, as Playwright's popups are.
 func TestPopups(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
@@ -764,6 +782,7 @@ document.title = 'init=' + window.__init + ' w=' + innerWidth + ' opener=' + (wi
 // Launch.Hosts answers requests to other origins, in every tab including
 // popups and cross-site iframes, as Playwright's context routes do.
 func TestHosts(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
@@ -818,6 +837,7 @@ func TestHosts(t *testing.T) {
 
 // A launch Chrome rejects says which part.
 func TestBadLaunch(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
@@ -828,6 +848,7 @@ func TestBadLaunch(t *testing.T) {
 }
 
 func TestHostsAreOrigins(t *testing.T) {
+	t.Parallel()
 	for _, origin := range []string{"https://docs.example/", "docs.example", "https://docs.example/x"} {
 		_, err := NewBrowser(context.Background(), Launch{Hosts: map[string]http.Handler{origin: http.NotFoundHandler()}})
 		if err == nil || !strings.Contains(err.Error(), "is not an origin") {
@@ -839,6 +860,7 @@ func TestHostsAreOrigins(t *testing.T) {
 // A Hosts handler that takes its time holds up neither the other requests,
 // nor dialogs, nor closing the browser.
 func TestSlowHostHandler(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("LAZYCUE_INTEGRATION") == "" {
 		t.Skip("set LAZYCUE_INTEGRATION=1 to run LazyCue browser tests")
 	}
