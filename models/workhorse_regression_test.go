@@ -454,7 +454,7 @@ func TestWorkhorseTextModalities(t *testing.T) {
 		known, allowed       bool
 	}{
 		{"audio input", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "qwen3-asr-flash", true, false},
-		{"audio output", "https://kenari.id/v1", "gemini-3-1-flash-tts", true, false},
+		{"audio output", DefaultGeminiBaseURL, "gemini-3.1-flash-tts-preview", true, false},
 		{"image output", "https://api.qnaigc.com/v1", "gemini-2.5-flash-image", true, false},
 		{"text model", DefaultGeminiBaseURL, "gemini-2.5-flash", true, true},
 		{"unknown model", "https://private.example/v1", "private-workhorse", false, true},

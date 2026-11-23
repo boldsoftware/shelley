@@ -129,6 +129,12 @@ func TestProviderModelAdmission(t *testing.T) {
 		{"https://api.mistral.ai/v1", "pixtral-12b", true},
 		{"https://api.together.ai/v1", "essentialai/Rnj-1-Instruct", true},
 		{"https://gemini.int.exe.xyz/v1beta", "gemini-3-flash-preview", true},
+		{"https://generativelanguage.googleapis.com/v1beta", "gemini-4-carbon", true},
+		{"https://generativelanguage.googleapis.com/v1beta", "gemini-4-hydrogen", true},
+		{"https://generativelanguage.googleapis.com/v1beta", "gemini-4-neon", true},
+		{"https://gemini.int.exe.xyz/v1beta", "gemini-4-carbon", true},
+		{"https://gemini.int.exe.xyz/v1beta", "gemini-4-hydrogen", true},
+		{"https://gemini.int.exe.xyz/v1beta", "gemini-4-neon", true},
 		{"https://gateway.example/v1", "claude-sonnet-5-5", true},
 		{"https://gateway.example/v1", "unrecognized-embedding", false},
 	} {

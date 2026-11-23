@@ -58,6 +58,34 @@ func openRouterResponsesService(t *testing.T, provider, model string, handle fun
 	}
 }
 
+func TestOpenRouterResponsesProxyOutputBudget(t *testing.T) {
+	for _, model := range []string{"google/gemini-4-carbon", "google/gemini-4-hydrogen", "google/gemini-4-neon"} {
+		t.Run(model, func(t *testing.T) {
+			const budget = 131072
+			const endpoint = "https://openrouter.int.exe.xyz/api/v1"
+			service := &ResponsesService{
+				APIKey: "test-key", Model: modelForTest(model), ModelURL: endpoint, MaxTokens: budget,
+				HTTPC: &http.Client{Transport: openRouterResponsesTransport(func(r *http.Request) (*http.Response, error) {
+					if r.URL.String() != endpoint+"/responses" {
+						t.Fatalf("request URL = %s", r.URL)
+					}
+					var req openRouterResponsesRequest
+					if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+						t.Fatal(err)
+					}
+					if req.MaxOutputTokens != budget {
+						t.Errorf("max_output_tokens = %d, want %d", req.MaxOutputTokens, budget)
+					}
+					return openRouterHTTPResponse(t, openRouterResponse("completed", "", []any{openRouterText("hi")}, 1, 1, 0), false, nil), nil
+				})},
+			}
+			if _, err := service.Do(t.Context(), &llm.Request{Messages: []llm.Message{llm.UserStringMessage("hi")}}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func openRouterJSON(t *testing.T, value any) []byte {
 	t.Helper()
 	data, err := json.Marshal(value)

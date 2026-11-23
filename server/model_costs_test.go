@@ -175,9 +175,9 @@ func TestSubagentUsageHandler(t *testing.T) {
 	}
 	// gpt-5.5 sent a 1M-token prompt, past its 272k context tier, so it bills at
 	// the tier rate (input 10, output 45) = $55 rather than the $35 base. Total:
-	// opus 73.5 + gpt 55 + qwen 3.05 + qwen 2.73 = 134.28.
-	if math.Abs(res.EstimatedUSD-134.28) > 1e-9 {
-		t.Errorf("estimated_usd = %v, want 134.28", res.EstimatedUSD)
+	// opus 73.5 + gpt 55 + qwen 3.05 + qwen 3.45 = 135.
+	if math.Abs(res.EstimatedUSD-135) > 1e-9 {
+		t.Errorf("estimated_usd = %v, want 135", res.EstimatedUSD)
 	}
 	if math.Abs(res.ReportedUSD-4.875) > 1e-9 {
 		t.Errorf("reported_usd = %v, want 4.875", res.ReportedUSD)
@@ -225,8 +225,8 @@ func TestSubagentUsageHandler(t *testing.T) {
 		t.Errorf("per_model[3] = %+v, want Tokengo pricing", qwenTokengo)
 	}
 	if qwenNano.Model != "qwen/qwen3.5-397b-a17b" || qwenNano.URL != "https://nano-gpt.com/api/v1" ||
-		qwenNano.LLMCalls != 1 || qwenNano.Cost == nil || qwenNano.Cost.Input != 0.39 ||
-		qwenNano.Cost.Output != 2.34 || math.Abs(qwenNano.EstimatedUSD-2.73) > 1e-9 || qwenNano.ReportedUSD != 0.25 {
+		qwenNano.LLMCalls != 1 || qwenNano.Cost == nil || qwenNano.Cost.Input != 0.45 ||
+		qwenNano.Cost.Output != 3 || math.Abs(qwenNano.EstimatedUSD-3.45) > 1e-9 || qwenNano.ReportedUSD != 0.25 {
 		t.Errorf("per_model[4] = %+v, want Nano-GPT pricing", qwenNano)
 	}
 

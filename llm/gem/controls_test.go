@@ -22,6 +22,9 @@ func TestModelAwareThinkingControls(t *testing.T) {
 		wantErr    string
 	}{
 		{name: "Argon level", model: "gemini-4-argon", level: llm.ThinkingLevelHigh, wantLevel: "high"},
+		{name: "Carbon clamps extreme", model: "gemini-4-carbon", level: llm.ThinkingLevelXHigh, wantLevel: "high"},
+		{name: "Hydrogen extreme", model: "gemini-4-hydrogen", level: llm.ThinkingLevelXHigh, wantLevel: "xhigh"},
+		{name: "Neon extreme", model: "gemini-4-neon", level: llm.ThinkingLevelXHigh, wantLevel: "xhigh"},
 		{name: "Argon resource name", model: "models/gemini-4-argon", level: llm.ThinkingLevelLow, wantLevel: "low"},
 		{name: "Argon snapshot", model: "gemini-4-argon-2026-11-06", level: llm.ThinkingLevelMedium, wantLevel: "medium"},
 		{name: "Flash alias", model: "gemini-flash-latest", level: llm.ThinkingLevelHigh, wantLevel: "high"},
@@ -45,9 +48,9 @@ func TestModelAwareThinkingControls(t *testing.T) {
 		{name: "unknown generic controls rejected", model: "custom-unknown", level: llm.ThinkingLevelHigh, wantErr: "unknown thinking controls"},
 		{name: "other provider controls not inherited", model: "gpt-5.6-sol", level: llm.ThinkingLevelHigh, wantErr: "unknown thinking controls"},
 		{name: "unknown explicit wire effort", model: "custom-unknown", raw: "future", wantLevel: "future"},
-		{name: "unlisted controls reject generic guesses", model: "gemini-2.5-flash-image", level: llm.ThinkingLevelHigh, wantErr: "unknown thinking controls"},
-		{name: "unlisted controls explicit standard effort", model: "gemini-2.5-flash-image", raw: "high", wantLevel: "high"},
-		{name: "unlisted controls explicit custom effort", model: "gemini-2.5-flash-image", raw: "future", wantLevel: "future"},
+		{name: "unlisted controls reject generic guesses", model: "gemini-2.5-computer-use-preview-10-2025", level: llm.ThinkingLevelHigh, wantErr: "unknown thinking controls"},
+		{name: "unlisted controls explicit standard effort", model: "gemini-2.5-computer-use-preview-10-2025", raw: "high", wantLevel: "high"},
+		{name: "unlisted controls explicit custom effort", model: "gemini-2.5-computer-use-preview-10-2025", raw: "future", wantLevel: "future"},
 		{name: "nonreasoning model rejects thinking", model: "gemini-2.5-flash-preview-tts", level: llm.ThinkingLevelHigh, wantErr: "does not support thinking"},
 		{name: "nonreasoning model rejects raw effort", model: "gemini-2.5-flash-preview-tts", raw: "high", wantErr: "does not support thinking"},
 	}
