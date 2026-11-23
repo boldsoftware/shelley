@@ -244,6 +244,10 @@ func runServe(global GlobalConfig, args []string) {
 	logger.Info("Available models", "models", strings.Join(availableModels, ", "))
 
 	toolSetConfig := setupToolSetConfig(llmManager, llmManager)
+	// Predictable fixtures must not install packages for missing commands.
+	if global.PredictableOnly {
+		toolSetConfig.EnableJITInstall = claudetool.NoBashToolJITInstall
+	}
 	// Browser tests, which run predictable-only, check exact bash output
 	// that a loaded test machine's notes would change.
 	toolSetConfig.BashResourceNotes = !global.PredictableOnly
