@@ -1,0 +1,119 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "The panel ignores a stale list answer after it was reopened. The page's first request for the integrations list gets the list holding only gh, but only once call \"release\" is made; later requests get the list holding only llm at once. Call \"lists asked\" returns how many times the page has asked for the list; call \"old list answered\" says whether the first answer has been sent (\"true\" or \"false\"). Name elements by ARIA role and accessible name, as Playwright's getByRole does; \"named X\" means an exact name match. \"The modal\" is \".integrations-modal\". To \"open the panel\": press Control+k; \".command-palette-input\" should be visible; fill it with \"integration\", click the first \".command-palette-item\", and the modal should be visible. To \"select\" an integration N: click the first \".integrations-tabs button\" (the list), then the \".integrations-name-btn\" whose text starts with N followed by a space; \".integrations-detail-head strong\" should then have exactly the text N. \"The refresh button\" is the modal's button named \"Refresh\"; \"the Slack test button\" is the button named \"Test integration (webhook only)\"; \"the notify button\" is the button named \"Send test notification\". To \"close the modal\": click the modal's button whose name contains \"Close modal\". To \"start\": navigate to /new, wait for the element with data-testid \"message-input\" to be visible, and open the panel. Perform the steps in order. 1. Start. 2. Call \"lists asked\" until it returns \"1\". 3. Close the modal, then open the panel again. The reopened panel asks again at once, without waiting for the first answer: \"Loading integrations\" should be gone within 5s (wait_text_gone with timeout \"5s\"), and the texts of \".integrations-name-btn\" should be exactly [\"llm →\"]. 4. Call \"release\", then call \"old list answered\" until it returns \"true\". Let the late answer land: eval new Promise((resolve) =\u003e requestAnimationFrame(() =\u003e setTimeout(resolve, 300))). 5. The texts of \".integrations-name-btn\" should still be exactly [\"llm →\"].",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "integration"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item",
+      "nth": 0
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".integrations-modal"
+    },
+    {
+      "action": "call",
+      "value": "lists asked",
+      "expect": "1"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".integrations-modal"
+      },
+      "role": "button",
+      "name": "Close modal"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".integrations-modal"
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "integration"
+    },
+    {
+      "action": "click",
+      "selector": ".command-palette-item",
+      "nth": 0
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".integrations-modal"
+    },
+    {
+      "action": "wait_text_gone",
+      "text": "Loading integrations",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_texts",
+      "selector": ".integrations-name-btn",
+      "texts": [
+        "llm →"
+      ]
+    },
+    {
+      "action": "call",
+      "value": "release"
+    },
+    {
+      "action": "call",
+      "value": "old list answered",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve) =\u003e requestAnimationFrame(() =\u003e setTimeout(resolve, 300)))"
+    },
+    {
+      "action": "assert_texts",
+      "selector": ".integrations-name-btn",
+      "texts": [
+        "llm →"
+      ]
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T00:35:06.862815765Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 35648,
+    "output_tokens": 1403,
+    "estimated_cost_usd": 0.043469100000000004,
+    "mode": "generated"
+  }
+}

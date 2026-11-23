@@ -236,8 +236,15 @@ class ApiService {
     return apiJSON("/api/models", "Failed to get models");
   }
 
+  // The integrations requests bypass the HTTP cache: the browser holds a GET
+  // behind a pending one for the same URL, for up to 20s, so a panel
+  // reopened while reflection is slow to answer would wait out the old
+  // request rather than ask again.
   async getIntegrations(): Promise<IntegrationsResponse> {
-    return apiJSON("/api/integrations", "Failed to load integrations");
+    const response = await apiFetch("/api/integrations", "Failed to load integrations", {
+      cache: "no-store",
+    });
+    return response.json();
   }
 
   async getIntegrationDetails(name: string, team: boolean): Promise<AttachedIntegration> {
@@ -245,6 +252,7 @@ class ApiService {
     const response = await apiFetch(
       `/api/integrations?${params}`,
       "Failed to load integration details",
+      { cache: "no-store" },
     );
     const body: IntegrationsResponse = await response.json();
     return body.integrations[0];
