@@ -63,10 +63,23 @@ type reflectionEmojiResponse struct {
 	Emoji string `json:"emoji"`
 }
 
+// probeReflection reports whether to ask reflection, with client, about this
+// VM. Off exe.dev there is nothing to ask: reflection's hostname resolves to
+// a link-local address where nothing answers, so a probe waits out its
+// timeout (a fresh server's first page took 3s). A test binary probes only
+// with a client a test injected, never over the real network; the tests of
+// the probes stand in for exe.dev with one.
+func probeReflection(client *http.Client) bool {
+	if testing.Testing() {
+		return client != http.DefaultClient
+	}
+	return isExeDev()
+}
+
 // cachedReflectionEmoji returns the VM emoji from reflection. A short cache
 // keeps concurrent page loads from making redundant requests.
 func cachedReflectionEmoji(ctx context.Context) string {
-	if testing.Testing() && exeReflectionEmojiHTTPClient == http.DefaultClient {
+	if !probeReflection(exeReflectionEmojiHTTPClient) {
 		return ""
 	}
 	env, err := exeenv.Current()
@@ -385,19 +398,15 @@ func handleIntegrationsIn(w http.ResponseWriter, r *http.Request, env exeenv.Env
 
 // exeDevHasNotifyIntegration reports whether this VM has a "notify" integration
 // available (i.e. push notifications to the owner's devices are possible). It
-// queries the default "reflection" integration. Returns false if the
-// integration is disabled/detached or on any network error.
+// queries the default "reflection" integration. Returns false off exe.dev,
+// where reflection never answers, if the integration is disabled/detached,
+// or on any network error.
 func exeDevHasNotifyIntegration() bool {
-	// Never probe the reflection API over the real network from a test binary
-	// unless a test has explicitly injected its own client. Many server and
-	// integration tests run with predictableOnly=false and mock LLMs; without
-	// this guard every simulated end-of-turn would fire a REAL push to the VM
-	// owner's devices whenever the host VM happens to have the "notify"
-	// integration attached. Tests that exercise the reflection logic itself
-	// override exeReflectionHTTPClient with a fake transport (see
-	// exe_notify_test.go); those are unaffected because the client is no longer
-	// the default.
-	if testing.Testing() && reflectionHTTPClient() == http.DefaultClient {
+	// Many server and integration tests run with predictableOnly=false and
+	// mock LLMs; probing from them would fire a REAL push to the VM owner's
+	// devices on every simulated end-of-turn whenever the host VM happens to
+	// have the "notify" integration attached.
+	if !probeReflection(reflectionHTTPClient()) {
 		return false
 	}
 	env, err := exeenv.Current()
