@@ -1,0 +1,418 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a phone, oversized working files show an honest warning, remain selectable, and preserve swipe navigation both ways between blocked and ordinary files. All selectors and expectations are given; no source exploration is needed. For every eval return a single boolean and expect true, not JSON strings or objects. Generate and run the complete script. Use real touch start/move/end actions, not synthetic events or direct navigation calls, and no sleep steps. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Click \".diff-rethink-mobile-files [title='b-small.txt']\" (the title is on a tree row, not a button). Wait for \".editor.modified .view-lines\" to contain \"ordinary after\". Click \".diff-rethink-file-jump\", then click \".diff-rethink-mobile-files[aria-label='Choose file'] [title='a-large.txt']\". Do not use an unscoped title selector: Git Graph also holds hidden rows with these titles. The panel with data-testid \"large-file-panel\" must be visible and contain \"Too large to display\", \"Combined file size exceeds 2 MiB.\", \"Before:\", \"After:\", and \"KiB\". The \".diff-viewer-editor\" must be hidden. Poll an eval expecting true that every \".diff-viewer-editor .view-lines\" has no \".view-line\" children: any prior Monaco model must be detached, not merely hidden. The \".diff-rethink-bottom-change-label\" must read exactly \"Diff not displayed\", not \"No changes\". The panel must have exactly one link named \"Download patch\". Evaluate its href as a URL: pathname must be \"/api/git/file-diff/working/a-large.txt\", searchParams.get(\"download\") must be \"patch\", and searchParams.get(\"cwd\") must equal \"{{REPO}}\"; it must have a download attribute. In an async eval, fetch that same URL with only its download parameter removed. The actual JSON response must have tooLarge === true, path === \"a-large.txt\", oldBytes === {{OLD_BYTES}}, newBytes === {{NEW_BYTES}}, oldExists === true, newExists === true, oldContent === \"\" and newContent === \"\". Do not mock requests. Click the \"Download patch\" link, then call \"patch downloaded\" until it returns \"true\". Click the warning's \"Choose another file\" button. The dialog \"Choose file\" is visible. Click \".diff-rethink-mobile-files[aria-label='Choose file'] [title='b-small.txt']\". The dialog and warning are hidden, \".diff-rethink-file-name\" reads \"b-small.txt\", and the visible modified Monaco editor contains \"ordinary after\". Swipe RIGHT across \".diff-rethink-file-jump\" with touch start at offsets x=40,y=10, move to x=260,y=10 in 3 steps, then touch end immediately (under 800ms). The file name becomes \"a-large.txt\". The panel with data-testid \"large-file-panel\" must be visible and contain \"Too large to display\", \"Combined file size exceeds 2 MiB.\", \"Before:\", \"After:\", and \"KiB\". The \".diff-viewer-editor\" must be hidden. Poll an eval expecting true that every \".diff-viewer-editor .view-lines\" has no \".view-line\" children: any prior Monaco model must be detached, not merely hidden. The bottom label reads \"Diff not displayed\". Swipe LEFT across the warning heading using viewport point touch actions, not selector touch actions: touch start at {x: r.right-5, y: r.top+r.height/2}, move to {x: r.left+5, y: r.top+r.height/2} in 3 steps, then end immediately. For each point, get r from document.querySelector('[data-testid=\"large-file-panel\"] h3').getBoundingClientRect(); these points span over 100px. Use point rather than selector for this gesture because heading descendants may be covered by the parent panel during a drag; never bypass real touch events. The file name becomes \"b-small.txt\", the warning is hidden and the visible modified editor contains \"ordinary after\". Repeat the exact RIGHT touch gesture across \".diff-rethink-file-jump\"; \"a-large.txt\" and the warning return. Repeat the exact LEFT viewport-point touch gesture across the warning heading; \"b-small.txt\" and the visible ordinary Monaco content return.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title='b-small.txt']"
+    },
+    {
+      "action": "wait_text",
+      "text": "ordinary after",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".editor.modified .view-lines"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-file-jump"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files[aria-label='Choose file'] [title='a-large.txt']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='large-file-panel']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "Too large to display"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "Combined file size exceeds 2 MiB."
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "Before:"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "After:"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "KiB"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-viewer-editor"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.diff-viewer-editor .view-lines')).every(el =\u003e el.querySelectorAll('.view-line').length === 0)",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Diff not displayed"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='large-file-panel'] a[download]",
+      "count": 1
+    },
+    {
+      "action": "assert_visible",
+      "role": "link",
+      "name": "Download patch",
+      "within": {
+        "selector": "[data-testid='large-file-panel']"
+      }
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const a = document.querySelector('[data-testid=\"large-file-panel\"] a[download]'); const url = new URL(a.href); return url.pathname === '/api/git/file-diff/working/a-large.txt' \u0026\u0026 url.searchParams.get('download') === 'patch' \u0026\u0026 url.searchParams.get('cwd') === '{{REPO}}'; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(async function() { const a = document.querySelector('[data-testid=\"large-file-panel\"] a[download]'); const url = new URL(a.href); url.searchParams.delete('download'); const r = await fetch(url.toString()); const j = await r.json(); return j.tooLarge === true \u0026\u0026 j.path === 'a-large.txt' \u0026\u0026 j.oldBytes === {{OLD_BYTES}} \u0026\u0026 j.newBytes === {{NEW_BYTES}} \u0026\u0026 j.oldExists === true \u0026\u0026 j.newExists === true \u0026\u0026 j.oldContent === '' \u0026\u0026 j.newContent === ''; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_no_download"
+    },
+    {
+      "action": "click",
+      "role": "link",
+      "name": "Download patch",
+      "within": {
+        "selector": "[data-testid='large-file-panel']"
+      }
+    },
+    {
+      "action": "call",
+      "value": "patch downloaded",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Choose another file",
+      "within": {
+        "selector": "[data-testid='large-file-panel']"
+      }
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Choose file"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files[aria-label='Choose file'] [title='b-small.txt']"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='large-file-panel']"
+    },
+    {
+      "action": "assert_not_visible",
+      "role": "dialog",
+      "name": "Choose file"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "b-small.txt"
+    },
+    {
+      "action": "wait_text",
+      "text": "ordinary after",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".editor.modified .view-lines"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": ".diff-rethink-file-jump",
+      "x": 40,
+      "y": 10
+    },
+    {
+      "action": "touch",
+      "value": "move",
+      "selector": ".diff-rethink-file-jump",
+      "x": 260,
+      "y": 10,
+      "count": 3
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_text",
+      "text": "a-large.txt",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "a-large.txt"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='large-file-panel']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "Too large to display"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "Combined file size exceeds 2 MiB."
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "Before:"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "After:"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "KiB"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-viewer-editor"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.diff-viewer-editor .view-lines')).every(el =\u003e el.querySelectorAll('.view-line').length === 0)",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Diff not displayed"
+    },
+    {
+      "action": "eval",
+      "expression": "(function() { const h3 = document.querySelector('[data-testid=\"large-file-panel\"] h3'); const r = h3.getBoundingClientRect(); return r.width \u003e 100; })()",
+      "expect": "true"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "point": "(function() { const h3 = document.querySelector('[data-testid=\"large-file-panel\"] h3'); const r = h3.getBoundingClientRect(); return {x: r.right-5, y: r.top+r.height/2}; })()"
+    },
+    {
+      "action": "touch",
+      "value": "move",
+      "point": "(function() { const h3 = document.querySelector('[data-testid=\"large-file-panel\"] h3'); const r = h3.getBoundingClientRect(); return {x: r.left+5, y: r.top+r.height/2}; })()",
+      "count": 3
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_text",
+      "text": "b-small.txt",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "b-small.txt"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='large-file-panel']"
+    },
+    {
+      "action": "wait_text",
+      "text": "ordinary after",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".editor.modified .view-lines"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "selector": ".diff-rethink-file-jump",
+      "x": 40,
+      "y": 10
+    },
+    {
+      "action": "touch",
+      "value": "move",
+      "selector": ".diff-rethink-file-jump",
+      "x": 260,
+      "y": 10,
+      "count": 3
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_text",
+      "text": "a-large.txt",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "a-large.txt"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='large-file-panel']"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "Too large to display"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "Combined file size exceeds 2 MiB."
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "Before:"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "After:"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid='large-file-panel']",
+      "text": "KiB"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-viewer-editor"
+    },
+    {
+      "action": "eval",
+      "expression": "Array.from(document.querySelectorAll('.diff-viewer-editor .view-lines')).every(el =\u003e el.querySelectorAll('.view-line').length === 0)",
+      "expect": "true"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Diff not displayed"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "point": "(function() { const h3 = document.querySelector('[data-testid=\"large-file-panel\"] h3'); const r = h3.getBoundingClientRect(); return {x: r.right-5, y: r.top+r.height/2}; })()"
+    },
+    {
+      "action": "touch",
+      "value": "move",
+      "point": "(function() { const h3 = document.querySelector('[data-testid=\"large-file-panel\"] h3'); const r = h3.getBoundingClientRect(); return {x: r.left+5, y: r.top+r.height/2}; })()",
+      "count": 3
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_text",
+      "text": "b-small.txt",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "b-small.txt"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='large-file-panel']"
+    },
+    {
+      "action": "wait_text",
+      "text": "ordinary after",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".editor.modified .view-lines"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T13:31:49.341679778Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 40104,
+    "output_tokens": 6234,
+    "estimated_cost_usd": 0.1297116,
+    "mode": "generated"
+  }
+}

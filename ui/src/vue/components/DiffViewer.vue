@@ -222,7 +222,7 @@
               <button
                 v-tooltip.top="'Previous change (,)'"
                 class="diff-viewer-nav-btn"
-                :disabled="!fileDiff || binaryPanel"
+                :disabled="!fileDiff || editorBlocked"
                 aria-label="Previous change (,)"
                 @click="goToPreviousChange"
               >
@@ -231,7 +231,7 @@
               <button
                 v-tooltip.top="'Next change (.)'"
                 class="diff-viewer-nav-btn"
-                :disabled="!fileDiff || binaryPanel"
+                :disabled="!fileDiff || editorBlocked"
                 aria-label="Next change (.)"
                 @click="goToNextChange"
               >
@@ -415,7 +415,7 @@
               <span>Loading...</span>
             </div>
             <div
-              v-if="!loading && !binaryPanel && !monacoLoaded && !error"
+              v-if="!loading && !editorBlocked && !monacoLoaded && !error"
               class="diff-viewer-loading"
             >
               <div class="spinner"></div>
@@ -427,7 +427,23 @@
                 Click a line to comment, or select text and click Comment.
               </p>
             </div>
-            <div v-if="fileDiff?.binary" class="diff-viewer-binary-toolbar">
+            <div
+              v-if="fileDiff?.tooLarge"
+              class="diff-viewer-empty diff-viewer-large"
+              data-testid="large-file-panel"
+              role="status"
+            >
+              <h3>Too large to display</h3>
+              <p>{{ selectedFile }}</p>
+              <p>{{ fileDiff.limitReason }} This file has not been loaded into the editor.</p>
+              <p>
+                Before: {{ formatFileSize(fileDiff.oldBytes) }} ·
+                After: {{ formatFileSize(fileDiff.newBytes) }}
+              </p>
+              <p><a :href="binaryDownloadURL('patch')" download>Download patch</a></p>
+              <p class="diff-viewer-hint">Choose another file to continue reviewing.</p>
+            </div>
+            <div v-if="fileDiff?.binary && !fileDiff.tooLarge" class="diff-viewer-binary-toolbar">
               <button
                 v-if="showBinaryAsText"
                 type="button"
@@ -509,10 +525,12 @@
             <div
               ref="editorContainerRef"
               class="diff-viewer-editor"
-              :style="{ display: fileDiff && !binaryPanel && monacoLoaded ? 'block' : 'none' }"
+              :style="{ display: fileDiff && !editorBlocked && monacoLoaded ? 'block' : 'none' }"
             />
             <div
-              v-if="!isMobile && vimEnabled && fileDiff && !fileDiff.binary && monacoLoaded"
+              v-if="
+                !isMobile && vimEnabled && fileDiff && !fileDiff.binary && !editorBlocked && monacoLoaded
+              "
               ref="vimStatusRef"
               class="monaco-vim-status"
             />
@@ -557,7 +575,7 @@
         <button
           v-tooltip.top="'Previous change (,)'"
           class="diff-viewer-mobile-nav-btn"
-          :disabled="!fileDiff || binaryPanel"
+          :disabled="!fileDiff || editorBlocked"
           aria-label="Previous change (,)"
           @click="goToPreviousChange"
         >
@@ -566,7 +584,7 @@
         <button
           v-tooltip.top="'Next change (.)'"
           class="diff-viewer-mobile-nav-btn"
-          :disabled="!fileDiff || binaryPanel"
+          :disabled="!fileDiff || editorBlocked"
           aria-label="Next change (.)"
           @click="goToNextChange"
         >
@@ -747,7 +765,14 @@ let loadFilesRequestId = 0;
 let loadFileDiffRequestId = 0;
 const fileDiff = ref<GitFileDiff | null>(null);
 const showBinaryAsText = ref(false);
-const binaryPanel = computed(() => !!fileDiff.value?.binary && !showBinaryAsText.value);
+const binaryPanel = computed(
+  () => !fileDiff.value?.tooLarge && !!fileDiff.value?.binary && !showBinaryAsText.value,
+);
+const editorBlocked = computed(() => !!fileDiff.value?.tooLarge || binaryPanel.value);
+function formatFileSize(bytes = 0): string {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 })} KiB`;
+}
 const binaryBeforeRatio = computed(() =>
   !fileDiff.value?.oldExists
     ? EMPTY_SIDE_SPLIT_RATIO
@@ -762,7 +787,7 @@ function showBinaryText() {
 function binaryMediaURL(side: "before" | "after"): string {
   return binaryDownloadURL(side).replace(`&download=${side}`, `&preview=${side}`);
 }
-function binaryDownloadURL(side: "before" | "after"): string {
+function binaryDownloadURL(side: "before" | "after" | "patch"): string {
   if (!selectedDiff.value || !selectedFile.value) return "";
   return (
     api.gitFileDiffURL(
@@ -901,7 +926,7 @@ function lineSpan(first: number, last: number): string {
 }
 
 function monacoEditors(): Array<[Monaco.editor.ICodeEditor, ReviewSide]> {
-  if (!diffEditor || loading.value || binaryPanel.value) return [];
+  if (!diffEditor || loading.value || editorBlocked.value) return [];
   return [
     [diffEditor.getModifiedEditor(), "new"],
     [diffEditor.getOriginalEditor(), "old"],
@@ -1184,6 +1209,7 @@ function createEditor() {
     minimap: { enabled: false },
     scrollBeyondLastLine: true,
     wordWrap: "on",
+    maxComputationTime: 1000,
     glyphMargin: !initMobile,
     lineDecorationsWidth: initMobile
       ? MOBILE_LINE_DECORATIONS_WIDTH
@@ -1312,10 +1338,28 @@ let diffUpdateDisposable: Monaco.IDisposable | null = null;
 watch(
   [monacoLoaded, fileDiff, showBinaryAsText],
   () => {
-    if (!monacoLoaded.value || !fileDiff.value || binaryPanel.value || !diffEditor || !monacoMod)
+    if (!diffEditor) return;
+    if (editorBlocked.value) {
+      highlightsCleanup?.();
+      highlightsCleanup = null;
+      commentPrompt.value = null;
+      diffUpdateDisposable?.dispose();
+      diffUpdateDisposable = null;
+      const previous = diffEditor.getModel();
+      diffEditor.setModel(null);
+      previous?.original.dispose();
+      previous?.modified.dispose();
       return;
+    }
+    if (!monacoLoaded.value || !fileDiff.value || !monacoMod) return;
     const monaco = monacoMod;
     const fd = fileDiff.value;
+    diffEditor.updateOptions({
+      wordWrap:
+        (fd.oldBytes ?? fd.oldContent.length) + (fd.newBytes ?? fd.newContent.length) > 512 * 1024
+          ? "off"
+          : "on",
+    });
 
     const isCommitMsg = isCommitMessageFile(fd.path);
     const commitHash = isCommitMsg ? commitHashFromPath(fd.path) : null;
@@ -1575,6 +1619,7 @@ async function loadFileDiff(diffId: string, filePath: string, asText = false) {
     if (saveTimeout) saveImmediately();
     await saveInFlight;
     if (requestId !== loadFileDiffRequestId) return;
+    fileDiff.value = null;
     if (isCommitMessageFile(filePath)) {
       const hash = commitHashFromPath(filePath);
       const msg = commitMessages.value.find((m) => m.hash === hash);
@@ -1631,7 +1676,7 @@ function goToPreviousFile(): boolean {
 }
 
 function goToNextChange() {
-  if (binaryPanel.value) return;
+  if (editorBlocked.value) return;
   if (!diffEditor) return;
   const changes = diffEditor.getLineChanges();
   if (!changes || changes.length === 0) {
@@ -1661,7 +1706,7 @@ function goToNextChange() {
 }
 
 function goToPreviousChange() {
-  if (binaryPanel.value) return;
+  if (editorBlocked.value) return;
   if (!diffEditor) return;
   const changes = diffEditor.getLineChanges();
   if (!changes || changes.length === 0) {
@@ -1816,7 +1861,7 @@ function handleKeyDown(e: KeyboardEvent) {
   }
   // Route Ctrl/Cmd+F to Monaco's find widget instead of browser find.
   if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-    if (diffEditor && !binaryPanel.value) {
+    if (diffEditor && !editorBlocked.value) {
       e.preventDefault();
       e.stopPropagation();
       const modEditor = diffEditor.getModifiedEditor();
@@ -1830,7 +1875,7 @@ function handleKeyDown(e: KeyboardEvent) {
   if (findWidget) return;
   // Intercept PageUp/PageDown to scroll the diff editor.
   if (e.key === "PageUp" || e.key === "PageDown") {
-    if (diffEditor && !binaryPanel.value) {
+    if (diffEditor && !editorBlocked.value) {
       e.preventDefault();
       e.stopPropagation();
       const modEditor = diffEditor.getModifiedEditor();

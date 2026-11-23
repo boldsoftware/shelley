@@ -117,8 +117,8 @@
           </nav>
           <div v-if="isMobile && !selectedMessage" class="diff-rethink-change-nav" :inert="mobileFileListOpen">
             <span class="diff-rethink-bottom-change-label">{{ changeLabel }}</span>
-            <button v-if="fileDiff && (hasPrevFile || (!binaryPanel && currentChangeIndex > 0))" class="diff-rethink-prev-change" :aria-label="prevChangeGoesToFile ? (prevChangeGoesToCommit ? 'Previous commit' : 'Previous file') : 'Previous hunk (,)'" @click="goToPreviousChange"><span v-html="PREV_CHANGE_ICON" /></button>
-            <button v-if="fileDiff && (hasNextFile || (!binaryPanel && currentChangeIndex < changeCount - 1))" class="diff-rethink-next-change" :aria-label="nextChangeGoesToFile ? 'Next file' : 'Next hunk (.)'" @click="goToNextChange"><span v-html="NEXT_CHANGE_ICON" /></button>
+            <button v-if="fileDiff && (hasPrevFile || (!editorBlocked && currentChangeIndex > 0))" class="diff-rethink-prev-change" :aria-label="prevChangeGoesToFile ? (prevChangeGoesToCommit ? 'Previous commit' : 'Previous file') : 'Previous hunk (,)'" @click="goToPreviousChange"><span v-html="PREV_CHANGE_ICON" /></button>
+            <button v-if="fileDiff && (hasNextFile || (!editorBlocked && currentChangeIndex < changeCount - 1))" class="diff-rethink-next-change" :aria-label="nextChangeGoesToFile ? 'Next file' : 'Next hunk (.)'" @click="goToNextChange"><span v-html="NEXT_CHANGE_ICON" /></button>
           </div>
           <div v-if="isMobile && selectedMessage && rawMessage" class="diff-rethink-mobile-tools">
             <button type="button" class="diff-rethink-raw-toggle" @click="toggleRawMessage">View rendered</button>
@@ -162,7 +162,7 @@
               <div class="spinner"></div>
               <span>Loading...</span>
             </div>
-            <div v-if="!loading && !binaryPanel && !monacoLoaded && !error" class="diff-viewer-loading">
+            <div v-if="!loading && !editorBlocked && !monacoLoaded && !error" class="diff-viewer-loading">
               <div class="spinner"></div>
               <span>Loading editor...</span>
             </div>
@@ -172,7 +172,29 @@
                 Click a line to comment, or select text and click Comment.
               </p>
             </div>
-            <div v-if="fileDiff?.binary" class="diff-viewer-binary-toolbar">
+            <div
+              v-if="fileDiff?.tooLarge"
+              class="diff-viewer-empty diff-viewer-large"
+              data-testid="large-file-panel"
+              role="status"
+              @touchstart.capture.passive="startMessageSwipe"
+              @touchmove.capture.passive="moveFileSwipe"
+              @touchend.capture.passive="endMessageSwipe"
+              @touchcancel.capture="cancelFileSwipe"
+            >
+              <h3>Too large to display</h3>
+              <p>{{ fileDiff.limitReason }}</p>
+              <p>This file’s changes are not shown here.</p>
+              <p>
+                Before: {{ formatFileSize(fileDiff.oldBytes) }} ·
+                After: {{ formatFileSize(fileDiff.newBytes) }}
+              </p>
+              <p><a :href="binaryDownloadURL('patch')" download>Download patch</a></p>
+              <button type="button" class="btn-secondary" @click="toggleMobileFileList">
+                Choose another file
+              </button>
+            </div>
+            <div v-if="fileDiff?.binary && !fileDiff.tooLarge" class="diff-viewer-binary-toolbar">
               <button v-if="showBinaryAsText" type="button" class="btn-secondary" :disabled="loading" @click="showBinaryAsText = false">Binary view</button>
               <button v-else type="button" class="btn-secondary" :disabled="loading" @click="showBinaryText">View as text</button>
             </div>
@@ -199,13 +221,13 @@
             <div
               ref="editorContainerRef"
               class="diff-viewer-editor"
-              :style="{ display: fileDiff && !binaryPanel && monacoLoaded ? 'block' : 'none', visibility: isMobile && revealPending ? 'hidden' : 'visible' }"
+              :style="{ display: fileDiff && !editorBlocked && monacoLoaded ? 'block' : 'none', visibility: isMobile && revealPending ? 'hidden' : 'visible' }"
               @touchstart.capture="startCodeSwipe($event); startOverviewTouch($event)"
               @touchmove.capture="moveOverviewTouch($event); moveFileSwipe($event)"
               @touchend.capture="endOverviewTouch($event); endFileSwipe($event)"
               @touchcancel.capture="endOverviewTouch($event); cancelFileSwipe()"
             />
-            <div v-if="isMobile && revealPending && fileDiff && !binaryPanel && monacoLoaded" class="diff-rethink-reveal-wait">Loading changes…</div>
+            <div v-if="isMobile && revealPending && fileDiff && !editorBlocked && monacoLoaded" class="diff-rethink-reveal-wait">Loading changes…</div>
 
             <!-- Floating "add comment" prompt shown next to a selection in comment mode -->
             <button
@@ -388,12 +410,17 @@ let loadFilesRequestId = 0;
 let loadFileDiffRequestId = 0;
 const fileDiff = ref<GitFileDiff | null>(null);
 const showBinaryAsText = ref(false);
-const binaryPanel = computed(() => !!fileDiff.value?.binary && !showBinaryAsText.value);
+const binaryPanel = computed(() => !fileDiff.value?.tooLarge && !!fileDiff.value?.binary && !showBinaryAsText.value);
+const editorBlocked = computed(() => !!fileDiff.value?.tooLarge || binaryPanel.value);
+function formatFileSize(bytes = 0): string {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 })} KiB`;
+}
 const binaryBeforeRatio = computed(() => !fileDiff.value?.oldExists ? EMPTY_SIDE_SPLIT_RATIO : !fileDiff.value?.newExists ? 1 - EMPTY_SIDE_SPLIT_RATIO : 0.5);
 function showBinaryText() {
   if (selectedDiff.value && selectedFile.value) void loadFileDiff(selectedDiff.value, selectedFile.value, true);
 }
-function binaryDownloadURL(side: "before" | "after"): string {
+function binaryDownloadURL(side: "before" | "after" | "patch"): string {
   if (!selectedDiff.value || !selectedFile.value) return "";
   return api.gitFileDiffURL(selectedDiff.value, selectedFile.value, props.cwd, props.conversationId,
     selectedDiff.value === "working" ? undefined : selectedTo.value) + `&download=${side}`;
@@ -425,7 +452,7 @@ const currentRealFile = computed(() => realFiles.value.find(f => f.path === sele
 const selectedMessage = computed(() => selectedFile.value && isCommitMessageFile(selectedFile.value) ? commitMessages.value.find(m => m.hash === commitHashFromPath(selectedFile.value!)) : undefined);
 const isCommitRange = computed(() => !!selectedDiff.value && selectedDiff.value !== "working" && selectedTo.value !== "self");
 const overviewMessage = computed(() => selectedMessage.value ?? commitMessages.value[0]);
-const changeLabel = computed(() => binaryPanel.value ? 'Binary file' : changeCount.value ? `Change ${Math.max(0,currentChangeIndex.value)+1} of ${changeCount.value}` : 'No changes');
+const changeLabel = computed(() => fileDiff.value?.tooLarge ? 'Diff not displayed' : binaryPanel.value ? 'Binary file' : changeCount.value ? `Change ${Math.max(0,currentChangeIndex.value)+1} of ${changeCount.value}` : 'No changes');
 function showRawMessage(msg = overviewMessage.value){ if(msg) selectedFile.value = COMMIT_MSG_PREFIX + msg.hash; rawMessage.value = true; mobileOverview.value = false; }
 function toggleRawMessage(){
   if(rawMessage.value){rawMessage.value=false;}
@@ -545,7 +572,7 @@ function lineSpan(first: number, last: number): string {
 }
 
 function monacoEditors(): Array<[Monaco.editor.ICodeEditor, ReviewSide]> {
-  if (!diffEditor || binaryPanel.value) return [];
+  if (!diffEditor || editorBlocked.value) return [];
   return [
     [diffEditor.getModifiedEditor(), "new"],
     [diffEditor.getOriginalEditor(), "old"],
@@ -870,6 +897,7 @@ function createEditor() {
     scrollBeyondLastLine: true,
     smoothScrolling: true,
     wordWrap: "on",
+    maxComputationTime: 1000,
     glyphMargin: false,
     lineDecorationsWidth: MOBILE_LINE_DECORATIONS_WIDTH,
     lineNumbersMinChars: 0,
@@ -987,9 +1015,32 @@ let diffUpdateDisposable: Monaco.IDisposable | null = null;
 watch(
   [editorReady, fileDiff, showBinaryAsText],
   () => {
-    if (!editorReady.value || !fileDiff.value || binaryPanel.value || !diffEditor || !monacoMod) return;
+    if (!diffEditor) return;
+    if (editorBlocked.value) {
+      initialReveal = null;
+      highlightsCleanup?.();
+      highlightsCleanup = null;
+      diffUpdateDisposable?.dispose();
+      diffUpdateDisposable = null;
+      commentPrompt.value = null;
+      revealPending.value = false;
+      changeCount.value = 0;
+      currentChangeIndex.value = -1;
+      const previous = diffEditor.getModel();
+      diffEditor.setModel(null);
+      previous?.original.dispose();
+      previous?.modified.dispose();
+      return;
+    }
+    if (!editorReady.value || !fileDiff.value || !monacoMod) return;
     const monaco = monacoMod;
     const fd = fileDiff.value;
+    diffEditor.updateOptions({
+      wordWrap:
+        (fd.oldBytes ?? fd.oldContent.length) + (fd.newBytes ?? fd.newContent.length) > 512 * 1024
+          ? "off"
+          : "on",
+    });
 
     const isCommitMsg = isCommitMessageFile(fd.path);
 
@@ -1223,6 +1274,7 @@ async function loadFileDiff(diffId: string, filePath: string, asText = false) {
     showBinaryAsText.value = false;
     loading.value = true;
     error.value = null;
+    fileDiff.value = null;
     if (isCommitMessageFile(filePath)) {
       const hash = commitHashFromPath(filePath);
       const msg = commitMessages.value.find((m) => m.hash === hash);
@@ -1237,7 +1289,7 @@ async function loadFileDiff(diffId: string, filePath: string, asText = false) {
     const diffData = await api.getGitFileDiff(diffId, filePath, cwd, props.conversationId, toArg, asText);
     if (requestId !== loadFileDiffRequestId) return;
     showBinaryAsText.value = asText;
-    if (diffData.binary && !asText) revealPending.value = false;
+    if (diffData.tooLarge || (diffData.binary && !asText)) revealPending.value = false;
     fileDiff.value = diffData;
   } catch (err) {
     if (requestId !== loadFileDiffRequestId) return;
@@ -1442,7 +1494,7 @@ function revealChange(change: Monaco.editor.ILineChange, index: number) {
 }
 
 function goToNextChange() {
-  if (binaryPanel.value) { goToNextFile(true); return; }
+  if (editorBlocked.value) { goToNextFile(true); return; }
   if(mobileOverview.value || (selectedMessage.value && !rawMessage.value)){goToNextFile(true);return;}
   if (!diffEditor) return;
   const changes = diffEditor.getLineChanges();
@@ -1459,7 +1511,7 @@ function goToNextChange() {
 }
 
 function goToPreviousChange() {
-  if (binaryPanel.value) { goToPreviousFile(false, true); return; }
+  if (editorBlocked.value) { goToPreviousFile(false, true); return; }
   if(mobileOverview.value || (selectedMessage.value && !rawMessage.value)){goToPreviousFile(false, true);return;}
   if (!diffEditor) return;
   const changes = diffEditor.getLineChanges();
@@ -1652,13 +1704,13 @@ const hasNextFile = computed(
 );
 const hasPrevFile = computed(() => currentFileIndex.value > 0);
 const prevChangeGoesToFile = computed(() =>
-  hasPrevFile.value && (binaryPanel.value || changeCount.value === 0 || currentChangeIndex.value <= 0),
+  hasPrevFile.value && (editorBlocked.value || changeCount.value === 0 || currentChangeIndex.value <= 0),
 );
 const prevChangeGoesToCommit = computed(() =>
   prevChangeGoesToFile.value && isCommitMessageFile(navOrder.value[currentFileIndex.value - 1]),
 );
 const nextChangeGoesToFile = computed(() =>
-  hasNextFile.value && (binaryPanel.value || changeCount.value === 0 || currentChangeIndex.value >= changeCount.value - 1),
+  hasNextFile.value && (editorBlocked.value || changeCount.value === 0 || currentChangeIndex.value >= changeCount.value - 1),
 );
 
 
@@ -1705,6 +1757,7 @@ onUnmounted(() => {
 .diff-viewer-main {display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .diff-viewer-files-pane {position:relative;flex:1;min-height:0;height:auto;display:flex;flex-direction:column}
 .diff-viewer-editor {flex:1;min-height:0}.diff-commit-message {flex:1;min-height:0;overflow:auto}
+.diff-viewer-large {touch-action:pan-y}
 .diff-rethink-reveal-wait {position:absolute;inset:0;z-index:2;display:grid;place-items:center;background:var(--bg-base);color:var(--text-secondary);font:12px/20px system-ui,sans-serif}
 .diff-viewer-readonly .diff-viewer-editor :deep(.cursors-layer .cursor) {visibility:hidden!important}
 .diff-viewer-editor :deep(.line-insert) {background:color-mix(in srgb,#6fba87 19%,var(--bg-base))!important}

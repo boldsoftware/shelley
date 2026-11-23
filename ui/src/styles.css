@@ -9631,6 +9631,12 @@ svg {
   opacity: 0.7;
 }
 
+.diff-viewer-large {
+  padding: 1.5rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .diff-viewer-editor {
   flex: 1;
   min-height: 0;

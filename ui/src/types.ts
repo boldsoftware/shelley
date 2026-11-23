@@ -361,6 +361,10 @@ export interface GitFileInfo {
 }
 
 export interface GitFileDiff {
+  tooLarge?: boolean;
+  oldBytes?: number;
+  newBytes?: number;
+  limitReason?: string;
   binary?: boolean;
   oldAudio?: boolean;
   newAudio?: boolean;
