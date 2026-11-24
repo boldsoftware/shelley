@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -2981,6 +2982,68 @@ func TestExecuteToolCallsCancelActiveSuccessWins(t *testing.T) {
 	r := recordedMessages[0].Content[0]
 	if r.ToolError || r.ToolResult[0].Text != "made it" {
 		t.Errorf("successful result should win over cancel: %+v", r)
+	}
+}
+
+// TestExecuteToolCallsRecoversToolPanic verifies that a panicking tool
+// becomes an error result for that call and the rest of the batch still
+// runs, instead of the panic ending the process.
+func TestExecuteToolCallsRecoversToolPanic(t *testing.T) {
+	t.Parallel()
+	var recorded []llm.Message
+	recordFunc := func(ctx context.Context, message llm.Message, _ string, usage llm.Usage, otherUsage []llm.PurposedUsage) error {
+		recorded = append(recorded, message)
+		return nil
+	}
+	schema := llm.MustSchema(`{"type": "object", "properties": {}}`)
+	panics := &llm.Tool{Name: "panics", InputSchema: schema, Run: func(context.Context, json.RawMessage) llm.ToolOut {
+		var lines []string
+		return llm.ToolOut{LLMContent: llm.TextContent(lines[3])}
+	}}
+	works := &llm.Tool{Name: "works", InputSchema: schema, Run: func(context.Context, json.RawMessage) llm.ToolOut {
+		return llm.ToolOut{LLMContent: llm.TextContent("ok")}
+	}}
+	loop := NewLoop(Config{LLM: predictable.NewService(), Tools: []*llm.Tool{panics, works}, RecordMessage: recordFunc})
+
+	content := []llm.Content{
+		{ID: "tc_1", Type: llm.ContentTypeToolUse, ToolName: "panics", ToolInput: json.RawMessage(`{}`)},
+		{ID: "tc_2", Type: llm.ContentTypeToolUse, ToolName: "works", ToolInput: json.RawMessage(`{}`)},
+	}
+	if err := loop.executeToolCalls(t.Context(), content); err != nil {
+		t.Fatalf("executeToolCalls: %v", err)
+	}
+	if len(recorded) != 1 || len(recorded[0].Content) != 2 {
+		t.Fatalf("expected one message with two results, got %+v", recorded)
+	}
+	r1, r2 := recorded[0].Content[0], recorded[0].Content[1]
+	if !r1.ToolError || r1.ToolResult[0].Text != "tool panics panicked (runtime.boundsError); the stack is in the server log" {
+		t.Errorf("panicking tool result wrong: %+v", r1)
+	}
+	if r2.ToolError || r2.ToolResult[0].Text != "ok" {
+		t.Errorf("later tool in the batch should still run: %+v", r2)
+	}
+
+	// The panic value bypasses the tool's redaction.
+	const secret = "test-only-panic-secret"
+	leaks := &llm.Tool{Name: "leaks", InputSchema: schema, Run: func(context.Context, json.RawMessage) llm.ToolOut {
+		panic(secret)
+	}}
+	var logs bytes.Buffer
+	recorded = nil
+	loop = NewLoop(Config{
+		LLM: predictable.NewService(), Tools: []*llm.Tool{leaks}, RecordMessage: recordFunc,
+		Logger: slog.New(slog.NewTextHandler(&logs, nil)),
+	})
+	call := []llm.Content{{ID: "tc_3", Type: llm.ContentTypeToolUse, ToolName: "leaks", ToolInput: json.RawMessage(`{}`)}}
+	if err := loop.executeToolCalls(t.Context(), call); err != nil {
+		t.Fatalf("executeToolCalls: %v", err)
+	}
+	result := recorded[0].Content[0]
+	if !result.ToolError || result.ToolResult[0].Text != "tool leaks panicked (string); the stack is in the server log" {
+		t.Errorf("string panic result wrong: %+v", result)
+	}
+	if got := logs.String(); strings.Contains(got, secret) || !strings.Contains(got, "loop_test.go:") {
+		t.Errorf("expected a log with the panic site and no panic value, got %q", got)
 	}
 }
 
