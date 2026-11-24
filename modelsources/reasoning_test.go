@@ -173,7 +173,7 @@ func TestNonIntegrationSourcesKeepCatalogBuild(t *testing.T) {
 	catalog := models.All()
 	for _, source := range []Source{
 		Env("anthropic-key", "openai-key", "gemini-key", "fireworks-key"),
-		Gateway("https://gateway.example", "", "", ""),
+		Gateway("https://gateway.example", "", "", "", ""),
 	} {
 		built := Build(catalog, []Source{source}, client, nil)
 		wantCount := 0

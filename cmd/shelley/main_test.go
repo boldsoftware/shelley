@@ -140,6 +140,69 @@ func TestBuildLLMConfigSkipsGatewayWhenReflectionFoundLLMIntegration(t *testing.
 	}
 }
 
+func TestBuildLLMConfigRoutesGemini(t *testing.T) {
+	oldDiscover := discoverLLMIntegrations
+	discoverLLMIntegrations = func(context.Context, *http.Client, *slog.Logger) modelsources.LLMIntegrationDiscoveryResult {
+		return modelsources.LLMIntegrationDiscoveryResult{}
+	}
+	t.Cleanup(func() { discoverLLMIntegrations = oldDiscover })
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("FIREWORKS_API_KEY", "")
+	configPath := filepath.Join(t.TempDir(), "shelley.json")
+	if err := os.WriteFile(configPath, []byte(`{"llm_gateway":"https://gateway.example.com"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range []struct{ key, want string }{
+		{"", "exe.dev gateway"},
+		{"gemini-key", "$GEMINI_API_KEY"},
+	} {
+		t.Setenv("GEMINI_API_KEY", tt.key)
+		cfg, err := buildLLMConfig(GlobalConfig{ConfigPath: configPath}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := findBuiltModelSource(cfg.Models, "gemini-3.8-flash"); got != tt.want {
+			t.Errorf("GEMINI_API_KEY=%q: gemini-3.8-flash source = %q, want %q", tt.key, got, tt.want)
+		}
+	}
+}
+
+// GEMINI_API_KEY predates Gemini on LLM integrations, so it keeps serving
+// Gemini when one is found, rather than moving that spend to the integration.
+func TestBuildLLMConfigPrefersGeminiKeyOverIntegration(t *testing.T) {
+	oldDiscover := discoverLLMIntegrations
+	discoverLLMIntegrations = func(context.Context, *http.Client, *slog.Logger) modelsources.LLMIntegrationDiscoveryResult {
+		return modelsources.LLMIntegrationDiscoveryResult{Found: true, Integrations: []*modelsources.LLMIntegrationConfig{{
+			Name: "llm", Host: "llm.int.exe.xyz", URL: "https://llm.int.exe.xyz",
+			Models: []modelsources.IntegrationModel{{ID: "google/gemini-3.8-flash", Provider: "google", NativeID: "gemini-3.8-flash", APIs: []string{"gemini_generate_content"}}},
+		}}}
+	}
+	t.Cleanup(func() { discoverLLMIntegrations = oldDiscover })
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("FIREWORKS_API_KEY", "")
+	configPath := filepath.Join(t.TempDir(), "shelley.json")
+	if err := os.WriteFile(configPath, []byte(`{"llm_gateway":"https://gateway.example.com"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range []struct{ key, want string }{
+		{"", "llm.int.exe.xyz"},
+		{"gemini-key", "$GEMINI_API_KEY"},
+	} {
+		t.Setenv("GEMINI_API_KEY", tt.key)
+		cfg, err := buildLLMConfig(GlobalConfig{ConfigPath: configPath}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := findBuiltModelSource(cfg.Models, "gemini-3.8-flash"); got != tt.want {
+			t.Errorf("GEMINI_API_KEY=%q: gemini-3.8-flash source = %q, want %q", tt.key, got, tt.want)
+		}
+	}
+}
+
 func TestBuildLLMConfigDoesNotOverrideMetadataEnvironment(t *testing.T) {
 	oldEnv, err := exeenv.New("https", "exe.xyz")
 	if err != nil {

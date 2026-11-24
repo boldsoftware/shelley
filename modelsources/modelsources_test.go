@@ -5,11 +5,13 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 
 	"shelley.exe.dev/exeenv"
+	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/ant"
 	"shelley.exe.dev/llm/oai"
 	"shelley.exe.dev/models"
@@ -143,29 +145,35 @@ func TestEnvSourceLabels(t *testing.T) {
 
 func TestGatewaySourceLabels(t *testing.T) {
 	// Plain gateway.
-	bs := Build(models.All(), []Source{Gateway("https://gw.example.com", "", "", "")}, &http.Client{}, nil)
+	bs := Build(models.All(), []Source{Gateway("https://gw.example.com", "", "", "", "")}, &http.Client{}, nil)
 	if b := findBuilt(bs, "claude-opus-5.5"); b == nil || b.Source != "exe.dev gateway" {
 		t.Errorf("claude-opus-5.5 with plain gateway: %+v", b)
 	}
-	if b := findBuilt(bs, "gemini-3.8-flash"); b != nil {
-		t.Errorf("gemini-3.8-flash should not be built by gateway, got %+v", b)
+	if b := findBuilt(bs, "gemini-3.8-flash"); b == nil || b.Source != "exe.dev gateway" || b.BaseURL != "https://gw.example.com/google" {
+		t.Errorf("gemini-3.8-flash with plain gateway: %+v", b)
 	}
 	if b := findBuilt(bs, "grok-4.5"); b == nil || b.Source != "exe.dev gateway" {
 		t.Errorf("grok-4.5 with plain gateway: %+v", b)
 	}
 
 	// Gateway with explicit anthropic key: provider label switches.
-	bs = Build(models.All(), []Source{Gateway("https://gw.example.com", "real-key", "", "")}, &http.Client{}, nil)
+	bs = Build(models.All(), []Source{Gateway("https://gw.example.com", "real-key", "", "", "")}, &http.Client{}, nil)
 	if b := findBuilt(bs, "claude-opus-5.5"); b == nil || b.Source != "$ANTHROPIC_API_KEY" {
 		t.Errorf("claude-opus-5.5 with explicit anthropic key: %+v", b)
 	}
 	if b := findBuilt(bs, "gpt-5.5"); b == nil || b.Source != "exe.dev gateway" {
 		t.Errorf("gpt-5.5 should still be gateway: %+v", b)
 	}
+
+	// An explicit Gemini key goes straight to Google.
+	bs = Build(models.All(), []Source{Gateway("https://gw.example.com", "", "", "gemini-key", "")}, &http.Client{}, nil)
+	if b := findBuilt(bs, "gemini-3.8-flash"); b == nil || b.Source != "$GEMINI_API_KEY" || b.BaseURL != "https://generativelanguage.googleapis.com" {
+		t.Errorf("gemini-3.8-flash with explicit Gemini key: %+v", b)
+	}
 }
 
 func TestAnthropicThinkingBindingSources(t *testing.T) {
-	gateway := Build(models.All(), []Source{Gateway("https://gw.example.com", "", "", "")}, &http.Client{}, nil)
+	gateway := Build(models.All(), []Source{Gateway("https://gw.example.com", "", "", "", "")}, &http.Client{}, nil)
 	gatewayModel := findBuilt(gateway, "claude-opus-5.5")
 	if gatewayModel == nil {
 		t.Fatal("gateway did not build claude-opus-5.5")
@@ -1201,12 +1209,12 @@ func TestTranscriptionModelsFromOpenAICredentials(t *testing.T) {
 		},
 		{
 			name: "gateway",
-			got:  routes(Gateway("https://gw.example.com", "", "", "")),
+			got:  routes(Gateway("https://gw.example.com", "", "", "", "")),
 			want: want("https://gw.example.com/openai/v1/audio/transcriptions", "implicit", "exe.dev gateway"),
 		},
 		{
 			name: "gateway with explicit key",
-			got:  routes(Gateway("https://gw.example.com", "", "sk-openai", "")),
+			got:  routes(Gateway("https://gw.example.com", "", "sk-openai", "", "")),
 			want: want("https://gw.example.com/openai/v1/audio/transcriptions", "sk-openai", "$OPENAI_API_KEY"),
 		},
 		{
@@ -1242,5 +1250,43 @@ func TestLLMIntegrationPreferredReasoningAppliesToPreferredModel(t *testing.T) {
 	}
 	if got[0].DefaultReasoningLevel != "high" || got[1].DefaultReasoningLevel != "" {
 		t.Fatalf("default reasoning = %q, %q; want high on the preferred model only", got[0].DefaultReasoningLevel, got[1].DefaultReasoningLevel)
+	}
+}
+
+// An exe.dev LLM integration serves Gemini's native API under /google.
+func TestIntegrationBuildsGeminiModels(t *testing.T) {
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path+"?"+r.URL.RawQuery)
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, `data: {"candidates":[{"content":{"role":"model","parts":[{"text":"hi"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1}}`+"\r\n\r\n")
+	}))
+	t.Cleanup(srv.Close)
+	gemini := func(native string) IntegrationModel {
+		return IntegrationModel{ID: "google/" + native, Provider: "google", NativeID: native, APIs: []string{"gemini_generate_content"}}
+	}
+	bs := Build(models.All(), []Source{LLMIntegration(&LLMIntegrationConfig{
+		Name: "llm", Host: "llm.int.exe.xyz", URL: srv.URL,
+		Models: []IntegrationModel{gemini("gemini-3.1-pro-preview"), gemini("gemini-4-neon")},
+	}, "")}, &http.Client{}, nil)
+
+	for _, want := range []struct{ id, native string }{
+		{"gemini-3.1-pro", "gemini-3.1-pro-preview"}, // a Shelley catalog model
+		{"gemini-4-neon", "gemini-4-neon"},
+	} {
+		b := findBuilt(bs, want.id)
+		if b == nil {
+			t.Fatalf("%s not built: %+v", want.id, bs)
+		}
+		if b.APIType != models.APITypeGemini || b.Provider != models.ProviderGemini || b.Source != "llm.int.exe.xyz" {
+			t.Errorf("%s = %+v", want.id, b)
+		}
+		paths = nil
+		if _, err := b.Service.Do(t.Context(), &llm.Request{Messages: []llm.Message{{Role: llm.MessageRoleUser, Content: []llm.Content{llm.StringContent("hi")}}}}); err != nil {
+			t.Fatalf("%s: %v", want.id, err)
+		}
+		if wantPath := "/google/v1beta/models/" + want.native + ":streamGenerateContent?alt=sse"; len(paths) != 1 || paths[0] != wantPath {
+			t.Errorf("%s requested %q, want %q", want.id, paths, wantPath)
+		}
 	}
 }

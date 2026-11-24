@@ -59,6 +59,16 @@ type Source struct {
 	integration *LLMIntegrationConfig
 }
 
+// WithoutProvider returns s without the models an integration serves from p.
+func (s Source) WithoutProvider(p models.Provider) Source {
+	if s.integration != nil {
+		integ := *s.integration
+		integ.Models = slices.DeleteFunc(slices.Clone(integ.Models), func(m IntegrationModel) bool { return m.provider() == p })
+		s.integration = &integ
+	}
+	return s
+}
+
 func (s *Source) labelFor(p models.Provider) string {
 	if l, ok := s.providerLabels[p]; ok {
 		return l
@@ -75,16 +85,20 @@ func Predictable() Source {
 	}
 }
 
-// Gateway returns a Source for the exe.dev gateway. The gateway serves
-// Anthropic, OpenAI, Fireworks, and xAI but not Gemini; Gemini models must
-// come from an env-var or LLM-integration source. Any non-empty
-// explicit per-provider key overrides the gateway's implicit credential.
-func Gateway(gatewayURL, anthropicKey, openAIKey, fireworksKey string) Source {
+// Gateway returns a Source for the exe.dev gateway, which serves Anthropic,
+// OpenAI, Fireworks, xAI, and Gemini. Any non-empty explicit per-provider key
+// overrides the gateway's implicit credential; a Gemini key goes straight to
+// Google, since the gateway only uses its own.
+func Gateway(gatewayURL, anthropicKey, openAIKey, geminiKey, fireworksKey string) Source {
 	key := func(k string) string {
 		if k != "" {
 			return k
 		}
 		return "implicit"
+	}
+	gemini := &providerConn{baseURL: gatewayURL + "/google", apiKey: "implicit"}
+	if geminiKey != "" {
+		gemini = &providerConn{apiKey: geminiKey}
 	}
 	return Source{
 		label: "exe.dev gateway",
@@ -94,9 +108,10 @@ func Gateway(gatewayURL, anthropicKey, openAIKey, fireworksKey string) Source {
 			models.ProviderFireworks: {baseURL: gatewayURL + "/fireworks/inference", apiKey: key(fireworksKey)},
 			// xAI is served by the gateway with an implicit (edge-injected)
 			// credential only. Direct XAI_API_KEY env support was removed.
-			models.ProviderXAI: {baseURL: gatewayURL + "/xai", apiKey: "implicit"},
+			models.ProviderXAI:    {baseURL: gatewayURL + "/xai", apiKey: "implicit"},
+			models.ProviderGemini: gemini,
 		},
-		providerLabels: explicitEnvLabels(anthropicKey, openAIKey, fireworksKey),
+		providerLabels: explicitEnvLabels(anthropicKey, openAIKey, geminiKey, fireworksKey),
 	}
 }
 
@@ -139,14 +154,17 @@ func LLMIntegration(integ *LLMIntegrationConfig, idSuffix string) Source {
 
 // explicitEnvLabels returns providerLabels that overlay env-var-style
 // labels on top of a gateway source for any provider whose key was set
-// explicitly. Gemini is omitted because the gateway never serves it.
-func explicitEnvLabels(anthropic, openAI, fireworks string) map[models.Provider]string {
+// explicitly.
+func explicitEnvLabels(anthropic, openAI, gemini, fireworks string) map[models.Provider]string {
 	labels := map[models.Provider]string{}
 	if anthropic != "" {
 		labels[models.ProviderAnthropic] = "$ANTHROPIC_API_KEY"
 	}
 	if openAI != "" {
 		labels[models.ProviderOpenAI] = "$OPENAI_API_KEY"
+	}
+	if gemini != "" {
+		labels[models.ProviderGemini] = "$GEMINI_API_KEY"
 	}
 	if fireworks != "" {
 		labels[models.ProviderFireworks] = "$FIREWORKS_API_KEY"
@@ -202,9 +220,9 @@ func Build(catalog []models.Model, sources []Source, httpc *http.Client, logger 
 				out = append(out, models.Built{
 					ID:              id,
 					DisplayName:     id,
-					Provider:        models.Provider(m.Provider),
+					Provider:        m.provider(),
 					Mode:            m.ExeDev.Mode,
-					Source:          integrationSourceLabel(src.label, models.Provider(m.Provider)),
+					Source:          integrationSourceLabel(src.label, m.provider()),
 					ReleaseDate:     modelReleaseDate(src.integration.URL, m.apiModelName()),
 					Service:         svc,
 					ServiceRevision: models.ConnectionRevision(string(apiType), src.integration.URL, "implicit", m.apiModelName()),
@@ -397,6 +415,9 @@ func newIntegrationService(catalog []models.Model, model IntegrationModel, baseU
 	if modelName == "" {
 		return "", nil, false
 	}
+	if model.provider() == models.ProviderGemini {
+		baseURL += "/google"
+	}
 	catalogModel, hasCatalog := compatibleCatalogModel(catalog, model)
 	override, hasOverride := integrationUpstreamAPIType(model)
 	// Catalog Build stays unless an explicit protocol override disagrees.
@@ -422,7 +443,7 @@ func newIntegrationService(catalog []models.Model, model IntegrationModel, baseU
 func compatibleCatalogModel(catalog []models.Model, integrationModel IntegrationModel) (models.Model, bool) {
 	modelName := integrationModel.apiModelName()
 	for _, catalogModel := range catalog {
-		if catalogModel.Provider == models.Provider(integrationModel.Provider) &&
+		if catalogModel.Provider == integrationModel.provider() &&
 			catalogModel.APIModelName == modelName &&
 			integrationAdvertisesAPI(integrationModel, catalogModel.APIType) {
 			return catalogModel, true
@@ -440,6 +461,8 @@ func integrationAdvertisesAPI(model IntegrationModel, apiType models.APIType) bo
 		api = "openai_responses"
 	case models.APITypeOpenAIChat:
 		api = "openai_chat"
+	case models.APITypeGemini:
+		api = "gemini_generate_content"
 	default:
 		return false
 	}
@@ -471,6 +494,9 @@ func integrationAPIType(model IntegrationModel) (models.APIType, bool) {
 	}
 	if slices.Contains(model.APIs, "anthropic_messages") {
 		return models.APITypeAnthropicMessages, true
+	}
+	if slices.Contains(model.APIs, "gemini_generate_content") {
+		return models.APITypeGemini, true
 	}
 	return "", false
 }
@@ -539,6 +565,15 @@ func (m IntegrationModel) reasoningOverride() *modelsdev.ReasoningCapabilities {
 
 type IntegrationModelArchitecture struct {
 	InputModalities []string `json:"input_modalities,omitempty"`
+}
+
+// provider maps the integration's provider ID to Shelley's. exe.dev calls the
+// Gemini API's provider "google"; integrations serve it under /google.
+func (m IntegrationModel) provider() models.Provider {
+	if m.Provider == "google" {
+		return models.ProviderGemini
+	}
+	return models.Provider(m.Provider)
 }
 
 func (m IntegrationModel) apiModelName() string {

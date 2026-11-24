@@ -676,7 +676,13 @@ func buildLLMModelSources(ctx context.Context, global GlobalConfig, config shell
 		if len(integs) > 1 && i > 0 {
 			suffix = "@" + integ.Name
 		}
-		sources = append(sources, modelsources.LLMIntegration(integ, suffix))
+		src := modelsources.LLMIntegration(integ, suffix)
+		if geminiKey != "" {
+			// GEMINI_API_KEY predates Gemini on integrations; it keeps
+			// serving Gemini rather than moving that spend to them.
+			src = src.WithoutProvider(models.ProviderGemini)
+		}
+		sources = append(sources, src)
 	}
 
 	gateway := strings.TrimSuffix(config.LLMGateway, "/")
@@ -689,9 +695,9 @@ func buildLLMModelSources(ctx context.Context, global GlobalConfig, config shell
 		gateway = ""
 	}
 
-	// 2. Gateway (Anthropic, OpenAI, Fireworks, xAI). Per-provider env vars
-	// override the gateway's implicit credential for those providers; xAI is
-	// gateway-only (no direct env-var credential).
+	// 2. Gateway (Anthropic, OpenAI, Fireworks, xAI, Gemini). Per-provider env
+	// vars override the gateway's implicit credential for those providers; xAI
+	// is gateway-only (no direct env-var credential).
 	if gateway != "" && llmIntegrationFound {
 		logger.Info("Skipping LLM gateway because an exe.dev LLM integration was discovered")
 		if geminiKey != "" {
@@ -699,12 +705,7 @@ func buildLLMModelSources(ctx context.Context, global GlobalConfig, config shell
 		}
 	} else if gateway != "" {
 		logger.Info("Using LLM gateway", "gateway", gateway)
-		sources = append(sources, modelsources.Gateway(gateway, anthropicKey, openAIKey, fireworksKey))
-		// 2b. Gemini is not served by the gateway; let GEMINI_API_KEY,
-		// when set, supply Gemini models alongside the gateway.
-		if geminiKey != "" {
-			sources = append(sources, modelsources.Env("", "", geminiKey, ""))
-		}
+		sources = append(sources, modelsources.Gateway(gateway, anthropicKey, openAIKey, geminiKey, fireworksKey))
 	} else if anthropicKey != "" || openAIKey != "" || geminiKey != "" || fireworksKey != "" {
 		// 3. Env vars.
 		sources = append(sources, modelsources.Env(anthropicKey, openAIKey, geminiKey, fireworksKey))
