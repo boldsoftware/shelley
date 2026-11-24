@@ -13,6 +13,8 @@ export const SNIPPET = `<!-- Edit with Shelley: a button that opens Shelley besi
   .edit-with-shelley summary { list-style: none; cursor: pointer; padding: 8px 14px; border: 1px solid #8885;
     border-radius: 99px; background: Canvas; color: CanvasText; box-shadow: 0 2px 10px #0002; }
   .edit-with-shelley summary::-webkit-details-marker { display: none; }
+  .edit-with-shelley[open] summary { font-size: 0; }
+  .edit-with-shelley[open] summary::before { content: "Close"; content: "Close" / ""; font-size: 13px; }
   .edit-with-shelley iframe { position: fixed; top: 0; right: 0; width: min(480px, 100vw); height: 100%;
     box-sizing: border-box; border: 0; border-left: 1px solid #8884; background: Canvas; }
   .edit-with-shelley[open] { right: calc(min(480px, 100vw) + 12px); }
