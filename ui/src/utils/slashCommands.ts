@@ -64,6 +64,11 @@ export const SLASH_COMMANDS = {
     description: wording("renames this conversation", "renames this task"),
     takesArgs: true,
   },
+  TAG: {
+    command: "/tag",
+    description: "edits tags or applies +tag and -tag changes",
+    takesArgs: true,
+  },
 } as const satisfies Record<string, SlashCommand>;
 
 export function slashCommandsForConversation(isChildConversation: boolean): SlashCommand[] {

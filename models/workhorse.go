@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/llm/ant"
 	"shelley.exe.dev/llm/gem"
 	"shelley.exe.dev/models/modelsdev"
 )
@@ -133,6 +134,38 @@ func (m *Manager) GetWorkhorseServiceNoFallback(conversationModelID string) (llm
 	return m.GetService(modelID)
 }
 
+// GetWorkhorseServiceWithoutReasoning selects a workhorse that can honor
+// ThinkingLevelOff, without falling back to a reasoning model.
+func (m *Manager) GetWorkhorseServiceWithoutReasoning(conversationModelID string) (llm.Service, error) {
+	modelID, ok := m.findWorkhorseModelIDMatching(conversationModelID, func(id string) bool {
+		svc, err := m.GetService(id)
+		return err == nil && workhorseSupportsReasoningOff(svc)
+	})
+	if !ok {
+		return nil, fmt.Errorf("no workhorse with reasoning off available (conversation model %q)", conversationModelID)
+	}
+	return m.GetService(modelID)
+}
+
+func workhorseSupportsReasoningOff(svc llm.Service) bool {
+	switch s := svc.(type) {
+	case *loggingService:
+		return workhorseSupportsReasoningOff(s.service)
+	case *reasoningService:
+		req, err := s.mapRequest(&llm.Request{ThinkingLevel: llm.ThinkingLevelOff})
+		return err == nil && req.ThinkingLevel == llm.ThinkingLevelOff &&
+			(req.ReasoningEffort == "" || req.ReasoningEffort == "none" || req.ReasoningEffort == "off") &&
+			workhorseSupportsReasoningOff(s.Service)
+	case *gem.Service:
+		return s.SupportsThinkingOff()
+	case *ant.Service:
+		return s.SupportsThinkingOff()
+	default:
+		return !llm.SupportsReasoning(svc) ||
+			slices.Contains(llm.SupportedReasoningLevels(svc), llm.ThinkingLevelOff)
+	}
+}
+
 func (m *Manager) newWorkhorseService(modelID, conversationModelID string) (llm.Service, error) {
 	primary, err := m.GetService(modelID)
 	if err != nil {
@@ -164,12 +197,19 @@ func (m *Manager) GetWorkhorseModelID(conversationModelID string) string {
 }
 
 func (m *Manager) findWorkhorseModelID(conversationModelID string) (string, bool) {
+	return m.findWorkhorseModelIDMatching(conversationModelID, nil)
+}
+
+func (m *Manager) findWorkhorseModelIDMatching(conversationModelID string, eligible func(string) bool) (string, bool) {
 	info := m.GetModelInfo(conversationModelID)
 	if info == nil || info.Provider == ProviderBuiltIn {
 		return "", false
 	}
 	available := m.GetAvailableModels()
 	available = append(available, conversationModelID)
+	if eligible != nil {
+		available = slices.DeleteFunc(available, func(id string) bool { return !eligible(id) })
+	}
 
 	// 1. Prefer the conversation's model family on the same source.
 	custom := isCustomWorkhorseRoute(info)

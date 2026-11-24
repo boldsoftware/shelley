@@ -13,6 +13,25 @@ import (
 	"shelley.exe.dev/llm/gem/gemini"
 )
 
+func TestWorkhorseWithoutReasoningRejectsRemappedOff(t *testing.T) {
+	newer := &gem.Service{Model: "gemini-3.8-flash"}
+	flash := &gem.Service{Model: "gemini-2.5-flash"}
+	manager := newWorkhorseManager(t,
+		Built{
+			ID: newer.Model, Provider: ProviderGemini, ReleaseDate: "2026-11-01",
+			Service: WrapReasoningConfig(newer, "", newer.Model, "", `{"off":"low","high":"high"}`),
+		},
+		Built{ID: flash.Model, Provider: ProviderGemini, ReleaseDate: "2025-06-01", Service: flash},
+	)
+	svc, err := manager.GetWorkhorseServiceWithoutReasoning(newer.Model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wrapped, ok := svc.(*loggingService); !ok || wrapped.service != flash {
+		t.Fatalf("selected %v, want Flash with real thinking-off support", svc)
+	}
+}
+
 func TestNativeGeminiWorkhorseThinking(t *testing.T) {
 	zero, minimal := 0, 1024
 	low := &gemini.ThinkingConfig{ThinkingLevel: "low", IncludeThoughts: true}

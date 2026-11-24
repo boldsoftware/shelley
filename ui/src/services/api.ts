@@ -1075,6 +1075,15 @@ class ApiService {
     });
   }
 
+  async editConversationTags(
+    conversationId: string,
+    edits: { tag: string; add: boolean }[],
+  ): Promise<Conversation> {
+    return apiJSON(`/api/conversation/${conversationId}/tags`, "Failed to update tags", "POST", {
+      edits,
+    });
+  }
+
   async getBackgroundJobs(conversationId: string): Promise<BackgroundJob[]> {
     return apiJSON(
       `/api/conversation/${encodeURIComponent(conversationId)}/background-jobs`,

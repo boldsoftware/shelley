@@ -1,0 +1,85 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Bare /rename opens the current name without asking the model. Navigate to /c/rename-original and wait for [data-testid=\"message-input\"]. Fill it with \"/rename\" and click [data-testid=\"send-button\"]. Wait for #slash-rename-name and verify its value is \"rename-original\". Call \"suggestion-count\" expecting \"0\".\nClick \"Suggest a new name\" and wait for #slash-rename-name to contain the input value \"rename-suggested\". Call \"suggestion-count\" expecting \"1\", and \"stored-name\" expecting \"rename-original\". Click \"Save\" and wait for the dialog to close. Call \"stored-name\" expecting \"rename-suggested\". Input values are the element's value property, not text content.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/rename-original"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "/rename"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "#slash-rename-name"
+    },
+    {
+      "action": "assert_value",
+      "selector": "#slash-rename-name",
+      "value": "rename-original"
+    },
+    {
+      "action": "call",
+      "value": "suggestion-count",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Suggest a new name"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "#slash-rename-name"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('#slash-rename-name').value",
+      "expect": "rename-suggested"
+    },
+    {
+      "action": "call",
+      "value": "suggestion-count",
+      "expect": "1"
+    },
+    {
+      "action": "call",
+      "value": "stored-name",
+      "expect": "rename-original"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "#slash-rename-name"
+    },
+    {
+      "action": "call",
+      "value": "stored-name",
+      "expect": "rename-suggested"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T07:07:34.310026158Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 32409,
+    "output_tokens": 1027,
+    "estimated_cost_usd": 0.03287265,
+    "mode": "generated"
+  }
+}

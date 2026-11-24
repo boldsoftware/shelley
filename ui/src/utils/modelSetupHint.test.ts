@@ -234,6 +234,8 @@ for (const local of [
   "/diff",
   "/archive",
   "/rename my-slug",
+  "/tag",
+  "/tag +bug -wip",
   "/clear",
   "!ls -la",
   "!  echo hi",

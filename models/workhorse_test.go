@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/llm/ant"
 )
 
 func newWorkhorseManager(t *testing.T, built ...Built) *Manager {
@@ -84,6 +85,14 @@ func TestWorkhorseModel(t *testing.T) {
 		if got := manager.GetWorkhorseModelID(test.conversationModel); got != test.want {
 			t.Errorf("GetWorkhorseModelID(%q) = %q, want %q", test.conversationModel, got, test.want)
 		}
+	}
+}
+
+func TestWorkhorseWithoutReasoningAcceptsBudgetHaiku(t *testing.T) {
+	haiku := &ant.Service{Model: ant.Claude45Haiku, ThinkingLevel: llm.ThinkingLevelHigh}
+	manager := newWorkhorseManager(t, Built{ID: haiku.Model, Provider: ProviderAnthropic, Service: haiku})
+	if _, err := manager.GetWorkhorseServiceWithoutReasoning(haiku.Model); err != nil {
+		t.Fatal(err)
 	}
 }
 

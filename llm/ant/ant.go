@@ -812,6 +812,12 @@ func (s *Service) effectiveThinkingLevel(level llm.ThinkingLevel) llm.ThinkingLe
 	return level
 }
 
+// SupportsThinkingOff reports whether an explicit off request omits thinking.
+func (s *Service) SupportsThinkingOff() bool {
+	level := s.effectiveThinkingLevel(llm.ThinkingLevelOff)
+	return s.DisableReasoning || level == llm.ThinkingLevelOff || level == llm.ThinkingLevelDefault
+}
+
 // applyAnthropicThinking sets the Thinking / OutputConfig fields without
 // increasing the configured output allowance. Budget-style thinking shares
 // max_tokens with the final answer, so leave 1024 tokens for that answer.

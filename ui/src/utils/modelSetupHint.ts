@@ -162,9 +162,9 @@ export function canSendWithModel(
 //
 // Exact match only: sendMessage's fast paths for these also match exactly, so
 // a malformed "/fork junk" falls through to a real chat send and does need a
-// model. /rename is the one that legitimately takes an argument.
+// model. /rename and /tag also have local command paths with arguments.
 const MODEL_FREE_EXACT = ["/fork", "/diff", "/archive", "/clear"];
-const MODEL_FREE_PREFIX = ["/rename"];
+const MODEL_FREE_PREFIX = ["/rename", "/tag"];
 
 // needsModel reports whether sending this composer text requires a model.
 // Shell escapes ("!cmd") and the model-free commands above do not; everything

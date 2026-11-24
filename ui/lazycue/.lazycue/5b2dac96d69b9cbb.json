@@ -1,0 +1,81 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Bare /tag opens the current tags without asking the model. Navigate to /c/tag-original and wait for [data-testid=\"message-input\"]. Fill it with \"/tag\" and click [data-testid=\"send-button\"]. Wait for the \"Edit tags\" dialog; it shows \"existing-tag\". Call \"suggestion-count\" expecting \"0\".\nClick \"Suggest tags\" and wait for \"suggested-tag\" in the dialog. Call \"suggestion-count\" expecting \"1\", and \"stored-tags\" expecting '[\"existing-tag\"]'. Click \"Save\" and wait for the dialog to close. Call \"stored-tags\" expecting '[\"existing-tag\",\"suggested-tag\"]'.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/tag-original"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "/tag"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Edit tags"
+    },
+    {
+      "action": "wait_text",
+      "text": "existing-tag"
+    },
+    {
+      "action": "call",
+      "value": "suggestion-count",
+      "expect": "0"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Suggest tags"
+    },
+    {
+      "action": "wait_text",
+      "text": "suggested-tag"
+    },
+    {
+      "action": "call",
+      "value": "suggestion-count",
+      "expect": "1"
+    },
+    {
+      "action": "call",
+      "value": "stored-tags",
+      "expect": "[\"existing-tag\"]"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save"
+    },
+    {
+      "action": "wait_hidden",
+      "role": "dialog",
+      "name": "Edit tags"
+    },
+    {
+      "action": "call",
+      "value": "stored-tags",
+      "expect": "[\"existing-tag\",\"suggested-tag\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T07:07:39.255351226Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 52178,
+    "output_tokens": 1265,
+    "estimated_cost_usd": 0.048261000000000005,
+    "mode": "generated"
+  }
+}

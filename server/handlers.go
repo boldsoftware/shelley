@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -982,6 +983,8 @@ func (s *Server) registerConversationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/conversation/{id}/rename", func(w http.ResponseWriter, r *http.Request) {
 		s.handleRenameConversation(w, r, r.PathValue("id"))
 	})
+	mux.HandleFunc("POST /api/conversation/{id}/rename-suggestion", s.handleRenameSuggestion)
+	mux.HandleFunc("POST /api/conversation/{id}/tag-suggestions", s.handleTagSuggestions)
 	mux.HandleFunc("POST /api/conversation/{id}/tags", func(w http.ResponseWriter, r *http.Request) {
 		s.handleUpdateConversationTags(w, r, r.PathValue("id"))
 	})
@@ -3712,7 +3715,13 @@ func (s *Server) handleSetConversationCwd(w http.ResponseWriter, r *http.Request
 
 // TagsRequest represents a request to update a conversation's tags.
 type TagsRequest struct {
-	Tags []string `json:"tags"`
+	Tags  []string  `json:"tags"`
+	Edits []tagEdit `json:"edits"`
+}
+
+type tagEdit struct {
+	Tag string `json:"tag"`
+	Add bool   `json:"add"`
 }
 
 // normalizeTags trims whitespace and removes empty/duplicate entries while
@@ -3742,8 +3751,28 @@ func (s *Server) handleUpdateConversationTags(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	tags := normalizeTags(req.Tags)
-	conversation, err := s.db.UpdateConversationTags(r.Context(), conversationID, tags)
+	var conversation *generated.Conversation
+	var err error
+	if req.Edits != nil {
+		conversation, err = s.db.EditConversationTags(r.Context(), conversationID, func(tags []string) []string {
+			result := slices.Clone(tags)
+			for _, edit := range req.Edits {
+				tag := strings.TrimSpace(edit.Tag)
+				if tag == "" {
+					continue
+				}
+				matches := func(current string) bool { return strings.EqualFold(strings.TrimSpace(current), tag) }
+				if !edit.Add {
+					result = slices.DeleteFunc(result, matches)
+				} else if !slices.ContainsFunc(result, matches) {
+					result = append(result, tag)
+				}
+			}
+			return result
+		})
+	} else {
+		conversation, err = s.db.UpdateConversationTags(r.Context(), conversationID, normalizeTags(req.Tags))
+	}
 	if err != nil {
 		s.internalError(w, "Failed to update conversation tags", err, "conversationID", conversationID)
 		return

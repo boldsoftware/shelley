@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1318,21 +1319,44 @@ func (db *DB) SetConversationSlugIfUnset(ctx context.Context, conversationID, sl
 // as a JSON array of strings; callers are responsible for normalizing/
 // deduplicating entries.
 func (db *DB) UpdateConversationTags(ctx context.Context, conversationID string, tags []string) (*generated.Conversation, error) {
+	conversation, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		return writeConversationTags(ctx, q, conversationID, tags)
+	})
+	return &conversation, err
+}
+
+// EditConversationTags applies an edit to the current tags in a single transaction.
+func (db *DB) EditConversationTags(ctx context.Context, conversationID string, edit func([]string) []string) (*generated.Conversation, error) {
+	conversation, err := db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
+		current, err := q.GetConversation(ctx, conversationID)
+		if err != nil {
+			return current, err
+		}
+		var tags []string
+		if err := json.Unmarshal([]byte(current.Tags), &tags); err != nil {
+			return current, err
+		}
+		updated := edit(tags)
+		if slices.Equal(tags, updated) {
+			return current, nil
+		}
+		return writeConversationTags(ctx, q, conversationID, updated)
+	})
+	return &conversation, err
+}
+
+func writeConversationTags(ctx context.Context, q *generated.Queries, conversationID string, tags []string) (generated.Conversation, error) {
 	if tags == nil {
 		tags = []string{}
 	}
 	tagsJSON, err := json.Marshal(tags)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal tags: %w", err)
+		return generated.Conversation{}, fmt.Errorf("failed to marshal tags: %w", err)
 	}
-	var conversation generated.Conversation
-	conversation, err = db.QueriesTxRes(ctx, func(q *generated.Queries) (generated.Conversation, error) {
-		return q.UpdateConversationTags(ctx, generated.UpdateConversationTagsParams{
-			Tags:           string(tagsJSON),
-			ConversationID: conversationID,
-		})
+	return q.UpdateConversationTags(ctx, generated.UpdateConversationTagsParams{
+		Tags:           string(tagsJSON),
+		ConversationID: conversationID,
 	})
-	return &conversation, err
 }
 
 // SetConversationAgentWorking persists the in-memory agent_working flag for

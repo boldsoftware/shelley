@@ -728,6 +728,58 @@
       />
     </div>
 
+    <TagCommandModal
+      v-if="tagDraft && tagDraft.id === conversationId"
+      :key="tagDraft.id"
+      :conversation-id="tagDraft.id"
+      :initial-tags="tagDraft.tags"
+      :known-tags="knownTags"
+      @close="tagDraft = null"
+      @saved="onTagsSaved"
+    />
+    <Modal :is-open="renameDraft !== null" title="Rename chat" @close="closeRename">
+      <form id="slash-rename-form" class="project-form" @submit.prevent="confirmRename">
+        <template v-if="renameDraft">
+          <label for="slash-rename-name">Chat name</label>
+          <input
+            id="slash-rename-name"
+            ref="renameInput"
+            v-model="renameDraft.name"
+            :disabled="renameSaving || renameDraft.generating"
+            autocomplete="off"
+            spellcheck="false"
+          />
+
+        </template>
+        <p v-if="renameError" class="error-line" role="alert">{{ renameError }}</p>
+      </form>
+      <template #footer>
+        <Button
+          type="button"
+          class="rename-suggest"
+          :label="renameDraft?.generating ? 'Generating…' : 'Suggest a new name'"
+          text
+          severity="secondary"
+          :loading="renameDraft?.generating"
+          :disabled="renameSaving"
+          @click="suggestRename"
+        />
+        <Button
+          :label="t('cancel')"
+          text
+          severity="secondary"
+          :disabled="renameSaving"
+          @click="closeRename"
+        />
+        <Button
+          type="submit"
+          form="slash-rename-form"
+          :label="t('save')"
+          :loading="renameSaving"
+          :disabled="renameDraft?.generating || !titleSlug(renameDraft?.name ?? '')"
+        />
+      </template>
+    </Modal>
     <ToolsModal
       :is-open="showToolsModal"
       :tools="availableTools"
@@ -885,7 +937,7 @@ import {
   COMPACT_IN_PLACE_TOOL,
   DEFAULT_COMPACT_NUDGE_TOKENS,
 } from "./autoCompaction";
-import { api, ApiError, modelProvidersApi, profilesApi } from "../../services/api";
+import { api, ApiError, apiJSON, modelProvidersApi, profilesApi } from "../../services/api";
 import { btwStore } from "../../services/btwStore";
 import { messageStore } from "../../services/messageStore";
 import { cacheDiag } from "../../services/cacheDiag";
@@ -1005,6 +1057,11 @@ import ModelPicker from "./ModelPicker.vue";
 import WorkspaceActionIcon from "./WorkspaceActionIcon.vue";
 import SystemPromptView from "./SystemPromptView.vue";
 import DirectoryPickerModal from "./DirectoryPickerModal.vue";
+import Modal from "./Modal.vue";
+import TagCommandModal from "./TagCommandModal.vue";
+import { parseTags } from "./conversationDrawerShared";
+import { parseTagCommand } from "../../utils/tagCommand";
+import { offeredTags } from "../../utils/tagFilter";
 import ProfilesModal from "./ProfilesModal.vue";
 import ToolsModal from "./ToolsModal.vue";
 import MessageSelectionToolbar from "./MessageSelectionToolbar.vue";
@@ -2638,6 +2695,83 @@ async function renameFromTitle(title: string) {
   props.onConversationUpdate?.(conversation);
 }
 
+const tagDraft = ref<{ id: string; tags: string[] } | null>(null);
+const knownTags = computed(() => offeredTags(props.conversations, []).slice(0, 60).map(({ tag }) => tag));
+function onTagsSaved(conversation: Conversation) {
+  tagDraft.value = null;
+  props.onConversationUpdate?.(conversation);
+}
+
+const renameDraft = ref<{ conversationId: string; originalName: string; name: string; generating: boolean } | null>(null);
+const renameInput = ref<HTMLInputElement | null>(null);
+const renameSaving = ref(false);
+const renameError = ref("");
+watch(renameInput, (input) => {
+  input?.focus();
+  input?.select();
+});
+watch(
+  () => props.conversationId,
+  () => {
+    tagDraft.value = null;
+    renameDraft.value = null;
+  },
+);
+
+function closeRename() {
+  if (!renameSaving.value) renameDraft.value = null;
+}
+
+async function suggestRename() {
+  const draft = renameDraft.value;
+  if (!draft || draft.generating || renameSaving.value) return;
+  renameError.value = "";
+  draft.generating = true;
+  try {
+    const { slug } = await apiJSON<{ slug: string }>(
+      `/api/conversation/${encodeURIComponent(draft.conversationId)}/rename-suggestion`,
+      "Failed to suggest a name",
+      "POST",
+    );
+    if (renameDraft.value === draft) draft.name = slug;
+  } catch (err) {
+    if (renameDraft.value === draft) {
+      renameError.value = err instanceof Error ? err.message : "Failed to suggest a name";
+    }
+  } finally {
+    draft.generating = false;
+  }
+}
+
+async function confirmRename() {
+  const draft = renameDraft.value;
+  if (
+    !draft ||
+    draft.generating ||
+    renameSaving.value ||
+    draft.conversationId !== props.conversationId
+  ) {
+    return;
+  }
+  const slug = titleSlug(draft.name);
+  if (!slug) return;
+  renameSaving.value = true;
+  renameError.value = "";
+  try {
+    if (draft.name !== draft.originalName && slug !== props.currentConversation?.slug) {
+      const conversation = await api.renameConversation(draft.conversationId, slug);
+      props.onConversationUpdate?.(conversation);
+    }
+    if (renameDraft.value === draft) renameDraft.value = null;
+  } catch (err) {
+    if (renameDraft.value === draft) {
+      renameError.value = err instanceof Error ? err.message : "Failed to rename conversation";
+    }
+  } finally {
+    renameSaving.value = false;
+  }
+}
+
 // Workspace mode's title row also holds a task's page tabs and where it runs.
 const showPlace = computed(
   () =>
@@ -3789,6 +3923,11 @@ function rejectSkillsOnCommand(message: string, skills: string[]) {
 }
 
 async function queueMessage(message: string, skills: string[] = [], keepFoundSecrets = false) {
+  const command = message.trim().split(" ", 1)[0];
+  if (command === SLASH_COMMANDS.TAG.command || command === SLASH_COMMANDS.RENAME.command) {
+    await sendMessage(message, skills, keepFoundSecrets);
+    return;
+  }
   if (!props.conversationId) return;
   await queueMessageTo(props.conversationId, selectedModel.value, message, skills, keepFoundSecrets);
 }
@@ -4322,6 +4461,33 @@ async function sendMessage(message: string, skills: string[] = [], keepFoundSecr
     return;
   }
   if (
+    trimmedMessage === SLASH_COMMANDS.TAG.command ||
+    trimmedMessage.startsWith(`${SLASH_COMMANDS.TAG.command} `)
+  ) {
+    try {
+      error.value = null;
+      const current = props.currentConversation;
+      if (!props.conversationId || !current || current.is_draft) {
+        throw new Error("Start a conversation before tagging it.");
+      }
+      const args = trimmedMessage.slice(SLASH_COMMANDS.TAG.command.length).trim();
+      const tags = parseTags(current);
+      if (!args) {
+        tagDraft.value = { id: props.conversationId, tags };
+      } else {
+        const edits = parseTagCommand(args);
+        sending.value = true;
+        props.onConversationUpdate?.(await api.editConversationTags(props.conversationId, edits));
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : "Failed to update tags";
+      throw err;
+    } finally {
+      sending.value = false;
+    }
+    return;
+  }
+  if (
     trimmedMessage === SLASH_COMMANDS.RENAME.command ||
     trimmedMessage.startsWith(`${SLASH_COMMANDS.RENAME.command} `)
   ) {
@@ -4332,9 +4498,16 @@ async function sendMessage(message: string, skills: string[] = [], keepFoundSecr
       throw err;
     }
     if (!requestedSlug) {
-      const err = new Error("Usage: /rename <new slug>");
-      error.value = err.message;
-      throw err;
+      error.value = null;
+      renameError.value = "";
+      const name = props.currentConversation?.slug ?? "";
+      renameDraft.value = {
+        conversationId: props.conversationId,
+        originalName: name,
+        name,
+        generating: false,
+      };
+      return;
     }
     try {
       sending.value = true;
@@ -6389,3 +6562,9 @@ onUnmounted(() => {
   closeMarkdownDoc();
 });
 </script>
+
+<style scoped>
+.rename-suggest {
+  margin-right: auto;
+}
+</style>
