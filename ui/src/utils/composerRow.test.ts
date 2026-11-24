@@ -29,6 +29,7 @@ function conv(id: string, extra: Partial<ConversationWithState> = {}): Conversat
     tags: "[]",
     is_draft: false,
     draft: "",
+    draft_updated_at: null,
     queued_messages: "[]",
     working: false,
     subagent_count: 0,

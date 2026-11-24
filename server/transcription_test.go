@@ -717,7 +717,7 @@ func TestRetryTranscriptionRejectsStaleAttemptUpdates(t *testing.T) {
 			MediaPath: mediaPath,
 		},
 	}
-	if _, err := database.AppendQueuedMessage(t.Context(), conversation.ConversationID, queued); err != nil {
+	if _, err := database.AppendQueuedMessage(t.Context(), conversation.ConversationID, queued, db.SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	server.transcriptionMu.Lock()
@@ -861,7 +861,7 @@ func TestQueuedTranscriptionRecoveryResumesInterruptedWork(t *testing.T) {
 		ID: "interrupted-queued", CreatedAt: time.Now().UTC(), Model: "predictable",
 		Kind: db.QueuedMessageKindTranscription, State: db.QueuedMessageStateWorking,
 		Transcription: &db.QueuedTranscription{MediaPath: "/tmp/interrupted.webm"},
-	})
+	}, db.SentDraft{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -896,7 +896,7 @@ func TestQueuedTranscriptionRecoveryIncludesArchivedParents(t *testing.T) {
 		ID: "archived-queued", CreatedAt: time.Now().UTC(), Model: "predictable",
 		Kind: db.QueuedMessageKindTranscription, State: db.QueuedMessageStateWorking,
 		Transcription: &db.QueuedTranscription{MediaPath: "/tmp/archived.webm"},
-	})
+	}, db.SentDraft{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -930,7 +930,7 @@ func TestQueuedTranscriptionRecoveryIsIdempotent(t *testing.T) {
 		ID: "recovery-queued", CreatedAt: time.Now().UTC(), Model: "predictable",
 		Kind: db.QueuedMessageKindTranscription, State: db.QueuedMessageStateWorking,
 		Transcription: &db.QueuedTranscription{MediaPath: "/tmp/recovery.webm"},
-	})
+	}, db.SentDraft{})
 	if err != nil {
 		t.Fatal(err)
 	}

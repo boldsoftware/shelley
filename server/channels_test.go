@@ -798,7 +798,7 @@ func TestChannelQueuesDrainWithoutTheUI(t *testing.T) {
 		}
 		if _, err := database.AppendQueuedMessage(t.Context(), assistantID, db.QueuedMessage{
 			ID: id, Llm: llmJSON, CreatedAt: time.Now().UTC(), Model: "predictable", ExternalMessageID: id,
-		}); err != nil {
+		}, db.SentDraft{}); err != nil {
 			t.Fatal(err)
 		}
 	}

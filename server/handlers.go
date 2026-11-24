@@ -1144,6 +1144,13 @@ type ChatRequest struct {
 	// it is: the sender said it holds no secret. Values already stored and
 	// the sender's own marks are still extracted (see secrets.go).
 	KeepFoundSecrets bool `json:"keep_found_secrets,omitempty"`
+	// DraftUpdatedAt is the conversation's draft_updated_at the sender's
+	// composer was synced to: the saved text this message was composed
+	// from, which the send clears unless another client changed it since.
+	// "" says the message consumed no saved text. Omitted keeps a started
+	// conversation's text, since the sender may not be its composer (a push
+	// reply, the CLI, an agent), and clears a draft's text as it promotes.
+	DraftUpdatedAt *string `json:"draft_updated_at,omitempty"`
 }
 
 // NewConversationRequest is the body of POST /api/conversations/new.
@@ -1177,6 +1184,15 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, "kind and parent_pointer are internal conversation options", http.StatusBadRequest)
 		return
 	}
+	var sentDraft db.SentDraft
+	if req.DraftUpdatedAt != nil && *req.DraftUpdatedAt != "" {
+		at, err := time.Parse(time.RFC3339Nano, *req.DraftUpdatedAt)
+		if err != nil {
+			http.Error(w, "draft_updated_at must be an RFC 3339 time", http.StatusBadRequest)
+			return
+		}
+		sentDraft.At = &at
+	}
 
 	// Load the conversation up front; we need its persisted model to
 	// resolve an omitted `model` (see below) and the draft branches need
@@ -1189,6 +1205,28 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	}
 	if !s.extractChatSecrets(w, r, conversationID, &req) {
 		return
+	}
+	// A send that doesn't say what it consumed and promotes the draft takes
+	// the draft's text, as before draft_updated_at (see claim.promoted).
+	legacyPromote := existing.IsDraft && req.DraftUpdatedAt == nil
+	var claim *sentDraftClaim
+	if sentDraft.At != nil || legacyPromote {
+		// The write that records or queues the message clears the text in
+		// its Tx (see contextWithSentDraft). A send that does neither — a
+		// command, /btw — clears it once it succeeded.
+		ctx, claim = contextWithSentDraft(ctx, conversationID, sentDraft)
+		sw := &statusWriter{ResponseWriter: w}
+		w = sw
+		defer func() {
+			if sw.status/100 != 2 {
+				return
+			}
+			if sent := claim.take(conversationID); sent != (db.SentDraft{}) {
+				if err := s.db.ClearSentDraft(context.WithoutCancel(ctx), conversationID, sent); err != nil {
+					s.logger.Error("Failed to clear sent draft", "conversationID", conversationID, "error", err)
+				}
+			}
+		}()
 	}
 
 	senderUserData, err := s.senderUserData(ctx, *existing, req.SenderConversationID)
@@ -1405,6 +1443,9 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 			modelOverride = &modelID
 		}
 		promoted, err := s.db.PromoteDraft(ctx, conversationID, cwdOverride, modelOverride, &conversationOptions)
+		if err == nil && legacyPromote {
+			claim.promoted(promoted)
+		}
 		switch {
 		case errors.Is(err, db.ErrConversationNotDraft):
 			// A concurrent send won the promote race; its overrides stand and
@@ -4688,14 +4729,15 @@ type UpdateDraftRequest struct {
 	Cwd   *string `json:"cwd,omitempty"`
 }
 
-// handleUpdateDraft partially updates a draft conversation: the draft text
-// (composer autosave), the model (composer picker — so a promote that
-// omits `model`, like the iOS push "Reply" handler, and other devices
-// reopening the draft see the pick), and/or the cwd (command palette
+// handleUpdateDraft partially updates a conversation's composer: the text
+// (composer autosave, for any conversation, so unsent text follows the user
+// between clients), and for a draft the model (composer picker — so a
+// promote that omits `model`, like the iOS push "Reply" handler, and other
+// devices reopening the draft see the pick) and/or the cwd (command palette
 // "set working directory") — without losing the fields it doesn't name.
-// 404 when the conversation is not a draft (either it never was, or it was
-// already promoted by a chat post): once promoted, cwd is immutable and
-// the model only changes through the /model loop switch.
+// 404 when model or cwd names a conversation that is not a draft (either it
+// never was, or it was already promoted by a chat post): once promoted, cwd
+// is immutable and the model only changes through the /model loop switch.
 func (s *Server) handleUpdateDraft(w http.ResponseWriter, r *http.Request, conversationID string) {
 	ctx := r.Context()
 	var req UpdateDraftRequest

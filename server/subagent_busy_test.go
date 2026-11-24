@@ -212,7 +212,7 @@ func testSubagentBusy_DeliversDurableInjectionMidTurn(t *testing.T) {
 		CreatedAt: time.Now().UTC(),
 		Model:     "predictable",
 		Inject:    true,
-	}); err != nil {
+	}, db.SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	requireSteeredMidTurn(t, f)

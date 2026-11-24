@@ -1,0 +1,140 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]; \"the thinking indicator\" is [data-testid=\"agent-thinking\"]; \"Queue it\" means: the send options button [data-testid=\"send-options-button\"] should be enabled and visible (up to 5s); click it; the queue option [data-testid=\"queue-option\"] should become visible (up to 5s); click it. Call \"saved text\" returns the text the server keeps for the conversation's composer, or \"(none)\". Call \"hold saves\" makes the browser's saves of its composer text wait before they reach the server, call \"saves held\" counts those waiting, and call \"release saves\" lets them through; calls \"hold sends\", \"sends held\" and \"release sends\" do the same for its message sends. Eval window.__streamSaw(T) says whether the page's event stream has brought text T. Perform the steps in order.\n1. Navigate to /c/composer-queue and wait (up to 30s) for the input to be visible.\n2. Fill the input with \"delay: 60\"; the send button should become enabled (up to 5s); click it; the thinking indicator should become visible (up to 30s).\n3. Call \"hold saves\"; it returns \"holding\".\n4. Call \"hold sends\"; it returns \"holding\".\n5. Fill the input with \"queued 7c2e\".\n6. Call \"saves held\"; it should become \"1\" (up to 10s).\n7. Queue it.\n8. The input's value should become exactly \"\" (up to 5s).\n9. Call \"release saves\"; it returns \"released\".\n10. Call \"sends held\"; it should become \"1\" (up to 10s).\n11. Eval window.__streamSaw(\"queued 7c2e\") should become true (up to 10s).\n12. The input's value is exactly \"\".\n13. Call \"release sends\"; it returns \"released\".\n14. A queued badge [data-testid=\"queued-badge\"] should become visible (up to 10s).\n15. The input's value is exactly \"\".\n16. Call \"saved text\"; it should become \"(none)\" (up to 10s).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/composer-queue"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "delay: 60"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='send-button']:not([disabled])",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='agent-thinking']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "hold saves",
+      "expect": "holding"
+    },
+    {
+      "action": "call",
+      "value": "hold sends",
+      "expect": "holding"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "queued 7c2e"
+    },
+    {
+      "action": "call",
+      "value": "saves held",
+      "expect": "1",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='send-options-button']"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='send-options-button']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-options-button']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='queue-option']",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='queue-option']"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "assert_value",
+          "selector": "[data-testid='message-input']",
+          "value": ""
+        }
+      ],
+      "timeout": "5s"
+    },
+    {
+      "action": "call",
+      "value": "release saves",
+      "expect": "released"
+    },
+    {
+      "action": "call",
+      "value": "sends held",
+      "expect": "1",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamSaw('queued 7c2e')",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "call",
+      "value": "release sends",
+      "expect": "released"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='queued-badge']",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "call",
+      "value": "saved text",
+      "expect": "(none)",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T17:36:17.773749491Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 7826,
+    "output_tokens": 778,
+    "estimated_cost_usd": 0.041016,
+    "mode": "generated"
+  }
+}

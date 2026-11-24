@@ -182,6 +182,7 @@ function conv(convId: string, agentWorking: boolean): Conversation {
     tags: "[]",
     is_draft: false,
     draft: "",
+    draft_updated_at: null,
     queued_messages: "[]",
   };
 }

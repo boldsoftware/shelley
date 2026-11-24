@@ -249,7 +249,7 @@ func TestNewAssistantThreadKeepsOldTexts(t *testing.T) {
 	}
 	if _, err := database.AppendQueuedMessage(t.Context(), old, db.QueuedMessage{
 		ID: "q1", Llm: llmJSON, CreatedAt: time.Now().UTC(), Model: "predictable", ExternalMessageID: "q1",
-	}); err != nil {
+	}, db.SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	server.recoverChannelQueues(t.Context())

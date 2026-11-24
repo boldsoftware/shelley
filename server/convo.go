@@ -1237,7 +1237,7 @@ func (cm *ConversationManager) QueueTranscription(ctx context.Context, qm db.Que
 	defer cm.loopLifecycleMu.Unlock()
 	cm.waitForLoopTeardownLocked()
 
-	_, queued, err := cm.db.CreateQueuedTranscription(ctx, cm.conversationID, qm)
+	_, queued, err := cm.db.CreateQueuedTranscription(ctx, cm.conversationID, qm, takeSentDraft(ctx, cm.conversationID))
 	if err != nil {
 		return db.QueuedMessage{}, err
 	}
@@ -1365,7 +1365,7 @@ func (cm *ConversationManager) queueMessageLocked(ctx context.Context, modelID s
 		Inject:            midTurn,
 		ExternalMessageID: externalMessageIDFromContext(ctx),
 	}
-	if _, err := s.db.AppendQueuedMessage(ctx, cm.conversationID, qm); err != nil {
+	if _, err := s.db.AppendQueuedMessage(ctx, cm.conversationID, qm, takeSentDraft(ctx, cm.conversationID)); err != nil {
 		return fmt.Errorf("failed to append queued message: %w", err)
 	}
 	if turnUserDataFromContext(ctx) == nil || liveDeliveryIDFromContext(ctx) != "" {

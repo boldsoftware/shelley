@@ -587,7 +587,7 @@
       ref="messageInputRef"
       v-show="!currentConversation?.archived || voicePhase !== 'idle'"
       :composer-hidden="!!currentConversation?.archived"
-      :on-send="sendMessage"
+      :on-send="sendFromComposer"
       :voice-active="voicePhase !== 'idle'"
       :on-start-recording="prepareRecording"
       :recording-inline-available="!currentConversation?.archived"
@@ -749,7 +749,6 @@
             autocomplete="off"
             spellcheck="false"
           />
-
         </template>
         <p v-if="renameError" class="error-line" role="alert">{{ renameError }}</p>
       </form>
@@ -948,6 +947,9 @@ import {
   rebaseCachedDraft,
   markCachedDraftPending,
   reconcileComposerDraft,
+  compareStamps,
+  type CachedDraft,
+  type ComposerReconcileResult,
 } from "../../services/draftCache";
 import { setFaviconStatus } from "../../services/favicon";
 import { workingConversationIds } from "../../utils/workingConversations";
@@ -1541,18 +1543,6 @@ function putDraftModel(draftId: string, model: string) {
   modelPutDraftId = draftId;
   api
     .updateDraft(draftId, { model })
-    .then((conv) => {
-      // The PUT bumped the row's updated_at — the arbiter the draft-text
-      // cache reconciles against. Re-base like saveDraft does, or a
-      // reload inside the autosave debounce would judge the locally
-      // cached keystrokes stale and resurrect the server's older text.
-      // Only advance: this response may land after a later text
-      // autosave's, and regressing the stamp would re-open the window.
-      if (draftConvId === draftId && conv.updated_at > draftSyncedAt) {
-        draftSyncedAt = conv.updated_at;
-      }
-      rebaseCachedDraft(draftId, conv.updated_at);
-    })
     .catch(() => {})
     .finally(() => {
       modelPutsInFlight--;
@@ -2696,13 +2686,22 @@ async function renameFromTitle(title: string) {
 }
 
 const tagDraft = ref<{ id: string; tags: string[] } | null>(null);
-const knownTags = computed(() => offeredTags(props.conversations, []).slice(0, 60).map(({ tag }) => tag));
+const knownTags = computed(() =>
+  offeredTags(props.conversations, [])
+    .slice(0, 60)
+    .map(({ tag }) => tag),
+);
 function onTagsSaved(conversation: Conversation) {
   tagDraft.value = null;
   props.onConversationUpdate?.(conversation);
 }
 
-const renameDraft = ref<{ conversationId: string; originalName: string; name: string; generating: boolean } | null>(null);
+const renameDraft = ref<{
+  conversationId: string;
+  originalName: string;
+  name: string;
+  generating: boolean;
+} | null>(null);
 const renameInput = ref<HTMLInputElement | null>(null);
 const renameSaving = ref(false);
 const renameError = ref("");
@@ -3928,8 +3927,35 @@ async function queueMessage(message: string, skills: string[] = [], keepFoundSec
     await sendMessage(message, skills, keepFoundSecrets);
     return;
   }
-  if (!props.conversationId) return;
-  await queueMessageTo(props.conversationId, selectedModel.value, message, skills, keepFoundSecrets);
+  const id = props.conversationId;
+  if (!id) return;
+  // The composer's text: it consumes the conversation's saved text, which the
+  // send clears. Saving "" too could erase text another device saved since.
+  if (id === draftConvId) draftAutosave.cancel();
+  const consumed = consumeDraft(id);
+  // MessageInput emptied the composer already: echoes of its saves of the
+  // text mustn't bring it back.
+  const release = holdOwnSend(id);
+  let accepted: boolean;
+  try {
+    accepted = await queueMessageTo(
+      id,
+      selectedModel.value,
+      message,
+      skills,
+      keepFoundSecrets,
+      consumed.saved ? await consumed.saved : consumed.stamp,
+    );
+  } finally {
+    release();
+  }
+  if (!accepted) {
+    // Stopped: whether the server took the text, and cleared it, is unknown.
+    if (id === draftConvId) draftAutosave.observe(null);
+    return;
+  }
+  draftConsumed(id, consumed);
+  if (id === draftConvId) followNewerRow(id);
 }
 
 async function queueMessageTo(
@@ -3938,8 +3964,9 @@ async function queueMessageTo(
   message: string,
   skills: string[] = [],
   keepFoundSecrets = false,
-) {
-  if (!message.trim()) return;
+  draftUpdatedAt?: string,
+): Promise<boolean> {
+  if (!message.trim()) return false;
   rejectSkillsOnCommand(message, skills);
   // Same guard as sendMessage: a queued turn runs the LLM later, so an
   // unavailable model just defers the confusing "Unsupported model" error.
@@ -3964,12 +3991,14 @@ async function queueMessageTo(
         queue: true,
         skills,
         keep_found_secrets: keepFoundSecrets || undefined,
+        draft_updated_at: draftUpdatedAt,
       },
       pending.controller.signal,
     );
     props.onMessageSent?.(conversationId);
+    return true;
   } catch (err) {
-    if (pending.controller.signal.aborted) return;
+    if (pending.controller.signal.aborted) return false;
     console.error("Failed to queue message:", err);
     throw err;
   } finally {
@@ -4229,6 +4258,14 @@ function prepareRecording(text: string): RecordingPreparation {
   // The recorder owns retries until it closes; autosave must not create a
   // competing destination after a failed attempt.
   if (!origin) draftAutosave.cancel();
+  // The saved text the recording takes, in case the composer moves on: the
+  // version its save, started now rather than after the debounce, gets.
+  let taken = NO_DRAFT;
+  if (origin && origin === draftConvId && text === draftText) {
+    const waiting = draftAutosave.reset();
+    if (waiting !== null) saveLeftBehind(origin, waiting);
+    taken = consumeDraft(origin);
+  }
 
   return {
     async resolve() {
@@ -4255,11 +4292,16 @@ function prepareRecording(text: string): RecordingPreparation {
             error.value = null;
             const suffix = context.trim();
             try {
-              await postSubmittedDraft(conversationId, text, () =>
-                api.sendMessage(conversationId, {
-                  message: `${SLASH_COMMANDS.TRANSCRIPTION.command} ${path}${suffix ? `\n${suffix}` : ""}`,
-                  ...options,
-                }),
+              await postSubmittedDraft(
+                conversationId,
+                text,
+                (draftUpdatedAt) =>
+                  api.sendMessage(conversationId, {
+                    message: `${SLASH_COMMANDS.TRANSCRIPTION.command} ${path}${suffix ? `\n${suffix}` : ""}`,
+                    ...options,
+                    draft_updated_at: draftUpdatedAt,
+                  }),
+                conversationId === origin ? taken : undefined,
               );
               accepted = true;
               forgetUnsaved(origin ?? null, sent);
@@ -4289,30 +4331,134 @@ function handleRecordingUnsent(path: string, cause: unknown) {
   error.value = `${detail}. Retry with /transcription ${path}`;
 }
 
-// Conversation ids with a send from THIS tab in flight. Their pending mirror
-// entries are ours: the reconcile watch must keep treating them as the
-// composer's own text (see CachedDraft.pending), so an echo cannot clear a
-// composer whose send may yet fail.
-const ownSends = new Set<string>();
+// Conversation ids with sends from THIS tab in flight, and how many. Their
+// pending mirror entries are ours: the reconcile watch must keep treating them
+// as the composer's own text (see CachedDraft.pending), so an echo cannot clear
+// a composer whose send may yet fail, nor bring back text it sent.
+const ownSends = new Map<string, number>();
+function holdOwnSend(id: string): () => void {
+  ownSends.set(id, (ownSends.get(id) ?? 0) + 1);
+  let held = true;
+  return () => {
+    if (!held) return;
+    held = false;
+    const left = (ownSends.get(id) ?? 1) - 1;
+    if (left > 0) ownSends.set(id, left);
+    else ownSends.delete(id);
+  };
+}
+
+// The saved text a send from a composer consumes, for the server to clear
+// it with the send: stamp is the draft_updated_at the composer was synced to
+// as the send took its text ("" for none; undefined, none known), or saved
+// resolves to the version a save of the composer's text then in flight got.
+// Text saved after that, say on another device, isn't the send's. changes is
+// composerChanges then (-1: not the focused composer's); shown, whether the
+// composer still showed text (Queue empties it first).
+interface ConsumedDraft {
+  stamp: string | undefined;
+  saved?: Promise<string | undefined>;
+  changes: number;
+  shown?: boolean;
+}
+const NO_DRAFT: ConsumedDraft = { stamp: "", changes: -1 };
+
+// Takes conversationId's focused composer text for a send, now. Callers await
+// saved only if set: yielding lets a render run first.
+function consumeDraft(conversationId: string): ConsumedDraft {
+  if (conversationId !== draftConvId) return NO_DRAFT;
+  return {
+    ...consumed(conversationId, draftSyncedAt || undefined, composerChanges),
+    shown: composerText !== "",
+  };
+}
+
+// Takes text sent for a composer no longer shown (a send that waited for its
+// draft's creation, say) by the version of the localStorage mirror holding
+// it, if one does.
+function consumeOffscreen(conversationId: string, text: string): ConsumedDraft {
+  const cached = loadCachedDraft(conversationId);
+  if (!cached) return { stamp: undefined, changes: -1 };
+  if (cached.value !== text) return NO_DRAFT;
+  return consumed(conversationId, cached.basedOn || undefined, -1);
+}
+
+function consumed(conversationId: string, stamp: string | undefined, changes: number) {
+  const put = draftPuts.get(conversationId);
+  return {
+    stamp,
+    saved: put?.then(
+      (acked) => (compareStamps(acked, stamp ?? "") > 0 ? acked : stamp),
+      () => stamp,
+    ),
+    changes,
+  };
+}
+
+// A send that consumed the composer's text was accepted: the server cleared
+// that text, so saving "" is a no-op. A composer that changed since holds
+// text the server may not have. Text typed into a composer Queue emptied
+// saves now, though it saved the same before: it is what the server should
+// have after the send's clear, and the mirror's version is older than that
+// clear. Not text the composer still showed, which MessageInput clears next,
+// nor a seed (say, entering the conversation again), which the server has.
+function draftConsumed(conversationId: string, consumed: ConsumedDraft) {
+  if (consumed.stamp === "" || conversationId !== draftConvId) return;
+  if (composerChanges === consumed.changes) {
+    draftAutosave.observe("");
+    return;
+  }
+  draftAutosave.observe(null);
+  if (consumed.shown || composerText === lastSeededValue) return;
+  draftAutosave.schedule(draftText);
+  draftAutosave.flush();
+}
+
+// The conversation whose composer's send was just accepted while the
+// composer still showed the sent text, which MessageInput clears next and
+// reports with draft-cleared: that clear saves nothing, the send having
+// cleared the server's copy.
+let sentFrom: string | null = null;
+
+// A send from id's composer was accepted. A composer MessageInput cleared
+// already (Queue, Send Now) follows text saved elsewhere meanwhile now; one
+// it clears yet, then, unless it changed since the send took its text: its
+// clear saves "" then.
+function composerSent(id: string, consumed: ConsumedDraft) {
+  if (id !== draftConvId) return;
+  if (composerText === "") followNewerRow(id);
+  else if (composerChanges === consumed.changes) sentFrom = id;
+}
 
 // postSubmittedDraft runs the chat POST for a composer's text with its mirror
 // entry flagged pending, then clears the accepted text, or unflags it if the
-// POST fails.
+// POST fails. post gets the stamp of the saved text the send consumes: the
+// focused composer's if it still shows text, else what taken consumed when
+// the text was taken (a recording's, as it started), else the mirror's.
 async function postSubmittedDraft<T>(
   conversationId: string,
   text: string,
-  post: () => Promise<T>,
+  post: (draftUpdatedAt: string | undefined) => Promise<T>,
+  taken?: ConsumedDraft,
 ): Promise<T> {
+  const consumed =
+    conversationId === draftConvId && text === draftText
+      ? consumeDraft(conversationId)
+      : (taken ?? consumeOffscreen(conversationId, text));
   const restore = markCachedDraftPending(conversationId, text);
-  ownSends.add(conversationId);
+  const release = holdOwnSend(conversationId);
   let result: T;
   try {
-    result = await post();
+    result = await post(consumed.saved ? await consumed.saved : consumed.stamp);
   } catch (err) {
     restore();
     throw err;
   } finally {
-    ownSends.delete(conversationId);
+    release();
+  }
+  if (consumed !== taken) {
+    draftConsumed(conversationId, consumed);
+    composerSent(conversationId, consumed);
   }
   clearSubmittedDraft(conversationId, text);
   props.onMessageSent?.(conversationId);
@@ -4330,7 +4476,35 @@ function clearSubmittedDraft(conversationId: string, text: string) {
   }
 }
 
-async function sendMessage(message: string, skills: string[] = [], keepFoundSecrets = false) {
+// Sends a command typed in conversationId's composer (/btw, /model), which
+// records no message the composer's text would wait on, so it consumes the
+// saved text like queueMessage does.
+async function sendComposerCommand(conversationId: string, request: ChatRequest) {
+  if (conversationId === draftConvId) draftAutosave.cancel();
+  const consumed = consumeDraft(conversationId);
+  const release = holdOwnSend(conversationId);
+  let accepted: Awaited<ReturnType<typeof api.sendMessage>>;
+  try {
+    accepted = await api.sendMessage(conversationId, {
+      ...request,
+      draft_updated_at: consumed.saved ? await consumed.saved : consumed.stamp,
+    });
+  } finally {
+    release();
+  }
+  draftConsumed(conversationId, consumed);
+  composerSent(conversationId, consumed);
+  return accepted;
+}
+
+// fromComposer false: a message the UI sends for a button, which leaves the
+// composer's text alone.
+async function sendMessage(
+  message: string,
+  skills: string[] = [],
+  keepFoundSecrets = false,
+  fromComposer = true,
+) {
   if (!message.trim() || sending.value) return;
   const trimmedMessage = message.trim();
   const transcriptionCommand =
@@ -4395,7 +4569,7 @@ async function sendMessage(message: string, skills: string[] = [], keepFoundSecr
     try {
       error.value = null;
       const originID = props.conversationId;
-      const accepted = await api.sendMessage(originID, {
+      const accepted = await sendComposerCommand(originID, {
         message,
         model: selectedModel.value,
         keep_found_secrets: keepFoundSecrets || undefined,
@@ -4440,13 +4614,15 @@ async function sendMessage(message: string, skills: string[] = [], keepFoundSecr
     try {
       sending.value = true;
       error.value = null;
-      await api.sendMessage(props.conversationId, {
+      await sendComposerCommand(props.conversationId, {
         message: trimmedMessage,
         model: selectedModel.value,
       });
     } catch (err) {
       console.error(`Failed to run ${syncCommand}:`, err);
       error.value = err instanceof Error ? err.message : "Unknown error";
+      // MessageInput keeps the command, which the server didn't take.
+      throw err;
     } finally {
       sending.value = false;
     }
@@ -4591,6 +4767,11 @@ async function sendMessage(message: string, skills: string[] = [], keepFoundSecr
     streamingText.value = "";
     streamingThinking.value = "";
 
+    // The send consumes the saved text and clears it; a save waiting (Send
+    // Now's "") could erase text another device saved since.
+    if (fromComposer && props.conversationId && props.conversationId === draftConvId) {
+      draftAutosave.cancel();
+    }
     // A pending autosave now finishes without pulling navigation back to its
     // origin. Bind normal sends just like recordings before waiting for it.
     const submittedDraft = inflightDraft?.text ?? draftText;
@@ -4618,14 +4799,19 @@ async function sendMessage(message: string, skills: string[] = [], keepFoundSecr
       }
     } else if (effectiveId) {
       const id = effectiveId;
-      const accepted = await postSubmittedDraft(id, submittedDraft, () =>
-        api.sendMessage(id, request),
-      );
+      const accepted = fromComposer
+        ? await postSubmittedDraft(id, submittedDraft, (draftUpdatedAt) =>
+            api.sendMessage(id, { ...request, draft_updated_at: draftUpdatedAt }),
+          )
+        : await api.sendMessage(id, { ...request, draft_updated_at: "" }).then((accepted) => {
+            props.onMessageSent?.(id);
+            return accepted;
+          });
       // A queued message starts no turn (e.g. it waits behind a failed
       // recording), so drop the optimistic indicator for the server's state.
       if (accepted.status === "queued") syncTransientFromStore(id);
     }
-    forgetUnsaved(session, sent);
+    if (fromComposer) forgetUnsaved(session, sent);
   } catch (err) {
     console.error("Failed to send message:", err);
     error.value = err instanceof Error ? err.message : "Unknown error";
@@ -4684,12 +4870,19 @@ async function handleCancel() {
  * A conversation started without the compact_in_place tool gets it first;
  * the server refuses that mid-turn (compactInPlaceBusy keeps the button
  * disabled then). */
-async function handleCompactInPlace(instructions?: string, keepFoundSecrets = false) {
+async function handleCompactInPlace(
+  instructions?: string,
+  keepFoundSecrets = false,
+  fromComposer = true,
+) {
   const conversationId = props.conversationId;
   if (!conversationId) return;
   if (!compactInPlaceEnabled.value) {
     error.value = null;
     let enabled: Conversation;
+    // A typed /compact is the composer's send already: the composer keeps
+    // the text it sends meanwhile.
+    const release = fromComposer ? holdOwnSend(conversationId) : () => {};
     try {
       enabled = await api.enableCompactInPlace(conversationId);
     } catch (err) {
@@ -4698,6 +4891,8 @@ async function handleCompactInPlace(instructions?: string, keepFoundSecrets = fa
         error.value = err instanceof Error ? err.message : String(err);
       }
       return;
+    } finally {
+      release();
     }
     props.onConversationUpdate?.(enabled);
     if (props.conversationId !== conversationId) return;
@@ -4706,6 +4901,7 @@ async function handleCompactInPlace(instructions?: string, keepFoundSecrets = fa
     instructions ? `${COMPACT_IN_PLACE_REQUEST}\n\n${instructions}` : COMPACT_IN_PLACE_REQUEST,
     [],
     keepFoundSecrets,
+    fromComposer,
   );
 }
 
@@ -4879,7 +5075,11 @@ let composerText = "";
 // an identical string still triggers MessageInput's watch. saved is what the
 // draft keeps of value.
 const draftSeed = ref<{ value: string; saved: string } | null>(null);
+// Counts changes to the composer's text, seeds and edits, so a send can tell
+// the composer took other text meanwhile.
+let composerChanges = 0;
 function seedComposer(value: string, saved = value) {
+  composerChanges++;
   draftText = saved;
   composerText = value;
   draftSeed.value = { value, saved };
@@ -4915,15 +5115,15 @@ function handleComposerDraftChange(value: string) {
 }
 const lazyDraftId = ref<string | null>(null);
 let draftConvId: string | null = props.conversationId;
-let draftIsDraft = !!props.currentConversation?.is_draft;
 let inflightCreate: Promise<string> | null = null;
 let draftSessionVersion = 0;
 let newDraftSessionVersion = 0;
 let inflightDraft: { text: string; newSessionVersion: number } | null = null;
-// The server `updated_at` of the draft row we last successfully synced to.
-// Keystrokes stamp the localStorage mirror with this so a reload can tell
-// whether the cached text is ahead of what the server acknowledged. "" before
-// any server row exists (new-conversation view). See draftCache.
+// The `draft_updated_at` of the conversation row we last synced the composer
+// to. Keystrokes stamp the localStorage mirror with this so a reload can tell
+// whether the cached text is ahead of what the server acknowledged, and a send
+// names it as the saved text it consumes. "" before any server row exists
+// (new-conversation view) or saved text. See draftCache.
 let draftSyncedAt = "";
 
 async function ensureDraftConversation(
@@ -4954,13 +5154,13 @@ function createDraftForSession(
   const created = api.createDraft({ draft: draft.text, ...creation }).then((conv) => {
     // The pending create owns its latest text even after leaving /new. Move
     // that cache to the saved id, without clearing a newer /new composer.
-    saveCachedDraft(conv.conversation_id, draft.text, conv.updated_at);
+    saveCachedDraft(conv.conversation_id, draft.text, conv.draft_updated_at ?? "");
     if (draft.newSessionVersion === newDraftSessionVersion) clearCachedDraft(null);
     // A late draft response still belongs to its caller (e.g. a recording),
     // but must not navigate away from the conversation selected meanwhile.
     if (sessionVersion !== draftSessionVersion) return conv.conversation_id;
     draftConvId = conv.conversation_id;
-    draftSyncedAt = conv.updated_at;
+    draftSyncedAt = conv.draft_updated_at ?? "";
     // A model picked while this createDraft was in flight had no draft id
     // to PUT onto and would otherwise be dropped (and the row echo would
     // revert the picker). Reconcile: the picker is authoritative.
@@ -4977,22 +5177,28 @@ function createDraftForSession(
   return created.finally(() => settle?.());
 }
 
+// Each conversation's composer text PUTs, in order: the last one in flight,
+// resolving to its draft_updated_at, which a send waits out so the text it
+// consumes is the version it names.
+const draftPuts = new Map<string, Promise<string>>();
+function chainPut(id: string, value: string): Promise<string> {
+  const before = draftPuts.get(id);
+  const put = before
+    ? before.catch(() => "").then(() => putComposerText(id, value))
+    : putComposerText(id, value);
+  draftPuts.set(id, put);
+  const settled = () => {
+    if (draftPuts.get(id) === put) draftPuts.delete(id);
+  };
+  put.then(settled, settled);
+  return put;
+}
 async function saveDraft(value: string) {
   const id = draftConvId;
   if (id) {
-    if (draftIsDraft) {
-      const conv = await api.updateDraft(id, { draft: value });
-      // The server advanced updated_at to acknowledge this text. Re-base the
-      // live cache entry onto it so keystrokes typed while this PUT was
-      // outstanding (stamped with the older time) stay ahead of the server.
-      // Only advance — a concurrent model PUT (putDraftModel) may have
-      // already re-based onto a newer stamp, and regressing would re-open
-      // the stale-cache window.
-      if (draftConvId === id && conv.updated_at > draftSyncedAt) {
-        draftSyncedAt = conv.updated_at;
-      }
-      rebaseCachedDraft(id, conv.updated_at);
-    }
+    // Every conversation saves its composer's text, so it follows the user
+    // to other browsers and devices.
+    await chainPut(id, value);
     return;
   }
   // A project's conversation starts with its first message (sendFirstMessage).
@@ -5000,22 +5206,67 @@ async function saveDraft(value: string) {
   await ensureDraftConversation(value);
 }
 
+async function putComposerText(id: string, value: string): Promise<string> {
+  const conv = await api.updateDraft(id, { draft: value });
+  // The server stamped draft_updated_at to acknowledge this text. Re-base
+  // the live cache entry onto it so keystrokes typed while this PUT was
+  // outstanding (stamped with the older time) stay ahead of the server.
+  // Only advance: a row echo may have re-based onto a newer stamp already.
+  const stamp = conv.draft_updated_at ?? "";
+  rebaseCachedDraft(id, stamp);
+  if (draftConvId !== id) return stamp;
+  // Its echo may have come first, while this save was still pending. So may
+  // text saved elsewhere after it, which the composer follows now. (No other
+  // save waits: it would be of newer text.)
+  if (draftText === value) {
+    syncedWithServer(id, value, stamp);
+    followNewerRow(id);
+  } else if (compareStamps(stamp, draftSyncedAt) > 0) {
+    draftSyncedAt = stamp;
+  }
+  return stamp;
+}
+
+// An idle composer, with no save waiting, takes text saved elsewhere that is
+// newer than the version it was synced to, which the reconcile watch left
+// alone as the composer's own save was under way. Not while the composer's
+// send is: it may yet fail and keep the composer's text.
+function followNewerRow(id: string) {
+  const row = props.currentConversation;
+  const stamp = row?.draft_updated_at ?? "";
+  if (
+    row?.conversation_id !== id ||
+    id !== draftConvId ||
+    compareStamps(stamp, draftSyncedAt) <= 0 ||
+    lastSeededSession !== id ||
+    composerText !== draftText ||
+    draftText !== lastSeededValue ||
+    ownSends.has(id)
+  ) {
+    return;
+  }
+  const text = row.draft || "";
+  if (text !== draftText) seedComposer(text);
+  draftAutosave.observe(text);
+  syncedWithServer(id, text, stamp);
+}
+
 const draftAutosave = useDraftAutosave(saveDraft);
+// Saves the text a composer left behind for id, after its save in flight.
+function saveLeftBehind(id: string, value: string) {
+  chainPut(id, value).catch((err) => console.warn("Failed to save composer text", err));
+}
 function handleDraftChange(value: string, autosave = true) {
   perfCount("chat.draftChange");
+  composerChanges++;
+  if (value !== "") sentFrom = null;
   draftText = value;
   if (inflightDraft) inflightDraft.text = value;
   // Mirror to localStorage SYNCHRONOUSLY before the debounced server autosave:
   // if the tab reloads (or the network silently dropped) before the PUT lands,
-  // the keystroke survives, stamped with the last server updated_at we synced
-  // to; on next load that stamp is >= the (frozen, on failure) server
-  // updated_at, so the cached text wins.
-  //
-  // Every session's composer is mirrored: the new-conversation view, real
-  // drafts, and the next-message composer of an already-sent conversation
-  // (client-side only, no server draft). draftSyncedAt is the last server
-  // updated_at for draft/new sessions and "" for non-draft ones (nothing to
-  // reconcile against; the cache is authoritative).
+  // the keystroke survives, stamped with the last server draft_updated_at we
+  // synced to; on next load that stamp is >= the (frozen, on failure) server
+  // stamp, so the cached text wins.
   saveCachedDraft(draftConvId, value, draftSyncedAt);
   // Text that makes no draft by itself still joins a draft that exists, is
   // being created, or has a save pending; else that save would carry the
@@ -5031,16 +5282,51 @@ function handleTextChange(value: string) {
 function handleDraftSendStarted() {
   draftAutosave.cancel();
 }
+// MessageInput's send. One that fails leaves the composer its text, whose
+// save draft-send-started called off: save it after all.
+async function sendFromComposer(message: string, skills: string[] = [], keepFoundSecrets = false) {
+  try {
+    await sendMessage(message, skills, keepFoundSecrets);
+  } catch (err) {
+    const id = draftConvId;
+    if (id && id === props.conversationId && draftText !== "" && composerText === draftText) {
+      draftAutosave.schedule(draftText);
+    }
+    throw err;
+  }
+}
 function handleDraftCleared() {
   draftText = "";
   composerText = "";
   lastSeededValue = "";
-  draftAutosave.cancel();
   // Draft is gone (sent or deleted): drop the local mirror so a later visit
   // doesn't resurrect it. Clear both the live id and the `null` new-view slot.
   clearCachedDraft(draftConvId);
   clearCachedDraft(null);
-  draftSyncedAt = "";
+  // And the conversation's saved text, which a command run here (/diff,
+  // !cmd) leaves. A send cleared it already, and text saved elsewhere since
+  // shows now. Queue and Send Now clear the composer before sending, which
+  // cancels this save.
+  const id = draftConvId;
+  if (id && sentFrom === id) {
+    sentFrom = null;
+    draftAutosave.cancel();
+    followNewerRow(id);
+  } else if (id) {
+    draftAutosave.schedule("");
+    // The send's clear may have echoed already.
+    const row = props.currentConversation;
+    const rowStamp = row?.draft_updated_at ?? "";
+    if (
+      row?.conversation_id === id &&
+      row.draft === "" &&
+      compareStamps(rowStamp, draftSyncedAt) > 0
+    ) {
+      draftSyncedAt = rowStamp;
+    }
+  } else {
+    draftAutosave.cancel();
+  }
 }
 
 // The Assistant's onboarding card tops its transcript until dismissed.
@@ -5220,7 +5506,7 @@ const statusContentProps = computed(() => {
     onClearError: () => (error.value = null),
     onCancel: handleCancel,
     onResumeInterrupted: handleResumeInterrupted,
-    onCompactInPlace: () => handleCompactInPlace(),
+    onCompactInPlace: () => handleCompactInPlace(undefined, false, false),
     compactInPlaceBusy: agentWorking.value && !compactInPlaceEnabled.value,
     contextNudges: contextNudgesOn.value,
     onSelectModel: setSelectedModel,
@@ -5641,14 +5927,16 @@ watch(
       // Start a trailing save while the mirrors still identify the old
       // composer; never let its debounce later write into the newly viewed one.
       draftAutosave.flush();
+      // Text waiting behind a save in flight follows it to its conversation.
+      const waiting = draftAutosave.reset();
+      if (waiting !== null && draftConvId) saveLeftBehind(draftConvId, waiting);
+      sentFrom = null;
       draftSessionVersion++;
       if (id == null) newDraftSessionVersion++;
       inflightCreate = null;
       inflightDraft = null;
-      draftAutosave.cancel();
     }
     draftConvId = id;
-    draftIsDraft = !!isDraft;
   },
   { flush: "sync" },
 );
@@ -5658,9 +5946,9 @@ watch([() => props.conversationId, lazyDraftId], () => {
   if (lazyDraftId.value && props.conversationId !== lazyDraftId.value) lazyDraftId.value = null;
 });
 
-// The session (conversation id) we last seeded the composer for. Guards the
-// non-draft branch from re-seeding on echoes (e.g. updated_at bumps from new
-// messages), which would wipe in-progress local edits. "" sentinel != any real
+// The session (conversation id) we last seeded the composer for. Guards
+// against re-seeding on echoes (e.g. new messages, or the row echoing an older
+// save), which would wipe in-progress local edits. "" sentinel != any real
 // id and != the null new-view session, so the first run always seeds.
 let lastSeededSession: string | null | undefined = undefined;
 // The exact value we last programmatically wrote into the composer. Lets the
@@ -5676,10 +5964,9 @@ function forgetUnsaved(session: string | null, text: string) {
 }
 
 // Initialize the composer from the conversation row when switching
-// conversations. Drafts and the new-conversation view reconcile the server
-// copy with the localStorage mirror via updated_at; non-draft conversations
-// have no server-side next-message draft, so their localStorage mirror is
-// authoritative (client-side only).
+// conversations, and follow the row's text as other tabs and devices change
+// it. Every conversation reconciles the server copy with the localStorage
+// mirror via draft_updated_at; the new-conversation view has only the mirror.
 //
 // reconcileComposerDraft() is the pure, unit-tested core; it returns null when
 // the composer must be left untouched (same session, would clobber live
@@ -5690,7 +5977,7 @@ watch(
     () => props.conversationId,
     () => props.currentConversation?.is_draft,
     () => props.currentConversation?.draft,
-    () => props.currentConversation?.updated_at,
+    () => props.currentConversation?.draft_updated_at,
     lazyDraftId,
     // A new message or queued one may be text leaving another tab's composer,
     // one this composer picked up from the shared mirror (see messagesOnly).
@@ -5711,16 +5998,22 @@ watch(
       unsavedComposers.set(lastSeededSession, { value: composerText, saved: draftText });
     }
     const cached = loadCachedDraft(sessionId);
-    // The row flipping is_draft true->false in place is the draft being sent.
+    const serverDraft = draft || "";
+    const serverUpdatedAt = updatedAt || "";
+    // The row flipping is_draft true->false in place, its text gone, is the
+    // draft being sent.
     const [prevId, prevIsDraft, prevDraft, prevUpdatedAt, prevLazyId] = prev ?? [];
     const promotedFrom =
-      prev && id === prevId && prevIsDraft === true && isDraft === false ? prevDraft || "" : null;
+      prev && id === prevId && prevIsDraft === true && isDraft === false && !draft
+        ? prevDraft || ""
+        : null;
     const result = reconcileComposerDraft({
       conversationId: sessionId,
       lazyDraftId: lazyDraftId.value,
       isDraft: !!isDraft,
-      serverDraft: props.currentConversation?.draft || "",
-      serverUpdatedAt: props.currentConversation?.updated_at || "",
+      serverDraft,
+      serverUpdatedAt,
+      syncedAt: sessionId !== null && sessionId === draftConvId ? draftSyncedAt : "",
       cached,
       ownsPending: sessionId !== null && ownSends.has(sessionId),
       promotedFrom,
@@ -5735,30 +6028,61 @@ watch(
       lastSeededSession,
       lastSeededValue,
     });
-    if (result === null) return;
-    // Entering a session restores even a pending entry (reload mid-send). Unless
-    // the send is this tab's own (still in flight while we navigated away and
-    // back), it died with its page: the text is a plain draft again, or later
-    // echoes would treat it as departing and clear the composer.
-    if (lastSeededSession !== sessionId && cached?.pending && !ownSends.has(sessionId ?? "")) {
-      saveCachedDraft(sessionId, cached.value, cached.basedOn);
+    if (result !== null) applyReconciled(result, sessionId, cached);
+    // The composer holds the server's text: in sync with this version of it,
+    // which saving again would not change. (A save waiting may be of the same
+    // text over a newer one this echo predates.)
+    if (
+      sessionId !== null &&
+      sessionId === draftConvId &&
+      lastSeededSession === sessionId &&
+      draftText === serverDraft &&
+      !draftAutosave.pending()
+    ) {
+      draftAutosave.observe(serverDraft);
+      syncedWithServer(sessionId, serverDraft, serverUpdatedAt);
     }
-    draftSyncedAt = result.draftSyncedAt;
-    // Keeping the composer's text keeps what isn't saved of it unsaved.
-    let seed = {
-      value: result.value,
-      saved: result.value === composerText ? draftText : result.value,
-    };
-    const kept = lastSeededSession !== sessionId ? unsavedComposers.get(sessionId) : undefined;
-    unsavedComposers.delete(sessionId);
-    if (kept?.saved === result.value) seed = kept;
-    seedComposer(seed.value, seed.saved);
-    // Text not saved counts as an edit, which echoes leave alone.
-    lastSeededValue = seed.saved;
-    lastSeededSession = result.seededSession;
   },
   { immediate: true },
 );
+
+// The focused composer holds text the server has at stamp. Idle, it follows
+// the text edited elsewhere from now on, as if seeded with it. A mirror of the
+// same text moves to the stamp too; one that differs is another tab's typing
+// the server hasn't acknowledged, which stays ahead.
+function syncedWithServer(id: string, text: string, stamp: string) {
+  if (compareStamps(stamp, draftSyncedAt) > 0) draftSyncedAt = stamp;
+  if (lastSeededSession === id && composerText === draftText) lastSeededValue = text;
+  const mirror = loadCachedDraft(id);
+  if (mirror && !mirror.pending && mirror.value === text) rebaseCachedDraft(id, draftSyncedAt);
+}
+
+function applyReconciled(
+  result: ComposerReconcileResult,
+  sessionId: string | null,
+  cached: CachedDraft | null,
+) {
+  // Entering a session restores even a pending entry (reload mid-send). Unless
+  // the send is this tab's own (still in flight while we navigated away and
+  // back), it died with its page: the text is a plain draft again, or later
+  // echoes would treat it as departing and clear the composer.
+  if (lastSeededSession !== sessionId && cached?.pending && !ownSends.has(sessionId ?? "")) {
+    saveCachedDraft(sessionId, cached.value, cached.basedOn);
+  }
+  draftSyncedAt = result.draftSyncedAt;
+  // Keeping the composer's text keeps what isn't saved of it unsaved.
+  let seed = {
+    value: result.value,
+    saved: result.value === composerText ? draftText : result.value,
+  };
+  const kept = lastSeededSession !== sessionId ? unsavedComposers.get(sessionId) : undefined;
+  unsavedComposers.delete(sessionId);
+  if (kept?.saved === result.value) seed = kept;
+  seedComposer(seed.value, seed.saved);
+  // Text not saved counts as an edit, which echoes leave alone.
+  lastSeededValue = seed.saved;
+  lastSeededSession = result.seededSession;
+}
 watch([() => props.conversationId, selectedCwd], () => reportComposer(draftText), {
   immediate: true,
 });

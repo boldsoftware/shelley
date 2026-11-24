@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -987,7 +988,7 @@ func TestQueuedMessages(t *testing.T) {
 		{ID: "a", Llm: []byte(`{"role":"user"}`), CreatedAt: time.Now(), Model: "m1"},
 		{ID: "b", Llm: []byte(`{"role":"user"}`), CreatedAt: time.Now(), Model: "m1"},
 	} {
-		if _, err := db.AppendQueuedMessage(ctx, id, qm); err != nil {
+		if _, err := db.AppendQueuedMessage(ctx, id, qm, SentDraft{}); err != nil {
 			t.Fatalf("AppendQueuedMessage: %v", err)
 		}
 	}
@@ -1040,7 +1041,7 @@ func TestQueuedTranscriptionLifecycle(t *testing.T) {
 			MediaPath: "/tmp/a.webm",
 		},
 	}
-	updatedParent, created, err := database.CreateQueuedTranscription(ctx, parent.ConversationID, queued)
+	updatedParent, created, err := database.CreateQueuedTranscription(ctx, parent.ConversationID, queued, SentDraft{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1096,7 +1097,7 @@ func TestRetryQueuedTranscriptionIsAtomic(t *testing.T) {
 			Audit:     json.RawMessage(`[{"Role":1}]`),
 		},
 	}
-	if _, err := database.AppendQueuedMessage(ctx, parent.ConversationID, queued); err != nil {
+	if _, err := database.AppendQueuedMessage(ctx, parent.ConversationID, queued, SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1141,7 +1142,7 @@ func TestCreateMessageRemoveQueuedIDAtomic(t *testing.T) {
 		{ID: "keep", Llm: []byte(`{"role":"user"}`), CreatedAt: time.Now(), Model: "m"},
 		{ID: "drain", Llm: []byte(`{"role":"user"}`), CreatedAt: time.Now(), Model: "m"},
 	} {
-		if _, err := db.AppendQueuedMessage(ctx, id, qm); err != nil {
+		if _, err := db.AppendQueuedMessage(ctx, id, qm, SentDraft{}); err != nil {
 			t.Fatalf("AppendQueuedMessage: %v", err)
 		}
 	}
@@ -1229,7 +1230,7 @@ func TestQueuedMessagesMutationStrictOnCorruptColumn(t *testing.T) {
 	}
 
 	// Mutations must error rather than overwrite with '[]'.
-	if _, err := db.AppendQueuedMessage(ctx, id, QueuedMessage{ID: "x"}); err == nil {
+	if _, err := db.AppendQueuedMessage(ctx, id, QueuedMessage{ID: "x"}, SentDraft{}); err == nil {
 		t.Fatal("AppendQueuedMessage on corrupt column: want error, got nil")
 	}
 	if _, err := db.RemoveQueuedMessages(ctx, id, "x"); err == nil {
@@ -1278,8 +1279,9 @@ func TestPromoteDraftAtomicOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("promote: %v", err)
 	}
-	if promoted.IsDraft || promoted.Draft != "" {
-		t.Fatalf("promoted row still draft-ish: is_draft=%v draft=%q", promoted.IsDraft, promoted.Draft)
+	// The text stays for the send's write to clear what it consumed.
+	if promoted.IsDraft || promoted.Draft != "body" {
+		t.Fatalf("promoted: is_draft=%v draft=%q, want false and the text kept", promoted.IsDraft, promoted.Draft)
 	}
 	if promoted.Model == nil || *promoted.Model != newModel {
 		t.Fatalf("promoted model: got %v, want %q", promoted.Model, newModel)
@@ -1620,7 +1622,7 @@ func TestListConversationsWithQueuedTranscriptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.AppendQueuedMessage(ctx, plain.ConversationID, QueuedMessage{ID: "plain", Llm: json.RawMessage(`{}`), CreatedAt: time.Now().UTC()}); err != nil {
+	if _, err := database.AppendQueuedMessage(ctx, plain.ConversationID, QueuedMessage{ID: "plain", Llm: json.RawMessage(`{}`), CreatedAt: time.Now().UTC()}, SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	parent, err := database.CreateConversation(ctx, stringPtr("transcription-queue"), true, nil, nil, ConversationOptions{})
@@ -1631,7 +1633,7 @@ func TestListConversationsWithQueuedTranscriptions(t *testing.T) {
 		ID: "t", Llm: json.RawMessage(`{}`), CreatedAt: time.Now().UTC(),
 		Kind: QueuedMessageKindTranscription, State: QueuedMessageStateFailed,
 		Transcription: &QueuedTranscription{MediaPath: "/tmp/a.webm"},
-	}); err != nil {
+	}, SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := database.ArchiveConversation(ctx, parent.ConversationID); err != nil {
@@ -1989,4 +1991,116 @@ func TestConversationListPreviewMessageUser(t *testing.T) {
 		items[i] = h.ConversationListItem
 	}
 	check("SearchConversationsFTS", items)
+}
+
+// Clients reconciled a draft's text against updated_at before migration
+// 089; draft_updated_at starts there so their local copies compare as
+// before. A started conversation has no saved text yet.
+func TestDraftUpdatedAtMigration(t *testing.T) {
+	t.Parallel()
+	database := setupDBMigratedThrough(t, 88)
+	t.Cleanup(func() { database.Close() })
+	ctx := t.Context()
+	stamp := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	for _, row := range []struct {
+		id      string
+		isDraft bool
+	}{{"draft", true}, {"started", false}} {
+		if err := database.pool.Exec(ctx, `INSERT INTO conversations(conversation_id, user_initiated, is_draft, draft, updated_at) VALUES(?, 1, ?, 'text', ?)`, row.id, row.isDraft, stamp); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := database.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	draft, err := database.GetConversationByID(ctx, "draft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if draft.DraftUpdatedAt == nil || !draft.DraftUpdatedAt.Equal(stamp) {
+		t.Fatalf("draft: draft_updated_at = %v, want %v", draft.DraftUpdatedAt, stamp)
+	}
+	started, err := database.GetConversationByID(ctx, "started")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.DraftUpdatedAt != nil {
+		t.Fatalf("started: draft_updated_at = %v, want unset", started.DraftUpdatedAt)
+	}
+}
+
+// Two clients' edits within one second are distinct versions: a send names
+// the version it was composed from, and must not consume a later one.
+func TestDraftUpdatedAtHasMilliseconds(t *testing.T) {
+	t.Parallel()
+	database := setupTestDB(t)
+	ctx := t.Context()
+	conv, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := "typed"
+	if _, err := database.UpdateDraft(ctx, conv.ConversationID, &text, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	var stored string
+	if err := database.pool.Rx(ctx, func(ctx context.Context, rx *Rx) error {
+		return rx.Conn().QueryRowContext(ctx, "SELECT CAST(draft_updated_at AS TEXT) FROM conversations WHERE conversation_id = ?", conv.ConversationID).Scan(&stored)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`:\d\d\.\d{3}$`).MatchString(stored) {
+		t.Fatalf("draft_updated_at %q has no milliseconds", stored)
+	}
+}
+
+// Each version of a conversation's text gets its own stamp, even when two
+// land within a millisecond or the clock steps back: the stamp is a
+// millisecond past the last one if the clock isn't ahead of it.
+func TestDraftUpdatedAtIncreases(t *testing.T) {
+	t.Parallel()
+	database := setupTestDB(t)
+	ctx := t.Context()
+	conv, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().UTC().Add(time.Hour).Truncate(time.Millisecond)
+	if err := database.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		_, err := tx.Conn().ExecContext(ctx, "UPDATE conversations SET draft = 'old', draft_updated_at = ? WHERE conversation_id = ?",
+			future.Format("2006-01-02 15:04:05.000"), conv.ConversationID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	want := future
+	for _, step := range []struct {
+		name string
+		run  func() error
+	}{
+		{"edit", func() error {
+			text := "new"
+			_, err := database.UpdateDraft(ctx, conv.ConversationID, &text, nil, nil)
+			return err
+		}},
+		{"clear", func() error {
+			got, err := database.GetConversationByID(ctx, conv.ConversationID)
+			if err != nil {
+				return err
+			}
+			return database.ClearSentDraft(ctx, conv.ConversationID, SentDraft{At: got.DraftUpdatedAt})
+		}},
+	} {
+		if err := step.run(); err != nil {
+			t.Fatalf("%s: %v", step.name, err)
+		}
+		got, err := database.GetConversationByID(ctx, conv.ConversationID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want = want.Add(time.Millisecond)
+		if got.DraftUpdatedAt == nil || !got.DraftUpdatedAt.Equal(want) {
+			t.Fatalf("%s: draft_updated_at = %v, want %v", step.name, got.DraftUpdatedAt, want)
+		}
+	}
 }

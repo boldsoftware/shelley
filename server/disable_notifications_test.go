@@ -161,19 +161,19 @@ func TestPublishConversationStateWaitsForDelegatedWork(t *testing.T) {
 			if _, err := s.getOrCreateConversationManager(t.Context(), id, ""); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}); err != nil {
+			if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}, db.SentDraft{}); err != nil {
 				t.Fatal(err)
 			}
 		}, false},
 		// Nothing loads it to drain the queue.
 		{"queued message of an unloaded conversation notifies", func(t *testing.T, s *Server, database *db.DB, id string) {
-			if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}); err != nil {
+			if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}, db.SentDraft{}); err != nil {
 				t.Fatal(err)
 			}
 		}, true},
 		{"transcription in progress suppresses", func(t *testing.T, s *Server, database *db.DB, id string) {
 			qm := db.QueuedMessage{ID: "q1", Kind: db.QueuedMessageKindTranscription, State: db.QueuedMessageStateWorking}
-			if _, err := database.AppendQueuedMessage(t.Context(), id, qm); err != nil {
+			if _, err := database.AppendQueuedMessage(t.Context(), id, qm, db.SentDraft{}); err != nil {
 				t.Fatal(err)
 			}
 		}, false},
@@ -185,7 +185,7 @@ func TestPublishConversationStateWaitsForDelegatedWork(t *testing.T) {
 		}, false},
 		{"failed transcription blocking the queue notifies", func(t *testing.T, s *Server, database *db.DB, id string) {
 			qm := db.QueuedMessage{ID: "q1", Kind: db.QueuedMessageKindTranscription, State: db.QueuedMessageStateFailed}
-			if _, err := database.AppendQueuedMessage(t.Context(), id, qm); err != nil {
+			if _, err := database.AppendQueuedMessage(t.Context(), id, qm, db.SentDraft{}); err != nil {
 				t.Fatal(err)
 			}
 		}, true},
@@ -311,7 +311,7 @@ func TestOwedTurnEndIsAnnouncedOnceIdle(t *testing.T) {
 			name: "transcription failed",
 			pend: func(t *testing.T, s *Server, database *db.DB, id string) {
 				qm := db.QueuedMessage{ID: "q1", Kind: db.QueuedMessageKindTranscription, State: db.QueuedMessageStateWorking, Transcription: &db.QueuedTranscription{MediaPath: "talk.m4a"}}
-				if _, err := database.AppendQueuedMessage(t.Context(), id, qm); err != nil {
+				if _, err := database.AppendQueuedMessage(t.Context(), id, qm, db.SentDraft{}); err != nil {
 					t.Fatal(err)
 				}
 				s.transcriptionMu.Lock()
@@ -328,7 +328,7 @@ func TestOwedTurnEndIsAnnouncedOnceIdle(t *testing.T) {
 			pend: func(t *testing.T, s *Server, database *db.DB, id string) {
 				// Any failure to start a turn will do.
 				qm := db.QueuedMessage{ID: "q1", Llm: []byte(`"not a message"`)}
-				if _, err := database.AppendQueuedMessage(t.Context(), id, qm); err != nil {
+				if _, err := database.AppendQueuedMessage(t.Context(), id, qm, db.SentDraft{}); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -344,7 +344,7 @@ func TestOwedTurnEndIsAnnouncedOnceIdle(t *testing.T) {
 		{
 			name: "queue cleared",
 			pend: func(t *testing.T, s *Server, database *db.DB, id string) {
-				if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}); err != nil {
+				if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}, db.SentDraft{}); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -359,7 +359,7 @@ func TestOwedTurnEndIsAnnouncedOnceIdle(t *testing.T) {
 		{
 			name: "conversation unloaded",
 			pend: func(t *testing.T, s *Server, database *db.DB, id string) {
-				if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}); err != nil {
+				if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}, db.SentDraft{}); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -378,7 +378,7 @@ func TestOwedTurnEndIsAnnouncedOnceIdle(t *testing.T) {
 		{
 			name: "queued message cancelled",
 			pend: func(t *testing.T, s *Server, database *db.DB, id string) {
-				if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}); err != nil {
+				if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}, db.SentDraft{}); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -394,7 +394,7 @@ func TestOwedTurnEndIsAnnouncedOnceIdle(t *testing.T) {
 		{
 			name: "stopped",
 			pend: func(t *testing.T, s *Server, database *db.DB, id string) {
-				if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}); err != nil {
+				if _, err := database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}, db.SentDraft{}); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -562,7 +562,7 @@ func TestJobNoticeRetriesUndrainableQueue(t *testing.T) {
 		t.Fatal(err)
 	}
 	qm := db.QueuedMessage{ID: "q1", Model: "predictable", Llm: []byte(`{"Role":0,"Content":[{"Type":2,"Text":"echo: queued"}]}`)}
-	if _, err := database.AppendQueuedMessage(t.Context(), id, qm); err != nil {
+	if _, err := database.AppendQueuedMessage(t.Context(), id, qm, db.SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	s.publishConversationState(ConversationState{ConversationID: id, Model: "predictable"})
@@ -612,7 +612,7 @@ func TestQueueHeldByActionDrainsAfterIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	qm := db.QueuedMessage{ID: "q1", Model: "predictable", Llm: []byte(`{"Role":0,"Content":[{"Type":2,"Text":"echo: queued"}]}`)}
-	if _, err := database.AppendQueuedMessage(t.Context(), id, qm); err != nil {
+	if _, err := database.AppendQueuedMessage(t.Context(), id, qm, db.SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	s.publishConversationState(ConversationState{ConversationID: id, Model: "predictable"})
@@ -655,7 +655,7 @@ func TestFailedLoopLeavesQueueToUser(t *testing.T) {
 	cm.modelID = "predictable"
 	cm.mu.Unlock()
 	cm.SetAgentWorking(true)
-	if _, err := database.AppendQueuedMessage(t.Context(), conv.ConversationID, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}); err != nil {
+	if _, err := database.AppendQueuedMessage(t.Context(), conv.ConversationID, db.QueuedMessage{ID: "q1", Llm: []byte(`{"Role":0}`)}, db.SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	cm.handleFatalLoopExit(failed, 1)
@@ -674,7 +674,7 @@ func TestUndrainableQueueIsRetriedAfterTheNextTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	qm := db.QueuedMessage{ID: "q1", Model: "predictable", Llm: []byte(`{"Role":0,"Content":[{"Type":2,"Text":"echo: queued"}]}`)}
-	if _, err := database.AppendQueuedMessage(t.Context(), conv.ConversationID, qm); err != nil {
+	if _, err := database.AppendQueuedMessage(t.Context(), conv.ConversationID, qm, db.SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	s.llmManager = &unavailableLLM{}

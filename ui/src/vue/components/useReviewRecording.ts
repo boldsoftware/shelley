@@ -4,7 +4,7 @@
 // accepted the `/transcription` command that hands them to the server.
 import { onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { api } from "../../services/api";
-import { keepDraftThroughPromotion, loadCachedDraft } from "../../services/draftCache";
+import { loadCachedDraft } from "../../services/draftCache";
 import { SLASH_COMMANDS } from "../../utils/slashCommands";
 import {
   startReviewCapture,
@@ -438,10 +438,11 @@ export function useReviewRecording(options: {
             if (replaced) throw new Error("This recording's conversation is gone");
             continue;
           }
-          if (destination.is_draft) keepDraftThroughPromotion(destination);
         }
         await api.sendMessage(conversationId, {
           message: `${SLASH_COMMANDS.TRANSCRIPTION.command} ${audioPath}`,
+          // Not the composer's text: it stays, even through a draft's promotion.
+          draft_updated_at: "",
           // These promote a draft; a conversation ignores them.
           ...(session.newConversation && {
             ...session.newConversation,

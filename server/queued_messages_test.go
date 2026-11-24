@@ -166,7 +166,7 @@ func TestSendQueuedNowRejectsNonHeadItem(t *testing.T) {
 		if _, err := database.AppendQueuedMessage(t.Context(), conversation.ConversationID, db.QueuedMessage{
 			ID: id, Llm: []byte(`{"Role":0,"Content":[{"Type":2,"Text":"queued"}]}`),
 			CreatedAt: time.Now(), Model: "predictable",
-		}); err != nil {
+		}, db.SentDraft{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -261,7 +261,7 @@ func testQueuedMessageNoDoubleFeedOnRestart(t *testing.T) {
 		CreatedAt: time.Now(),
 		Model:     "predictable",
 	}
-	if _, err := database.AppendQueuedMessage(ctx, convID, qm); err != nil {
+	if _, err := database.AppendQueuedMessage(ctx, convID, qm, db.SentDraft{}); err != nil {
 		t.Fatalf("AppendQueuedMessage: %v", err)
 	}
 
@@ -334,7 +334,7 @@ func TestCancelQueuedNoActiveManager(t *testing.T) {
 	for _, id := range []string{"q1", "q2"} {
 		if _, err := database.AppendQueuedMessage(ctx, convID, db.QueuedMessage{
 			ID: id, Llm: []byte(`{"Role":0}`), CreatedAt: time.Now(), Model: "predictable",
-		}); err != nil {
+		}, db.SentDraft{}); err != nil {
 			t.Fatalf("AppendQueuedMessage: %v", err)
 		}
 	}
@@ -398,7 +398,7 @@ func testCancelConversationClearsQueueUnconditionally(t *testing.T) {
 	// Seed the array directly WITHOUT going through QueueMessage.
 	if _, err := database.AppendQueuedMessage(ctx, convID, db.QueuedMessage{
 		ID: "diverged", Llm: []byte(`{"Role":0}`), CreatedAt: time.Now(), Model: "predictable",
-	}); err != nil {
+	}, db.SentDraft{}); err != nil {
 		t.Fatalf("AppendQueuedMessage: %v", err)
 	}
 
@@ -437,7 +437,7 @@ func TestDrainWithoutLoopFeedsQueuedMessageOnce(t *testing.T) {
 	if _, err := database.AppendQueuedMessage(ctx, convID, db.QueuedMessage{
 		ID: id, Llm: []byte(`{"Role":0,"Content":[{"Type":2,"Text":"echo: exactly once"}]}`),
 		CreatedAt: time.Now(), Model: "predictable",
-	}); err != nil {
+	}, db.SentDraft{}); err != nil {
 		t.Fatalf("AppendQueuedMessage: %v", err)
 	}
 	mgr.mu.Lock()

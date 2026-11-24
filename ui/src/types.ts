@@ -164,6 +164,10 @@ export interface ChatRequest {
   /** Send what secret detection finds as typed: the user said it holds no
    *  secret. Stored values and marks are still extracted (docs/secrets.md). */
   keep_found_secrets?: boolean;
+  /** The conversation's `draft_updated_at` the composer was synced to: the
+   *  saved text this message consumes, which the send clears. "" consumes
+   *  none; omitted keeps a conversation's text and clears a draft's. */
+  draft_updated_at?: string;
 }
 
 /** A conversation's adjustable settings; see Settings in server/settings.go. */

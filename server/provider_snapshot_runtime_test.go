@@ -92,7 +92,7 @@ func TestProviderSnapshotWarmLoopLifecycle(t *testing.T) {
 	}
 	_, err = database.AppendQueuedMessage(t.Context(), conversation.ConversationID, db.QueuedMessage{
 		ID: "queued", Llm: []byte(`{"Role":0,"Content":[{"Type":2,"Text":"do not lose me"}]}`), CreatedAt: time.Now(), Model: id,
-	})
+	}, db.SentDraft{})
 	if err != nil {
 		t.Fatal(err)
 	}

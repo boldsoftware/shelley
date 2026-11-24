@@ -25,6 +25,7 @@ export interface Conversation {
   external_endpoint: string | null;
   next_prompt_suggestion: string;
   next_prompt_suggestion_seq: number;
+  draft_updated_at: string | null;
 }
 
 export interface Usage {
@@ -158,6 +159,7 @@ export interface ConversationWithStateForTS {
   tags: string;
   is_draft: boolean;
   draft: string;
+  draft_updated_at: string | null;
   queued_messages: string;
   turn_interrupted: boolean;
   external_conversation_id: string | null;

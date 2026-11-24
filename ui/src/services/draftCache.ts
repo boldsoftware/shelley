@@ -10,25 +10,23 @@
 // to localStorage on EVERY keystroke (synchronous, no network).
 //
 // On load we read the draft from the server row and from localStorage and keep
-// whichever is newer, WITHOUT any server-side schema change. The arbiter is
-// the conversation row's existing `updated_at`, which the server bumps on each
-// successful PUT /draft. Each keystroke we record, alongside the cached text,
-// the server `updated_at` the composer was last in sync with (`basedOn`). On
-// load the local copy wins iff its `basedOn` is >= the server's current
-// `updated_at` AND its text differs — i.e. the user typed past what the server
-// has acknowledged. This naturally covers the lost-connection case: failed
-// PUTs never advance `updated_at`, so `basedOn` stays equal to it and the
+// whichever is newer. The arbiter is the row's `draft_updated_at`, which the
+// server stamps whenever the text changes (a PUT /draft, or a send clearing
+// it). Each keystroke we record, alongside the cached text, the
+// `draft_updated_at` the composer was last in sync with (`basedOn`). On load
+// the local copy wins iff its `basedOn` is >= the server's current
+// `draft_updated_at` AND its text differs — i.e. the user typed past what the
+// server has acknowledged. This naturally covers the lost-connection case:
+// failed PUTs never advance the stamp, so `basedOn` stays equal to it and the
 // locally-typed text is preserved.
 //
 // We never try to flush localStorage back to the server; on the next keystroke
 // the normal autosave carries the merged text forward and the two converge.
 //
-// Two kinds of session use this cache:
-//   * Draft / new-conversation sessions HAVE a server copy, so they reconcile
-//     via pickDraft() + `basedOn` as described above.
-//   * The next-message composer of an already-sent (non-draft) conversation
-//     has NO server-side draft, so its cache entry is authoritative: the
-//     caller reads `value` directly and ignores `basedOn` (stored as "").
+// Every conversation, draft or started, has a server copy of its composer
+// text, so it follows the user between browsers and devices. Only the
+// new-conversation view has none until its draft is created: its entry
+// (basedOn "") always wins.
 
 const PREFIX = "shelley-draft:";
 
@@ -41,10 +39,10 @@ function cacheKey(id: string | null): string {
 
 export interface CachedDraft {
   value: string;
-  // The server row's `updated_at` the composer was last reconciled with when
-  // this cache entry was written. Empty string for the new-conversation
-  // session (no server row yet); such an entry always wins on load since any
-  // server row that later appears is a fresh draft we just created.
+  // The server row's `draft_updated_at` the composer was last reconciled with
+  // when this cache entry was written. Empty string for the new-conversation
+  // session (no server row yet), and for a conversation whose text was never
+  // saved; such an entry wins on load against a row with no saved text.
   basedOn: string;
   // Set while the text is being POSTed as a message. The entry is shared by
   // every tab on the conversation, and the new message's row echo can reach
@@ -86,14 +84,32 @@ export function saveCachedDraft(
   }
 }
 
+// compareStamps orders two server stamps (RFC 3339; "" for none, the oldest).
+// Not as strings: the server trims trailing zeros off their fractional
+// seconds, and "…:05.1Z" sorts before "…:05Z" as a string.
+export function compareStamps(a: string, b: string): number {
+  const ka = stampKey(a);
+  const kb = stampKey(b);
+  return ka < kb ? -1 : ka > kb ? 1 : 0;
+}
+
+function stampKey(stamp: string): string {
+  if (!stamp) return "";
+  const utc = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?Z$/.exec(stamp);
+  if (utc) return `${utc[1]}.${(utc[2] ?? "").padEnd(9, "0")}`;
+  const time = new Date(stamp);
+  return isNaN(time.getTime()) ? stamp : stampKey(time.toISOString());
+}
+
 // rebaseCachedDraft advances the entry's `basedOn` after the server acknowledged
-// a PUT with a newer `updated_at`, so keystrokes typed while that PUT was
+// a PUT with a newer `draft_updated_at`, so keystrokes typed while that PUT was
 // outstanding (stamped with the older time) stay ahead of the server. Only
 // advances: responses can land out of order, and regressing the stamp would
 // re-open the stale-cache window.
 export function rebaseCachedDraft(id: string, updatedAt: string): void {
   const cur = loadCachedDraft(id);
-  if (cur && updatedAt > cur.basedOn) saveCachedDraft(id, cur.value, updatedAt, cur.pending);
+  if (cur && compareStamps(updatedAt, cur.basedOn) > 0)
+    saveCachedDraft(id, cur.value, updatedAt, cur.pending);
 }
 
 // markCachedDraftPending flags the entry holding `text` as in flight (see
@@ -120,8 +136,8 @@ export function clearCachedDraft(id: string | null): void {
 
 export interface DraftCandidate {
   value: string;
-  // The server row's `updated_at`. Empty string when there is no server row
-  // yet (new-conversation view).
+  // The server row's `draft_updated_at`. Empty string when there is no server
+  // row yet (new-conversation view) or it never saved text.
   updatedAt: string;
 }
 
@@ -129,43 +145,30 @@ export interface DraftCandidate {
 //
 // The local copy wins only when the user has typed past what the server has
 // acknowledged: its text differs from the server's AND it was based on a
-// server state at least as recent as the server's current `updated_at`. The
+// server state at least as recent as the server's current `draft_updated_at`. The
 // >= comparison (rather than >) is deliberate: a dropped connection leaves
 // `basedOn` exactly equal to the frozen server `updated_at`, yet the local
 // text is the one we must keep. When the server's `updated_at` is strictly
 // newer than `basedOn`, the server has changes the cache predates (e.g. an
-// edit from another tab), so the server wins.
+// edit from another device), so the server wins.
 export function pickDraft(server: DraftCandidate, local: CachedDraft | null): DraftCandidate {
-  if (local && local.value !== server.value && local.basedOn >= server.updatedAt) {
+  if (
+    local &&
+    local.value !== server.value &&
+    compareStamps(local.basedOn, server.updatedAt) >= 0
+  ) {
     return { value: local.value, updatedAt: server.updatedAt };
   }
   return server;
 }
 
-// Promoting a draft clears its server copy, and a conversation's composer
-// reads only this browser's mirror; leave the newer of the two there so text
-// written elsewhere (or not yet synced) outlives the promotion, and text
-// cleared elsewhere stays cleared.
-export function keepDraftThroughPromotion(draft: {
-  conversation_id: string;
-  draft: string;
-  updated_at: string;
-}): void {
-  const kept = pickDraft(
-    { value: draft.draft, updatedAt: draft.updated_at },
-    loadCachedDraft(draft.conversation_id),
-  );
-  if (kept.value) saveCachedDraft(draft.conversation_id, kept.value, draft.updated_at);
-  else clearCachedDraft(draft.conversation_id);
-}
-
 // reconcileComposerDraft decides what (if anything) the message composer should
 // be (re)seeded with when the focused conversation, its draft text, or its
-// server `updated_at` changes, and whether new messages clear it. It is the pure core of ChatInterface's draft
+// `draft_updated_at` changes, and whether new messages clear it. It is the pure core of ChatInterface's draft
 // reconcile watch, extracted so the ordering-sensitive logic can be unit tested.
 //
 // The bug this guards against: on a slow network the autosave round-trip (PUT
-// /draft) and the conversation-row echo that streams the new `updated_at`/draft
+// /draft) and the conversation-row echo that streams the new stamp/draft
 // back can arrive out of order. In that window the localStorage mirror's
 // `basedOn` still points at the *previous* server state, so pickDraft() looks
 // stale and returns the OLDER server snapshot. If we blindly wrote that into the
@@ -183,18 +186,25 @@ export interface ComposerReconcileInput {
   lazyDraftId: string | null;
   // Whether the focused conversation row is a draft.
   isDraft: boolean;
-  // The focused conversation row's server draft text and `updated_at`.
+  // The focused conversation row's server draft text and `draft_updated_at`
+  // ("" when it never saved text).
   serverDraft: string;
   serverUpdatedAt: string;
+  // The `draft_updated_at` the composer is synced to: it has taken in every
+  // version up to it (seeded, saved, or typed over), so an echo of one is
+  // stale ("" when none).
+  syncedAt?: string;
   // The localStorage mirror for this session (null if none).
   cached: CachedDraft | null;
   // Whether a send from THIS tab flagged `cached` pending (it is then still
   // the composer's own text, not another tab's departing one).
   ownsPending: boolean;
   // The server draft text this echo turned into a message (the row flipped
-  // is_draft true->false without changing conversation), else null. While the
-  // sending tab's POST is in flight its pending entry is the more exact record
-  // of what went (the server draft may lag its last keystrokes).
+  // is_draft true->false without changing conversation, and its text went),
+  // else null. While the sending tab's POST is in flight its pending entry is
+  // the more exact record of what went (the server draft may lag its last
+  // keystrokes). A started conversation's composer needs no such case: synced
+  // and idle, it follows the server's text (lastSeededValue), cleared or not.
   promotedFrom: string | null;
   // Whether only the conversation's messages or queue changed. That carries
   // no draft, but may be text leaving another tab's composer (its row echo can
@@ -212,7 +222,8 @@ export interface ComposerReconcileInput {
 export interface ComposerReconcileResult {
   // The value to write into the composer.
   value: string;
-  // The server `updated_at` this value is reconciled against ("" when none).
+  // The server `draft_updated_at` this value is reconciled against ("" when
+  // none).
   draftSyncedAt: string;
   // The session id to record as seeded.
   seededSession: string | null;
@@ -254,28 +265,28 @@ export function reconcileComposerDraft(
   const foreignPending = !!input.cached?.pending && !ownsPending;
   const cached = lastSeededSession === sessionId && foreignPending ? null : input.cached;
 
-  // Compute the candidate value + sync stamp for this session.
-  let value: string;
-  let draftSyncedAt: string;
-  if (isDraft) {
-    const picked = pickDraft({ value: serverDraft, updatedAt: serverUpdatedAt }, cached);
-    value = picked.value;
-    draftSyncedAt = serverUpdatedAt;
-  } else if (conversationId === null) {
-    const picked = pickDraft({ value: "", updatedAt: "" }, cached);
-    value = picked.value;
-    draftSyncedAt = "";
-  } else {
-    // Non-draft conversation: no server-side next-message draft, the local
-    // mirror is authoritative.
-    value = cached?.value ?? "";
-    draftSyncedAt = "";
-  }
+  // Compute the candidate value + sync stamp for this session. The
+  // new-conversation view has no server copy.
+  const server =
+    conversationId === null
+      ? { value: "", updatedAt: "" }
+      : { value: serverDraft, updatedAt: serverUpdatedAt };
+  // This tab's own send in flight: the entry is still the composer's text,
+  // which must outlive an echo of the server clearing it, in case the POST
+  // fails yet.
+  const own = ownsPending && cached?.pending;
+  const value = own ? cached.value : pickDraft(server, cached).value;
+  const draftSyncedAt = server.updatedAt;
 
   // First entry into a session always seeds.
   if (lastSeededSession !== sessionId) {
     return { value, draftSyncedAt, seededSession: sessionId };
   }
+
+  // This tab's send from the composer is in flight: the composer keeps the
+  // text it sent until the POST settles; text another device saved meanwhile
+  // shows after.
+  if (ownsPending) return null;
 
   // Same session: this is a server echo. Applying it must not clobber
   // in-progress keystrokes. Safe only when the candidate is already what the
@@ -289,6 +300,14 @@ export function reconcileComposerDraft(
   // typed beyond what went, was never sent and stays.
   if (value === composerValue) return null;
   if (input.messagesOnly && value !== "") return null;
+  // A late echo, say of this tab's save of text it has sent since.
+  if (
+    !input.messagesOnly &&
+    conversationId !== null &&
+    compareStamps(serverUpdatedAt, input.syncedAt ?? "") <= 0
+  ) {
+    return null;
+  }
   let sentText = promotedFrom;
   if (sentText !== null && foreignPending && input.cached) sentText = input.cached.value;
   const sentAsTyped = sentText !== null && composerValue !== "" && sentText.includes(composerValue);

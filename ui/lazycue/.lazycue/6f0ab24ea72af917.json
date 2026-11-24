@@ -1,0 +1,51 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A message send that fails leaves its text saved for the conversation's composer. \"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]. Call \"saved text\" returns the text the server keeps for the conversation's composer, or \"(none)\". The server fails every message send; call \"sends failed\" counts them. Perform the steps in order.\n1. Navigate to /c/composer-failed and wait (up to 30s) for the input to be visible.\n2. Fill the input with \"echo: failed send 4d1a\" and, right away, press Enter in it.\n3. Call \"sends failed\"; it should become \"1\" (up to 10s).\n4. Call \"saved text\"; it should become \"echo: failed send 4d1a\" (up to 10s).\n5. The input's value is exactly \"echo: failed send 4d1a\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/composer-failed"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: failed send 4d1a"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "call",
+      "value": "sends failed",
+      "expect": "1",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "saved text",
+      "expect": "echo: failed send 4d1a",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: failed send 4d1a"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T17:37:10.297597914Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 42903,
+    "output_tokens": 1668,
+    "estimated_cost_usd": 0.07121340000000001,
+    "mode": "generated"
+  }
+}

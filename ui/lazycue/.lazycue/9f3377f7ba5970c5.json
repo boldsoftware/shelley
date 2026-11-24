@@ -1,0 +1,94 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Text saved on another device while a send is under way survives it and shows in the composer after. \"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]. Call \"saved text\" returns the text the server keeps for the conversation's composer, or \"(none)\". Call \"hold sends\" makes the server's answers to the browser's message sends wait; call \"sends held\" returns how many sends the server took but hasn't answered; call \"release\" answers them. Call \"phone edits\" saves \"edited on the phone 5b1e\" there, as the phone's composer would, and returns \"edited\". Call \"empty saves\" returns how many times the browser saved empty composer text. Eval window.__streamSaw(T) says whether the page's event stream has brought text T. Perform the steps in order.\n1. Navigate to /c/composer-sending and wait (up to 30s) for the input to be visible.\n2. The input's value should become exactly \"echo: saved elsewhere 4e1a\" (up to 10s).\n3. Call \"hold sends\"; it returns \"holding\".\n4. The send button should become enabled (up to 5s); click it.\n5. Call \"sends held\"; it should become \"1\" (up to 10s).\n6. Call \"phone edits\"; it returns \"edited\".\n7. Eval window.__streamSaw(\"edited on the phone 5b1e\") should become true (up to 10s).\n8. The input's value is exactly \"echo: saved elsewhere 4e1a\".\n9. Call \"release\"; it returns \"released\".\n10. An element [data-testid=\"message\"] containing \"saved elsewhere 4e1a\" should be visible (up to 10s).\n11. The input's value should become exactly \"edited on the phone 5b1e\" (up to 10s).\n12. Call \"saved text\"; it returns \"edited on the phone 5b1e\".\n13. Call \"empty saves\"; it returns \"0\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/composer-sending"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: saved elsewhere 4e1a",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "hold sends",
+      "expect": "holding"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid='send-button']",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "call",
+      "value": "sends held",
+      "expect": "1",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "phone edits",
+      "expect": "edited"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__streamSaw('edited on the phone 5b1e')",
+      "expect": "true",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: saved elsewhere 4e1a"
+    },
+    {
+      "action": "call",
+      "value": "release",
+      "expect": "released"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "saved elsewhere 4e1a",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "edited on the phone 5b1e",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "saved text",
+      "expect": "edited on the phone 5b1e"
+    },
+    {
+      "action": "call",
+      "value": "empty saves",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T06:26:36.940531883Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 7769,
+    "output_tokens": 562,
+    "estimated_cost_usd": 0.014340299999999999,
+    "mode": "generated"
+  }
+}

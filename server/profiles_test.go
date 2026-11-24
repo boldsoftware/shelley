@@ -636,7 +636,7 @@ func TestQueuedMessageFollowsModelSwitch(t *testing.T) {
 	if _, err := e.database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{
 		ID: "q", Llm: []byte(`{"Role":0,"Content":[{"Type":2,"Text":"queued on a"}]}`),
 		CreatedAt: time.Now(), Model: "model-a",
-	}); err != nil {
+	}, db.SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	manager, err := e.srv.getOrCreateConversationManager(t.Context(), id, "")
@@ -925,7 +925,7 @@ func TestIdleDrainKeepsSettingsUntilNextTurn(t *testing.T) {
 	if _, err := e.database.AppendQueuedMessage(t.Context(), id, db.QueuedMessage{
 		ID: "q", Llm: []byte(`{"Role":0,"Content":[{"Type":2,"Text":"echo: queued"}]}`),
 		CreatedAt: time.Now(), Model: "model-a",
-	}); err != nil {
+	}, db.SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	<-manager.drainPendingMessages()

@@ -1,0 +1,152 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "\"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]; \"the thinking indicator\" is [data-testid=\"agent-thinking\"]; \"Queue it\" means: the send options button [data-testid=\"send-options-button\"] should be enabled and visible (up to 5s); click it; the queue option [data-testid=\"queue-option\"] should become visible (up to 5s); click it. Call \"saved text\" returns the text the server keeps for the conversation's composer, or \"(none)\". To \"select conversation X from the drawer\": if the button with aria-label \"Open conversations\" is visible, click it; then wait for \".conversation-item[data-conversation-id=\\\"X\\\"]\" to be visible, click it, and wait until it has the class \"active\". The test seeded the conversation {{QUEUE}} at /c/composer-queue-away and another one, {{OTHER}}. Call \"hold sends\" makes the browser's message sends wait before they reach the server, call \"sends held\" counts those waiting, and call \"release sends\" lets them through. Perform the steps in order.\n1. Navigate to /c/composer-queue-away and wait (up to 30s) for the input to be visible.\n2. Fill the input with \"delay: 60\"; the send button should become enabled (up to 5s); click it; the thinking indicator should become visible (up to 30s).\n3. Fill the input with \"queued 3f8a\".\n4. Call \"saved text\"; it should become \"queued 3f8a\" (up to 10s).\n5. Call \"hold sends\"; it returns \"holding\".\n6. Queue it.\n7. The input's value should become exactly \"\" (up to 5s).\n8. Call \"sends held\"; it should become \"1\" (up to 10s).\n9. Select conversation {{OTHER}} from the drawer.\n10. Select conversation {{QUEUE}} from the drawer.\n11. Call \"release sends\"; it returns \"released\".\n12. A queued badge [data-testid=\"queued-badge\"] should become visible (up to 10s).\n13. Call \"saved text\"; it should become \"(none)\" (up to 10s).\n14. The input's value should become exactly \"\" (up to 10s).\n15. Call \"saved text\"; it returns \"(none)\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/composer-queue-away"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "delay: 60"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"agent-thinking\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "queued 3f8a"
+    },
+    {
+      "action": "call",
+      "value": "saved text",
+      "expect": "queued 3f8a",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "hold sends",
+      "expect": "holding"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"send-options-button\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": "[data-testid=\"send-options-button\"]"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-options-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"queue-option\"]",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"queue-option\"]"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "call",
+      "value": "sends held",
+      "expect": "1",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{OTHER}}\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{OTHER}}\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{OTHER}}\"].active"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open conversations"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{QUEUE}}\"]"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{QUEUE}}\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{QUEUE}}\"].active"
+    },
+    {
+      "action": "call",
+      "value": "release sends",
+      "expect": "released"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"queued-badge\"]",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "saved text",
+      "expect": "(none)",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "call",
+      "value": "saved text",
+      "expect": "(none)"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T18:08:59.543042785Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 45892,
+    "output_tokens": 2889,
+    "estimated_cost_usd": 0.09640394999999999,
+    "mode": "generated"
+  }
+}

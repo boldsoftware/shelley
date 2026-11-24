@@ -120,6 +120,7 @@ function placeholder(
     tags: "[]",
     is_draft: row.sent === null,
     draft: "",
+    draft_updated_at: null,
     queued_messages: "[]",
     turn_interrupted: false,
     external_conversation_id: null,

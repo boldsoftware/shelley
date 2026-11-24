@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"slices"
@@ -9,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/llm"
 )
 
 // setupTestDB creates a test database with schema migrated
@@ -889,5 +892,32 @@ func TestDB_Migrate_MarksExistingConversationsEdited(t *testing.T) {
 		if opts.SettingsEdited != tc.edited || (tc.edited && opts.ThinkingLevel != "high") {
 			t.Fatalf("migrated options %s: %+v", conv.ConversationOptions, opts)
 		}
+	}
+}
+
+// oldSchemaConversation and oldSchemaMessage write rows to a database
+// migrated only partway, where the current queries, which name every column
+// of the current schema, can't run.
+func oldSchemaConversation(t *testing.T, database *DB, id string, opts ConversationOptions) *generated.Conversation {
+	t.Helper()
+	optsJSON, err := json.Marshal(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.pool.Exec(t.Context(), `INSERT INTO conversations(conversation_id, user_initiated, conversation_options) VALUES(?, 1, ?)`, id, string(optsJSON)); err != nil {
+		t.Fatal(err)
+	}
+	return &generated.Conversation{ConversationID: id}
+}
+
+func oldSchemaMessage(t *testing.T, database *DB, conversationID string, sequenceID int64, kind MessageType, message llm.Message) {
+	t.Helper()
+	data, err := json.Marshal(message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.pool.Exec(t.Context(), `INSERT INTO messages(message_id, conversation_id, sequence_id, type, llm_data) VALUES(?, ?, ?, ?, ?)`,
+		uuid.New().String(), conversationID, sequenceID, string(kind), string(data)); err != nil {
+		t.Fatal(err)
 	}
 }

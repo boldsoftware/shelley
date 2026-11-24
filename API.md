@@ -18,8 +18,8 @@ it, and an older server that doesn't ship the field is equivalent to
 advertising none.
 
 Capabilities advertise optional behavior. Current capabilities include
-`thinking-levels`, `drafts`, and `queued-transcriptions`; clients that do not
-recognize one ignore it.
+`thinking-levels`, `drafts`, `queued-transcriptions`, and `composer-text`;
+clients that do not recognize one ignore it.
 
 ## Stream architecture
 
@@ -102,6 +102,8 @@ Unless noted, results exclude **archived** conversations.
 |---|---|
 | `conversation_id`, `slug`, `created_at`, `updated_at`, `cwd`, `archived`, `parent_conversation_id`, `model`, `conversation_options`, `current_generation`, `agent_working`, `user_initiated` | DB columns |
 | `working` | mirror of `agent_working`, kept for the patch-stream contract |
+| `is_draft` | the conversation has no messages yet (see `PUT /api/conversation/<id>/draft`) |
+| `draft`, `draft_updated_at` | the composer's unsent text, in any conversation, and when it last changed (RFC 3339 to the millisecond, trailing zeros trimmed, so compare as times; each change stamps a later time; `null` until first saved). Non-empty text doesn't make a conversation a draft; only `is_draft` does |
 | `git_repo_root`, `git_worktree_root`, `git_commit`, `git_subject` | optional, from a cached HEAD lookup keyed by `cwd` |
 | `subagent_count` | number of subagent conversations whose `parent_conversation_id` matches this row |
 | `preview`, `preview_updated_at` | the start (300 chars) of the agent's latest reply to the user, and that message's time (RFC 3339): the last text block, or the trimmed `text` of a `message_user`, `send_to_thread` or `send_to_channel` call, in the newest agent message with one; with `message_user` on, text blocks don't count. Empty until there is one |
@@ -151,6 +153,23 @@ These timestamps are private to the requesting identity.
   to the transcript, preserving text and ready attachments that were present
   before recording. Video results include the original recording's path in
   that turn.
+  Optional `draft_updated_at` is the row's `draft_updated_at` the sender's
+  composer was synced to: the saved text the message was composed from. The
+  send clears that text, in the same write that records or queues the
+  message, unless it changed since (another client typed). `""` says the
+  message consumed no saved text. Omitted, a started conversation's text is
+  kept, since the sender need not be its composer (a push reply, the CLI);
+  the message that promotes a draft clears the text the draft had then.
+- `PUT /api/conversation/<id>/draft` — save composer state (capabilities
+  `drafts` and `composer-text`): `{"draft"?, "model"?, "cwd"?}`; fields left
+  out keep their values. Any conversation takes `draft`, the unsent text;
+  `""` clears it. Changing it stamps `draft_updated_at`. Only a draft takes
+  `model` and `cwd`; naming either for a started conversation is a `404`
+  that saves nothing. Saving a started conversation's text leaves its
+  `updated_at`, so the list keeps its order; a draft's moves. Responds with
+  the conversation row. Clients debounce these writes, keep a local copy,
+  and prefer it while it differs from the row's and is no older than the
+  row's `draft_updated_at`.
 - `POST /api/conversation/<id>/send-queued?queued_id=<id>` — interrupt the
   running turn and immediately drain the FIFO head. The supplied id must still
   name that head item.

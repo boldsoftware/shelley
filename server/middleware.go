@@ -183,3 +183,25 @@ func parseAcceptEncoding(h string) map[string]float64 {
 	}
 	return out
 }
+
+// statusWriter records the status of the response written through it.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(statusCode int) {
+	if w.status == 0 {
+		w.status = statusCode
+	}
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *statusWriter) Write(b []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }

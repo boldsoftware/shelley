@@ -30,6 +30,7 @@ function conv(id: string, updatedAt: string): ConversationWithState {
     tags: "[]",
     is_draft: false,
     draft: "",
+    draft_updated_at: null,
     queued_messages: "[]",
     working: false,
     subagent_count: 0,

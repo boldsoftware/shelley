@@ -431,7 +431,7 @@ func TestActionPendingWorkGuardsAndSuccessRetention(t *testing.T) {
 	defer cleanup()
 	ctx := t.Context()
 	id := newDBTestConversation(t, database, "my-project", t.TempDir())
-	if _, err := database.AppendQueuedMessage(ctx, id, QueuedMessage{ID: "pending"}); err != nil {
+	if _, err := database.AppendQueuedMessage(ctx, id, QueuedMessage{ID: "pending"}, SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, _, err := database.BeginAction(ctx, id, "release"); !errors.Is(err, ErrConflict) {
@@ -477,7 +477,7 @@ func TestActionPendingWorkGuardsAndSuccessRetention(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.AppendQueuedMessage(ctx, id, QueuedMessage{ID: "arrived-during-run"}); err != nil {
+	if _, err := database.AppendQueuedMessage(ctx, id, QueuedMessage{ID: "arrived-during-run"}, SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 	code := 0
@@ -930,7 +930,7 @@ func TestAssistantProfileMigrationNotifications(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := database.runMigration(ctx, "088-assistant-profile.sql", 88); err != nil {
+	if err := database.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
 	for id, want := range map[string]ConversationOptions{

@@ -7,32 +7,53 @@ RETURNING *;
 -- Creates a conversation in draft state with the given initial draft text.
 -- Drafts have no messages; the chat handler clears is_draft / draft when
 -- the user sends their first message via PromoteDraftConversation.
-INSERT INTO conversations (conversation_id, slug, user_initiated, cwd, model, conversation_options, is_draft, draft)
-VALUES (?, ?, TRUE, ?, ?, ?, TRUE, ?)
+INSERT INTO conversations (conversation_id, slug, user_initiated, cwd, model, conversation_options, is_draft, draft, draft_updated_at)
+VALUES (?, ?, TRUE, ?, ?, ?, TRUE, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))
 RETURNING *;
 
 -- name: UpdateConversationDraft :one
--- Partially updates a draft conversation: any NULL argument keeps the
--- current value (text, model, and cwd each update independently), and
--- updated_at bumps so the conversation list reorders. The is_draft guard
--- makes this atomic: a draft promoted concurrently yields no rows
--- (ErrConversationNotDraft) rather than mutating an active conversation,
--- whose cwd is immutable and whose model only changes through the /model
--- loop switch.
+-- Partially updates a conversation's composer fields: any NULL argument
+-- keeps the current value (text, model, and cwd each update independently).
+-- The text (draft) is the composer's unsent message, saved for any
+-- conversation; changing it stamps draft_updated_at, the version clients
+-- reconcile against: the time to the millisecond, or a millisecond past the
+-- last stamp if that is no earlier, so each version has its own stamp.
+-- model and cwd are a draft's alone: a started conversation's cwd is
+-- immutable and its model only changes through the /model loop switch, so
+-- naming either yields no rows (ErrConversationNotDraft), atomically with a
+-- concurrent promotion. A draft's updated_at bumps so the conversation list
+-- reorders; a started conversation's stays, so saving its text leaves the
+-- list as it is.
 UPDATE conversations
 SET draft = COALESCE(sqlc.narg('draft'), draft),
+    draft_updated_at = CASE
+      WHEN sqlc.narg('draft') IS NULL OR sqlc.narg('draft') = draft THEN draft_updated_at
+      ELSE MAX(strftime('%Y-%m-%d %H:%M:%f', 'now'),
+               COALESCE(strftime('%Y-%m-%d %H:%M:%f', draft_updated_at, '+0.001 seconds'), ''))
+    END,
     model = COALESCE(sqlc.narg('model'), model),
     cwd = COALESCE(sqlc.narg('cwd'), cwd),
-    updated_at = CURRENT_TIMESTAMP
-WHERE conversation_id = sqlc.arg('conversation_id') AND is_draft = TRUE
+    updated_at = CASE WHEN is_draft THEN CURRENT_TIMESTAMP ELSE updated_at END
+WHERE conversation_id = sqlc.arg('conversation_id')
+  AND (is_draft = TRUE OR (sqlc.narg('model') IS NULL AND sqlc.narg('cwd') IS NULL))
 RETURNING *;
 
 -- name: PromoteDraftConversation :one
--- Clears the draft state when the user sends the first message.
+-- Clears the draft state when the user sends the first message. The text
+-- stays: the write that records or queues the message clears what it
+-- consumed (see SentDraft), so a send that fails after promoting keeps it.
 UPDATE conversations
-SET is_draft = FALSE, draft = '', updated_at = CURRENT_TIMESTAMP
+SET is_draft = FALSE, updated_at = CURRENT_TIMESTAMP
 WHERE conversation_id = ? AND is_draft = TRUE
 RETURNING *;
+
+-- name: ClearConversationDraft :exec
+-- Clears the composer's saved text once a message sent from it went out.
+UPDATE conversations
+SET draft = '',
+    draft_updated_at = MAX(strftime('%Y-%m-%d %H:%M:%f', 'now'),
+                           COALESCE(strftime('%Y-%m-%d %H:%M:%f', draft_updated_at, '+0.001 seconds'), ''))
+WHERE conversation_id = ? AND draft <> '';
 
 -- name: GetConversation :one
 SELECT * FROM conversations

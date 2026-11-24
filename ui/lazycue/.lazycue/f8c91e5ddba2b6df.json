@@ -1,0 +1,86 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A send clears only the saved text it consumed. \"The input\" is the message input [data-testid=\"message-input\"]; \"the send button\" is [data-testid=\"send-button\"]. Call \"saved text\" returns the text the server keeps for the conversation's composer, or \"(none)\". Call \"hold saves\" makes the server's answers to the browser's saves of its composer text wait; call \"saves held\" returns how many saves the server took but hasn't answered; call \"release\" answers them. Call \"phone edits\" saves \"edited on the phone 5b1e\" there, as the phone's composer would, and returns \"edited\". Call \"empty saves\" returns how many times the browser saved empty composer text. Perform the steps in order.\n1. Navigate to /c/composer-race and wait (up to 30s) for the input to be visible.\n2. Call \"hold saves\"; it returns \"holding\".\n3. Fill the input with \"echo: sent from the laptop 9f4d\".\n4. Call \"saves held\"; it should become \"1\" (up to 10s).\n5. Call \"phone edits\"; it returns \"edited\".\n6. Call \"saved text\"; it returns \"edited on the phone 5b1e\".\n7. The send button should become enabled (up to 5s); click it.\n8. Call \"release\"; it returns \"released\".\n9. An element [data-testid=\"message\"] containing \"sent from the laptop 9f4d\" should be visible (up to 10s).\n10. The input's value should become exactly \"edited on the phone 5b1e\" (up to 10s).\n11. Call \"saved text\"; it returns \"edited on the phone 5b1e\".\n12. Call \"empty saves\"; it returns \"0\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/composer-race"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "hold saves",
+      "expect": "holding"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "echo: sent from the laptop 9f4d"
+    },
+    {
+      "action": "call",
+      "value": "saves held",
+      "expect": "1",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "phone edits",
+      "expect": "edited"
+    },
+    {
+      "action": "call",
+      "value": "saved text",
+      "expect": "edited on the phone 5b1e"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='send-button']:not([disabled])",
+      "timeout": "5s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "call",
+      "value": "release",
+      "expect": "released"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message']",
+      "has_text": "sent from the laptop 9f4d",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "edited on the phone 5b1e"
+    },
+    {
+      "action": "call",
+      "value": "saved text",
+      "expect": "edited on the phone 5b1e"
+    },
+    {
+      "action": "call",
+      "value": "empty saves",
+      "expect": "0"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T06:33:39.411792426Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 16208,
+    "output_tokens": 969,
+    "estimated_cost_usd": 0.04874085,
+    "mode": "generated"
+  }
+}

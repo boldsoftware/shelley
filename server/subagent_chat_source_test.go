@@ -432,7 +432,7 @@ func TestQueuedProvenanceWrapsAfterHydrationAndDrain(t *testing.T) {
 		t.Fatal(err)
 	}
 	queued := db.QueuedMessage{ID: "queued-provenance", Llm: llmJSON, Model: "predictable", UserData: userData}
-	if _, err := database.AppendQueuedMessage(t.Context(), parent.ConversationID, queued); err != nil {
+	if _, err := database.AppendQueuedMessage(t.Context(), parent.ConversationID, queued, db.SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
 

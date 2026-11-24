@@ -1508,6 +1508,7 @@ type (
 	externalMessageIDContextKey struct{}
 	turnUserDataContextKey      struct{}
 	localCLIRequestContextKey   struct{}
+	sentDraftContextKey         struct{}
 )
 
 // contextWithUserEmail returns a child context carrying userEmail. An empty
@@ -1532,6 +1533,50 @@ func contextWithExternalMessageID(ctx context.Context, id string) context.Contex
 func externalMessageIDFromContext(ctx context.Context) string {
 	id, _ := ctx.Value(externalMessageIDContextKey{}).(string)
 	return id
+}
+
+// contextWithSentDraft carries the composer text a chat send to
+// conversationID was composed from, like contextWithUserEmail, so the write
+// that records or queues the message clears that text in the same Tx. The
+// first such write takes it (takeSentDraft): later writes with a context
+// derived from this one, to any conversation, clear nothing.
+func contextWithSentDraft(ctx context.Context, conversationID string, sent db.SentDraft) (context.Context, *sentDraftClaim) {
+	claim := &sentDraftClaim{conversationID: conversationID, sent: sent}
+	return context.WithValue(ctx, sentDraftContextKey{}, claim), claim
+}
+
+type sentDraftClaim struct {
+	conversationID string
+	sent           db.SentDraft
+	mu             sync.Mutex
+	taken          bool
+}
+
+// promoted names the version a draft's promoting send consumed, for a send
+// that didn't say: the text the draft had as this send promoted it.
+func (c *sentDraftClaim) promoted(conv *generated.Conversation) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.sent = db.SentDraft{At: conv.DraftUpdatedAt}
+}
+
+// take returns the sent text's version once, and only for its conversation.
+func (c *sentDraftClaim) take(conversationID string) db.SentDraft {
+	if c == nil || c.conversationID != conversationID {
+		return db.SentDraft{}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.taken {
+		return db.SentDraft{}
+	}
+	c.taken = true
+	return c.sent
+}
+
+func takeSentDraft(ctx context.Context, conversationID string) db.SentDraft {
+	claim, _ := ctx.Value(sentDraftContextKey{}).(*sentDraftClaim)
+	return claim.take(conversationID)
 }
 
 func contextWithTurnUserData(ctx context.Context, userData any) context.Context {
@@ -1594,6 +1639,7 @@ func (s *Server) recordTurnStartMessage(ctx context.Context, conversationID stri
 	// the email here unconditionally.
 	params.UserEmail = userEmailFromContext(ctx)
 	params.ExternalMessageID = externalMessageIDFromContext(ctx)
+	params.SentDraft = takeSentDraft(ctx, conversationID)
 	created, err := s.insertMessages(ctx, conversationID, []db.CreateMessageParams{params})
 	if err != nil {
 		return nil, err

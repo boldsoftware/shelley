@@ -12,10 +12,7 @@ func TestConversationReadAttentionUsesPersistedVisibleContent(t *testing.T) {
 	database := setupDBMigratedThrough(t, 71)
 	t.Cleanup(func() { database.Close() })
 	ctx := t.Context()
-	conversation, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	conversation := oldSchemaConversation(t, database, "c", ConversationOptions{})
 
 	add := func(kind MessageType, message llm.Message, userData any) int64 {
 		t.Helper()
@@ -56,7 +53,7 @@ func TestConversationReadAttentionUsesPersistedVisibleContent(t *testing.T) {
 	if err := database.UpsertCacheSession(ctx, "browser", "alice"); err != nil {
 		t.Fatal(err)
 	}
-	add(MessageTypeAgent, llm.UserStringMessage("historical reply"), nil)
+	oldSchemaMessage(t, database, conversation.ConversationID, 1, MessageTypeAgent, llm.UserStringMessage("historical reply"))
 	if err := database.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -184,12 +181,9 @@ func TestConversationReadMessageUserHiddenText(t *testing.T) {
 	database := setupDBMigratedThrough(t, 74)
 	t.Cleanup(func() { database.Close() })
 	ctx := t.Context()
-	conversation, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{
+	conversation := oldSchemaConversation(t, database, "c", ConversationOptions{
 		ToolOverrides: map[string]string{"message_user": "on"},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	add := func(kind MessageType, content ...llm.Content) {
 		t.Helper()
 		if _, err := database.CreateMessage(ctx, CreateMessageParams{
@@ -207,7 +201,7 @@ func TestConversationReadMessageUserHiddenText(t *testing.T) {
 		}
 		return marks[conversation.ConversationID]
 	}
-	add(MessageTypeAgent, llm.Content{Type: llm.ContentTypeText, Text: "previously recorded reply"})
+	oldSchemaMessage(t, database, conversation.ConversationID, 1, MessageTypeAgent, llm.Message{Content: []llm.Content{{Type: llm.ContentTypeText, Text: "previously recorded reply"}}})
 	beforeUpgrade := attention()
 	if beforeUpgrade == 0 {
 		t.Fatal("pre-upgrade text did not mark attention")

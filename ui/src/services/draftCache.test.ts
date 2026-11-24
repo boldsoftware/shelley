@@ -9,7 +9,7 @@ import {
   rebaseCachedDraft,
   markCachedDraftPending,
   pickDraft,
-  keepDraftThroughPromotion,
+  compareStamps,
   reconcileComposerDraft,
   type ComposerReconcileInput,
 } from "./draftCache";
@@ -117,6 +117,27 @@ run("pickDraft defers to a server copy that advanced past the cache", () => {
   const server = { value: "newer from other tab", updatedAt: "2026-01-01T00:00:09Z" };
   const local = { value: "my stale text", basedOn: "2026-01-01T00:00:05Z" };
   assert(pickDraft(server, local).value === "newer from other tab", "newer server wins");
+});
+
+run("stamps compare as times, whatever their fractional seconds", () => {
+  // The server trims trailing zeros: as strings, ".1Z" < "Z" and ".12Z" > ".123Z".
+  assert(compareStamps("2026-01-01T00:00:05.1Z", "2026-01-01T00:00:05Z") > 0, ".1 after .0");
+  assert(
+    compareStamps("2026-01-01T00:00:05.12Z", "2026-01-01T00:00:05.123Z") < 0,
+    ".12 before .123",
+  );
+  assert(compareStamps("2026-01-01T00:00:05.5Z", "2026-01-01T00:00:05.500Z") === 0, "same time");
+  assert(compareStamps("", "2026-01-01T00:00:05Z") < 0, "none is oldest");
+  assert(compareStamps("2026-01-01T01:00:05+01:00", "2026-01-01T00:00:05Z") === 0, "offsets");
+});
+
+run("pickDraft tells apart edits within one second", () => {
+  // The phone edited 300ms after this tab's text was saved.
+  const picked = pickDraft(
+    { value: "edited on the phone", updatedAt: "2026-01-01T00:00:05.4Z" },
+    { value: "typed here", basedOn: "2026-01-01T00:00:05.1Z" },
+  );
+  assert(picked.value === "edited on the phone", "the later edit wins");
 });
 
 run("pickDraft defers to the server when text matches", () => {
@@ -369,21 +390,25 @@ run("reconcile seeds the new-conversation view from its local mirror", () => {
   assert(r!.seededSession === null, "new-view session id is null");
 });
 
-run("reconcile seeds a non-draft conversation from its authoritative cache once", () => {
+run("reconcile seeds a conversation's text this browser kept before the server saved any", () => {
+  // Text typed before the server saved a started conversation's composer
+  // lived only here, stamped "": it wins over a row with no saved text.
   const first = reconcileComposerDraft(
     reconcileInput({
       conversationId: "sent1",
       isDraft: false,
+      serverUpdatedAt: "",
       cached: { value: "next message", basedOn: "" },
       lastSeededSession: undefined,
     }),
   );
   assert(first !== null && first.value === "next message", "non-draft first entry seeds");
-  // A later updated_at echo (new agent message) must not wipe the edit.
+  // A later echo (new agent message) must not wipe the edit.
   const echo = reconcileComposerDraft(
     reconcileInput({
       conversationId: "sent1",
       isDraft: false,
+      serverUpdatedAt: "",
       cached: { value: "next message", basedOn: "" },
       composerValue: "next message and more",
       lastSeededSession: "sent1",
@@ -393,21 +418,123 @@ run("reconcile seeds a non-draft conversation from its authoritative cache once"
   assert(echo === null, "non-draft echo does not clobber edits");
 });
 
-run("keeps the newer draft text through promotion", () => {
-  const server = { conversation_id: "p1", draft: "from elsewhere", updated_at: "t2" };
-  keepDraftThroughPromotion(server);
-  assert(loadCachedDraft("p1")?.value === "from elsewhere", "server text is kept");
-  saveCachedDraft("p2", "typed here", "t2");
-  keepDraftThroughPromotion({ ...server, conversation_id: "p2" });
-  assert(loadCachedDraft("p2")?.value === "typed here", "unsynced local text wins");
-  saveCachedDraft("p3", "stale", "t1");
-  keepDraftThroughPromotion({ ...server, conversation_id: "p3" });
-  assert(loadCachedDraft("p3")?.value === "from elsewhere", "stale local text loses");
-  keepDraftThroughPromotion({ conversation_id: "p4", draft: "", updated_at: "t2" });
-  assert(loadCachedDraft("p4") === null, "nothing to keep");
-  saveCachedDraft("p5", "cleared elsewhere", "t1");
-  keepDraftThroughPromotion({ conversation_id: "p5", draft: "", updated_at: "t2" });
-  assert(loadCachedDraft("p5") === null, "text cleared elsewhere stays cleared");
+run("reconcile seeds a started conversation from its server text", () => {
+  // Typed on another device: the server copy follows the user here, over
+  // this browser's older copy of the text.
+  const first = reconcileComposerDraft(
+    reconcileInput({
+      conversationId: "sent1",
+      isDraft: false,
+      serverDraft: "typed on the phone",
+      serverUpdatedAt: "2026-01-01T00:00:09Z",
+      cached: { value: "typed here earlier", basedOn: "2026-01-01T00:00:05Z" },
+      lastSeededSession: undefined,
+    }),
+  );
+  assert(first !== null && first.value === "typed on the phone", "newer server text wins");
+  assert(first!.draftSyncedAt === "2026-01-01T00:00:09Z", "synced to the server stamp");
+  // Keystrokes here the server hasn't acknowledged yet win, as in a draft.
+  const unacked = reconcileComposerDraft(
+    reconcileInput({
+      conversationId: "sent1",
+      isDraft: false,
+      serverDraft: "typed on the phone",
+      serverUpdatedAt: "2026-01-01T00:00:09Z",
+      cached: { value: "typed on the phone, and here", basedOn: "2026-01-01T00:00:09Z" },
+      lastSeededSession: undefined,
+    }),
+  );
+  assert(
+    unacked !== null && unacked.value === "typed on the phone, and here",
+    "unacked local wins",
+  );
+  // While the user isn't typing, the other device's edits show up live...
+  const live = reconcileComposerDraft(
+    reconcileInput({
+      conversationId: "sent1",
+      isDraft: false,
+      serverDraft: "edited on the phone",
+      serverUpdatedAt: "2026-01-01T00:00:12Z",
+      cached: { value: "typed on the phone", basedOn: "2026-01-01T00:00:09Z" },
+      composerValue: "typed on the phone",
+      lastSeededSession: "sent1",
+      lastSeededValue: "typed on the phone",
+    }),
+  );
+  assert(live !== null && live.value === "edited on the phone", "untouched composer follows");
+  // ...but never over keystrokes typed here since.
+  const typing = reconcileComposerDraft(
+    reconcileInput({
+      conversationId: "sent1",
+      isDraft: false,
+      serverDraft: "edited on the phone",
+      serverUpdatedAt: "2026-01-01T00:00:12Z",
+      cached: { value: "typed on the phone!", basedOn: "2026-01-01T00:00:09Z" },
+      composerValue: "typed on the phone!",
+      lastSeededSession: "sent1",
+      lastSeededValue: "typed on the phone",
+    }),
+  );
+  assert(typing === null, "live keystrokes stay");
+});
+
+run("reconcile clears a started conversation's text sent from another device", () => {
+  // This tab typed the text and saved it (so it follows the server copy); the
+  // phone sent it, and the send cleared the server copy.
+  const sent = reconcileInput({
+    conversationId: "sent1",
+    isDraft: false,
+    serverDraft: "",
+    serverUpdatedAt: "2026-01-01T00:00:12Z",
+    cached: { value: "next message", basedOn: "2026-01-01T00:00:09Z" },
+    composerValue: "next message",
+    lastSeededSession: "sent1",
+    lastSeededValue: "next message",
+  });
+  const r = reconcileComposerDraft(sent);
+  assert(r !== null && r.value === "", "sent text leaves this composer too");
+  // Typed after its own send cleared the text, before the clear echoed: a
+  // new message, which stays.
+  const next = reconcileComposerDraft({
+    ...sent,
+    cached: { value: "n", basedOn: "2026-01-01T00:00:09Z" },
+    composerValue: "n",
+    lastSeededValue: "",
+  });
+  assert(next === null, "the next message stays");
+});
+
+run("reconcile ignores an echo no newer than the version the composer has", () => {
+  // This tab saved "hello queue" (acknowledged at .100), then queued it, which
+  // emptied the composer; the save's echo comes late. It isn't news.
+  const late = reconcileInput({
+    conversationId: "sent1",
+    isDraft: false,
+    serverDraft: "hello queue",
+    serverUpdatedAt: "2026-01-01T00:00:09.1Z",
+    syncedAt: "2026-01-01T00:00:09.100Z",
+    composerValue: "",
+    lastSeededSession: "sent1",
+    lastSeededValue: "",
+  });
+  assert(reconcileComposerDraft(late) === null, "a stale echo leaves the composer");
+  const newer = reconcileComposerDraft({
+    ...late,
+    serverDraft: "from the phone",
+    serverUpdatedAt: "2026-01-01T00:00:09.2Z",
+  });
+  assert(newer !== null && newer.value === "from the phone", "a newer version shows");
+  const entry = reconcileComposerDraft({ ...late, lastSeededSession: undefined });
+  assert(entry !== null && entry.value === "hello queue", "entering seeds whatever the stamp");
+  // A message alone can still take text sent elsewhere out of the composer.
+  const sent = reconcileComposerDraft({
+    ...late,
+    serverDraft: "",
+    composerValue: "picked up",
+    lastSeededValue: "picked up",
+    messagesOnly: true,
+  });
+  assert(sent !== null && sent.value === "", "sent text leaves");
 });
 
 run("reconcile ignores a pending entry on a same-session echo", () => {
@@ -456,7 +583,10 @@ run("reconcile on new messages alone clears text sent elsewhere, never seeds", (
   }
   // What B has typed since is no message: it waits for a row echo.
   const typed = reconcileComposerDraft(
-    reconcileInput({ ...picked, cached: { value: "picked up, and more", basedOn: "" } }),
+    reconcileInput({
+      ...picked,
+      cached: { value: "picked up, and more", basedOn: "2026-01-01T00:00:05Z" },
+    }),
   );
   assert(typed === null, "new mirror text is not seeded");
   // Nor is text typed here cleared.
@@ -484,17 +614,48 @@ run("reconcile keeps the sending tab's own pending text on its echo", () => {
   assert(r === null, "own pending entry is the composer's text");
 });
 
+run("reconcile leaves the composer alone while its own send is in flight", () => {
+  // Sent as seeded from the server, with no local mirror to flag pending:
+  // text another device saves meanwhile must not replace what's being sent,
+  // which MessageInput clears once the POST is accepted.
+  const r = reconcileComposerDraft(
+    reconcileInput({
+      conversationId: "sent1",
+      isDraft: false,
+      serverDraft: "edited on the phone",
+      serverUpdatedAt: "2026-01-01T00:00:09Z",
+      cached: null,
+      ownsPending: true,
+      composerValue: "from the server",
+      lastSeededSession: "sent1",
+      lastSeededValue: "from the server",
+    }),
+  );
+  assert(r === null, "the sending composer keeps its text");
+});
+
 run("reconcile restores a pending entry on first entry into the session", () => {
   // Reload while the send was still in flight: the text must not be lost.
   const r = reconcileComposerDraft(
     reconcileInput({
       conversationId: "sent1",
       isDraft: false,
-      cached: { value: "leaving", basedOn: "", pending: true },
+      cached: { value: "leaving", basedOn: "2026-01-01T00:00:05Z", pending: true },
       lastSeededSession: undefined,
     }),
   );
   assert(r !== null && r.value === "leaving", "pending entry seeds on entry");
+  // Unless the send arrived: it cleared the server copy since.
+  const sent = reconcileComposerDraft(
+    reconcileInput({
+      conversationId: "sent1",
+      isDraft: false,
+      serverUpdatedAt: "2026-01-01T00:00:07Z",
+      cached: { value: "leaving", basedOn: "2026-01-01T00:00:05Z", pending: true },
+      lastSeededSession: undefined,
+    }),
+  );
+  assert(sent !== null && sent.value === "", "a send that went is not restored");
 });
 
 console.log("draftCache: all tests passed");

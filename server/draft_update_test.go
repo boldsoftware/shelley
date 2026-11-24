@@ -133,9 +133,15 @@ func TestUpdateDraftRejectsNonDraft(t *testing.T) {
 		t.Fatalf("failed to create conversation: %v", err)
 	}
 
-	w := draftPut(t, server, conv.ConversationID, map[string]string{"model": "test-model-2", "cwd": "/tmp/newdir"})
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for non-draft, got %d: %s", w.Code, w.Body.String())
+	for _, fields := range []map[string]string{
+		{"model": "test-model-2", "cwd": "/tmp/newdir"},
+		{"model": "test-model-2", "draft": "text"},
+		{"cwd": "/tmp/newdir", "draft": "text"},
+	} {
+		w := draftPut(t, server, conv.ConversationID, fields)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 for non-draft %v, got %d: %s", fields, w.Code, w.Body.String())
+		}
 	}
 
 	got, err := database.GetConversationByID(t.Context(), conv.ConversationID)
@@ -147,6 +153,71 @@ func TestUpdateDraftRejectsNonDraft(t *testing.T) {
 	}
 	if got.Cwd == nil || *got.Cwd != origCwd {
 		t.Fatalf("non-draft cwd should be unchanged: got %v", got.Cwd)
+	}
+	if got.Draft != "" || got.DraftUpdatedAt != nil {
+		t.Fatalf("rejected update saved text: %q at %v", got.Draft, got.DraftUpdatedAt)
+	}
+}
+
+// A started conversation's composer text is saved like a draft's, so it
+// follows the user between clients, without making the conversation a draft
+// or reordering the list: updated_at stays and draft_updated_at versions it.
+func TestUpdateDraftTextOnStartedConversation(t *testing.T) {
+	t.Parallel()
+	server, database, _ := newTestServer(t)
+
+	model := "test-model"
+	conv, err := database.CreateConversation(t.Context(), nil, true, nil, &model, db.ConversationOptions{})
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+	id := conv.ConversationID
+	backdated := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
+	if err := database.Pool().Exec(t.Context(), "UPDATE conversations SET updated_at = ? WHERE conversation_id = ?", backdated, id); err != nil {
+		t.Fatalf("backdate updated_at: %v", err)
+	}
+
+	w := draftPut(t, server, id, map[string]string{"draft": "next message"})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp generated.Conversation
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.Draft != "next message" || resp.IsDraft || resp.DraftUpdatedAt == nil {
+		t.Fatalf("response: draft=%q is_draft=%v draft_updated_at=%v", resp.Draft, resp.IsDraft, resp.DraftUpdatedAt)
+	}
+	got, err := database.GetConversationByID(t.Context(), id)
+	if err != nil {
+		t.Fatalf("reload conversation: %v", err)
+	}
+	if got.Draft != "next message" || got.IsDraft {
+		t.Fatalf("saved: draft=%q is_draft=%v", got.Draft, got.IsDraft)
+	}
+	if !got.UpdatedAt.Equal(backdated) {
+		t.Fatalf("saving text moved updated_at: %v, want %v", got.UpdatedAt, backdated)
+	}
+
+	// The same text again keeps its version; empty text clears it.
+	if err := database.Pool().Exec(t.Context(), "UPDATE conversations SET draft_updated_at = ? WHERE conversation_id = ?", backdated, id); err != nil {
+		t.Fatalf("backdate draft_updated_at: %v", err)
+	}
+	if w := draftPut(t, server, id, map[string]string{"draft": "next message"}); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if got, _ = database.GetConversationByID(t.Context(), id); !got.DraftUpdatedAt.Equal(backdated) {
+		t.Fatalf("unchanged text moved draft_updated_at: %v", got.DraftUpdatedAt)
+	}
+	if w := draftPut(t, server, id, map[string]string{"draft": ""}); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	got, _ = database.GetConversationByID(t.Context(), id)
+	if got.Draft != "" || !got.DraftUpdatedAt.After(backdated) {
+		t.Fatalf("cleared: draft=%q draft_updated_at=%v", got.Draft, got.DraftUpdatedAt)
+	}
+	if !got.UpdatedAt.Equal(backdated) {
+		t.Fatalf("clearing text moved updated_at: %v", got.UpdatedAt)
 	}
 }
 

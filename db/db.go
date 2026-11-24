@@ -522,12 +522,13 @@ func (db *DB) CreateDraftConversation(ctx context.Context, cwd, model *string, o
 	return &conversation, err
 }
 
-// UpdateDraft partially updates a draft conversation in place: nil fields
-// keep their current value, so draft text, model, and cwd each update
-// independently without racing each other. Returns ErrConversationNotDraft
-// if the conversation no longer exists as a draft (deleted, or promoted by
-// a concurrent chat post) so the caller doesn't mutate an active
-// conversation.
+// UpdateDraft partially updates a conversation's composer fields in place:
+// nil fields keep their current value, so text, model, and cwd each update
+// independently without racing each other. Any conversation takes text (the
+// composer's unsent message); model and cwd are a draft's alone. Returns
+// ErrConversationNotDraft if the conversation is gone, or is no longer a
+// draft (promoted by a concurrent chat post) and model or cwd was named, so
+// the caller doesn't mutate an active conversation.
 func (db *DB) UpdateDraft(ctx context.Context, conversationID string, draft, model, cwd *string) (*generated.Conversation, error) {
 	var conv generated.Conversation
 	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
@@ -548,8 +549,9 @@ func (db *DB) UpdateDraft(ctx context.Context, conversationID string, draft, mod
 }
 
 // PromoteDraft applies send-time overrides (any non-nil of cwd, model,
-// opts) and clears is_draft and draft, all in one transaction, returning
-// the promoted row. The single Tx matters: a concurrent PUT /draft can no
+// opts) and clears is_draft, all in one transaction, returning the promoted
+// row. The text stays for the write that records the message to clear (see
+// SentDraft), so a send that fails after promoting keeps it. The single Tx matters: a concurrent PUT /draft can no
 // longer interleave between an override and the promote, so the returned
 // row's model is exactly what the loop must pin to. Returns
 // ErrConversationNotDraft (and applies nothing) when the conversation is
@@ -574,11 +576,12 @@ func (db *DB) PromoteDraft(ctx context.Context, conversationID string, cwd, mode
 		// Gate the overrides on is_draft inside the Tx (not just on the
 		// caller's earlier read): if the promote below is going to lose the
 		// race, the overrides must not touch the now-active conversation.
-		if _, err := q.UpdateConversationDraft(ctx, generated.UpdateConversationDraftParams{
+		_, err := q.UpdateConversationDraft(ctx, generated.UpdateConversationDraftParams{
 			ConversationID: conversationID,
 			Model:          model,
 			Cwd:            cwd,
-		}); err != nil {
+		})
+		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrConversationNotDraft
 			}
@@ -767,10 +770,60 @@ func mutateQueuedMessagesTx(ctx context.Context, tx *Tx, conversationID string, 
 }
 
 // AppendQueuedMessage atomically appends qm to a conversation's
-// queued_messages array.
-func (db *DB) AppendQueuedMessage(ctx context.Context, conversationID string, qm QueuedMessage) (*generated.Conversation, error) {
-	return db.mutateQueuedMessages(ctx, conversationID, func(msgs []QueuedMessage) ([]QueuedMessage, error) {
-		return append(msgs, qm), nil
+// queued_messages array, and clears the composer text it was sent from.
+func (db *DB) AppendQueuedMessage(ctx context.Context, conversationID string, qm QueuedMessage, sent SentDraft) (*generated.Conversation, error) {
+	var conv generated.Conversation
+	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		if err := mutateQueuedMessagesTx(ctx, tx, conversationID, func(msgs []QueuedMessage) ([]QueuedMessage, error) {
+			return append(msgs, qm), nil
+		}); err != nil {
+			return err
+		}
+		q := generated.New(tx.Conn())
+		var err error
+		if conv, err = q.GetConversation(ctx, conversationID); err != nil {
+			return err
+		}
+		if sent.clears(conv) {
+			if err := q.ClearConversationDraft(ctx, conversationID); err != nil {
+				return err
+			}
+			conv, err = q.GetConversation(ctx, conversationID)
+		}
+		return err
+	})
+	return &conv, err
+}
+
+// SentDraft names the saved composer text (a conversation's draft) that a
+// sent message was composed from, so the send clears that text and nothing
+// newer: text another client saved since stays.
+type SentDraft struct {
+	// At is the draft_updated_at the sender's composer was synced to. The
+	// text is cleared only while it still carries that stamp.
+	At *time.Time
+}
+
+func (s SentDraft) clears(conv generated.Conversation) bool {
+	return conv.Draft != "" && s.At != nil && conv.DraftUpdatedAt != nil && s.At.Equal(*conv.DraftUpdatedAt)
+}
+
+// ClearSentDraft clears the composer text sent consumed, for a send that
+// recorded no message (a command) or queued none.
+func (db *DB) ClearSentDraft(ctx context.Context, conversationID string, sent SentDraft) error {
+	// Read first: a write Tx that changes nothing still recomputes the
+	// conversation list for every subscriber.
+	conv, err := db.GetConversationByID(ctx, conversationID)
+	if err != nil || !sent.clears(*conv) {
+		return err
+	}
+	return db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		conv, err := q.GetConversation(ctx, conversationID)
+		if err != nil || !sent.clears(conv) {
+			return err
+		}
+		return q.ClearConversationDraft(ctx, conversationID)
 	})
 }
 
@@ -836,13 +889,11 @@ func (db *DB) UpdateQueuedMessage(ctx context.Context, conversationID, queuedID 
 
 // CreateQueuedTranscription atomically appends a working transcription item
 // to the parent queue.
-func (db *DB) CreateQueuedTranscription(ctx context.Context, parentID string, qm QueuedMessage) (*generated.Conversation, QueuedMessage, error) {
+func (db *DB) CreateQueuedTranscription(ctx context.Context, parentID string, qm QueuedMessage, sent SentDraft) (*generated.Conversation, QueuedMessage, error) {
 	if qm.Kind != QueuedMessageKindTranscription || qm.State != QueuedMessageStateWorking || qm.Transcription == nil {
 		return nil, QueuedMessage{}, fmt.Errorf("invalid queued transcription")
 	}
-	parent, err := db.mutateQueuedMessages(ctx, parentID, func(msgs []QueuedMessage) ([]QueuedMessage, error) {
-		return append(msgs, qm), nil
-	})
+	parent, err := db.AppendQueuedMessage(ctx, parentID, qm, sent)
 	return parent, qm, err
 }
 
@@ -1796,6 +1847,10 @@ type CreateMessageParams struct {
 	// message's created_at and the tool/usage timestamps embedded in it
 	// stay on one timeline instead of disagreeing about "now".
 	CreatedAt *time.Time
+	// SentDraft clears the composer text this message was sent from inside
+	// the same Tx as the INSERT, so no reader sees both the message and the
+	// text still waiting to be sent.
+	SentDraft SentDraft
 }
 
 // nullableString returns nil for an empty string so the column is stored as
@@ -1942,6 +1997,11 @@ func insertMessageTx(ctx context.Context, q *generated.Queries, params CreateMes
 	}
 	if params.BumpTimestamp {
 		if err := q.UpdateConversationTimestamp(ctx, params.ConversationID); err != nil {
+			return generated.Message{}, err
+		}
+	}
+	if params.SentDraft.clears(conversation) {
+		if err := q.ClearConversationDraft(ctx, params.ConversationID); err != nil {
 			return generated.Message{}, err
 		}
 	}
