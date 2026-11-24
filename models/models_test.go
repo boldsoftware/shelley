@@ -1099,3 +1099,52 @@ func TestReasoningServiceMapsServiceDefault(t *testing.T) {
 type defaultThinkingService struct{ captureThinkingService }
 
 func (s *defaultThinkingService) DefaultReasoningLevel() string { return "medium" }
+
+// An account's preferred reasoning level replaces only the model's default:
+// explicit levels pass through, and a level the model lacks is ignored.
+func TestManagerAppliesBuiltDefaultReasoningLevel(t *testing.T) {
+	levels := []llm.ThinkingLevel{llm.ThinkingLevelLow, llm.ThinkingLevelMedium, llm.ThinkingLevelHigh}
+	preferred := &advertisedReasoningService{levels: levels}
+	unsupported := &advertisedReasoningService{levels: levels}
+	mgr, err := NewManager(&Config{Models: []Built{
+		{ID: "preferred", Provider: ProviderAnthropic, Service: preferred, DefaultReasoningLevel: "high"},
+		{ID: "unsupported", Provider: ProviderAnthropic, Service: unsupported, DefaultReasoningLevel: "xhigh"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc, err := mgr.GetService("preferred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := llm.ServiceDefaultReasoningLevel(svc); got != "high" {
+		t.Fatalf("default reasoning = %q, want high", got)
+	}
+	if _, err := svc.Do(t.Context(), &llm.Request{}); err != nil {
+		t.Fatal(err)
+	}
+	if preferred.got != llm.ThinkingLevelHigh {
+		t.Fatalf("default request sent %s, want high", preferred.got.Name())
+	}
+	if _, err := svc.Do(t.Context(), &llm.Request{ThinkingLevel: llm.ThinkingLevelLow}); err != nil {
+		t.Fatal(err)
+	}
+	if preferred.got != llm.ThinkingLevelLow {
+		t.Fatalf("explicit request sent %s, want low", preferred.got.Name())
+	}
+
+	svc, err = mgr.GetService("unsupported")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := llm.ServiceDefaultReasoningLevel(svc); got != "" {
+		t.Fatalf("unsupported default reasoning = %q, want the model's own", got)
+	}
+	if _, err := svc.Do(t.Context(), &llm.Request{}); err != nil {
+		t.Fatal(err)
+	}
+	if unsupported.got != llm.ThinkingLevelDefault {
+		t.Fatalf("unsupported default request sent %s, want default", unsupported.got.Name())
+	}
+}

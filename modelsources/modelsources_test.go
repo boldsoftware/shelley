@@ -771,6 +771,8 @@ func TestDiscoverLLMIntegrationsFallsBackWhenReflectionRequestFails(t *testing.T
 			catalogStatus: http.StatusOK,
 			catalogBody: `{
 				"schema_version": 1,
+				"preferred_model": "openai/gpt-5.5",
+				"preferred_reasoning": "high",
 				"models": [
 					{"id":"openai/gpt-5.5","provider":"openai","native_id":"gpt-5.5","apis":["openai_responses"]}
 				]
@@ -828,7 +830,7 @@ func TestDiscoverLLMIntegrationsFallsBackWhenReflectionRequestFails(t *testing.T
 			}
 			if tt.wantIntegrations == 1 {
 				integ := result.Integrations[0]
-				if integ.Name != "llm" || integ.Host != "llm.int.exe.xyz" || integ.URL != "https://llm.int.exe.xyz" {
+				if integ.Name != "llm" || integ.Host != "llm.int.exe.xyz" || integ.URL != "https://llm.int.exe.xyz" || integ.PreferredModel != "openai/gpt-5.5" || integ.PreferredReasoning != "high" {
 					t.Fatalf("integration = %+v, want default llm integration", integ)
 				}
 			}
@@ -1222,5 +1224,23 @@ func TestTranscriptionModelsFromOpenAICredentials(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestLLMIntegrationPreferredReasoningAppliesToPreferredModel(t *testing.T) {
+	integ := &LLMIntegrationConfig{
+		Name: "llm", Host: "llm.int.exe.xyz", URL: "https://llm.int.exe.xyz",
+		PreferredModel: "anthropic/claude-opus-4-7", PreferredReasoning: "high",
+		Models: []IntegrationModel{
+			{ID: "anthropic/claude-opus-4-7", Provider: "anthropic", NativeID: "claude-opus-4-7", APIs: []string{"anthropic_messages"}},
+			{ID: "openai/gpt-5.5", Provider: "openai", NativeID: "gpt-5.5", APIs: []string{"openai_responses"}},
+		},
+	}
+	got := Build(models.All(), []Source{LLMIntegration(integ, "")}, &http.Client{}, nil)
+	if len(got) != 2 {
+		t.Fatalf("built models = %+v, want two", got)
+	}
+	if got[0].DefaultReasoningLevel != "high" || got[1].DefaultReasoningLevel != "" {
+		t.Fatalf("default reasoning = %q, %q; want high on the preferred model only", got[0].DefaultReasoningLevel, got[1].DefaultReasoningLevel)
 	}
 }

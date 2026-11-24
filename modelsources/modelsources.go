@@ -195,6 +195,10 @@ func Build(catalog []models.Model, sources []Source, httpc *http.Client, logger 
 					continue
 				}
 				seen[id] = true
+				var reasoning string
+				if m.ID == src.integration.PreferredModel {
+					reasoning = src.integration.PreferredReasoning
+				}
 				out = append(out, models.Built{
 					ID:              id,
 					DisplayName:     id,
@@ -207,6 +211,8 @@ func Build(catalog []models.Model, sources []Source, httpc *http.Client, logger 
 					APIType:         apiType,
 					BaseURL:         src.integration.URL,
 					APIModelName:    m.apiModelName(),
+
+					DefaultReasoningLevel: reasoning,
 				})
 				logger.Debug("Materialized integration model", "id", id, "source", src.label)
 			}
@@ -568,6 +574,11 @@ type LLMIntegrationConfig struct {
 	// transcription API or Deepgram's listen API. They are not materialized
 	// as chat services.
 	TranscriptionModels []IntegrationModel
+
+	// PreferredModel is the catalog ID of the account's preferred model, and
+	// PreferredReasoning its default reasoning level; "" or "auto" when unset.
+	PreferredModel     string
+	PreferredReasoning string
 }
 
 // LLMIntegrationDiscoveryResult distinguishes "no LLM integration was found"
@@ -594,8 +605,10 @@ type reflectionIntegrationsResponse struct {
 }
 
 type llmIntegrationModelCatalog struct {
-	SchemaVersion int                `json:"schema_version"`
-	Models        []IntegrationModel `json:"models"`
+	SchemaVersion      int                `json:"schema_version"`
+	Models             []IntegrationModel `json:"models"`
+	PreferredModel     string             `json:"preferred_model"`
+	PreferredReasoning string             `json:"preferred_reasoning"`
 }
 
 // DiscoverLLMIntegrations looks up every integration of type "llm" via
@@ -682,6 +695,8 @@ func loadLLMIntegration(ctx context.Context, httpc *http.Client, logger *slog.Lo
 		URL:                 base,
 		Models:              models,
 		TranscriptionModels: transcriptionModels,
+		PreferredModel:      catalog.PreferredModel,
+		PreferredReasoning:  catalog.PreferredReasoning,
 	}, true
 }
 

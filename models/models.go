@@ -137,6 +137,10 @@ type Built struct {
 	// BaseURL is the resolved upstream base URL (after applying any source
 	// override on top of the catalog's DefaultBaseURL).
 	BaseURL string
+
+	// DefaultReasoningLevel, when the service supports it, replaces the
+	// service's own default reasoning level.
+	DefaultReasoningLevel string
 }
 
 // Transcription models used for recordings: TranscriptionTextModel produces
@@ -488,6 +492,9 @@ type serviceEntry struct {
 	apiType         APIType
 	// apiModelName is the wire model name used for models.dev lookups.
 	apiModelName string
+	// defaultReasoning replaces the service's default reasoning level;
+	// ThinkingLevelDefault keeps the service's own.
+	defaultReasoning llm.ThinkingLevel
 }
 
 // ConfigInfo is an optional interface that services can implement to provide configuration details for logging
@@ -508,9 +515,23 @@ type loggingService struct {
 	sourceID    string
 	displayName string
 	baseURL     string
+	// defaultReasoning is sent for requests at ThinkingLevelDefault.
+	defaultReasoning llm.ThinkingLevel
+}
+
+// withDefaultReasoning returns request with ThinkingLevelDefault replaced by
+// l.defaultReasoning, if any.
+func (l *loggingService) withDefaultReasoning(request *llm.Request) *llm.Request {
+	if l.defaultReasoning == llm.ThinkingLevelDefault || request.ThinkingLevel != llm.ThinkingLevelDefault {
+		return request
+	}
+	r := *request
+	r.ThinkingLevel = l.defaultReasoning
+	return &r
 }
 
 func (l *loggingService) Do(ctx context.Context, request *llm.Request) (*llm.Response, error) {
+	request = l.withDefaultReasoning(request)
 	start := time.Now()
 	ctx = llmhttp.WithModelID(ctx, l.modelID)
 	ctx = llmhttp.WithProvider(ctx, string(l.provider))
@@ -574,6 +595,7 @@ func customModelErrorPrefix(displayName, modelID, baseURL string) string {
 func (l *loggingService) CacheTTL() time.Duration { return llm.CacheTTL(l.service) }
 
 func (l *loggingService) WarmCache(ctx context.Context, request *llm.Request) (llm.Usage, error) {
+	request = l.withDefaultReasoning(request)
 	ctx = llmhttp.WithModelID(ctx, l.modelID)
 	ctx = llmhttp.WithProvider(ctx, string(l.provider))
 	usage, err := llm.WarmCache(ctx, l.service, request)
@@ -615,6 +637,9 @@ func (l *loggingService) SupportedReasoningLevels() []llm.ThinkingLevel {
 // DefaultReasoningLevel forwards the wrapped service's default reasoning level
 // so the llm.DefaultReasoner assertion survives the logging wrapper.
 func (l *loggingService) DefaultReasoningLevel() string {
+	if l.defaultReasoning != llm.ThinkingLevelDefault {
+		return l.defaultReasoning.Name()
+	}
 	return llm.ServiceDefaultReasoningLevel(l.service)
 }
 
@@ -651,7 +676,7 @@ func (m *Manager) registerBuiltModelsLocked(built []Built) {
 		if dn == "" {
 			dn = b.ID
 		}
-		m.services[b.ID] = serviceEntry{
+		entry := serviceEntry{
 			service:         b.Service,
 			serviceRevision: b.ServiceRevision,
 			provider:        b.Provider,
@@ -664,6 +689,10 @@ func (m *Manager) registerBuiltModelsLocked(built []Built) {
 			apiType:         b.APIType,
 			apiModelName:    b.APIModelName,
 		}
+		if level := llm.ParseThinkingLevel(b.DefaultReasoningLevel); slices.Contains(llm.SupportedReasoningLevels(b.Service), level) {
+			entry.defaultReasoning = level
+		}
+		m.services[b.ID] = entry
 		m.modelOrder = append(m.modelOrder, b.ID)
 		m.logger.Info("Registered model", "id", b.ID, "source", b.Source)
 	}
@@ -789,6 +818,8 @@ func (m *Manager) loggedService(entry serviceEntry) llm.Service {
 		sourceID:    entry.sourceID,
 		displayName: entry.displayName,
 		baseURL:     entry.baseURL,
+
+		defaultReasoning: entry.defaultReasoning,
 	}
 }
 
