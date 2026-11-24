@@ -963,8 +963,11 @@ func (l *RunConfig) insertMissingToolResults(req *llm.Request) {
 	totalInserted := 0
 	totalRemoved := 0
 
-	// Track the tool_use IDs from the most recent assistant message
+	// Track the tool_use IDs from the most recent assistant message, and their
+	// order: synthetic results must come out the same way on every request, or
+	// the prompt cache misses from this point on.
 	var prevAssistantToolUseIDs map[string]bool
+	var prevAssistantToolUseOrder []string
 
 	for i := 0; i < len(req.Messages); i++ {
 		msg := req.Messages[i]
@@ -982,9 +985,11 @@ func (l *RunConfig) insertMissingToolResults(req *llm.Request) {
 
 			// Track all tool_use IDs in this assistant message
 			prevAssistantToolUseIDs = make(map[string]bool)
+			prevAssistantToolUseOrder = nil
 			for _, c := range msg.Content {
-				if c.Type == llm.ContentTypeToolUse {
+				if c.Type == llm.ContentTypeToolUse && !prevAssistantToolUseIDs[c.ID] {
 					prevAssistantToolUseIDs[c.ID] = true
+					prevAssistantToolUseOrder = append(prevAssistantToolUseOrder, c.ID)
 				}
 			}
 			newMessages = append(newMessages, msg)
@@ -1054,7 +1059,7 @@ func (l *RunConfig) insertMissingToolResults(req *llm.Request) {
 			// Check if we need to add missing tool_results for this user message
 			if prevAssistantToolUseIDs != nil {
 				var prefix []llm.Content
-				for toolUseID := range prevAssistantToolUseIDs {
+				for _, toolUseID := range prevAssistantToolUseOrder {
 					if !existingResultIDs[toolUseID] {
 						prefix = append(prefix, llm.Content{
 							Type:      llm.ContentTypeToolResult,
@@ -1084,6 +1089,7 @@ func (l *RunConfig) insertMissingToolResults(req *llm.Request) {
 
 			// Reset for next iteration - user message "consumes" the previous tool_uses
 			prevAssistantToolUseIDs = nil
+			prevAssistantToolUseOrder = nil
 		} else {
 			newMessages = append(newMessages, msg)
 		}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -525,6 +526,42 @@ func TestInsertMissingToolResults(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Synthetic results are rebuilt on every request and never stored, so they
+// must come out in the same order each time; otherwise the request bytes
+// change and the prompt cache misses from the interrupted turn onward.
+func TestInsertMissingToolResultsIsDeterministic(t *testing.T) {
+	ids := []string{"tool_1", "tool_2", "tool_3", "tool_4", "tool_5", "tool_6"}
+	assistant := llm.Message{Role: llm.MessageRoleAssistant}
+	for _, id := range ids {
+		assistant.Content = append(assistant.Content, llm.Content{Type: llm.ContentTypeToolUse, ID: id, ToolName: "bash"})
+	}
+	answered := llm.Content{Type: llm.ContentTypeToolResult, ToolUseID: "tool_3"}
+	user := llm.Message{Role: llm.MessageRoleUser, Content: []llm.Content{answered, {Type: llm.ContentTypeText, Text: "stop"}}}
+
+	want := []string{"tool_1", "tool_2", "tool_4", "tool_5", "tool_6", "tool_3"}
+	for range 50 {
+		req := &llm.Request{Messages: []llm.Message{assistant, user}}
+		(&RunConfig{Logger: slog.Default()}).insertMissingToolResults(req)
+		var got []string
+		for _, c := range req.Messages[1].Content {
+			if c.Type == llm.ContentTypeToolResult {
+				got = append(got, c.ToolUseID)
+			}
+		}
+		if !slices.Equal(got, want) {
+			t.Fatalf("tool_result order = %v, want %v", got, want)
+		}
+	}
+
+	// A repeated tool_use ID still gets a single synthetic result.
+	assistant.Content = append(assistant.Content, assistant.Content[0])
+	req := &llm.Request{Messages: []llm.Message{assistant, user}}
+	(&RunConfig{Logger: slog.Default()}).insertMissingToolResults(req)
+	if n := len(req.Messages[1].Content); n != len(want)+1 {
+		t.Fatalf("got %d content items with a repeated tool_use ID, want %d", n, len(want)+1)
 	}
 }
 
