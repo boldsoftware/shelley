@@ -88,6 +88,7 @@ func main() {
 		fmt.Fprintf(flag.CommandLine.Output(), "  models [flags]                List the models the server would expose, without starting it\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  client [flags] <subcommand>   CLI client (chat, read, list, archive) (experimental)\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  mcp <command>                 Use MCP servers (list, call, add, rm, auth, restart)\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  secret ID                     Write a secret from a message to a temporary file\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  skill <cat|ls|new> [name]     Read, list, or create skills\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  dtach <new|attach> ...        Legacy persistent PTY session helper\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  highlights <scaffold|verify|attach|show> ...  Commit file order and line highlights (git notes)\n")
@@ -117,6 +118,8 @@ func main() {
 		client.Run(args[1:])
 	case "mcp":
 		client.RunMCP(args[1:])
+	case "secret":
+		client.RunSecret(args[1:])
 	case "skill":
 		runSkill(args[1:])
 	case "dtach":

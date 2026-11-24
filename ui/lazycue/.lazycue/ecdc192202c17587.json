@@ -1,0 +1,324 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A password sent in a chat is captured, shown as a pill, and managed in the Secrets modal. The screen is the default 393x727 phone. The conversation /c/{{SLUG}} exists. Call \"stored\" returns the IDs of the secrets the server has stored for it, as a JSON array. Name elements by ARIA role and accessible name, as Playwright's getByRole does (visible elements only); \"named X\" means an exact name match. \"The composer\" is [data-testid=\"message-input\"], \"the row\" [data-testid=\"secret-bar\"] and \"its button\" [data-testid=\"secret-bar-action\"]. Call \"copied\" returns what the page last copied (\"none\" before anything). \"The modal\" is the element with role \"dialog\" named \"Secrets\", and \"the target\" its \"tr.secrets-target\". Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Fill the composer with \"connect with postgres://app:Tz8qWm3RkP5vX7@db.internal:5432/app\". 3. The row should contain the text \"Captured on send\" (allow 10s). 4. Click the row's button whose name contains \"Database password\". Eval (() =\u003e { const el = document.querySelector('[data-testid=\"message-input\"]'); return el.value.slice(el.selectionStart, el.selectionEnd); })(): it must return \"Tz8qWm3RkP5vX7\". 5. Click [data-testid=\"send-button\"]. The composer should have the value exactly \"\". 6. Call \"stored\" until it returns an array of exactly one ID, which starts with \"database-password-\". 7. The text \"connect with postgres://app:\" should be visible, and \".messages-container .secret-pill\" (exactly one) should contain the text \"database-password-\". Eval document.body.textContent.includes(\"Tz8qWm3RkP5vX7\"): it must return false. 8. Click the pill: the button whose name starts with \"Secret database-password-\". The target should contain the text \"database-password-\", and its visible link named \"{{SLUG}}\" should have the attribute href exactly \"/c/{{SLUG}}\". Eval /in (23|24)h/.test(document.querySelector('tr.secrets-target').textContent): it must return true. 9. The modal must not contain the text \"Tz8qWm3RkP5vX7\". Click the target's button named \"Show\": the modal's \".secrets-value\" should have exactly the text \"Tz8qWm3RkP5vX7\". Click the target's button named \"Hide\": the modal must not contain the text \"Tz8qWm3RkP5vX7\". 10. Click the target's button named \"Copy\". The target's button named \"Copied\" should be visible. Call \"copied\" until it returns exactly \"Tz8qWm3RkP5vX7\". 11. Delete asks first; Cancel and Escape keep the secret and the focus. Click the target's button named \"Delete\". Eval document.activeElement.textContent.trim(): it must return \"Cancel\". Press Escape. The target should have no button named \"Cancel\" (count 0), and eval document.activeElement.textContent.trim() must return \"Delete\". Click the target's button named \"Delete\", then its button named \"Cancel\"; eval document.activeElement.textContent.trim() must return \"Delete\". 12. Click the target's button named \"Delete\", then its [data-testid=\"secret-delete-confirm\"]. There should be no \"tr.secrets-target\" (count 0). Eval !!document.activeElement?.closest('[role=\"dialog\"]'): it must return true. The modal must not contain the text \"expired or was deleted\". Call \"stored\": it must return []. 13. Press Escape: there should be no modal (count 0). Click the pill again. Eval (() =\u003e { const id = document.querySelector('.messages-container .secret-pill').dataset.secretId; return document.querySelector('[role=\"dialog\"]').textContent.includes(id + ' expired or was deleted.'); })() until it returns true. 14. Press Escape: there should be no modal (count 0). Press Control+k, fill \".command-palette-input\" with \"Secrets\" and press Enter. The modal should contain the text \"Shelley tries to capture secrets from chat input\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "connect with postgres://app:Tz8qWm3RkP5vX7@db.internal:5432/app"
+    },
+    {
+      "action": "wait_text",
+      "text": "Captured on send",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-testid='secret-bar']"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "[data-testid='secret-bar']"
+      },
+      "role": "button",
+      "name": "Database password"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-testid=\"message-input\"]'); return el.value.slice(el.selectionStart, el.selectionEnd); })()",
+      "expect": "Tz8qWm3RkP5vX7"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "(async () =\u003e { const r = await fetch('/api/secrets'); const j = await r.json(); if (!Array.isArray(j) || j.length !== 1) throw new Error('not ready'); if (!j[0].id.startsWith('database-password-')) throw new Error('wrong id'); return true; })()",
+          "expect": "true"
+        }
+      ],
+      "timeout": "15s"
+    },
+    {
+      "action": "call",
+      "value": "stored"
+    },
+    {
+      "action": "wait_text",
+      "text": "connect with postgres://app:"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".messages-container .secret-pill",
+      "count": 1
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".messages-container .secret-pill",
+      "text": "database-password-"
+    },
+    {
+      "action": "eval",
+      "expression": "document.body.textContent.includes('Tz8qWm3RkP5vX7')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": ".messages-container .secret-pill"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Secrets"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "tr.secrets-target",
+      "text": "database-password-"
+    },
+    {
+      "action": "assert_attribute",
+      "within": {
+        "selector": "tr.secrets-target"
+      },
+      "role": "link",
+      "name": "{{SLUG}}",
+      "exact": true,
+      "attribute": "href",
+      "value": "/c/{{SLUG}}"
+    },
+    {
+      "action": "eval",
+      "expression": "/in (23|24)h/.test(document.querySelector('tr.secrets-target').textContent)",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"]').textContent.includes('Tz8qWm3RkP5vX7')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "tr.secrets-target"
+      },
+      "role": "button",
+      "name": "Show",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": "[role='dialog'] .secrets-value",
+      "text": "Tz8qWm3RkP5vX7"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "tr.secrets-target"
+      },
+      "role": "button",
+      "name": "Hide",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"]').textContent.includes('Tz8qWm3RkP5vX7')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "tr.secrets-target"
+      },
+      "role": "button",
+      "name": "Copy",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "within": {
+        "selector": "tr.secrets-target"
+      },
+      "role": "button",
+      "name": "Copied",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "copied",
+      "expect": "Tz8qWm3RkP5vX7"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "tr.secrets-target"
+      },
+      "role": "button",
+      "name": "Delete",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement.textContent.trim()",
+      "expect": "Cancel"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": "tr.secrets-target"
+      },
+      "role": "button",
+      "name": "Cancel",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement.textContent.trim()",
+      "expect": "Delete"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "tr.secrets-target"
+      },
+      "role": "button",
+      "name": "Delete",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "tr.secrets-target"
+      },
+      "role": "button",
+      "name": "Cancel",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement.textContent.trim()",
+      "expect": "Delete"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "tr.secrets-target"
+      },
+      "role": "button",
+      "name": "Delete",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": "tr.secrets-target"
+      },
+      "selector": "[data-testid='secret-delete-confirm']"
+    },
+    {
+      "action": "assert_count",
+      "selector": "tr.secrets-target",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "!!document.activeElement?.closest('[role=\"dialog\"]')",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[role=\"dialog\"]').textContent.includes('expired or was deleted')",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "stored",
+      "expect": "[]"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role='dialog']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".messages-container .secret-pill"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "(() =\u003e { const id = document.querySelector('.messages-container .secret-pill').dataset.secretId; const dialog = document.querySelector('[role=\"dialog\"]'); return !!dialog \u0026\u0026 dialog.textContent.includes(id + ' expired or was deleted.'); })()",
+          "expect": "true"
+        }
+      ],
+      "timeout": "15s"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[role='dialog']",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "k",
+      "modifiers": "Control"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".command-palette-input"
+    },
+    {
+      "action": "fill",
+      "selector": ".command-palette-input",
+      "value": "Secrets"
+    },
+    {
+      "action": "press_key",
+      "key": "Enter"
+    },
+    {
+      "action": "assert_text_contains",
+      "role": "dialog",
+      "name": "Secrets",
+      "text": "Shelley tries to capture secrets from chat input"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T22:59:38.481456846Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 354483,
+    "output_tokens": 13196,
+    "estimated_cost_usd": 0.4057896,
+    "mode": "generated"
+  }
+}

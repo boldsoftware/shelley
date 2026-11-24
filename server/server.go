@@ -608,7 +608,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	if DBPath != "" {
 		secretsKey = filepath.Join(filepath.Dir(DBPath), "secrets.key")
 	}
-	s.secrets = newSecretStore(database, secretsKey, func(ctx context.Context) (bool, error) { return s.flagOn(ctx, FlagSecrets) }, logger.Error)
+	s.secrets = newSecretStore(database, secretsKey)
 
 	// Any committed write may change the conversation list. Refresh after
 	// every Tx commit so SSE clients always see the current state. This is

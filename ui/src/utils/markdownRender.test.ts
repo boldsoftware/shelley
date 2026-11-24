@@ -48,12 +48,23 @@ function withCallCounting<T>(fn: () => T): T {
 
 // ---- Baseline: rendering + sanitization behavior is unchanged ----
 
-const pilled = renderMarkdownToSafeHTML("use {{secret:openai-key-k3f9}} and `{{secret:x-1234}}`");
+const pilled = renderMarkdownToSafeHTML(
+  "use [Secret extracted by Shelley; shelley secret github-pat-k3f9 prints the path of a file holding it], `export T=[Secret extracted by Shelley; shelley secret x-1234 prints the path of a file holding it]` and {{secret:openai-key-k3f9}}",
+);
 assert(
-  pilled.includes('class="secret-pill" href="/secrets#openai-key-k3f9"') &&
+  pilled.includes('class="secret-pill" type="button" data-secret-id="github-pat-k3f9"') &&
+    pilled.includes('aria-label="Secret github-pat-k3f9" aria-haspopup="dialog"') &&
+    pilled.includes('<span class="secret-pill-id">github-pat-k3f9</span>') &&
+    pilled.includes('<code>export T=<button class="secret-pill"') &&
     pilled.includes('<span class="secret-pill-id">openai-key-k3f9</span>') &&
-    pilled.includes("<code>{{secret:x-1234}}</code>"),
-  "secret placeholders become pills outside code",
+    !pilled.includes("Secret extracted"),
+  "secret markers and placeholders become pills, in code too",
+);
+assert(
+  renderMarkdownToSafeHTML(
+    "A=[Secret extracted by Shelley; shelley secret a-1234 prints the path of a file holding it];B=x$y costs 5$",
+  ).includes('data-secret-id="a-1234"'),
+  "a marker followed by dollars stays a pill",
 );
 
 assert(

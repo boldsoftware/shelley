@@ -14,6 +14,7 @@ import (
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/mcp"
 	"shelley.exe.dev/mcp/mcptest"
+	"shelley.exe.dev/secretdetect"
 )
 
 func TestMCPApps(t *testing.T) {
@@ -111,13 +112,14 @@ func TestMCPApps(t *testing.T) {
 	// Stored secrets are redacted from the call's record, as from any tool's
 	// output.
 	e.srv.secrets.keyPath = filepath.Join(t.TempDir(), "secrets.key")
-	secret, _ := json.Marshal(newSecret{ID: "github-token-k3f9", Name: "GitHub", Kind: "github-token", Value: testSecretValue})
-	e.want(201, "POST", "/api/secrets", "", string(secret))
+	if err := e.srv.secrets.create(t.Context(), newSecret{ID: "github-token-k3f9", Name: "GitHub", Kind: "github-token", Value: testSecretValue}); err != nil {
+		t.Fatal(err)
+	}
 	e.want(200, "POST", "/api/mcp/servers/t/call", id, `{"tool":"show","arguments":{"text":"`+testSecretValue+`"}}`)
 	if msgs, err = e.db.ListMessagesByType(t.Context(), id, db.MessageTypeMCPApp); err != nil || len(msgs) != 2 {
 		t.Fatalf("mcpapp messages: %v %v", msgs, err)
 	}
-	if got := *msgs[1].UserData; strings.Contains(got, testSecretValue) || !strings.Contains(got, "showing {{secret:github-token-k3f9}}") {
+	if got := *msgs[1].UserData; strings.Contains(got, testSecretValue) || !strings.Contains(got, "showing "+secretdetect.Marker("github-token-k3f9")) {
 		t.Fatalf("user_data: %s", got)
 	}
 
@@ -159,16 +161,11 @@ func TestChatAppContext(t *testing.T) {
 	}
 	// Stored secrets are redacted from views' context, as from the message.
 	server.secrets.keyPath = filepath.Join(t.TempDir(), "secrets.key")
-	api := http.NewServeMux()
-	server.registerSecretRoutes(api)
-	secret, _ := json.Marshal(newSecret{ID: "github-token-k3f9", Name: "GitHub", Kind: "github-token", Value: testSecretValue})
-	w := httptest.NewRecorder()
-	api.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/secrets", strings.NewReader(string(secret))))
-	if w.Code != http.StatusCreated {
-		t.Fatalf("secret: %d %s", w.Code, w.Body)
+	if err := server.secrets.create(t.Context(), newSecret{ID: "github-token-k3f9", Name: "GitHub", Kind: "github-token", Value: testSecretValue}); err != nil {
+		t.Fatal(err)
 	}
 
-	w = httptest.NewRecorder()
+	w := httptest.NewRecorder()
 	server.handleChatConversation(w, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(
 		`{"message":"hello","model":"predictable","app_context":[{"source":"t.show","text":"picked <3> `+testSecretValue+`"},{"source":"empty","text":" "}]}`,
 	)), conv.ConversationID)
@@ -182,7 +179,7 @@ func TestChatAppContext(t *testing.T) {
 		texts = append(texts, c.Text)
 	}
 	got := strings.Join(texts, "|")
-	if !strings.Contains(got, "hello") || !strings.Contains(got, "|<view_context source=\"t.show\" note=\"what the view reports, not the user\">\npicked &lt;3&gt; {{secret:github-token-k3f9}}\n</view_context>") ||
+	if !strings.Contains(got, "hello") || !strings.Contains(got, "|<view_context source=\"t.show\" note=\"what the view reports, not the user\">\npicked &lt;3&gt; "+secretdetect.Marker("github-token-k3f9")+"\n</view_context>") ||
 		strings.Contains(got, "empty") || strings.Contains(got, testSecretValue) {
 		t.Fatalf("model saw %q", got)
 	}
@@ -200,7 +197,7 @@ func TestChatAppContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(stored.Content) != 2 || stored.Content[1].Display["type"] != "app_context" || stored.Content[1].Display["source"] != "t.show" ||
-		stored.Content[1].Display["text"] != "picked <3> {{secret:github-token-k3f9}}" {
+		stored.Content[1].Display["text"] != "picked <3> "+secretdetect.Marker("github-token-k3f9") {
 		t.Fatalf("stored: %+v", stored)
 	}
 }

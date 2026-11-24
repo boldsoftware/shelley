@@ -1018,6 +1018,10 @@ func (s *Server) handleCompactRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "conversation is archived or a draft", http.StatusConflict)
 		return
 	}
+	// The instructions are the user's text, as a chat message is.
+	if !s.extractMessageSecrets(w, r, conversation.ConversationID, &req.Instructions, false) {
+		return
+	}
 	userEmail := r.Header.Get("X-ExeDev-Email")
 	ctx = contextWithUserEmail(ctx, userEmail)
 	manager, err := s.getOrCreateConversationManager(ctx, conversation.ConversationID, userEmail)

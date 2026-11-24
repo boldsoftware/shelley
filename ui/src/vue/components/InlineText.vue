@@ -2,17 +2,23 @@
      user-typed text with Slack-style backtick formatting: ```fenced``` ->
      <pre class="inline-code-block"><code>, `inline` -> <code class="inline-code">,
      and bare URLs in plain segments become <a class="text-link"> links,
-     {{secret:ID}} placeholders SecretPills. URLs
-     inside code are not linkified. Mirrors the React output node-for-node. -->
+     secret markers SecretPills (in code too). URLs inside code are not
+     linkified. Mirrors the React output node-for-node. -->
 <template>
   <template v-for="(seg, i) in segments" :key="i">
     <pre
       v-if="seg.type === 'codeblock'"
       class="inline-code-block"
-    ><code>{{ seg.content }}</code></pre>
-    <code v-else-if="seg.type === 'code'" class="inline-code">{{ seg.content }}</code>
+    ><code><template v-for="(part, k) in splitSecretMarkers(seg.content)" :key="k"><SecretPill v-if="part.secretId" :id="part.secretId" /><template v-else>{{ part.text }}</template></template></code></pre>
+    <code v-else-if="seg.type === 'code'" class="inline-code"
+      ><template v-for="(part, k) in splitSecretMarkers(seg.content)" :key="k"
+        ><SecretPill v-if="part.secretId" :id="part.secretId" /><template v-else>{{
+          part.text
+        }}</template></template
+      ></code
+    >
     <template v-else>
-      <template v-for="(part, k) in splitPlaceholders(seg.content)" :key="k">
+      <template v-for="(part, k) in splitSecretMarkers(seg.content)" :key="k">
         <SecretPill v-if="part.secretId" :id="part.secretId" />
         <template v-else>
           <template v-for="(p, j) in links(part.text)" :key="j">
@@ -36,7 +42,7 @@
 import { computed } from "vue";
 import { parseInlineSegments } from "../../utils/inlineText";
 import { localhostLinkOptionsFromInit, parseLinks } from "../../utils/linkify";
-import { splitPlaceholders } from "../../utils/secretDetect";
+import { splitSecretMarkers } from "../../utils/secretMarkers";
 import SecretPill from "./SecretPill.vue";
 
 const props = defineProps<{ text: string; rewriteLocalhostLinks?: boolean }>();

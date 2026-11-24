@@ -1666,37 +1666,34 @@ export const notificationChannelsApi = new NotificationChannelsApi();
 // A stored secret, without its value (server Secret, docs/secrets.md).
 export interface Secret {
   id: string;
-  name: string;
   kind: string;
   conversation_id: string | null;
   conversation_slug: string | null;
-  created_at: string;
-  injections: Array<{
-    conversation_id: string | null;
-    machine: string;
-    path: string;
-    created_at: string;
-  }>;
+  expires_at: string;
 }
 
-const secretsRequest = (method: string, path: string, body?: unknown) =>
-  apiFetch(`/api/secrets${path}`, "Secrets", sendJSON(method, body));
+/** A span of a draft the chat API would take out as a secret, in UTF-16
+ *  code units (server SecretSpan). */
+export interface SecretSpan {
+  start: number;
+  end: number;
+  kind: string;
+  label: string;
+  /** The user's own {{secret=...}} mark, and a value stored already:
+   *  keep_found_secrets keeps neither. */
+  manual?: boolean;
+  stored?: boolean;
+}
+
+const secretsRequest = (method: string, path: string, body?: unknown, signal?: AbortSignal) =>
+  apiFetch(`/api/secrets${path}`, "Secrets", { ...sendJSON(method, body), signal });
 
 export const secretsApi = {
   async list(): Promise<Secret[]> {
     return (await secretsRequest("GET", "")).json();
   },
-  async create(secret: {
-    id: string;
-    name: string;
-    kind: string;
-    value: string;
-    conversation_id: string | null;
-  }): Promise<void> {
-    await secretsRequest("POST", "", secret);
-  },
-  async rename(id: string, name: string): Promise<void> {
-    await secretsRequest("PATCH", `/${encodeURIComponent(id)}`, { name });
+  async detect(text: string, signal?: AbortSignal): Promise<SecretSpan[]> {
+    return (await secretsRequest("POST", "/detect", { text }, signal)).json();
   },
   async remove(id: string): Promise<void> {
     await secretsRequest("DELETE", `/${encodeURIComponent(id)}`);

@@ -24,3 +24,19 @@ export async function copyText(text: string): Promise<boolean> {
     return false;
   }
 }
+
+// Copies text still being fetched. Safari copies only within a click's
+// gesture, which an await ends, so where ClipboardItem takes a promise the
+// clipboard gets the pending text; elsewhere it falls back to copyText.
+export async function copyPendingText(text: Promise<string>): Promise<boolean> {
+  if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+    try {
+      const blob = text.then((t) => new Blob([t], { type: "text/plain" }));
+      await navigator.clipboard.write([new ClipboardItem({ "text/plain": blob })]);
+      return true;
+    } catch {
+      // fall through to copyText
+    }
+  }
+  return copyText(await text);
+}

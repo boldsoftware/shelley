@@ -19,6 +19,7 @@ import (
 	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/predictable"
+	"shelley.exe.dev/secretdetect"
 )
 
 // compactTestConversation is a conversation on a predictable model, driven
@@ -1324,13 +1325,14 @@ func TestCompactionRefreshesSystemPrompt(t *testing.T) {
 
 // TestCompactRequestEndpoint: the endpoint the mobile apps call to compact
 // enables compact_in_place and asks the agent to use it, with the user's
-// instructions.
+// instructions, their secrets extracted.
 func TestCompactRequestEndpoint(t *testing.T) {
 	t.Parallel()
 	c := newCompactTestConversation(t, compactInPlaceOff)
+	c.srv.secrets.keyPath = filepath.Join(t.TempDir(), "secrets.key")
 	c.turn("hello")
 	before := c.endTurns()
-	body := `{"source_conversation_id":"` + c.id + `","model":"ignored","method":"compact","instructions":"keep the plan"}`
+	body := `{"source_conversation_id":"` + c.id + `","model":"ignored","method":"compact","instructions":"keep the plan {{secret:plan-key=hunter2hunter2}}"}`
 	w := httptest.NewRecorder()
 	c.srv.handleCompactRequest(w, httptest.NewRequest(http.MethodPost, "/api/conversations/distill-new-generation", strings.NewReader(body)))
 	if w.Code != http.StatusCreated {
@@ -1341,7 +1343,7 @@ func TestCompactRequestEndpoint(t *testing.T) {
 		t.Fatalf("compact_in_place not enabled: %+v", opts)
 	}
 	waitFor(t, 10*time.Second, func() bool { return c.endTurns() > before })
-	c.seqWith(`Compact your context in place.\n\nkeep the plan`)
+	c.seqWith(`Compact your context in place.\n\nkeep the plan ` + secretdetect.Marker("plan-key"))
 	if !hasTool(c.agentRequest(), claudetool.CompactInPlaceName) {
 		t.Fatal("compact_in_place not offered to the agent")
 	}

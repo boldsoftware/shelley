@@ -162,6 +162,9 @@ export interface ChatRequest {
   skills?: string[];
   /** What views asked the model to know (services/appContext.ts). */
   app_context?: { source: string; text: string }[];
+  /** Send what secret detection finds as typed: the user said it holds no
+   *  secret. Stored values and marks are still extracted (docs/secrets.md). */
+  keep_found_secrets?: boolean;
 }
 
 /** A conversation's adjustable settings; see Settings in server/settings.go. */

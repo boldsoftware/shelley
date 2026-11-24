@@ -218,9 +218,15 @@ func (s *Server) deliverChatMessage(ctx context.Context, m chatMessage) error {
 	if err := s.db.RecordChannelRoute(ctx, m.route); err != nil {
 		return err
 	}
+	// Only what the sender wrote: attachment paths and tags hold no secret,
+	// though they may look random. A retry finds what it stored.
+	text, err := s.extractChannelSecrets(ctx, id, m.text)
+	if err != nil {
+		return err
+	}
 	// Fetch signed provider URLs only after deduplication, while holding the
 	// chat lock. Retries must not re-fetch URLs that may have expired.
-	text, err := s.channelMessageText(ctx, m.text, m.attachments)
+	text, err = s.channelMessageText(ctx, text, m.attachments)
 	if err != nil {
 		return err
 	}

@@ -445,7 +445,7 @@ func isConversationSlugPath(path string) bool {
 
 func isSPARoute(path string) bool {
 	return path == "/new" || strings.HasPrefix(path, "/export/") || strings.HasPrefix(path, "/vm/") ||
-		strings.HasPrefix(path, "/project/") || path == "/secrets"
+		strings.HasPrefix(path, "/project/")
 }
 
 // acceptsGzip reports whether r accepts gzip encoding.
@@ -1112,6 +1112,10 @@ type ChatRequest struct {
 	// AppContext is what views (MCP Apps and output_html) asked the model
 	// to know with the user's next message.
 	AppContext []appContext `json:"app_context,omitempty"`
+	// KeepFoundSecrets sends what secret detection finds in the message as
+	// it is: the sender said it holds no secret. Values already stored and
+	// the sender's own marks are still extracted (see secrets.go).
+	KeepFoundSecrets bool `json:"keep_found_secrets,omitempty"`
 }
 
 // NewConversationRequest is the body of POST /api/conversations/new.
@@ -1137,9 +1141,6 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, "Message is required", http.StatusBadRequest)
 		return
 	}
-	if !s.redactChatMessage(w, r, &req) {
-		return
-	}
 	if !s.checkConversationRequest(w, r, conversationID, "chat") {
 		return
 	}
@@ -1156,6 +1157,9 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		s.logger.Error("Failed to load conversation", "conversationID", conversationID, "error", err)
 		http.Error(w, "Conversation not found", http.StatusNotFound)
+		return
+	}
+	if !s.extractChatSecrets(w, r, conversationID, &req) {
 		return
 	}
 
@@ -1615,9 +1619,6 @@ func (s *Server) newConversation(w http.ResponseWriter, r *http.Request, req New
 		http.Error(w, "Message is required", http.StatusBadRequest)
 		return
 	}
-	if !s.redactChatMessage(w, r, &req.ChatRequest) {
-		return
-	}
 	if !s.prepareProjectConversation(w, r, &req) {
 		return
 	}
@@ -1661,6 +1662,12 @@ func (s *Server) newConversation(w http.ResponseWriter, r *http.Request, req New
 		http.Error(w, err.Error(), status)
 		return
 	}
+	// The secrets are extracted once the conversation they belong to
+	// exists; a mark that would fail that fails before it does.
+	if err := s.checkSecretMarks(ctx, req.Message); err != nil {
+		s.secretHTTPError(w, err)
+		return
+	}
 
 	// Create new conversation with optional cwd
 	var cwdPtr *string
@@ -1676,6 +1683,9 @@ func (s *Server) newConversation(w http.ResponseWriter, r *http.Request, req New
 	defer releaseCreation()
 	cwdPtr = conversation.Cwd
 	conversationID := conversation.ConversationID
+	if !s.extractChatSecrets(w, r, conversationID, &req.ChatRequest) {
+		return
+	}
 	if title := slug.Sanitize(req.Title); title != "" {
 		if err := s.nameConversation(ctx, conversationID, title); err != nil {
 			s.internalError(w, "Failed to name conversation", err)

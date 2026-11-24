@@ -1,17 +1,20 @@
-<!-- A {{secret:ID}} placeholder in a message (docs/secrets.md): the ID and
-     blurred filler derived from it, never the value, linking to the
-     secrets page. markdownRender.ts builds the same markup. -->
+<!-- A secret's marker in a message (docs/secrets.md): the ID and blurred
+     filler derived from it, never the value. Clicking it opens the secrets
+     modal (App.vue). markdownRender.ts builds the same markup. -->
 <template>
-  <a class="secret-pill" :href="pill.href" target="_blank" rel="noopener" :title="pill.title"
+  <button
+    type="button"
+    class="secret-pill"
+    :data-secret-id="id"
+    :aria-label="`Secret ${id}`"
+    aria-haspopup="dialog"
     ><i class="pi pi-lock" aria-hidden="true" /><span class="secret-pill-id">{{ id }}</span
-    ><span class="secret-pill-filler" aria-hidden="true">{{ pill.filler }}</span></a
+    ><span class="secret-pill-filler" aria-hidden="true">{{ secretFiller(id) }}</span></button
   >
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
-import { secretPill } from "../../utils/secretDetect";
+import { secretFiller } from "../../utils/secretMarkers";
 
-const props = defineProps<{ id: string }>();
-const pill = computed(() => secretPill(props.id));
+defineProps<{ id: string }>();
 </script>

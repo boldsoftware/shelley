@@ -1,0 +1,111 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "What the user says holds no secret is sent as typed, until something else is found. The screen is the default 393x727 phone. The conversation /c/{{SLUG}} exists. Call \"stored\" returns the IDs of the secrets the server has stored for it, as a JSON array. Name elements by ARIA role and accessible name, as Playwright's getByRole does (visible elements only); \"named X\" means an exact name match. \"The composer\" is [data-testid=\"message-input\"], \"the row\" [data-testid=\"secret-bar\"] and \"its button\" [data-testid=\"secret-bar-action\"]. Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. Fill the composer with \"example: postgres://demo:Qv7nLx2WpR9kT4@localhost/demo\". 3. The row should contain the text \"Captured on send\" (allow 10s), and its button should have exactly the text \"Don't capture\". 4. Click its button: the row should contain the text \"Sent as text\". Click its button: the row should contain \"Captured on send\". Click its button again: it should have exactly the text \"Capture\". 5. A new finding is captured with the rest, until it is gone again. Fill the composer with \"example: postgres://demo:Qv7nLx2WpR9kT4@localhost/demo and postgres://demo:Hd4sYt8MzJ3cW6@localhost/demo\": the row should contain \"Captured on send\". Fill the composer with \"example: postgres://demo:Qv7nLx2WpR9kT4@localhost/demo\": the row should contain \"Sent as text\". 6. Click [data-testid=\"send-button\"]. The composer should have the value exactly \"\". 7. The first \".messages-container .message-user\" containing \"Qv7nLx2WpR9kT4\" should be visible, and there should be no \".messages-container .secret-pill\" (count 0). 8. Call \"stored\": it must return [].",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "example: postgres://demo:Qv7nLx2WpR9kT4@localhost/demo"
+    },
+    {
+      "action": "wait_text",
+      "text": "Captured on send",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"secret-bar\"]",
+      "text": "Captured on send"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"secret-bar-action\"]",
+      "text": "Don't capture"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"secret-bar-action\"]"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"secret-bar\"]",
+      "text": "Sent as text"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"secret-bar-action\"]"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"secret-bar\"]",
+      "text": "Captured on send"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"secret-bar-action\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": "[data-testid=\"secret-bar-action\"]",
+      "text": "Capture"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "example: postgres://demo:Qv7nLx2WpR9kT4@localhost/demo and postgres://demo:Hd4sYt8MzJ3cW6@localhost/demo"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"secret-bar\"]",
+      "text": "Captured on send"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "example: postgres://demo:Qv7nLx2WpR9kT4@localhost/demo"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=\"secret-bar\"]",
+      "text": "Sent as text"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".messages-container .message-user",
+      "has_text": "Qv7nLx2WpR9kT4"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".messages-container .secret-pill",
+      "count": 0
+    },
+    {
+      "action": "call",
+      "value": "stored",
+      "expect": "[]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-23T22:55:37.383554178Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 49549,
+    "output_tokens": 1875,
+    "estimated_cost_usd": 0.0873315,
+    "mode": "generated"
+  }
+}

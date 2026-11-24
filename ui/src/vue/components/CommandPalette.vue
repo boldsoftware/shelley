@@ -27,6 +27,7 @@
          (e: "open-integrations-modal"): void                 // onOpenIntegrationsModal
          (e: "open-notifications-modal"): void                // onOpenNotificationsModal
          (e: "open-feature-flags-modal"): void                // onOpenFeatureFlagsModal
+         (e: "open-secrets-modal"): void                      // onOpenSecretsModal
          (e: "open-favicon-emoji-picker"): void                // onOpenFaviconEmojiPicker
          (e: "open-embed-modal"): void                        // onOpenEmbedModal
          (e: "next-conversation"): void                       // onNextConversation
@@ -179,6 +180,7 @@ const emit = defineEmits<{
   (e: "open-integrations-modal"): void;
   (e: "open-notifications-modal"): void;
   (e: "open-feature-flags-modal"): void;
+  (e: "open-secrets-modal"): void;
   (e: "open-favicon-emoji-picker"): void;
   (e: "open-embed-modal"): void;
   (e: "next-conversation"): void;
@@ -217,6 +219,7 @@ const ICON_BELL = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="roun
 const ICON_SMILE = `${SVG_OPEN}<circle cx="12" cy="12" r="9" stroke-width="2" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.5 14a4 4 0 007 0M9 9.5h.01M15 9.5h.01" /></svg>`;
 const ICON_CODE = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>`;
 const ICON_FLAG = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21V5a2 2 0 012-2h11l-2 4 2 4H5v10" /></svg>`;
+const ICON_LOCK = `${SVG_OPEN}<rect x="5" y="11" width="14" height="10" rx="2" stroke-width="2" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 018 0v4" /></svg>`;
 const ICON_MARKDOWN = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" /></svg>`;
 const ICON_ARCHIVE = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>`;
 const ICON_FOLDER = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>`;
@@ -569,6 +572,19 @@ const actionItems = computed<CommandItem[]>(() => {
       "site",
       "origin",
     ],
+  });
+
+  items.push({
+    id: "secrets",
+    type: "action",
+    title: "Secrets",
+    subtitle: "View captured secrets",
+    icon: ICON_LOCK,
+    action: () => {
+      emit("open-secrets-modal");
+      emit("close");
+    },
+    keywords: ["secret", "password", "key", "token", "credential"],
   });
 
   items.push({

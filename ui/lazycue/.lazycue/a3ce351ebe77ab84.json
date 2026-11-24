@@ -1,0 +1,370 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Composer text that may hold a secret, so isn't saved as a draft, stays in the tab. The screen is the default 393x727 phone. The conversation /c/{{SLUG}} exists. Call \"stored\" returns the IDs of the secrets the server has stored for it, as a JSON array. Name elements by ARIA role and accessible name, as Playwright's getByRole does (visible elements only); \"named X\" means an exact name match. \"The composer\" is [data-testid=\"message-input\"], \"the row\" [data-testid=\"secret-bar\"] and \"its button\" [data-testid=\"secret-bar-action\"]. The conversation {{OTHER}} exists too, and {{SLUG}}'s id is {{ID}}. \"The drafts\" means the result of eval Object.keys(localStorage).filter((k) =\u003e k.startsWith(\"shelley-draft:\")).map((k) =\u003e localStorage.getItem(k)).join(\" \"). \"Paste X\" means eval (() =\u003e { const el = document.querySelector('[data-testid=\"message-input\"]'); el.focus(); el.value += X; el.dispatchEvent(new InputEvent(\"input\", { bubbles: true, inputType: \"insertFromPaste\" })); })(). To \"open conversation X\": if the button with aria-label \"Open conversations\" is visible, click it; then wait for .conversation-item[data-conversation-id=\"X\"] to be visible, click it, and wait until it has the class \"active\". After call \"hold sends\", messages sent to a conversation wait for call \"release sends\"; after call \"hold checks\", the composer's secret checks wait for call \"release checks\". {{CHAT}} is Shelley's new conversation page with a chat from the bookmarklet whose selection holds a database URL with the password \"Hd4sYt8MzJ3cW6\". Perform the steps in order. 1. Navigate to /c/{{SLUG}}. Fill the composer with \"note: \". The drafts should contain \"note: \" (allow 10s). 2. Paste \"postgres://app:Tz8qWm3RkP5vX7@db.internal:5432/app\". The row should contain the text \"Captured on send\" (allow 10s). Click the composer, press End and type \" later\". 3. Open conversation {{OTHER}}. The composer should have the value exactly \"\" (allow 10s). 4. Open conversation {{ID}}. The composer should have the value exactly \"note: postgres://app:Tz8qWm3RkP5vX7@db.internal:5432/app later\" (allow 10s). 5. Click the visible button with class \"btn-new\" (named \"New Conversation\"). The URL should come to end with \"/new\" (allow 10s). Open conversation {{ID}}. The composer should have the value exactly \"note: postgres://app:Tz8qWm3RkP5vX7@db.internal:5432/app later\" (allow 10s). The drafts must not contain \"Tz8qWm3RkP5vX7\". 6. The row should contain \"Captured on send\" (allow 10s). Click its button; the row should contain \"Sent as text\". Click the composer, press End and type \" thanks\". Wait longer than the composer takes to save a draft: eval new Promise((resolve) =\u003e setTimeout(() =\u003e resolve('waited'), 1500)) expecting \"waited\". The drafts must not contain \"Tz8qWm3RkP5vX7\". Click its button; the row should contain \"Captured on send\". 7. Fill the composer with \"\". The drafts must come to not contain \"note: \" (allow 10s). Paste \"postgres://app:Zx9cVb2NmQ4wE6@db.internal/app\". The row should contain \"Captured on send\" (allow 10s). Click the composer, press End and type \" sent-while-away\". Call \"hold sends\". Click [data-testid=\"send-button\"]. Open conversation {{OTHER}}. Call \"release sends\". Open conversation {{ID}}. The page should contain the text \"sent-while-away\" (allow 30s), and then the composer must have the value exactly \"\". 8. Call \"hold checks\". Navigate to {{CHAT}}. The composer should contain \"Hd4sYt8MzJ3cW6\" (allow 10s). Click the composer, press End and type \" x\". Wait longer than the composer takes to save a draft: eval new Promise((resolve) =\u003e setTimeout(() =\u003e resolve('waited'), 1500)) expecting \"waited\". The drafts must not contain \"Hd4sYt8MzJ3cW6\". 9. Call \"release checks\". The row should contain \"Captured on send\" (allow 10s). The drafts must not contain \"Hd4sYt8MzJ3cW6\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "15s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "note: "
+    },
+    {
+      "action": "retry",
+      "timeout": "10s",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "Object.keys(localStorage).filter((k) =\u003e k.startsWith('shelley-draft:')).map((k) =\u003e localStorage.getItem(k)).join(' ').includes('note: ')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-testid=\"message-input\"]'); el.focus(); el.value += 'postgres://app:Tz8qWm3RkP5vX7@db.internal:5432/app'; el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' })); })()"
+    },
+    {
+      "action": "wait_text",
+      "text": "Captured on send",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-testid=\"message-input\"]'); const len = el.value.length; el.setSelectionRange(len, len); })()"
+    },
+    {
+      "action": "type",
+      "value": " later"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value",
+      "expect": "note: postgres://app:Tz8qWm3RkP5vX7@db.internal:5432/app later"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('button[aria-label=\"Open conversations\"]'); if (btn \u0026\u0026 btn.offsetParent !== null) { btn.click(); } })()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OTHER}}']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{OTHER}}']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OTHER}}'].active",
+      "timeout": "10s"
+    },
+    {
+      "action": "retry",
+      "timeout": "10s",
+      "steps": [
+        {
+          "action": "assert_value",
+          "selector": "[data-testid='message-input']",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('button[aria-label=\"Open conversations\"]'); if (btn \u0026\u0026 btn.offsetParent !== null) { btn.click(); } })()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'].active",
+      "timeout": "10s"
+    },
+    {
+      "action": "retry",
+      "timeout": "10s",
+      "steps": [
+        {
+          "action": "assert_value",
+          "selector": "[data-testid='message-input']",
+          "value": "note: postgres://app:Tz8qWm3RkP5vX7@db.internal:5432/app later"
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "selector": "button.btn-new",
+      "visible": true
+    },
+    {
+      "action": "wait_url",
+      "text": "/new",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('button[aria-label=\"Open conversations\"]'); if (btn \u0026\u0026 btn.offsetParent !== null) { btn.click(); } })()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'].active",
+      "timeout": "10s"
+    },
+    {
+      "action": "retry",
+      "timeout": "10s",
+      "steps": [
+        {
+          "action": "assert_value",
+          "selector": "[data-testid='message-input']",
+          "value": "note: postgres://app:Tz8qWm3RkP5vX7@db.internal:5432/app later"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "Object.keys(localStorage).filter((k) =\u003e k.startsWith('shelley-draft:')).map((k) =\u003e localStorage.getItem(k)).join(' ').includes('Tz8qWm3RkP5vX7')",
+      "expect": "false"
+    },
+    {
+      "action": "wait_text",
+      "text": "Captured on send",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='secret-bar-action']"
+    },
+    {
+      "action": "wait_text",
+      "text": "Sent as text",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-testid=\"message-input\"]'); const len = el.value.length; el.setSelectionRange(len, len); })()"
+    },
+    {
+      "action": "type",
+      "value": " thanks"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve) =\u003e setTimeout(() =\u003e resolve('waited'), 1500))",
+      "expect": "waited"
+    },
+    {
+      "action": "eval",
+      "expression": "Object.keys(localStorage).filter((k) =\u003e k.startsWith('shelley-draft:')).map((k) =\u003e localStorage.getItem(k)).join(' ').includes('Tz8qWm3RkP5vX7')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='secret-bar-action']"
+    },
+    {
+      "action": "wait_text",
+      "text": "Captured on send",
+      "timeout": "10s"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "retry",
+      "timeout": "10s",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "Object.keys(localStorage).filter((k) =\u003e k.startsWith('shelley-draft:')).map((k) =\u003e localStorage.getItem(k)).join(' ').includes('note: ')",
+          "expect": "false"
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-testid=\"message-input\"]'); el.focus(); el.value += 'postgres://app:Zx9cVb2NmQ4wE6@db.internal/app'; el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' })); })()"
+    },
+    {
+      "action": "wait_text",
+      "text": "Captured on send",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-testid=\"message-input\"]'); const len = el.value.length; el.setSelectionRange(len, len); })()"
+    },
+    {
+      "action": "type",
+      "value": " sent-while-away"
+    },
+    {
+      "action": "call",
+      "value": "hold sends"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='send-button']"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('button[aria-label=\"Open conversations\"]'); if (btn \u0026\u0026 btn.offsetParent !== null) { btn.click(); } })()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OTHER}}']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{OTHER}}']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{OTHER}}'].active",
+      "timeout": "10s"
+    },
+    {
+      "action": "call",
+      "value": "release sends"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const btn = document.querySelector('button[aria-label=\"Open conversations\"]'); if (btn \u0026\u0026 btn.offsetParent !== null) { btn.click(); } })()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}']",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".conversation-item[data-conversation-id='{{ID}}'].active",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_text",
+      "text": "sent-while-away",
+      "timeout": "30s"
+    },
+    {
+      "action": "retry",
+      "timeout": "10s",
+      "steps": [
+        {
+          "action": "assert_value",
+          "selector": "[data-testid='message-input']",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "action": "call",
+      "value": "hold checks"
+    },
+    {
+      "action": "navigate",
+      "url": "{{CHAT}}"
+    },
+    {
+      "action": "retry",
+      "timeout": "10s",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "(document.querySelector('[data-testid=\"message-input\"]')?.value || '').includes('Hd4sYt8MzJ3cW6')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const el = document.querySelector('[data-testid=\"message-input\"]'); const len = el.value.length; el.setSelectionRange(len, len); })()"
+    },
+    {
+      "action": "type",
+      "value": " x"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve) =\u003e setTimeout(() =\u003e resolve('waited'), 1500))",
+      "expect": "waited"
+    },
+    {
+      "action": "eval",
+      "expression": "Object.keys(localStorage).filter((k) =\u003e k.startsWith('shelley-draft:')).map((k) =\u003e localStorage.getItem(k)).join(' ').includes('Hd4sYt8MzJ3cW6')",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "release checks"
+    },
+    {
+      "action": "wait_text",
+      "text": "Captured on send",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "Object.keys(localStorage).filter((k) =\u003e k.startsWith('shelley-draft:')).map((k) =\u003e localStorage.getItem(k)).join(' ').includes('Hd4sYt8MzJ3cW6')",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T01:11:29.266863632Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 103313,
+    "output_tokens": 11587,
+    "estimated_cost_usd": 0.26707230000000004,
+    "mode": "generated"
+  }
+}

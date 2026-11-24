@@ -7,7 +7,7 @@ import { Marked } from "marked";
 import DOMPurify from "dompurify";
 import { rewriteLocalhostLink, type LocalhostLinkOptions } from "./linkify";
 import * as markdownMath from "./markdownMath";
-import { secretPill, splitPlaceholders } from "./secretDetect";
+import { mayHoldSecretMarker, secretFiller, splitSecretMarkers } from "./secretMarkers";
 
 // Maximum size (in characters of the data: URI) we are willing to inline.
 // Keeps the DOM and persisted payloads from ballooning when a model emits a
@@ -143,29 +143,28 @@ function linkifyCodeSpans(root: HTMLElement, localhostLinks?: LocalhostLinkOptio
   }
 }
 
-// Renders {{secret:ID}} placeholders in text (not code) as SecretPill.vue
-// does.
+// Renders secret markers as SecretPill.vue does, in code too (a secret
+// pasted in a code block is still one), but not in links.
 function pillSecrets(root: HTMLElement): void {
   const doc = root.ownerDocument;
   const walker = doc.createTreeWalker(root, 4 /* NodeFilter.SHOW_TEXT, not a global in tests */);
   const nodes: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    if (n.textContent?.includes("{{secret:") && !n.parentElement?.closest("code, pre, a"))
+    if (mayHoldSecretMarker(n.textContent ?? "") && !n.parentElement?.closest("a"))
       nodes.push(n as Text);
   }
   for (const node of nodes) {
-    const parts = splitPlaceholders(node.textContent ?? "");
+    const parts = splitSecretMarkers(node.textContent ?? "");
     if (!parts.some((p) => p.secretId)) continue;
     node.replaceWith(
       ...parts.map((p) => {
         if (!p.secretId) return doc.createTextNode(p.text);
-        const pill = doc.createElement("a");
-        const { href, title, filler } = secretPill(p.secretId);
+        const pill = doc.createElement("button");
         pill.className = "secret-pill";
-        pill.setAttribute("href", href);
-        pill.setAttribute("target", "_blank");
-        pill.setAttribute("rel", "noopener");
-        pill.setAttribute("title", title);
+        pill.setAttribute("type", "button");
+        pill.dataset.secretId = p.secretId;
+        pill.setAttribute("aria-label", `Secret ${p.secretId}`);
+        pill.setAttribute("aria-haspopup", "dialog");
         const icon = doc.createElement("i");
         icon.className = "pi pi-lock";
         icon.setAttribute("aria-hidden", "true");
@@ -175,7 +174,7 @@ function pillSecrets(root: HTMLElement): void {
         const blur = doc.createElement("span");
         blur.className = "secret-pill-filler";
         blur.setAttribute("aria-hidden", "true");
-        blur.textContent = filler;
+        blur.textContent = secretFiller(p.secretId);
         pill.append(icon, id, blur);
         return pill;
       }),

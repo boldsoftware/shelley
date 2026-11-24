@@ -2614,7 +2614,9 @@ a.error-retry-button {
   align-self: flex-start;
 }
 
-.generic-tool-warning:hover {
+.generic-tool-warning:hover,
+.secret-bar-action:hover,
+.secrets-table a:hover {
   text-decoration: underline;
 }
 
@@ -3261,7 +3263,8 @@ diffs-container {
   border-bottom: 1px solid var(--border);
 }
 
-.patch-file-diff:last-child {
+.patch-file-diff:last-child,
+.secrets-table tr:has(+ .secrets-value) > * {
   border-bottom: 0;
 }
 
@@ -3713,7 +3716,8 @@ diffs-container {
   align-items: center;
 }
 
-.output-iframe-tool-time {
+.output-iframe-tool-time,
+.secret-chip code {
   font-family: var(--font-mono);
   font-size: var(--font-size-12);
   color: var(--text-tertiary);
@@ -6189,7 +6193,8 @@ svg {
   color: var(--text-tertiary);
 }
 .toc-entry-eot .toc-entry-icon,
-.toc-entry-image .toc-entry-icon {
+.toc-entry-image .toc-entry-icon,
+.secret-chip .pi {
   font-size: var(--font-size-12);
 }
 .toc-entry-label {
@@ -7731,19 +7736,29 @@ svg {
   }
 
   .message-input-form .message-attachments,
+  .message-input-form .secret-bar,
   .message-input-form .view-draft-label {
     grid-column: 1 / -1;
     grid-row: 2;
     order: 0;
   }
 
-  .message-input-form:has(.message-attachments, .view-draft-label) .textarea-wrapper,
-  .message-input-form:has(.message-attachments) .view-draft-label {
+  .message-input-form:has(.secret-bar, .message-attachments, .view-draft-label) .textarea-wrapper,
+  .message-input-form:has(.secret-bar) .message-attachments,
+  .message-input-form:has(.secret-bar, .message-attachments) .view-draft-label {
     grid-row: 3;
   }
 
-  .message-input-form:has(.message-attachments):has(.view-draft-label) .textarea-wrapper {
+  .message-input-form:has(.secret-bar):has(.message-attachments, .view-draft-label)
+    .textarea-wrapper,
+  .message-input-form:has(.message-attachments):has(.view-draft-label) .textarea-wrapper,
+  .message-input-form:has(.secret-bar):has(.message-attachments) .view-draft-label {
     grid-row: 4;
+  }
+
+  .message-input-form:has(.secret-bar):has(.message-attachments):has(.view-draft-label)
+    .textarea-wrapper {
+    grid-row: 5;
   }
 
   .message-textarea {
@@ -10641,7 +10656,8 @@ svg {
 .model-provider-key,
 .model-provider-suffix,
 .model-provider-empty,
-.model-provider-load-error {
+.model-provider-load-error,
+.secrets-narrow {
   color: var(--text-secondary);
   font-size: var(--font-size-12);
 }
@@ -10898,11 +10914,13 @@ svg {
   max-width: 44rem;
 }
 .integrations-status,
-.integrations-note {
+.integrations-note,
+.secrets-status {
   color: var(--text-secondary);
   font-size: var(--font-size-14);
 }
-.integrations-status {
+.integrations-status,
+.secrets-status {
   padding: 1rem 0;
 }
 .integrations-tabs {
@@ -10934,7 +10952,8 @@ svg {
   overflow-x: auto;
 }
 .integrations-table,
-.integrations-detail-table {
+.integrations-detail-table,
+.secrets-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
@@ -10951,7 +10970,8 @@ svg {
   text-align: left;
   vertical-align: top;
 }
-.integrations-table thead th {
+.integrations-table thead th,
+.secrets-table thead th {
   color: var(--text-tertiary);
   font-size: 0.7rem;
   font-weight: 600;
@@ -10965,7 +10985,8 @@ svg {
 .integrations-table th:nth-child(3) {
   width: 30%;
 }
-.integrations-table tbody tr:hover {
+.integrations-table tbody tr:hover,
+.secrets-table tr.secrets-target {
   background: var(--bg-secondary);
 }
 .integrations-name-btn {
@@ -11134,7 +11155,8 @@ svg {
   flex-wrap: wrap;
   font-size: 0.8rem;
 }
-.integrations-modal .modal-footer a {
+.integrations-modal .modal-footer a,
+.secrets-table :is(th code, td:nth-child(3)) {
   white-space: nowrap;
 }
 @media (max-width: 520px) {
@@ -11222,7 +11244,8 @@ svg {
 .skill-chip-x:hover,
 .skill-chip-x:focus-visible,
 .next-prompt-suggestion-use:not(:disabled):hover,
-.next-prompt-suggestion-use:focus-visible {
+.next-prompt-suggestion-use:focus-visible,
+.secret-chip:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
@@ -12882,7 +12905,8 @@ kbd {
   white-space: nowrap;
 }
 
-.system-prompt-tool-param-name code {
+.system-prompt-tool-param-name code,
+.secrets-table code {
   font-family: var(--font-mono);
   font-size: var(--font-size-12);
 }
@@ -13934,7 +13958,8 @@ kbd {
   white-space: normal;
 }
 
-.token-cost-table .token-cost-legend-row th {
+.token-cost-table .token-cost-legend-row th,
+.secrets-table tbody th {
   font-weight: normal;
 }
 
@@ -17357,6 +17382,12 @@ kbd {
   text-decoration: none;
   cursor: grab;
 }
+.bookmarklet-sites,
+.embed-sites {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .bookmarklet-sites-title,
 .embed-sites-title {
   margin: 1.5rem 0 0.5rem;
@@ -19371,14 +19402,14 @@ kbd {
   font-size: var(--font-size-13);
 }
 
-/* Secrets (docs/secrets.md): the transcript pill, the composer's sealed
-   bar, and the /secrets page. */
-.secret-pill,
-.markdown-content a.secret-pill {
+/* Secrets (docs/secrets.md): the pill in messages, the composer's row, and
+   the secrets modal. */
+.secret-pill {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   max-width: 100%;
+  margin: 0;
   padding: 0 6px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -19387,12 +19418,11 @@ kbd {
   font-family: var(--font-mono);
   font-size: var(--font-size-12);
   line-height: 1.5;
-  text-decoration: none;
   vertical-align: baseline;
   white-space: nowrap;
+  cursor: pointer;
 }
-.secret-pill:hover,
-.markdown-content a.secret-pill:hover {
+.secret-pill:hover {
   border-color: var(--primary);
   background: var(--bg-secondary);
   color: var(--primary);
@@ -19403,154 +19433,74 @@ kbd {
   color: var(--text-secondary);
 }
 
+/* Above the text box: what sending will capture. */
 .secret-bar {
+  flex: 0 0 100%;
+  order: -1;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0.25rem 0 0.5rem;
-  flex: 0 0 100%;
-  order: -2;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  padding: 0.125rem 0.5rem;
+  font-size: var(--font-size-14);
+  color: var(--text-secondary);
+}
+.secret-bar-label {
+  flex: none;
+  font-weight: 500;
+  color: var(--text-tertiary);
 }
 .secret-chip {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0 4px 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-12);
-}
-.secret-chip-uploading {
-  opacity: 0.6;
-}
-.secret-chip-lock {
-  width: 13px;
-  height: 13px;
-}
-.secret-chip-undo {
-  padding: 2px 6px;
-  border: none;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0 0.25rem;
+  border: 0;
   border-radius: 4px;
-  background: transparent;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.secret-bar-action {
+  margin-left: auto;
+  padding: 0 0.25rem;
+  border: 0;
+  background: none;
+  font: inherit;
   color: var(--primary);
   cursor: pointer;
 }
-.secret-chip-undo:hover {
-  background: var(--bg-tertiary);
-  text-decoration: underline;
-}
 
-.secrets-page {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 24px 16px 64px;
-  color: var(--text-primary);
-}
-.secrets-header {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-}
-.secrets-header h1 {
-  margin: 0;
-  line-height: 1.2;
-}
-.secrets-back,
-.secret-facts a {
+.secrets-table a {
   color: var(--primary);
   text-decoration: none;
 }
-.secrets-error {
-  padding: 8px 12px;
-  border: 1px solid var(--error-border);
-  border-radius: 6px;
-  background: var(--error-bg);
-  color: var(--error-text);
+.secrets-intro {
+  margin: 0 0 0.75rem;
+  color: var(--text-secondary);
+  font-size: var(--font-size-14);
 }
-.secret-card {
-  margin: 12px 0;
-  padding: 12px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-base);
+.secrets-table :is(th, td) {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
 }
-.secret-card-target {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent);
+.secrets-table .secrets-actions {
+  width: 1%;
+  padding: 0.25rem 0;
+  text-align: right;
+  white-space: nowrap;
 }
-.secret-card-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.secret-name {
-  flex: 1;
-  min-width: 0;
-  padding: 4px 6px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-}
-.secret-name:hover,
-.secret-name:focus {
-  border-color: var(--border);
-}
-.secret-facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 16px;
-  margin: 8px 0;
-  font-size: var(--font-size-13);
-}
-.secret-facts dd {
-  margin: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.secret-injections,
-.bookmarklet-sites,
-.embed-sites {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.secret-injections li {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.secret-value {
-  margin: 8px 0;
-  padding: 8px;
-  border-radius: 6px;
-  background: var(--bg-tertiary);
-  overflow-wrap: anywhere;
-}
-.secret-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--font-size-13);
-}
-.secret-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--border);
+.secrets-value code {
+  display: block;
+  padding: 0.5rem;
   border-radius: 6px;
   background: var(--bg-secondary);
-  color: var(--text-primary);
-  font: inherit;
-  cursor: pointer;
-}
-.secret-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 /* A title-only drawer row's build status: a pill tinted by its own text
@@ -19889,8 +19839,10 @@ kbd {
   top: 1rem;
   margin: 0;
 }
+/* Not clickable: in selection mode, and on pages without the secrets modal. */
 .drawer.selection-mode .conversation-tag,
-.drawer.selection-mode .conversation-meta button {
+.drawer.selection-mode .conversation-meta button,
+.export-page .secret-pill {
   pointer-events: none;
   cursor: inherit;
 }

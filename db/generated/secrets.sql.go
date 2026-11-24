@@ -12,7 +12,8 @@ import (
 
 const createSecret = `-- name: CreateSecret :exec
 
-INSERT INTO secrets (id, name, kind, sealed, conversation_id) VALUES (?, ?, ?, ?, ?)
+INSERT INTO secrets (id, name, kind, sealed, conversation_id, expires_at)
+VALUES (?, ?, ?, ?, ?, datetime('now', CAST(?6 AS TEXT)))
 `
 
 type CreateSecretParams struct {
@@ -21,9 +22,12 @@ type CreateSecretParams struct {
 	Kind           string  `json:"kind"`
 	Sealed         []byte  `json:"sealed"`
 	ConversationID *string `json:"conversation_id"`
+	Lifetime       string  `json:"lifetime"`
 }
 
-// Secrets (069-secrets.sql).
+// Secrets (069-secrets.sql, 088-secret-expiry.sql). Expired secrets are
+// deleted before they're read.
+// lifetime is a SQLite date modifier, e.g. '+86400 seconds'.
 func (q *Queries) CreateSecret(ctx context.Context, arg CreateSecretParams) error {
 	_, err := q.db.ExecContext(ctx, createSecret,
 		arg.ID,
@@ -31,8 +35,21 @@ func (q *Queries) CreateSecret(ctx context.Context, arg CreateSecretParams) erro
 		arg.Kind,
 		arg.Sealed,
 		arg.ConversationID,
+		arg.Lifetime,
 	)
 	return err
+}
+
+const deleteExpiredSecrets = `-- name: DeleteExpiredSecrets :execrows
+DELETE FROM secrets WHERE expires_at <= CURRENT_TIMESTAMP
+`
+
+func (q *Queries) DeleteExpiredSecrets(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteExpiredSecrets)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const deleteSecret = `-- name: DeleteSecret :execrows
@@ -59,12 +76,13 @@ func (q *Queries) GetSealedSecret(ctx context.Context, id string) ([]byte, error
 }
 
 const listSealedSecrets = `-- name: ListSealedSecrets :many
-SELECT id, sealed FROM secrets
+SELECT id, sealed, expires_at FROM secrets
 `
 
 type ListSealedSecretsRow struct {
-	ID     string `json:"id"`
-	Sealed []byte `json:"sealed"`
+	ID        string    `json:"id"`
+	Sealed    []byte    `json:"sealed"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 func (q *Queries) ListSealedSecrets(ctx context.Context) ([]ListSealedSecretsRow, error) {
@@ -76,48 +94,7 @@ func (q *Queries) ListSealedSecrets(ctx context.Context) ([]ListSealedSecretsRow
 	items := []ListSealedSecretsRow{}
 	for rows.Next() {
 		var i ListSealedSecretsRow
-		if err := rows.Scan(&i.ID, &i.Sealed); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSecretInjections = `-- name: ListSecretInjections :many
-SELECT secret_id, conversation_id, machine, path, created_at FROM secret_injections ORDER BY created_at DESC, id DESC
-`
-
-type ListSecretInjectionsRow struct {
-	SecretID       string    `json:"secret_id"`
-	ConversationID *string   `json:"conversation_id"`
-	Machine        string    `json:"machine"`
-	Path           string    `json:"path"`
-	CreatedAt      time.Time `json:"created_at"`
-}
-
-func (q *Queries) ListSecretInjections(ctx context.Context) ([]ListSecretInjectionsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSecretInjections)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListSecretInjectionsRow{}
-	for rows.Next() {
-		var i ListSecretInjectionsRow
-		if err := rows.Scan(
-			&i.SecretID,
-			&i.ConversationID,
-			&i.Machine,
-			&i.Path,
-			&i.CreatedAt,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.Sealed, &i.ExpiresAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -132,17 +109,16 @@ func (q *Queries) ListSecretInjections(ctx context.Context) ([]ListSecretInjecti
 }
 
 const listSecrets = `-- name: ListSecrets :many
-SELECT secrets.id, secrets.name, secrets.kind, secrets.conversation_id, secrets.created_at, conversations.slug AS conversation_slug
+SELECT secrets.id, secrets.kind, secrets.conversation_id, secrets.expires_at, conversations.slug AS conversation_slug
 FROM secrets LEFT JOIN conversations ON conversations.conversation_id = secrets.conversation_id
 ORDER BY secrets.created_at DESC, secrets.id
 `
 
 type ListSecretsRow struct {
 	ID               string    `json:"id"`
-	Name             string    `json:"name"`
 	Kind             string    `json:"kind"`
 	ConversationID   *string   `json:"conversation_id"`
-	CreatedAt        time.Time `json:"created_at"`
+	ExpiresAt        time.Time `json:"expires_at"`
 	ConversationSlug *string   `json:"conversation_slug"`
 }
 
@@ -157,10 +133,9 @@ func (q *Queries) ListSecrets(ctx context.Context) ([]ListSecretsRow, error) {
 		var i ListSecretsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Name,
 			&i.Kind,
 			&i.ConversationID,
-			&i.CreatedAt,
+			&i.ExpiresAt,
 			&i.ConversationSlug,
 		); err != nil {
 			return nil, err
@@ -174,42 +149,4 @@ func (q *Queries) ListSecrets(ctx context.Context) ([]ListSecretsRow, error) {
 		return nil, err
 	}
 	return items, nil
-}
-
-const recordSecretInjection = `-- name: RecordSecretInjection :exec
-INSERT INTO secret_injections (secret_id, conversation_id, machine, path) VALUES (?, ?, ?, ?)
-`
-
-type RecordSecretInjectionParams struct {
-	SecretID       string  `json:"secret_id"`
-	ConversationID *string `json:"conversation_id"`
-	Machine        string  `json:"machine"`
-	Path           string  `json:"path"`
-}
-
-func (q *Queries) RecordSecretInjection(ctx context.Context, arg RecordSecretInjectionParams) error {
-	_, err := q.db.ExecContext(ctx, recordSecretInjection,
-		arg.SecretID,
-		arg.ConversationID,
-		arg.Machine,
-		arg.Path,
-	)
-	return err
-}
-
-const renameSecret = `-- name: RenameSecret :execrows
-UPDATE secrets SET name = ? WHERE id = ?
-`
-
-type RenameSecretParams struct {
-	Name string `json:"name"`
-	ID   string `json:"id"`
-}
-
-func (q *Queries) RenameSecret(ctx context.Context, arg RenameSecretParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, renameSecret, arg.Name, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
 }

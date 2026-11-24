@@ -230,6 +230,12 @@
             commandPaletteOpen = false;
           }
         "
+        @open-secrets-modal="
+          () => {
+            secretsModal = { target: null };
+            commandPaletteOpen = false;
+          }
+        "
         @open-favicon-emoji-picker="
           () => {
             faviconEmojiPickerOpen = true;
@@ -302,6 +308,17 @@
         @close="
           () => {
             featureFlagsModalOpen = false;
+            focusMessageInputIfUnfocused();
+          }
+        "
+      />
+
+      <SecretsModal
+        :is-open="secretsModal !== null"
+        :target="secretsModal?.target"
+        @close="
+          () => {
+            secretsModal = null;
             focusMessageInputIfUnfocused();
           }
         "
@@ -383,6 +400,7 @@ import IntegrationsModal from "./components/IntegrationsModal.vue";
 import NotificationsModal from "./components/NotificationsModal.vue";
 import FeatureFlagsModal from "./components/FeatureFlagsModal.vue";
 import EmbedModal from "./components/EmbedModal.vue";
+import SecretsModal from "./components/SecretsModal.vue";
 import FaviconEmojiPicker from "./components/FaviconEmojiPicker.vue";
 import FileFinderModal from "./components/FileFinderModal.vue";
 import EditableFileModal from "./components/EditableFileModal.vue";
@@ -674,6 +692,15 @@ const integrationsModalOpen = ref(false);
 const notificationsModalOpen = ref(false);
 const featureFlagsModalOpen = ref(false);
 const embedModalOpen = ref(false);
+// Open, on the secret whose pill was clicked if any.
+const secretsModal = ref<{ target: string | null } | null>(null);
+// Secret pills (SecretPill.vue, markdownRender.ts) are in rendered HTML too.
+function openSecretPill(event: MouseEvent) {
+  const pill = (event.target as Element | null)?.closest?.<HTMLElement>(".secret-pill");
+  if (!pill?.dataset.secretId) return;
+  event.preventDefault();
+  secretsModal.value = { target: pill.dataset.secretId };
+}
 const faviconEmojiPickerOpen = ref(false);
 // Fuzzy file finder (Cmd/Ctrl+P) + the generic editor it opens.
 const fileFinderOpen = ref(false);
@@ -1423,6 +1450,7 @@ async function handleFirstMessage(
   cwd?: string,
   conversationOptions?: ChatRequest["conversation_options"],
   skills?: string[],
+  keepFoundSecrets?: boolean,
 ) {
   // The composer row stands in for the new conversation until the response
   // names it.
@@ -1439,6 +1467,7 @@ async function handleFirstMessage(
       cwd,
       conversation_options: conversationOptions,
       skills,
+      keep_found_secrets: keepFoundSecrets || undefined,
     });
     const newConversationId = response.conversation_id;
     // The conversation list's patches can beat the response: a first turn
@@ -1704,6 +1733,7 @@ onMounted(() => {
   });
 
   document.addEventListener("keydown", handleKeyDown);
+  document.addEventListener("click", openSecretPill);
   window.addEventListener("popstate", handlePopState);
 });
 
@@ -1718,6 +1748,7 @@ onUnmounted(() => {
   globalStreamHandle?.close();
   globalStreamHandle = null;
   document.removeEventListener("keydown", handleKeyDown);
+  document.removeEventListener("click", openSecretPill);
   window.removeEventListener("popstate", handlePopState);
   clearChord();
 });

@@ -18,6 +18,7 @@
          (e: "focus"): void
          (e: "clear-injected-text"): void
          (e: "draft-change", value: string): void
+         (e: "text-change", value: string): void
          (e: "draft-send-started"): void
          (e: "draft-cleared"): void
          (e: "recording-unsent", path: string, error: unknown): void
@@ -86,37 +87,30 @@
         aria-hidden="true"
         @change="handleFileSelect"
       />
-      <div v-if="sealedSecrets.length > 0" class="secret-bar" data-testid="secret-bar">
-        <span
-          v-for="s in sealedSecrets"
-          :key="s.id"
-          :class="`secret-chip secret-chip-${s.status}`"
-          :title="s.error ?? `Stored as a secret: the model sees {{secret:${s.id}}}`"
+      <div v-if="secretChips.length > 0" class="secret-bar" data-testid="secret-bar">
+        <span class="secret-bar-label">{{
+          secretsKept ? "Sent as text" : "Captured on send"
+        }}</span>
+        <button
+          v-for="(c, i) in secretChips"
+          :key="i"
+          type="button"
+          class="secret-chip"
+          @mousedown.prevent
+          @click="selectSpan(c)"
         >
-          <svg
-            class="secret-chip-lock"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            aria-hidden="true"
-          >
-            <rect x="5" y="11" width="14" height="10" rx="2" />
-            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-          </svg>
-          <span class="secret-chip-id">{{ s.id }}</span>
-          <span v-if="s.status === 'error'" class="secret-chip-error text-error">{{
-            s.error
-          }}</span>
-          <button
-            type="button"
-            class="secret-chip-undo"
-            :aria-label="`Undo secret ${s.id}`"
-            @click="undoSecret(s.id)"
-          >
-            Undo
-          </button>
-        </span>
+          <i v-if="!secretsKept" class="pi pi-lock" aria-hidden="true" />{{ c.label }}
+          <code>{{ c.preview }}</code>
+        </button>
+        <button
+          type="button"
+          class="secret-bar-action"
+          data-testid="secret-bar-action"
+          @mousedown.prevent
+          @click="toggleNotSecrets"
+        >
+          {{ secretsKept ? "Capture" : "Don't capture" }}
+        </button>
       </div>
       <div
         v-if="attachments.length > 0 || selectedSkills.length > 0"
@@ -485,9 +479,9 @@
                     : undefined
             "
             @input="onTextareaInput"
-            @select="onCaretMove"
-            @click="onCaretMove"
-            @keyup="onCaretMove"
+            @select="syncFileSelection"
+            @click="syncFileSelection"
+            @keyup="syncFileSelection"
             @blur="onTextareaBlur"
             @keydown="handleKeyDown"
             @paste="handlePaste"
@@ -640,7 +634,7 @@ import PathText from "./PathText.vue";
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowReactive, shallowRef, useId, watch, watchEffect } from "vue";
 import { useFileCompletion } from "../composables/fileCompletion";
 import { useSkillCompletion } from "../composables/skillCompletion";
-import { apiFetch, type SkillDescriptor } from "../../services/api";
+import { apiFetch, type SecretSpan, type SkillDescriptor } from "../../services/api";
 import type { Profile } from "../../types";
 import { useI18n } from "../composables/i18n";
 import { pickPlaceholderHint } from "../../utils/placeholderHints";
@@ -655,7 +649,7 @@ import type { RecordingDestination, RecordingMode, RecordingPreparation } from "
 import { focusMessageInputIfUnfocused } from "../../utils/focusMessageInput";
 import { isCommand, openComposer, viewDraftFor, type ViewDraft } from "../../services/viewDrafts";
 import { useFeatureFlag } from "../composables/featureFlags";
-import { useSecretSealing } from "../composables/secretSealing";
+import { useSecretPreview } from "../composables/secretPreview";
 import { prettyModelName } from "../../utils/modelNames";
 import {
   CONCRETE_THINKING_LEVELS,
@@ -682,7 +676,11 @@ interface AttachmentSession {
 const props = withDefaults(
   defineProps<{
     /** Async send handler (awaited). Mirrors React's onSend prop. */
-    onSend: (message: string, skills?: string[]) => Promise<void> | void;
+    onSend: (
+      message: string,
+      skills?: string[],
+      keepFoundSecrets?: boolean,
+    ) => Promise<void> | void;
     voiceActive?: boolean;
     /** Leave the persistent call slot available when browsing an archive. */
     composerHidden?: boolean;
@@ -691,7 +689,11 @@ const props = withDefaults(
     /** Archived conversations hide the composer, but not an active recording. */
     recordingInlineAvailable?: boolean;
     /** Async queue handler (awaited). Mirrors React's onQueue prop. */
-    onQueue?: (message: string, skills?: string[]) => Promise<void> | void;
+    onQueue?: (
+      message: string,
+      skills?: string[],
+      keepFoundSecrets?: boolean,
+    ) => Promise<void> | void;
     /** Show the split send button with queue chevron (e.g. when in a conversation) */
     showQueueOption?: boolean;
     /** Whether queuing is available right now (agent is working) */
@@ -706,7 +708,8 @@ const props = withDefaults(
      * live keystroke value: the parent must not re-render per keystroke (that
      * made typing crawl in huge conversations); it tracks live text via the
      * draft-change emit instead. */
-    draftSeed?: { value: string } | null;
+    /** saved: the part of value already in the draft, if not all of it. */
+    draftSeed?: { value: string; saved?: string } | null;
     initialRows?: number;
     /** Id of the focused conversation, used to scope pending attachments. */
     conversationId?: string | null;
@@ -748,6 +751,8 @@ const emit = defineEmits<{
   (e: "open-terminal"): void;
   (e: "clear-injected-text"): void;
   (e: "draft-change", value: string): void;
+  /** The draft as it is, saved or not. */
+  (e: "text-change", value: string): void;
   (e: "draft-send-started"): void;
   (e: "draft-cleared"): void;
   (e: "recording-unsent", path: string, error: unknown): void;
@@ -788,47 +793,100 @@ const recordingFloating = computed(() => {
   return (props.conversationId ?? null) !== target;
 });
 // setMessage mirrors the React controlled-value path: surfaces every change via
-// draft-change so the parent can persist it.
-// A draft holding an unsealed secret is not saved (docs/secrets.md).
-function setMessage(next: string | ((prev: string) => string)) {
+// draft-change so the parent can persist it, unless it may hold a secret
+// (savableDraft). Only typing is known to bring none.
+function setMessage(next: string | ((prev: string) => string), typed = false) {
   const prev = message.value;
   const value = typeof next === "function" ? next(prev) : next;
-  if (value !== prev && !secrets.holdsUnsealed(value)) emit("draft-change", value);
   message.value = value;
+  if (value === prev) return;
+  if (!typed) unchecked = true;
+  saveDraft();
 }
 
-const secretsOn = useFeatureFlag("secrets");
-const secrets = useSecretSealing(secretsOn, () => props.conversationId ?? undefined);
-const sealedSecrets = secrets.sealed;
+const secretsOn = useFeatureFlag("secrets", true);
+const secretPreview = useSecretPreview(() => message.value, secretsOn);
+// The parent's draft, which seeds set too.
+let savedDraft = props.draftSeed?.saved ?? message.value;
+// Text that wasn't typed waits for the server's check (docs/secrets.md).
+let unchecked = savedDraft !== message.value;
+function saveDraft() {
+  const value = savableDraft();
+  if (value === undefined || value === savedDraft) return;
+  savedDraft = value;
+  emit("draft-change", value);
+}
+watch(secretPreview.preview, (p) => {
+  if (p.text === message.value) unchecked = false;
+  saveDraft();
+});
+/** The draft, or undefined while it may hold a secret: until the server
+ *  has checked text that wasn't typed, and while its last check found any. */
+function savableDraft(): string | undefined {
+  const held = unchecked || secretPreview.preview.value.spans.length > 0;
+  return held && message.value.trim() ? undefined : draftValue();
+}
+/** What the draft holds: the text box, less a view's message the user left
+ *  as the view wrote it. */
+function draftValue(): string {
+  const filled = viewDraft.value?.filled;
+  return filled && viewTextUntouched() ? filled.before : message.value;
+}
 
-/** Sets the message to text with its complete secrets sealed (all of them
- *  if all), keeping the caret where it was in the text. */
-function setMessageSealed(text: string, caret: number, all: boolean): string {
-  const out = secrets.seal(text, caret, all);
-  setMessage(out.text);
+// What the server would find in the message, while the text it was found in
+// is still in it. The user's own marks and values stored already aren't
+// listed: they go anyway.
+const secretChips = computed(() => {
+  const { text, spans } = secretPreview.preview.value;
+  if (!message.value.includes(text)) return [];
+  const offset = message.value.indexOf(text);
+  return found(spans).map((s) => {
+    const value = text.slice(s.start, s.end);
+    return {
+      value,
+      label: s.label,
+      start: offset + s.start,
+      end: offset + s.end,
+      preview: value.length > 12 ? `${value.slice(0, 4)}…` : "…",
+    };
+  });
+});
+
+// Values the user said hold no secret. The message goes with
+// keep_found_secrets only while all the spans found in exactly its text are
+// among them; otherwise everything found is extracted.
+const notSecrets = ref(new Set<string>());
+const secretsKept = computed(
+  () =>
+    secretChips.value.length > 0 && secretChips.value.every((c) => notSecrets.value.has(c.value)),
+);
+function toggleNotSecrets() {
+  notSecrets.value = secretsKept.value ? new Set() : new Set(secretChips.value.map((c) => c.value));
+}
+function keepFoundSecrets(value: string): boolean {
+  const { text, spans } = secretPreview.preview.value;
+  const unmarked = found(spans);
+  return (
+    text === value &&
+    unmarked.length > 0 &&
+    unmarked.every((s) => notSecrets.value.has(text.slice(s.start, s.end)))
+  );
+}
+function found(spans: SecretSpan[]): SecretSpan[] {
+  return spans.filter((s) => !s.manual && !s.stored);
+}
+watch(message, (value) => {
+  if (!value.trim()) notSecrets.value = new Set();
+});
+
+function selectSpan(c: { start: number; end: number }) {
   const textarea = textareaRef.value;
-  if (out.text !== text && textarea) {
-    void nextTick(() => textarea.setSelectionRange(out.caret, out.caret));
-  }
-  return out.text;
+  if (!textarea || message.value.slice(c.start, c.end) === "") return;
+  textarea.focus();
+  textarea.setSelectionRange(c.start, c.end);
 }
 
-/** Seals every secret in the message before it is sent. */
-function sealForSend(): string {
-  return setMessageSealed(message.value, textareaRef.value?.selectionStart ?? 0, true);
-}
-
-function onCaretMove() {
-  syncFileSelection();
-  const textarea = textareaRef.value;
-  if (textarea && !viewTextUntouched()) {
-    setMessageSealed(message.value, textarea.selectionStart, false);
-  }
-}
-
-/** Whether the text box holds a view's message as the view wrote it. Until
- *  the user edits it or sends it, nothing changes it for them: sealing
- *  would make it look edited, so theirs. */
+/** Whether the text box holds a view's message as the view wrote it. */
 function viewTextUntouched(): boolean {
   const filled = viewDraft.value?.filled;
   return !!filled && message.value === filled.after;
@@ -849,16 +907,14 @@ function viewTextInCommand(): boolean {
   return true;
 }
 
-function undoSecret(id: string) {
-  setMessage(secrets.undo(id, message.value).text);
-}
-
 // Sync programmatic seeds (e.g. switching between draft conversations).
 watch(
   () => props.draftSeed,
   (seed) => {
     if (seed == null) return;
     message.value = seed.value;
+    savedDraft = seed.saved ?? seed.value;
+    if (savedDraft !== seed.value) unchecked = true;
     // A seed for this conversation replaces the text box, view's text and all.
     const draft = viewDraft.value;
     if (draft?.filled && !draft.sending) draft.settle(false);
@@ -932,6 +988,7 @@ const suggestion = computed(() =>
 // the keys or taps meant for the view don't send it.
 const VIEW_DRAFT_HOLD_MS = 600;
 const viewDraft = computed(() => viewDraftFor(props.conversationId));
+watch(draftValue, (value) => emit("text-change", value), { flush: "sync" });
 const viewDraftFresh = ref(false);
 const viewDraftLabelId = useId();
 let viewDraftTimer: ReturnType<typeof setTimeout> | undefined;
@@ -958,6 +1015,7 @@ watch([viewDraft, () => props.conversationId], ([draft, id], [old, oldId]) => {
   const value = withViewText(before, draft.text);
   draft.filled = { before, after: value };
   message.value = value;
+  unchecked = true;
   viewDraftFresh.value = true;
   clearTimeout(viewDraftTimer);
   viewDraftTimer = setTimeout(() => (viewDraftFresh.value = false), VIEW_DRAFT_HOLD_MS);
@@ -1037,10 +1095,13 @@ function beginRecording(mode: RecordingMode) {
       : undefined;
   void microphone?.catch(() => {});
   void screen?.catch(() => {});
+  // The recording's destination may be a new draft, which must not hold a
+  // secret; the message itself goes through the chat API with it.
+  const draftText = savableDraft() ?? "";
   // A recording goes out without Send, so not with a view's message.
   withdrawViewText();
   // The recorder starts while the destination is still being created.
-  const preparation = props.onStartRecording(message.value);
+  const preparation = props.onStartRecording(draftText);
   const submission = shallowReactive<RecordingSubmission>({
     mode,
     microphone,
@@ -1331,8 +1392,9 @@ watch(
           // It joins the user's text, ahead of the view's, which stays as
           // the view wrote it.
           draft.filled = { before, after: withViewText(before, draft.text) };
-          if (!secrets.holdsUnsealed(before)) emit("draft-change", before);
           message.value = draft.filled.after;
+          unchecked = true;
+          saveDraft();
         }
       } else {
         setMessage(add);
@@ -1489,9 +1551,6 @@ function closeSkillPicker() {
   textareaRef.value?.focus({ preventScroll: true });
 }
 function onTextareaBlur(e: FocusEvent) {
-  if (!viewTextUntouched()) {
-    setMessageSealed(message.value, (e.target as HTMLTextAreaElement).selectionStart, true);
-  }
   fileFocused.value = false;
   if (!skillMenuRef.value?.contains(e.relatedTarget as Node)) skillFocused.value = false;
 }
@@ -1831,7 +1890,8 @@ async function handleSubmit(e: Event) {
   if (canSubmit.value) {
     if (openTerminalIfRequested(composerDispatch(message.value))) return;
 
-    const messageToSend = composeMessageWithAttachments(sealForSend());
+    const messageToSend = composeMessageWithAttachments(message.value);
+    const keep = keepFoundSecrets(message.value);
     const attachmentSession = activeAttachmentSession;
     // Pause autosave before awaiting onSend so a trailing PUT can't race the
     // chat POST. Don't clear the draft yet — if send fails the textarea stays.
@@ -1842,10 +1902,8 @@ async function handleSubmit(e: Event) {
     const draft = holdViewDraft();
     submissions.value++;
     try {
-      await secrets.ready();
-      await props.onSend(messageToSend, selectedSkillNames());
+      await props.onSend(messageToSend, selectedSkillNames(), keep);
       draft?.settle(true);
-      void secrets.sent(messageToSend);
       clearAttachments(attachmentSession);
       guardComposerClear(origin, composerOrigin, () => {
         selectedSkills.value = [];
@@ -1873,15 +1931,10 @@ async function handleQueueMessage() {
     return;
   }
   if (hasContent.value && props.onQueue) {
-    const messageToQueue = composeMessageWithAttachments(sealForSend()).trim();
+    const messageToQueue = composeMessageWithAttachments(message.value).trim();
+    const keep = keepFoundSecrets(message.value);
     const draft = holdViewDraft();
     submissions.value++;
-    try {
-      await secrets.ready();
-    } catch {
-      releaseViewDraft(draft);
-      return; // The secret bar shows the failed upload.
-    }
     const skillsToQueue = selectedSkills.value;
     const origin = composerOrigin();
     setMessage("");
@@ -1894,9 +1947,9 @@ async function handleQueueMessage() {
       await props.onQueue(
         messageToQueue,
         skillsToQueue.map((s) => s.name),
+        keep,
       );
       draft?.settle(true);
-      void secrets.sent(messageToQueue);
     } catch {
       guardComposerClear(origin, composerOrigin, () => {
         selectedSkills.value = skillsToQueue;
@@ -1915,16 +1968,11 @@ async function handleSendNow() {
   if (canSubmit.value) {
     const dispatch = composerDispatch(message.value, { intent: "send-now" });
     if (openTerminalIfRequested(dispatch)) return;
-    const composed = composeMessageWithAttachments(sealForSend());
+    const composed = composeMessageWithAttachments(message.value);
     const draft = holdViewDraft();
     submissions.value++;
-    try {
-      await secrets.ready();
-    } catch {
-      releaseViewDraft(draft);
-      return; // The secret bar shows the failed upload.
-    }
     const messageToSend = dispatch.route === "btw" ? composed : composed.trim();
+    const keep = keepFoundSecrets(message.value);
     const skillsToSend = selectedSkills.value;
     setMessage("");
     clearAttachments();
@@ -1939,9 +1987,9 @@ async function handleSendNow() {
       await props.onSend(
         messageToSend,
         skillsToSend.map((s) => s.name),
+        keep,
       );
       draft?.settle(true);
-      void secrets.sent(messageToSend);
     } catch {
       guardComposerClear(origin, composerOrigin, () => {
         selectedSkills.value = skillsToSend;
@@ -1963,10 +2011,17 @@ function openTerminalIfRequested(dispatch: ReturnType<typeof composerDispatch>):
   return true;
 }
 
+// Input types of typing, as opposed to pasting, dropping or undoing. A
+// keyboard's clipboard suggestion comes as insertText too, so inserted text
+// with a long run without spaces, as secrets have, waits for the check; so
+// does such text set by a script (its input event has no type).
+const TYPED = /^(insert(Text|LineBreak|Paragraph|CompositionText|ReplacementText)$|delete)/;
 function onTextareaInput(e: Event) {
   const textarea = e.target as HTMLTextAreaElement;
-  const paste = (e as InputEvent).inputType === "insertFromPaste";
-  setMessageSealed(textarea.value, textarea.selectionStart, paste);
+  const { inputType, data } = e as InputEvent;
+  const inserted = inputType ? (data ?? "") : textarea.value;
+  const typed = (!inputType || TYPED.test(inputType)) && !/\S{12}/.test(inserted);
+  setMessage(textarea.value, typed);
   syncFileSelection();
 }
 
@@ -2193,6 +2248,7 @@ onUnmounted(() => {
   window.removeEventListener("keyup", trackAlt);
   window.removeEventListener("blur", clearAlt);
   disposed = true;
+  secretPreview.cancel();
   const sessions = new Set(attachmentSessions.values());
   if (recordingSubmission.value) sessions.add(recordingSubmission.value.attachmentSession);
   recordingSubmission.value?.preparation.release();
