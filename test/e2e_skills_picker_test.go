@@ -109,7 +109,7 @@ func TestE2ESkillsPickerLongMCPDetailsKeepPickerFixed(t *testing.T) {
 }
 
 func TestE2ESkillsPickerChoosingAddsChip(t *testing.T) {
-	e2e(t, useful(0), skillsPickerSetup+`On a wide screen, choosing a skill adds a chip, clears "/skills" and sends nothing. Call "start recording" starts recording the page's POST requests, other than the activity heartbeat and read receipts; call "recorded posts" returns them, or "none". Perform the steps in order. 1. Navigate to /c/skills, and wait for the input to be visible. 2. Call "start recording". 3. Fill the input with "/skills draft". 4. Click the first option. 5. The chip should contain "draft-review". 6. The input's value should be exactly "". 7. The picker should be hidden (or absent). 8. Call "recorded posts" with expect "none".`, func(s *shelley) {
+	e2e(t, useful(0), skillsPickerSetup+`On a wide screen, choosing a skill adds a chip, clears "/skills" and sends nothing. Call "start recording" starts recording the page's POST requests, other than the activity heartbeat, read receipts and the composer's secret check; call "recorded posts" returns them, or "none". Perform the steps in order. 1. Navigate to /c/skills, and wait for the input to be visible. 2. Call "start recording". 3. Fill the input with "/skills draft". 4. Click the first option. 5. The chip should contain "draft-review". 6. The input's value should be exactly "". 7. The picker should be hidden (or absent). 8. Call "recorded posts" with expect "none".`, func(s *shelley) {
 		s.viewport(1280, 800)
 		skillsPicker(s)
 		var mu sync.Mutex
@@ -129,8 +129,9 @@ func TestE2ESkillsPickerChoosingAddsChip(t *testing.T) {
 			var sent []string
 			for _, req := range s.requestLog()[from:] {
 				method, uri, _ := strings.Cut(req, " ")
-				// Neither the activity heartbeat nor the read receipt is a send.
-				if method == "POST" && !strings.HasSuffix(uri, "/api/activity") && !strings.HasSuffix(uri, "/read") {
+				// The activity heartbeat, the read receipt and the debounced
+				// secret check of the composer's text are not sends.
+				if method == "POST" && !strings.HasSuffix(uri, "/api/activity") && !strings.HasSuffix(uri, "/read") && !strings.HasSuffix(uri, "/api/secrets/detect") {
 					sent = append(sent, uri)
 				}
 			}

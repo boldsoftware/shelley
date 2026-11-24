@@ -829,6 +829,10 @@ func TestE2EDrawerTokenQueryEditing(t *testing.T) {
 	// The Playwright test is one long scenario; each part below is independent
 	// (every later section starts by clearing the query), split so that each
 	// script fits in one agent run.
+	//
+	// Parallel like every other e2e test: a sequential parent holds back every
+	// parallel test in the package until its own subtests are done.
+	t.Parallel()
 	setup := func(s *shelley) {
 		drawerMe(s)
 		s.stubDrawerList(
