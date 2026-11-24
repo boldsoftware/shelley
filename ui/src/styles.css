@@ -2597,6 +2597,12 @@ a.error-retry-button {
   gap: 0.3rem;
 }
 
+.generic-tool-update {
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 400;
+}
+
 .generic-tool-warning {
   display: inline-flex;
   max-width: 100%;
@@ -12698,6 +12704,7 @@ kbd {
   white-space: nowrap;
 }
 
+.generic-tool-update a,
 .markdown-content a {
   color: var(--link-color);
   text-decoration: underline;

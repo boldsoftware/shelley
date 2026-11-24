@@ -445,6 +445,7 @@ import { perfCount } from "../utils/perf";
 import { storedSelectedCwd, storeSelectedCwd } from "../utils/selectedCwd";
 import { useI18n } from "./composables/i18n";
 import { ConversationsListKey, CurrentConversationIdKey } from "./composables/subagentLive";
+import { UiUpdatedKey } from "./composables/uiUpdated";
 import {
   COMPOSER_ROW_ID,
   ComposerPreviewKey,
@@ -546,6 +547,7 @@ function updatePageTitle(conversation: Conversation | undefined) {
 const banner = window.__SHELLEY_INIT__?.banner;
 // The server runs a newer UI build; the page reloads once hidden.
 const uiUpdated = ref(false);
+provide(UiUpdatedKey, uiUpdated);
 const reloadPage = () => window.location.reload();
 
 // ---- state ----
