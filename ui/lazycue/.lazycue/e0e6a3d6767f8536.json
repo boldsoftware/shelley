@@ -1,0 +1,215 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "An open phone comment rail navigates between files without losing focus or mixing their drafts. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Click the row titled \"first.txt\". Click \"Comment on current hunk\". Resize to 390x420. Save \".diff-rethink-rail-input\" as window.railInput and fill it with \"First file draft\". The next arrow is enabled and named \"Next file\". Click it. Wait for \".diff-rethink-file-name\" to read \"second.txt\" and the modified editor to show \"second changed\". The rail input is still window.railInput, empty, and focused. Fill it with \"Second file feedback\" and click \"OK\". The input stays open, empty, and focused. The message input contains \"\u003e second.txt:1: second changed\" followed by \"Second file feedback\", not a first.txt reference for that comment. The previous arrow is enabled and named \"Previous file\". Click it. Wait for first.txt and its \"first changed\" text. The same rail input contains \"First file draft\" and remains focused. Click \"OK\". The message input now contains both comments with their correct file references. Click the file heading, choose second.txt in the file list, and confirm the same rail input stays open and empty. The next arrow is disabled at the end of the last file. Click \"Cancel\" to close the input.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-container .git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files"
+    },
+    {
+      "action": "click",
+      "selector": "button.diff-tree-row[title=\"first.txt\"]"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Comment on current hunk"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 420,
+      "scale": 2.75,
+      "mobile": true,
+      "touch": true
+    },
+    {
+      "action": "eval",
+      "expression": "window.railInput = document.querySelector('.diff-rethink-rail-input'); 'saved'"
+    },
+    {
+      "action": "eval",
+      "expression": "window.railInput.value='First file draft'; window.railInput.dispatchEvent(new Event('input',{bubbles:true})); window.railInput.dispatchEvent(new Event('change',{bubbles:true})); window.railInput.value",
+      "expect": "First file draft"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": ".diff-rethink-next-change"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-rethink-next-change",
+      "attribute": "aria-label",
+      "value": "Next file"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-next-change"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "second.txt"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".editor.modified",
+      "text": "second changed"
+    },
+    {
+      "action": "eval",
+      "expression": "({same: document.querySelector('.diff-rethink-rail-input')===window.railInput, empty: window.railInput.value==='', focused: document.activeElement===window.railInput})",
+      "expect": "{\"empty\":true,\"focused\":true,\"same\":true}"
+    },
+    {
+      "action": "eval",
+      "expression": "window.railInput.value='Second file feedback'; window.railInput.dispatchEvent(new Event('input',{bubbles:true})); window.railInput.dispatchEvent(new Event('change',{bubbles:true})); window.railInput.value",
+      "expect": "Second file feedback"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "OK",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "({open: !!window.railInput.offsetParent, empty: window.railInput.value==='', focused: document.activeElement===window.railInput})",
+      "expect": "{\"empty\":true,\"focused\":true,\"open\":true}"
+    },
+    {
+      "action": "eval",
+      "expression": "const v=document.querySelector('[data-testid=\"message-input\"]').value; ({hasSecond: v.includes('\u003e second.txt:1: second changed\\nSecond file feedback'), noFirstForThat: !/\u003e first\\.txt:1[^\\n]*\\nSecond file feedback/.test(v), notFirstDraft: !v.includes('First file draft')})",
+      "expect": "{\"hasSecond\":true,\"noFirstForThat\":true,\"notFirstDraft\":true}"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": ".diff-rethink-prev-change"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-rethink-prev-change",
+      "attribute": "aria-label",
+      "value": "Previous file"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-prev-change"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "first.txt"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".editor.modified",
+      "text": "first changed"
+    },
+    {
+      "action": "eval",
+      "expression": "({same: document.querySelector('.diff-rethink-rail-input')===window.railInput, val: window.railInput.value, focused: document.activeElement===window.railInput})",
+      "expect": "{\"focused\":true,\"same\":true,\"val\":\"First file draft\"}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "OK",
+      "exact": true
+    },
+    {
+      "action": "eval",
+      "expression": "const v=document.querySelector('[data-testid=\"message-input\"]').value; ({first: v.includes('\u003e first.txt:1: first changed\\nFirst file draft'), second: v.includes('\u003e second.txt:1: second changed\\nSecond file feedback')})",
+      "expect": "{\"first\":true,\"second\":true}"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-file-jump"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files[role=\"dialog\"]"
+    },
+    {
+      "action": "click",
+      "selector": "button.diff-tree-row[title=\"second.txt\"]"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "second.txt"
+    },
+    {
+      "action": "eval",
+      "expression": "({same: document.querySelector('.diff-rethink-rail-input')===window.railInput, open: !!window.railInput.offsetParent, empty: window.railInput.value===''})",
+      "expect": "{\"empty\":true,\"open\":true,\"same\":true}"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": ".diff-rethink-next-change"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Cancel",
+      "exact": true
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-rethink-rail-input"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T01:39:30.465503469Z",
+    "hostname": "exedevwork",
+    "model": "accounts/fireworks/models/kimi-k3",
+    "input_tokens": 672125,
+    "output_tokens": 16347,
+    "estimated_cost_usd": 0.6051165000000001,
+    "mode": "generated"
+  }
+}

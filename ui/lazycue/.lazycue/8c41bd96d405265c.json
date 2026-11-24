@@ -1,0 +1,191 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A phone's diff file picker follows the ranked order, and a highlight comment uses the comment rail. Use condition waits, never sleep steps. Use the supplied selectors directly. The conversation at /c/{{SLUG}} works in a git repo whose top commit, \"Highlighted commit\", changes src/zeta.ts (line 160 becomes \"const critical = true;\"), README.md and src/alpha.ts, and carries commit highlights that rank the files zeta.ts, README.md, alpha.ts and comment on src/zeta.ts line 160 (\"The one line that matters.\") and README.md line 3 (\"Docs follow the code.\"). \"The overlay\" is the \".diff-viewer-overlay\" element; \"the files\" are the overlay's \".diff-tree-row[aria-selected]\" elements, in document order; \"the second file\" is the one at index 1 (pick it with \"nth\": 1, scoped with \"within\" the overlay). Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Open the Diffs workspace tool: wait for the \".header\" element to be visible, then click the button with accessible name exactly \"Diffs\" inside \".chat-workspace-actions\" (when that toolbar is not shown, click the button named exactly \"More options\" and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"). The overlay becomes visible (allow 30s).\n3. Click the first \".diff-rethink-message-files .diff-tree-code-row\" in the overlay, then click \".diff-rethink-file-jump\" to open the file picker.\n4. The labels of \".diff-rethink-mobile-files .diff-tree-code-row[aria-selected]\" are in order \"zeta.ts\", \"README.md\", \"alpha.ts\". Click the first row; \".diff-rethink-file-name\" reads \"zeta.ts\", and \".diff-rethink-file-position\" contains \"File 1 of 3\".\n5. The narrow diff is inline; the comment still shows under its line: \"the callout\" is the overlay's \".diff-highlight-callout-text\": it has exactly the text \"The one line that matters.\" and is in the viewport.\n6. A tap on the callout's button opens the comment rail, though Monaco claims touches inside the editor: tap (touch start, then touch end) the button with role \"button\" and name exactly \"Comment\" inside the overlay's element with role \"note\". The \".diff-rethink-rail-input\" is visible, focused, and has aria-label \"Comment on Line 160, new\". There is no \".diff-viewer-comment-dialog\" or \".diff-viewer-selected-text\".\n7. Save the rail input node as window.highlightInput, fill \".diff-rethink-rail-input\" with \"Why this line?\", and click \".diff-rethink-change-nav .diff-rethink-comment-change\" (the exact OK button). The rail input remains visible, empty, focused, and identical to window.highlightInput.\n8. The message input ([data-testid=\"message-input\"]) has exactly this value, including the final empty line: \"\u003e src/zeta.ts:160: const critical = true;\\n\u003e ★ The one line that matters.\\nWhy this line?\\n\\n\". Check its value in an eval with expect as a JSON string, preserving the newlines.\n9. Click \".diff-rethink-cancel-comment\". The rail input disappears and the \"Comment on current hunk\" button returns.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=\"message-input\"]",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "eval",
+          "expression": "(() =\u003e { const tb = document.querySelector('.chat-workspace-actions'); if (!tb) return 'no-toolbar'; const direct = tb.querySelector('[aria-label=\"Diffs\"]'); if (direct) { direct.click(); return 'direct'; } const more = tb.querySelector('[aria-label=\"More options\"]'); if (more) { more.click(); return 'more'; } return 'not-found'; })()"
+        },
+        {
+          "action": "eval",
+          "expression": "(() =\u003e { const popover = document.querySelector('.chat-overflow-popover'); if (!popover) return 'no-popover'; const btn = [...popover.querySelectorAll('button')].find(b =\u003e b.textContent.trim().startsWith('Diffs')); if (btn) { btn.click(); return 'clicked'; } return 'no-diffs-btn'; })()"
+        }
+      ],
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .diff-rethink-message-files .diff-tree-code-row"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .diff-rethink-file-jump"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files .diff-tree-code-row[aria-selected]"
+    },
+    {
+      "action": "assert_texts",
+      "selector": ".diff-rethink-mobile-files .diff-tree-code-row[aria-selected] .diff-tree-label",
+      "texts": [
+        "zeta.ts",
+        "README.md",
+        "alpha.ts"
+      ]
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files .diff-tree-code-row[aria-selected]",
+      "nth": 0
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-rethink-mobile-files[role=\"dialog\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-viewer-overlay .diff-rethink-file-name",
+      "text": "zeta.ts"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-viewer-overlay .diff-rethink-file-position",
+      "text": "File 1 of 3"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .diff-highlight-callout-text",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-viewer-overlay .diff-highlight-callout-text",
+      "text": "The one line that matters."
+    },
+    {
+      "action": "assert_in_viewport",
+      "selector": ".diff-viewer-overlay .diff-highlight-callout-text"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "within": {
+        "selector": ".diff-viewer-overlay [role=\"note\"]"
+      },
+      "role": "button",
+      "name": "Comment",
+      "exact": true
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-rail-input",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-rethink-rail-input",
+      "attribute": "aria-label",
+      "value": "Comment on Line 160, new"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-viewer-comment-dialog"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-viewer-selected-text"
+    },
+    {
+      "action": "eval",
+      "expression": "window.highlightInput = document.querySelector('.diff-rethink-rail-input'); window.highlightInput !== null"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-rethink-rail-input",
+      "value": "Why this line?"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-change-nav .diff-rethink-comment-change"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-rail-input",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_value",
+      "selector": ".diff-rethink-rail-input",
+      "value": ""
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-rethink-rail-input') === window.highlightInput",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=\"message-input\"]').value",
+      "expect": "\u003e src/zeta.ts:160: const critical = true;\n\u003e ★ The one line that matters.\nWhy this line?\n\n"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-cancel-comment"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-rethink-rail-input",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-change-nav .diff-rethink-comment-change[aria-label=\"Comment on current hunk\"]",
+      "timeout": "15s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T02:24:05.099506248Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 377156,
+    "output_tokens": 11468,
+    "estimated_cost_usd": 0.36733695,
+    "mode": "generated"
+  }
+}

@@ -134,7 +134,7 @@
     height: 50px;
     box-sizing: border-box;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 44px 44px;
+    grid-template-columns: auto minmax(0, 1fr) 44px 44px;
     flex: none;
     align-items: center;
     column-gap: 8px;
@@ -519,11 +519,28 @@
       sans-serif !important;
   }
 
+  .diff-viewer-rethink:has(> .diff-viewer-comment-dialog) > .diff-viewer-content {
+    min-height: 0;
+  }
+
   .diff-viewer-rethink .diff-viewer-comment-dialog {
-    top: 12px !important;
+    position: static;
+    top: auto !important;
+    left: auto !important;
+    transform: none;
     display: flex;
-    max-height: calc(100% - 24px) !important;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    max-height: 55% !important;
+    flex: 0 1 auto;
     flex-direction: column;
+    padding: 10px 12px;
+    border: 0;
+    border-top: 2px solid var(--diff-accent);
+    border-radius: 0;
+    box-shadow: none;
+    overflow: auto;
   }
 
   .diff-viewer-rethink .diff-viewer-comment-dialog h4,
@@ -533,20 +550,33 @@
   }
 
   .diff-viewer-rethink .diff-viewer-comment-dialog h4 {
-    font-size: 14px;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+
+  .diff-viewer-rethink .diff-viewer-comment-dialog-handle {
+    cursor: default;
+  }
+
+  .diff-viewer-rethink .diff-viewer-comment-dialog-handle::before {
+    display: none;
   }
 
   .diff-viewer-rethink .diff-viewer-selected-text {
     flex: 0 1 auto;
     min-height: 0;
-    max-height: 60px;
-    overflow: hidden;
+    max-height: 64px;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border-left: 3px solid var(--diff-accent);
+    overflow: auto;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
   }
 
   .diff-viewer-rethink .diff-viewer-comment-input {
-    min-height: 80px;
+    min-height: 60px;
+    height: 60px;
     font-size: 16px;
     line-height: 1.4;
     resize: none;
@@ -554,11 +584,11 @@
 
   .diff-viewer-rethink .diff-viewer-comment-actions {
     gap: 8px;
-    margin-top: 10px;
+    margin-top: 6px;
   }
 
   .diff-viewer-rethink .diff-viewer-comment-actions .diff-viewer-btn {
-    min-height: 44px;
+    min-height: 36px;
     flex: 1;
     padding: 10px 8px;
     font-size: 14px;
@@ -796,10 +826,40 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .diff-viewer-rethink .diff-rethink-prev-change {
+  .diff-viewer-rethink .diff-viewer-main > .diff-rethink-change-nav .diff-rethink-comment-change,
+  .diff-viewer-rethink .diff-viewer-main > .diff-rethink-change-nav .diff-rethink-cancel-comment {
     grid-column: 2;
+    justify-self: start;
+    width: auto;
+    max-width: none;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .diff-viewer-rethink .diff-rethink-prev-change {
+    grid-column: -3;
   }
   .diff-viewer-rethink .diff-rethink-next-change {
+    grid-column: -2;
+  }
+
+  .diff-viewer-rethink .diff-viewer-main:has(> .is-commenting) {
+    padding-bottom: 126px;
+  }
+  .diff-viewer-rethink .diff-viewer-main > .diff-rethink-change-nav.is-commenting {
+    height: 126px;
+    padding-top: 76px;
+    grid-template-columns: auto auto minmax(0, 1fr) 44px 44px;
+  }
+  .diff-viewer-rethink .diff-rethink-rail-input {
+    position: absolute;
+    top: 8px;
+    left: 14px;
+    width: calc(100% - 28px);
+    margin: 0;
+  }
+  .diff-viewer-rethink .diff-viewer-main > .is-commenting .diff-rethink-comment-change {
     grid-column: 3;
   }
 }

@@ -1,6 +1,6 @@
 <!-- Mobile diff viewer with commit selection, file navigation, and comments. -->
 <template>
-  <div v-if="isOpen" class="diff-viewer-overlay">
+  <div v-if="isOpen" class="diff-viewer-overlay" :style="commentViewport ?? undefined">
     <div ref="containerRef" class="diff-viewer-container diff-viewer-rethink diff-viewer-readonly">
       <!-- Toast notifications -->
       <div
@@ -115,10 +115,26 @@
               </span>
             </button>
           </nav>
-          <div v-if="isMobile && !selectedMessage" class="diff-rethink-change-nav" :inert="mobileFileListOpen">
+          <div v-if="isMobile && (!selectedMessage || showCommentDialog)" class="diff-rethink-change-nav" :class="{ 'is-commenting': showCommentDialog }" :inert="mobileFileListOpen">
+            <textarea
+              v-if="showCommentDialog"
+              ref="commentInput"
+              v-model="commentText"
+              class="diff-viewer-comment-input diff-rethink-rail-input"
+              :aria-label="commentReady ? `Comment on ${lineCommentLabel(showCommentDialog, true)}` : 'Comment draft'"
+              :placeholder="commentReady ? 'Enter your comment...' : 'Select a changed text hunk to comment...'"
+              @keydown.esc.stop="showCommentDialog = null"
+            />
             <span class="diff-rethink-bottom-change-label">{{ changeLabel }}</span>
-            <button v-if="fileDiff && (hasPrevFile || (!editorBlocked && currentChangeIndex > 0))" class="diff-rethink-prev-change" :aria-label="prevChangeGoesToFile ? (prevChangeGoesToCommit ? 'Previous commit' : 'Previous file') : 'Previous hunk (,)'" @click="goToPreviousChange"><span v-html="PREV_CHANGE_ICON" /></button>
-            <button v-if="fileDiff && (hasNextFile || (!editorBlocked && currentChangeIndex < changeCount - 1))" class="diff-rethink-next-change" :aria-label="nextChangeGoesToFile ? 'Next file' : 'Next hunk (.)'" @click="goToNextChange"><span v-html="NEXT_CHANGE_ICON" /></button>
+            <template v-if="showCommentDialog">
+              <button class="diff-rethink-cancel-comment" type="button" @click="showCommentDialog = null">Cancel</button>
+              <button class="diff-rethink-comment-change" type="button" :disabled="!commentReady || !commentText.trim()" @pointerdown.prevent @click="submitHunkComment">OK</button>
+            </template>
+            <button v-else class="diff-rethink-comment-change" type="button" aria-label="Comment on current hunk" :disabled="editorBlocked || revealPending || !changeCount || recordingLocked" @click="commentOnCurrentHunk">
+              Comment
+            </button>
+            <button v-if="showCommentDialog || (fileDiff && (hasPrevFile || (!editorBlocked && currentChangeIndex > 0)))" class="diff-rethink-prev-change" :aria-label="prevChangeGoesToFile ? (prevChangeGoesToCommit ? 'Previous commit' : 'Previous file') : showCommentDialog ? 'Previous hunk' : 'Previous hunk (,)'" :disabled="!!showCommentDialog && (loading || revealPending || (!hasPrevFile && (editorBlocked || currentChangeIndex <= 0)))" @pointerdown="showCommentDialog && $event.preventDefault()" @click="showCommentDialog ? navigateCommentHunk(-1) : goToPreviousChange()"><span v-html="PREV_CHANGE_ICON" /></button>
+            <button v-if="showCommentDialog || (fileDiff && (hasNextFile || (!editorBlocked && currentChangeIndex < changeCount - 1)))" class="diff-rethink-next-change" :aria-label="nextChangeGoesToFile ? 'Next file' : showCommentDialog ? 'Next hunk' : 'Next hunk (.)'" :disabled="!!showCommentDialog && (loading || revealPending || (!hasNextFile && (editorBlocked || currentChangeIndex >= changeCount - 1)))" @pointerdown="showCommentDialog && $event.preventDefault()" @click="showCommentDialog ? navigateCommentHunk(1) : goToNextChange()"><span v-html="NEXT_CHANGE_ICON" /></button>
           </div>
           <div v-if="isMobile && selectedMessage && rawMessage" class="diff-rethink-mobile-tools">
             <button type="button" class="diff-rethink-raw-toggle" @click="toggleRawMessage">View rendered</button>
@@ -241,27 +257,13 @@
               💬 Comment
             </button>
           </div>
-          <nav v-if="isMobile && selectedMessage" class="diff-rethink-commit-nav" aria-label="Commit navigation">
+          <nav v-if="isMobile && selectedMessage && !showCommentDialog" class="diff-rethink-commit-nav" aria-label="Commit navigation">
             <button type="button" :disabled="!hasPrevFile || mobileFileListOpen" aria-label="Previous file" @click="goToPreviousFile()"><span v-html="PREV_CHANGE_ICON" /></button>
             <button type="button" :disabled="!hasNextFile || mobileFileListOpen" aria-label="Next file" @click="goToNextFile()"><span v-html="NEXT_CHANGE_ICON" /></button>
           </nav>
         </div>
       </div>
 
-      <!-- Comment dialog -->
-      <CommentDialog
-        v-if="showCommentDialog"
-        :key="commentDialogOpens"
-        v-model:text="commentText"
-        :where="lineCommentLabel(showCommentDialog, true)"
-        :quoted="
-          showCommentDialog.highlight
-            ? `${showCommentDialog.selectedText}\n${highlightQuote(showCommentDialog.highlight)}`
-            : showCommentDialog.selectedText
-        "
-        @submit="handleAddComment"
-        @cancel="showCommentDialog = null"
-      />
       <CommentDialog
         v-if="previewComment"
         :key="previewCommentOpens"
@@ -293,10 +295,11 @@ import { loadMonaco } from "../../services/monaco";
 import { isDarkModeActive } from "../../services/theme";
 
 import {
-  highlightQuote,
+
   lineCommentLabel,
   truncateWithEllipsis,
   useMonacoComments,
+  type CommentDialogInfo,
 } from "../composables/monacoComments";
 import CommentDialog from "./CommentDialog.vue";
 import CommitPicker from "./CommitPicker.vue";
@@ -439,6 +442,7 @@ const rangeHashes = computed(() => new Set(commitMessages.value.map((message) =>
 const previewComment = ref<{ message: GitCommitMessage; quote: string } | null>(null);
 const previewCommentText = ref("");
 const previewCommentOpens = ref(0);
+const commentViewport = ref<{ top: string; height: string; bottom: string } | null>(null);
 
 const isMobile = ref(window.innerWidth < 768);
 const mobileOverview = ref(isMobile.value && !props.initialFile);
@@ -513,7 +517,7 @@ let isMobileVal = isMobile.value;
 // Shared comment-mode UX (click-to-comment, selection prompt, dialog state).
 const {
   showCommentDialog,
-  commentDialogOpens,
+
   commentPrompt,
   commentText,
   attach: attachComments,
@@ -529,6 +533,104 @@ const {
   fileRef: commentFileRef,
   onSubmit: emitComment,
 });
+
+const hunkDrafts = new Map<string, string>();
+const commentInput = ref<HTMLTextAreaElement | null>(null);
+const commentFile = ref<string | null>(null);
+const commentReady = computed(() =>
+  commentFile.value === selectedFile.value && !loading.value && !revealPending.value &&
+  !editorBlocked.value && !selectedMessage.value,
+);
+const hunkDraftKey = (target: CommentDialogInfo) =>
+  `${commentFile.value}:${target.side}:${target.startLine ?? target.line}:${target.endLine ?? target.line}`;
+const pendingDraftKey = (path: string | null) => `${path}:pending`;
+
+watch(showCommentDialog, target => {
+  if (!target) {
+    hunkDrafts.clear();
+    commentFile.value = null;
+  } else {
+    commentFile.value = selectedFile.value;
+    nextTick(() => commentInput.value?.focus({ preventScroll: true }));
+  }
+});
+
+function navigateCommentHunk(direction: -1 | 1) {
+  if (!diffEditor || loading.value || revealPending.value) return;
+  const path = selectedFile.value;
+  if (direction === 1) goToNextChange();
+  else goToPreviousChange();
+  if (selectedFile.value === path) commentOnCurrentHunk();
+}
+
+function submitHunkComment() {
+  const target = showCommentDialog.value;
+  if (!target || !commentReady.value || !commentText.value.trim()) return;
+  hunkDrafts.delete(hunkDraftKey(target));
+  handleAddComment(true);
+}
+
+function revealCommentTarget() {
+  const target = showCommentDialog.value;
+  if (!target || !commentReady.value || !diffEditor || !monacoMod || !isMobile.value) return;
+  diffEditor.layout();
+  const editor = diffEditor.getModifiedEditor();
+  if (target.side === "left") {
+    const deletedChanges = diffEditor.getLineChanges()?.filter(change => change.originalEndLineNumber > 0) ?? [];
+    const index = deletedChanges.findIndex(change =>
+      change.originalStartLineNumber <= target.line && change.originalEndLineNumber >= target.line,
+    );
+    const zone = editorHost.querySelectorAll<HTMLElement>(".inline-deleted-margin-view-zone")[index];
+    const editorNode = editor.getDomNode();
+    if (zone && editorNode) {
+      editor.setScrollTop(
+        editor.getScrollTop() + zone.getBoundingClientRect().top - editorNode.getBoundingClientRect().top - 8,
+        monacoMod.editor.ScrollType.Immediate,
+      );
+    }
+  } else {
+    editor.revealLineNearTop(target.startLine ?? target.line, monacoMod.editor.ScrollType.Immediate);
+  }
+}
+
+function syncCommentViewport() {
+  const viewport = window.visualViewport;
+  commentViewport.value = isMobile.value && (showCommentDialog.value || previewComment.value) && viewport
+    ? { top: `${viewport.offsetTop}px`, height: `${viewport.height}px`, bottom: "auto" }
+    : null;
+  if (showCommentDialog.value) requestAnimationFrame(revealCommentTarget);
+}
+
+watch([showCommentDialog, previewComment], syncCommentViewport, { flush: "post" });
+
+function commentOnCurrentHunk() {
+  if (!diffEditor || !monacoMod || editorBlocked.value || revealPending.value || recordingLocked.value) return;
+  const change = diffEditor.getLineChanges()?.[Math.max(0, currentChangeIndex.value)];
+  if (!change) return;
+  const deleted = change.modifiedEndLineNumber === 0;
+  const model = (deleted ? diffEditor.getOriginalEditor() : diffEditor.getModifiedEditor()).getModel();
+  if (!model) return;
+  const startLine = deleted ? change.originalStartLineNumber : change.modifiedStartLineNumber;
+  const endLine = deleted ? change.originalEndLineNumber : change.modifiedEndLineNumber;
+  const previous = showCommentDialog.value;
+  const pendingText = previous && commentFile.value === null ? commentText.value : "";
+  if (previous && commentFile.value === selectedFile.value) {
+    hunkDrafts.set(hunkDraftKey(previous), commentText.value);
+  }
+  commentFile.value = selectedFile.value;
+  commentPrompt.value = null;
+  showCommentDialog.value = {
+    line: startLine,
+    side: deleted ? "left" : "right",
+    startLine,
+    endLine,
+    selectedText: model.getValueInRange(
+      new monacoMod.Range(startLine, 1, endLine, model.getLineMaxColumn(endLine)),
+    ),
+  };
+  commentText.value = pendingText || hunkDrafts.get(hunkDraftKey(showCommentDialog.value)) || "";
+  hunkDrafts.delete(pendingDraftKey(selectedFile.value));
+}
 
 // Reference used in the quote header of a submitted comment: the file path,
 // or "commit <hash> (<subject>)" for commit-message pseudo-files.
@@ -723,8 +825,21 @@ watch(
   { immediate: true },
 );
 
-watch([selectedFile, selectedDiff, selectedTo], () => {
+watch(selectedFile, (path, previousPath) => {
+  if (showCommentDialog.value) {
+    const key = commentFile.value === previousPath
+      ? hunkDraftKey(showCommentDialog.value)
+      : pendingDraftKey(previousPath);
+    hunkDrafts.set(key, commentText.value);
+    commentText.value = hunkDrafts.get(pendingDraftKey(path)) ?? "";
+    commentFile.value = null;
+  }
   commentPrompt.value = null;
+});
+
+watch([selectedDiff, selectedTo, () => props.cwd], () => {
+  resetComments();
+  hunkDrafts.clear();
 });
 
 // Track viewport size.
@@ -924,7 +1039,9 @@ function createEditor() {
   });
   editorSizeObserver?.disconnect();
   editorSizeObserver = new ResizeObserver(() => {
-    if (editorHost.clientHeight > 0) initialReveal?.();
+    if (editorHost.clientHeight <= 0) return;
+    if (showCommentDialog.value) requestAnimationFrame(revealCommentTarget);
+    else initialReveal?.();
   });
   editorSizeObserver.observe(editorHost);
   editorHost.addEventListener('click', expandHiddenContext);
@@ -944,7 +1061,7 @@ function createEditor() {
 
   modEditor.onDidScrollChange(({ scrollTopChanged, scrollHeightChanged }) => {
     if (scrollHeightChanged) syncDeletedOverview();
-    if (!scrollTopChanged || !isMobile.value || revealPending.value ||
+    if (!scrollTopChanged || !isMobile.value || showCommentDialog.value || revealPending.value ||
         fileDiff.value?.path !== selectedFile.value) return;
     const changes = diffEditor?.getLineChanges();
     if (!changes?.length) return;
@@ -1139,7 +1256,10 @@ watch(
           hasScrolledToFirstChange = true;
           diffEditor.getModifiedEditor().setScrollTop(0);
         }
-        if (hasScrolledToFirstChange) revealPending.value = false;
+        if (hasScrolledToFirstChange) {
+          revealPending.value = false;
+          if (showCommentDialog.value && commentFile.value !== fd.path) commentOnCurrentHunk();
+        }
       });
     };
     diffUpdateDisposable?.dispose();
@@ -1737,9 +1857,13 @@ onMounted(() => {
       .catch(() => {});
   });
   window.addEventListener("resize", handleResize);
+  window.visualViewport?.addEventListener("resize", syncCommentViewport);
+  window.visualViewport?.addEventListener("scroll", syncCommentViewport);
 });
 onUnmounted(() => {
   window.removeEventListener("resize", handleResize);
+  window.visualViewport?.removeEventListener("resize", syncCommentViewport);
+  window.visualViewport?.removeEventListener("scroll", syncCommentViewport);
   window.removeEventListener("keydown", handleKeyDown, true);
   themeObserver?.disconnect();
   diffUpdateDisposable?.dispose();

@@ -1401,10 +1401,9 @@ watch(
       }
       emit("clear-injected-text");
       // Focusing shows the user where the text landed, but not at the cost of
-      // yanking focus out of a modal that is still open: the image comment view
-      // stays up across submissions so several regions can be commented on.
+      // yanking focus out of an open comment view or modal.
       setTimeout(() => {
-        if (document.activeElement?.closest('[aria-modal="true"]')) return;
+        if (document.activeElement?.closest('[aria-modal="true"], .diff-viewer-comment-input')) return;
         textareaRef.value?.focus();
       }, 0);
     }

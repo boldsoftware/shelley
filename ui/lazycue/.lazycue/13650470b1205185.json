@@ -1,0 +1,345 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a phone, three separated edits are navigation stops and each keeps its own comment draft. Use condition waits, never sleep steps. Use the supplied selectors directly. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". \n1. In \".diff-rethink-mobile-files [title='hunks.txt']\", evaluate expecting true that the bounding-box y values of \".diff-tree-changes-added\" and \".diff-tree-changes-deleted\" differ by less than 2 pixels. Click that row. Assert \".diff-rethink-file-name\" reads \"hunks.txt\", \".diff-rethink-file-position\" contains \"File 1 of 1\", and \".diff-rethink-bottom-change-label\" reads \"Change 1 of 3\". There is no button with exact aria-label \"Previous hunk (,)\".\n2. Click the exact \"Next hunk (.)\" button: the label reads \"Change 2 of 3\". Click again: \"Change 3 of 3\", and no button has exact aria-label \"Next hunk (.)\". Click the exact \"Previous hunk (,)\" button: \"Change 2 of 3\".\n3. Click \".diff-rethink-change-nav [aria-label='Comment on current hunk']\". The \".diff-rethink-rail-input\" is visible, focused, and has aria-label \"Comment on Line 20, new\". There is no \".diff-viewer-comment-dialog\" or \".diff-viewer-selected-text\". The rail contains Cancel, OK, Previous hunk and Next hunk buttons, with the arrows to the right of OK.\n4. Resize to 390x420, with mobile=true, touch=true and scale=2.75. The editor pane is \".diff-viewer-files-pane\", not a CodeMirror element. Evaluate expecting true: (() =\u003e { const input=document.querySelector('.diff-rethink-rail-input'), pane=document.querySelector('.diff-viewer-files-pane'), rail=document.querySelector('.diff-rethink-change-nav'); if(!input||!pane||!rail)return false; const i=input.getBoundingClientRect(), p=pane.getBoundingClientRect(), v=window.visualViewport, top=v?v.offsetTop:0, bottom=top+(v?v.height:innerHeight); return i.top\u003e=p.bottom-1 \u0026\u0026 i.bottom\u003c=bottom+1 \u0026\u0026 [...pane.querySelectorAll('.diff-current-hunk-gutter')].some(e=\u003e{const r=e.getBoundingClientRect();return r.bottom\u003ep.top\u0026\u0026r.top\u003cp.bottom;}) \u0026\u0026 [...rail.querySelectorAll('button')].every(e=\u003e{const r=e.getBoundingClientRect();return r.top\u003e=top-1\u0026\u0026r.bottom\u003c=bottom+1;}); })(). Assert the rail input remains focused and the label still reads \"Change 2 of 3\".\n5. Fill \".diff-rethink-rail-input\" with \"Review this hunk\" and save that node as window.hunkInput. Click \".diff-rethink-next-change\". The input has aria-label \"Comment on Line 35, new\", is empty, is still window.hunkInput, and remains focused. The next arrow is disabled.\n6. Click \".diff-rethink-prev-change\". The input has aria-label \"Comment on Line 20, new\" and value \"Review this hunk\". Click \".diff-rethink-change-nav .diff-rethink-comment-change\" (the exact OK button). The input stays open, empty, focused and identical to window.hunkInput. The value of [data-testid='message-input'] contains \"hunks.txt:20: line 20 changed\" and \"Review this hunk\".\n7. Click \".diff-rethink-prev-change\". The input has aria-label \"Comment on Line 5, new\" and the previous arrow is disabled. Fill the rail input with \"First hunk feedback\" and click \".diff-rethink-change-nav .diff-rethink-comment-change\". The input stays open, empty, focused and identical to window.hunkInput. The message input contains both feedback strings and their correct hunks.txt:5 and hunks.txt:20 references.\n8. Click \".diff-rethink-cancel-comment\". The rail input disappears and the \"Comment on current hunk\" button returns.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label='More options']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files [title='hunks.txt']",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const row = document.querySelector(\".diff-rethink-mobile-files [title='hunks.txt']\"); if (!row) return false; const added = row.querySelector('.diff-tree-changes-added'); const deleted = row.querySelector('.diff-tree-changes-deleted'); if (!added || !deleted) return false; const ar = added.getBoundingClientRect(); const dr = deleted.getBoundingClientRect(); return Math.abs(ar.y - dr.y) \u003c 2; })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title='hunks.txt']"
+    },
+    {
+      "action": "wait_text",
+      "text": "Change 1 of 3",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-file-name",
+      "text": "hunks.txt"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-rethink-file-position",
+      "text": "File 1 of 1"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 1 of 3"
+    },
+    {
+      "action": "assert_count",
+      "selector": "button[aria-label='Previous hunk (,)']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Next hunk (.)",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 2 of 3"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Next hunk (.)",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 3 of 3"
+    },
+    {
+      "action": "assert_count",
+      "selector": "button[aria-label='Next hunk (.)']",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Previous hunk (,)",
+      "exact": true
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 2 of 3"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-change-nav [aria-label='Comment on current hunk']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-rail-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-rethink-rail-input",
+      "attribute": "aria-label",
+      "value": "Comment on Line 20, new"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-comment-dialog",
+      "count": 0
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-viewer-selected-text",
+      "count": 0
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-rethink-cancel-comment"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-rethink-comment-change"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-rethink-prev-change"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-rethink-next-change"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const nav = document.querySelector('.diff-rethink-change-nav'); if (!nav) return false; const ok = nav.querySelector('.diff-rethink-comment-change'); const prev = nav.querySelector('.diff-rethink-prev-change'); const next = nav.querySelector('.diff-rethink-next-change'); if (!ok || !prev || !next) return false; const buttons = [...nav.querySelectorAll('button')]; const okIdx = buttons.indexOf(ok); const prevIdx = buttons.indexOf(prev); const nextIdx = buttons.indexOf(next); return prevIdx \u003e okIdx \u0026\u0026 nextIdx \u003e okIdx; })()",
+      "expect": "true"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 420,
+      "mobile": true,
+      "touch": true,
+      "scale": 2.75
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const input=document.querySelector('.diff-rethink-rail-input'), pane=document.querySelector('.diff-viewer-files-pane'), rail=document.querySelector('.diff-rethink-change-nav'); if(!input||!pane||!rail)return false; const i=input.getBoundingClientRect(), p=pane.getBoundingClientRect(), v=window.visualViewport, top=v?v.offsetTop:0, bottom=top+(v?v.height:innerHeight); return i.top\u003e=p.bottom-1 \u0026\u0026 i.bottom\u003c=bottom+1 \u0026\u0026 [...pane.querySelectorAll('.diff-current-hunk-gutter')].some(e=\u003e{const r=e.getBoundingClientRect();return r.bottom\u003ep.top\u0026\u0026r.top\u003cp.bottom;}) \u0026\u0026 [...rail.querySelectorAll('button')].every(e=\u003e{const r=e.getBoundingClientRect();return r.top\u003e=top-1\u0026\u0026r.bottom\u003c=bottom+1;}); })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 2 of 3"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-rethink-rail-input",
+      "value": "Review this hunk"
+    },
+    {
+      "action": "eval",
+      "expression": "window.hunkInput = document.querySelector('.diff-rethink-rail-input'); true",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-next-change"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-rethink-rail-input",
+      "attribute": "aria-label",
+      "value": "Comment on Line 35, new"
+    },
+    {
+      "action": "assert_value",
+      "selector": ".diff-rethink-rail-input",
+      "value": ""
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-rethink-rail-input') === window.hunkInput",
+      "expect": "true"
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": ".diff-rethink-next-change"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-prev-change"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-rethink-rail-input",
+      "attribute": "aria-label",
+      "value": "Comment on Line 20, new"
+    },
+    {
+      "action": "assert_value",
+      "selector": ".diff-rethink-rail-input",
+      "value": "Review this hunk"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-change-nav .diff-rethink-comment-change"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-rail-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": ".diff-rethink-rail-input",
+      "value": ""
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-rethink-rail-input') === window.hunkInput",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=message-input]')?.value || ''",
+      "expect": "\u003e hunks.txt:20: line 20 changed\nReview this hunk\n\n"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-prev-change"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-rethink-rail-input",
+      "attribute": "aria-label",
+      "value": "Comment on Line 5, new"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": ".diff-rethink-prev-change"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-rethink-rail-input",
+      "value": "First hunk feedback"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-change-nav .diff-rethink-comment-change"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-rail-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": ".diff-rethink-rail-input",
+      "value": ""
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.diff-rethink-rail-input') === window.hunkInput",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "const v = document.querySelector('[data-testid=message-input]')?.value || ''; v.includes('First hunk feedback') \u0026\u0026 v.includes('Review this hunk') \u0026\u0026 v.includes('hunks.txt:5') \u0026\u0026 v.includes('hunks.txt:20')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-cancel-comment"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-rethink-change-nav [aria-label='Comment on current hunk']"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T01:55:52.265504248Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 349368,
+    "output_tokens": 13363,
+    "estimated_cost_usd": 0.39939165,
+    "mode": "generated"
+  }
+}

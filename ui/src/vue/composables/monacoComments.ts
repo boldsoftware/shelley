@@ -277,7 +277,7 @@ export function useMonacoComments(deps: MonacoCommentsDeps) {
     };
   }
 
-  function handleAddComment() {
+  function handleAddComment(keepOpen = false) {
     if (!showCommentDialog.value || !commentText.value.trim()) return;
     const fileRef = deps.fileRef();
     if (!fileRef) return;
@@ -288,7 +288,7 @@ export function useMonacoComments(deps: MonacoCommentsDeps) {
     const quote = highlight ? `\n> ${highlightQuote(highlight)}` : "";
     const commentBlock = `> ${fileRef}:${line}: ${truncatedCode}${quote}\n${commentText.value}\n\n`;
     deps.onSubmit(commentBlock);
-    showCommentDialog.value = null;
+    if (!keepOpen) showCommentDialog.value = null;
     commentText.value = "";
   }
 

@@ -25,7 +25,15 @@ func mobileDiffCommit(s *shelley, dir, message string) {
 }
 
 func TestE2EMobileDiffHunkNavigation(t *testing.T) {
-	e2e(t, useful(0), `On a phone, three separated edits in hunks.txt are three navigation stops. `+fmt.Sprintf(mobileDiffOpen, "Diffs")+mobileDiffWorking+`In ".diff-rethink-mobile-files", the row with title "hunks.txt" has its added and deleted counts on the same horizontal line: their bounding-box y values differ by less than 2 pixels (eval with expect true). Click that row. ".diff-rethink-file-name" should read "hunks.txt" and ".diff-rethink-file-position" should contain "File 1 of 1". The bottom ".diff-rethink-bottom-change-label" should read "Change 1 of 3"; the button "Previous hunk (,)" must not exist. Click "Next hunk (.)": label is "Change 2 of 3". Click it again: label is "Change 3 of 3" and the button "Next hunk (.)" must not exist. Click "Previous hunk (,)": label is "Change 2 of 3".`, func(s *shelley) {
+	e2e(t, useful(0), `On a phone, three separated edits are navigation stops and each keeps its own comment draft. Use condition waits, never sleep steps. Use the supplied selectors directly. `+fmt.Sprintf(mobileDiffOpen, "Diffs")+mobileDiffWorking+`
+1. In ".diff-rethink-mobile-files [title='hunks.txt']", evaluate expecting true that the bounding-box y values of ".diff-tree-changes-added" and ".diff-tree-changes-deleted" differ by less than 2 pixels. Click that row. Assert ".diff-rethink-file-name" reads "hunks.txt", ".diff-rethink-file-position" contains "File 1 of 1", and ".diff-rethink-bottom-change-label" reads "Change 1 of 3". There is no button with exact aria-label "Previous hunk (,)".
+2. Click the exact "Next hunk (.)" button: the label reads "Change 2 of 3". Click again: "Change 3 of 3", and no button has exact aria-label "Next hunk (.)". Click the exact "Previous hunk (,)" button: "Change 2 of 3".
+3. Click ".diff-rethink-change-nav [aria-label='Comment on current hunk']". The ".diff-rethink-rail-input" is visible, focused, and has aria-label "Comment on Line 20, new". There is no ".diff-viewer-comment-dialog" or ".diff-viewer-selected-text". The rail contains Cancel, OK, Previous hunk and Next hunk buttons, with the arrows to the right of OK.
+4. Resize to 390x420, with mobile=true, touch=true and scale=2.75. The editor pane is ".diff-viewer-files-pane", not a CodeMirror element. Evaluate expecting true: (() => { const input=document.querySelector('.diff-rethink-rail-input'), pane=document.querySelector('.diff-viewer-files-pane'), rail=document.querySelector('.diff-rethink-change-nav'); if(!input||!pane||!rail)return false; const i=input.getBoundingClientRect(), p=pane.getBoundingClientRect(), v=window.visualViewport, top=v?v.offsetTop:0, bottom=top+(v?v.height:innerHeight); return i.top>=p.bottom-1 && i.bottom<=bottom+1 && [...pane.querySelectorAll('.diff-current-hunk-gutter')].some(e=>{const r=e.getBoundingClientRect();return r.bottom>p.top&&r.top<p.bottom;}) && [...rail.querySelectorAll('button')].every(e=>{const r=e.getBoundingClientRect();return r.top>=top-1&&r.bottom<=bottom+1;}); })(). Assert the rail input remains focused and the label still reads "Change 2 of 3".
+5. Fill ".diff-rethink-rail-input" with "Review this hunk" and save that node as window.hunkInput. Click ".diff-rethink-next-change". The input has aria-label "Comment on Line 35, new", is empty, is still window.hunkInput, and remains focused. The next arrow is disabled.
+6. Click ".diff-rethink-prev-change". The input has aria-label "Comment on Line 20, new" and value "Review this hunk". Click ".diff-rethink-change-nav .diff-rethink-comment-change" (the exact OK button). The input stays open, empty, focused and identical to window.hunkInput. The value of [data-testid='message-input'] contains "hunks.txt:20: line 20 changed" and "Review this hunk".
+7. Click ".diff-rethink-prev-change". The input has aria-label "Comment on Line 5, new" and the previous arrow is disabled. Fill the rail input with "First hunk feedback" and click ".diff-rethink-change-nav .diff-rethink-comment-change". The input stays open, empty, focused and identical to window.hunkInput. The message input contains both feedback strings and their correct hunks.txt:5 and hunks.txt:20 references.
+8. Click ".diff-rethink-cancel-comment". The rail input disappears and the "Comment on current hunk" button returns.`, func(s *shelley) {
 		dir := mobileDiffRepo(s)
 		lines := make([]string, 50)
 		for i := range lines {
@@ -37,6 +45,18 @@ func TestE2EMobileDiffHunkNavigation(t *testing.T) {
 			lines[n-1] += " changed"
 		}
 		s.write(filepath.Join(dir, "hunks.txt"), strings.Join(lines, "\n")+"\n")
+		mobileDiffConversation(s, dir)
+	})
+}
+
+func TestE2EMobileDiffOpenCommentFileNavigation(t *testing.T) {
+	e2e(t, useful(0), `An open phone comment rail navigates between files without losing focus or mixing their drafts. `+fmt.Sprintf(mobileDiffOpen, "Diffs")+mobileDiffWorking+`Click the row titled "first.txt". Click "Comment on current hunk". Resize to 390x420. Save ".diff-rethink-rail-input" as window.railInput and fill it with "First file draft". The next arrow is enabled and named "Next file". Click it. Wait for ".diff-rethink-file-name" to read "second.txt" and the modified editor to show "second changed". The rail input is still window.railInput, empty, and focused. Fill it with "Second file feedback" and click "OK". The input stays open, empty, and focused. The message input contains "> second.txt:1: second changed" followed by "Second file feedback", not a first.txt reference for that comment. The previous arrow is enabled and named "Previous file". Click it. Wait for first.txt and its "first changed" text. The same rail input contains "First file draft" and remains focused. Click "OK". The message input now contains both comments with their correct file references. Click the file heading, choose second.txt in the file list, and confirm the same rail input stays open and empty. The next arrow is disabled at the end of the last file. Click "Cancel" to close the input.`, func(s *shelley) {
+		dir := mobileDiffRepo(s)
+		s.write(filepath.Join(dir, "first.txt"), "first\n")
+		s.write(filepath.Join(dir, "second.txt"), "second\n")
+		mobileDiffCommit(s, dir, "base")
+		s.write(filepath.Join(dir, "first.txt"), "first changed\n")
+		s.write(filepath.Join(dir, "second.txt"), "second changed\n")
 		mobileDiffConversation(s, dir)
 	})
 }
@@ -70,7 +90,7 @@ func TestE2EMobileDiffSingleFileNoPhantomNext(t *testing.T) {
 }
 
 func TestE2EMobileDiffWorkingFileReadOnly(t *testing.T) {
-	e2e(t, useful(0), `A working text file on a phone is review-only. `+fmt.Sprintf(mobileDiffOpen, "Diffs")+mobileDiffWorking+`Click the row titled "only.txt" in ".diff-rethink-mobile-files" and wait for the modified Monaco editor to show "after". There is no button named "Edit" in the viewer. Evaluate that ".diff-viewer-rethink .editor.modified textarea.inputarea" has readOnly === true and tabIndex === -1. Tap the "after" line in the modified editor; the Comment dialog opens with quoted text "after". Close it without submitting. Call "working-file-content" and confirm it still returns "after\n".`, func(s *shelley) {
+	e2e(t, useful(0), `A working text file on a phone is review-only. `+fmt.Sprintf(mobileDiffOpen, "Diffs")+mobileDiffWorking+`Click the row titled "only.txt" in ".diff-rethink-mobile-files" and wait for the modified Monaco editor to show "after". There is no button named "Edit" in the viewer. Evaluate that ".diff-viewer-rethink .editor.modified textarea.inputarea" has readOnly === true and tabIndex === -1. Tap the "after" line in the modified editor; the rail input ".diff-rethink-rail-input" opens above the rail's Cancel and OK buttons without repeating a code excerpt. Click Cancel without submitting. Call "working-file-content" and confirm it still returns "after\n".`, func(s *shelley) {
 		dir := mobileDiffRepo(s)
 		file := filepath.Join(dir, "only.txt")
 		s.write(file, "before\n")

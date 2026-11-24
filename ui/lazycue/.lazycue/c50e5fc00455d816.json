@@ -1,0 +1,114 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A working text file on a phone is review-only. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Click the row titled \"only.txt\" in \".diff-rethink-mobile-files\" and wait for the modified Monaco editor to show \"after\". There is no button named \"Edit\" in the viewer. Evaluate that \".diff-viewer-rethink .editor.modified textarea.inputarea\" has readOnly === true and tabIndex === -1. Tap the \"after\" line in the modified editor; the rail input \".diff-rethink-rail-input\" opens above the rail's Cancel and OK buttons without repeating a code excerpt. Click Cancel without submitting. Call \"working-file-content\" and confirm it still returns \"after\\n\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      },
+      "selector": ".overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-container .git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-rethink-mobile-files"
+      },
+      "selector": "[title=\"only.txt\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-rethink .editor.modified"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-viewer-rethink .editor.modified",
+      "text": "after"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "role": "button",
+      "name": "Edit",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "const t = document.querySelector('.diff-viewer-rethink .editor.modified textarea.inputarea'); JSON.stringify({readOnly: t.readOnly, tabIndex: t.tabIndex});",
+      "expect": "{\"readOnly\":true,\"tabIndex\":-1}"
+    },
+    {
+      "action": "click",
+      "point": "(() =\u003e { const lines = [...document.querySelectorAll('.diff-viewer-rethink .editor.modified .view-line')]; const el = lines.find(l =\u003e l.textContent.includes('after')) || lines[0]; const r = el.getBoundingClientRect(); return {x: r.left + r.width/2, y: r.top + r.height/2}; })()"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "eval",
+      "expression": "const ri = document.querySelector('.diff-rethink-rail-input'); const rr = ri.getBoundingClientRect(); const cancel = [...document.querySelectorAll('button')].find(b=\u003eb.textContent.trim()==='Cancel'); const ok = [...document.querySelectorAll('button')].find(b=\u003eb.textContent.trim()==='OK'); const cr = cancel.getBoundingClientRect(); const or = ok.getBoundingClientRect(); JSON.stringify({aboveCancel: rr.bottom \u003c= cr.top + 1, aboveOK: rr.bottom \u003c= or.top + 1, value: ri.value});",
+      "expect": "{\"aboveCancel\":true,\"aboveOK\":true,\"value\":\"\"}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Cancel"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "call",
+      "value": "working-file-content",
+      "expect": "after\n"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T01:33:16.909882707Z",
+    "hostname": "exedevwork",
+    "model": "accounts/fireworks/models/kimi-k3",
+    "input_tokens": 165321,
+    "output_tokens": 4968,
+    "estimated_cost_usd": 0.1653696,
+    "mode": "generated"
+  }
+}
