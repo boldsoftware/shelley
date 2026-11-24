@@ -1,0 +1,257 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "unread filter toggles, combines with text and tags, and updates on read. Conversations {{UNREAD}} and {{READ}} both say \"echo: unread filter needle\" and are tagged unread-filter; {{READ}} has been read and {{UNREAD}} not. Call \"read-unread\" marks {{UNREAD}} read. The viewport is 1280x900, where the drawer stays open. Conversation rows are \".conversation-item[data-conversation-id='\u003cid\u003e']\" (\"the row of \u003cid\u003e\"). \"Activity\" is data-testid \"activity-filter\". Open it to see the checkbox labeled \"Unread or working\" (data-testid \"unread-toggle\"); assert its state by evaluating its checked property. To \"close Activity\", focus the checkbox (eval its focus()), press Escape and wait for the checkbox to be hidden; changing it does not close the popover. The search query editor is the contenteditable element with data-testid \"conversation-query-editor\" (\"the editor\"); its data-query-value attribute is the serialized query. \"The query is X\" means data-query-value is exactly X, spaces included. To \"set the query to X\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\" (the editor's own select-all), insert_text X (as pasting would), then wait until the query is X. To \"clear the query\": eval the editor's focus(), press_key \"a\" with modifiers \"Control\", press Backspace, then wait until the query is \"\". Query tokens are [data-conversation-query-token=\"\u003ckind\u003e\"] elements inside the editor (kind tag or user); \"the token T\" is the one whose text contains T. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. 1. Navigate to /new and wait for data-testid \"message-input\". The row of {{UNREAD}} has the class conversation-item-unread and the row of {{READ}} is visible. 2. Click the button \"Search conversations...\". The checkbox is not visible. 3. Open Activity and assert the checkbox is unchecked. Click it and assert it is checked. Close Activity. 4. The query is \"is:unread \"; the row of {{UNREAD}} is visible and {{READ}} is not. 5. Open Activity and click the button \"Past day\" scoped to \".drawer-bulk-popover\" and wait for the checkbox to be hidden. The activity token ([data-conversation-query-token=\"activity\"]) is visible and {{READ}} is still hidden. 6. Set the query to \"is:unread tag:unread-filter needle\". The row of {{UNREAD}} is visible and {{READ}} is not. 7. Open Activity, click the checkbox to turn it off, assert it is unchecked, then close Activity. The query is \"tag:unread-filter needle \", the activity token stays visible and {{READ}} is visible. 8. Open Activity, check the checkbox, then close Activity. {{READ}} is not visible. 9. Call \"read-unread\". The row of {{UNREAD}} is not visible. 10. Click \"[data-testid='conversation-query-editor'] [data-conversation-query-token='unread'] .conversation-query-token-delete\". Both rows are visible. Open Activity and assert the checkbox is unchecked.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 900,
+      "scale": 2.75,
+      "mobile": true,
+      "touch": true
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\".conversation-item[data-conversation-id='{{UNREAD}}']\").classList.contains('conversation-item-unread')",
+      "expect": "true"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{READ}}']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Search conversations...",
+      "exact": true
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='activity-filter']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='unread-toggle']\").checked",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='unread-toggle']\").checked",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='unread-toggle']\").focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "is:unread "
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{UNREAD}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{READ}}']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='activity-filter']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Past day",
+      "exact": true,
+      "selector": ".drawer-bulk-popover"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-query-token='activity']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{READ}}']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='conversation-query-editor']\").focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "a",
+      "modifiers": "Control"
+    },
+    {
+      "action": "insert_text",
+      "value": "is:unread tag:unread-filter needle"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "is:unread tag:unread-filter needle"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{UNREAD}}']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{READ}}']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='activity-filter']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='unread-toggle']\").checked",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='unread-toggle']\").focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": "[data-testid='conversation-query-editor']",
+      "attribute": "data-query-value",
+      "value": "tag:unread-filter needle "
+    },
+    {
+      "action": "assert_visible",
+      "selector": "[data-conversation-query-token='activity']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{READ}}']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='activity-filter']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='unread-toggle']\").focus()"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{READ}}']"
+    },
+    {
+      "action": "call",
+      "value": "read-unread"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".conversation-item[data-conversation-id='{{UNREAD}}']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-query-editor'] [data-conversation-query-token='unread'] .conversation-query-token-delete"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{UNREAD}}']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id='{{READ}}']"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='activity-filter']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='unread-toggle']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector(\"[data-testid='unread-toggle']\").checked",
+      "expect": "false"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T22:32:48.568205242Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 75052,
+    "output_tokens": 6911,
+    "estimated_cost_usd": 0.16210365000000002,
+    "mode": "generated"
+  }
+}

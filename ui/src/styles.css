@@ -950,6 +950,7 @@ body {
 
 .drawer-filter-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
   padding: 0.35rem 0.1rem 0;
@@ -19828,6 +19829,20 @@ kbd {
 .drawer-activity-heading {
   padding: 0.5rem 0.4rem 0.15rem;
   font-size: var(--font-size-12);
+}
+.drawer-activity-unread {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-size-12);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.drawer-filter-action {
+  white-space: nowrap;
 }
 .drawer-bulk-actions {
   display: flex;

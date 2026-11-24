@@ -448,6 +448,8 @@
         <button
           type="button"
           class="drawer-filter-action drawer-activity-trigger"
+          :class="{ 'drawer-filter-action-on': parsedQuery.unreadOnly }"
+          data-testid="activity-filter"
           @click="activityPopover?.toggle($event)"
         >
           Activity <i class="pi pi-angle-down" aria-hidden="true" />
@@ -477,16 +479,7 @@
         >
           # tag
         </button>
-        <button
-          type="button"
-          :class="`drawer-filter-action${parsedQuery.unreadOnly ? ' drawer-filter-action-on' : ''}`"
-          :aria-pressed="parsedQuery.unreadOnly"
-          aria-label="Unread or working conversations"
-          data-testid="unread-toggle"
-          @click="toggleUnreadFilter"
-        >
-          unread
-        </button>
+
         <button
           v-if="isSearching"
           type="button"
@@ -524,6 +517,15 @@
         />
       </div>
       <Popover ref="activityPopover" :pt="{ root: { class: 'drawer-bulk-popover' } }">
+        <label class="drawer-activity-unread">
+          <input
+            type="checkbox"
+            data-testid="unread-toggle"
+            :checked="parsedQuery.unreadOnly"
+            @change="toggleUnreadFilter"
+          />
+          Unread or working
+        </label>
         <button type="button" class="tag-filter-option" @click="setActivity(null)">Any</button>
         <template v-for="mode in ['active', 'inactive'] as const" :key="mode">
           <div class="text-secondary drawer-activity-heading">
