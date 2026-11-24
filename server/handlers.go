@@ -106,9 +106,22 @@ func (s *Server) handleRead(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", contentType)
 	}
+	// An agent can write what is served here: no script may run on
+	// Shelley's origin. The browser's own viewers run none, and the policy
+	// would stop them.
+	if ct := w.Header().Get("Content-Type"); !rendersItself(ct) {
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+	}
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	// Reasonable short-term caching for assets, allow quick refresh during sessions
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	io.Copy(w, f)
+}
+
+// rendersItself reports whether browsers show contentType in a viewer of
+// their own, a media player or PDF viewer.
+func rendersItself(contentType string) bool {
+	return strings.HasPrefix(contentType, "video/") || strings.HasPrefix(contentType, "audio/") || contentType == "application/pdf"
 }
 
 func isReadableUIFile(path string) bool {

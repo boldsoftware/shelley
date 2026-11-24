@@ -482,3 +482,40 @@ func TestBrowserPDFCanBeReadViaReadEndpoint(t *testing.T) {
 		t.Errorf("Content-Type = %q, want application/pdf", ct)
 	}
 }
+
+// An agent can write any file where /api/read serves from: none may run
+// script on Shelley's origin, but the browser's own viewers keep working.
+func TestReadServesActiveContentInert(t *testing.T) {
+	t.Parallel()
+	server, _, _ := newTestServer(t)
+	if err := os.MkdirAll(browse.UploadDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, content, csp string
+	}{
+		{"x.html", "<html><script>alert(1)</script>", "default-src 'none'; style-src 'unsafe-inline'; sandbox"},
+		{"x.svg", `<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`, "default-src 'none'; style-src 'unsafe-inline'; sandbox"},
+		{"x.pdf", "%PDF-1.4\n", ""},
+		{"x.mp4", "\x00\x00\x00\x18ftypmp42", ""},
+	} {
+		f, err := os.CreateTemp(browse.UploadDir, "*-"+tc.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Remove(f.Name()) })
+		f.WriteString(tc.content)
+		f.Close()
+		w := httptest.NewRecorder()
+		server.handleRead(w, httptest.NewRequest("GET", "/api/read?path="+url.QueryEscape(f.Name()), nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: status %d", tc.name, w.Code)
+		}
+		if got := w.Header().Get("Content-Security-Policy"); got != tc.csp {
+			t.Errorf("%s (%s): CSP %q, want %q", tc.name, w.Header().Get("Content-Type"), got, tc.csp)
+		}
+		if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Errorf("%s: X-Content-Type-Options %q", tc.name, got)
+		}
+	}
+}
