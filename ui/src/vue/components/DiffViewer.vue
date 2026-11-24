@@ -1333,10 +1333,12 @@ watch(isMobile, (mob) => {
   });
 });
 
-// Swap models into the existing editor when fileDiff changes.
+// Swap models into the existing editor when fileDiff changes, and into a new
+// editor: Monaco can finish loading after the diff did, and createEditor runs
+// a tick after this watcher would have.
 let diffUpdateDisposable: Monaco.IDisposable | null = null;
 watch(
-  [monacoLoaded, fileDiff, showBinaryAsText],
+  [monacoLoaded, fileDiff, showBinaryAsText, modifiedEditor],
   () => {
     if (!diffEditor) return;
     if (editorBlocked.value) {

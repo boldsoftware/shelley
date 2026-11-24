@@ -503,9 +503,10 @@ func (s *Server) staticHandler(fsys http.FileSystem) http.Handler {
 			return
 		}
 
-		// For JS, CSS, source-map and font files, serve from .gz files (only the
-		// .gz versions are embedded to keep the binary small).
-		if strings.HasSuffix(r.URL.Path, ".js") || strings.HasSuffix(r.URL.Path, ".css") || strings.HasSuffix(r.URL.Path, ".map") || strings.HasSuffix(r.URL.Path, ".woff2") {
+		// For /assets/ and JS, CSS, source-map and font files, serve from .gz
+		// files (only the .gz versions are embedded to keep the binary small).
+		immutable := strings.HasPrefix(r.URL.Path, "/assets/")
+		if immutable || strings.HasSuffix(r.URL.Path, ".js") || strings.HasSuffix(r.URL.Path, ".css") || strings.HasSuffix(r.URL.Path, ".map") || strings.HasSuffix(r.URL.Path, ".woff2") {
 			gzPath := r.URL.Path + ".gz"
 			gzFile, err := fsys.Open(gzPath)
 			if err != nil {
@@ -543,12 +544,23 @@ func (s *Server) staticHandler(fsys http.FileSystem) http.Handler {
 				contentType = "application/json; charset=utf-8"
 			case ".woff2":
 				contentType = "font/woff2"
+			case ".woff":
+				contentType = "font/woff"
+			case ".ttf":
+				contentType = "font/ttf"
+			case ".eot":
+				contentType = "application/vnd.ms-fontobject"
 			}
 			w.Header().Set("Content-Type", contentType)
 			w.Header().Add("Vary", "Accept-Encoding")
-			// Use must-revalidate so browsers check ETag on each request.
-			// We can't use immutable since we don't have content-hashed filenames.
-			w.Header().Set("Cache-Control", "public, max-age=0, must-revalidate")
+			if immutable {
+				// Named after their content (ui/scripts/build.js): a new build
+				// names new files, so browsers may keep these for good.
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				// Fixed names (main.js names the assets): check the ETag each time.
+				w.Header().Set("Cache-Control", "public, max-age=0, must-revalidate")
+			}
 
 			if acceptsGzip(r) {
 				// Client accepts gzip - serve compressed directly

@@ -132,7 +132,7 @@ func TestE2ETerminalGhosttyThemeSwitchHiddenSize(t *testing.T) {
 
 func TestE2ETerminalGhosttyThemeSwitchWhileLoading(t *testing.T) {
 	e2e(t, useful(0), ghosttyDesc(`A theme switch while ghostty-web loads still applies.`, "gh-loading",
-		`prints "ghostty-ready" and then echoes what it reads. The server holds the page's request for /ghostty-web.js until call "release" lets it through; call "requested" says whether the page asked for it yet ("true" or "false").`,
+		`prints "ghostty-ready" and then echoes what it reads. The server holds the page's request for ghostty-web until call "release" lets it through; call "requested" says whether the page asked for it yet ("true" or "false").`,
 		`
 1. RUN_SCRIPT
 2. Call "requested" should return "true".
@@ -142,7 +142,7 @@ func TestE2ETerminalGhosttyThemeSwitchWhileLoading(t *testing.T) {
 6. The terminal's canvas background (eval `+"`"+canvasBackground(visibleTerminal)+"`"+`) should become exactly "`+dark+`".`), func(s *shelley) {
 		requested := s.signal("requested")
 		release := s.gate("release")
-		s.route("GET /ghostty-web.js", func(w http.ResponseWriter, r *http.Request) {
+		s.routeGhostty(func(w http.ResponseWriter, r *http.Request) {
 			requested.Store(true)
 			if release.wait(r) {
 				s.pass.ServeHTTP(w, r)
@@ -152,14 +152,26 @@ func TestE2ETerminalGhosttyThemeSwitchWhileLoading(t *testing.T) {
 	})
 }
 
-// ghosttyMissing has the server answer 404 for /ghostty-web.js once open
-// is called, or at once without one.
+// routeGhostty has handler answer the page's request for the ghostty-web
+// bundle, which ui/scripts/build.js names after its content.
+func (s *shelley) routeGhostty(handler http.HandlerFunc) {
+	s.route("GET /assets/{file}", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.PathValue("file"), "ghostty-web-") {
+			handler(w, r)
+		} else {
+			s.pass.ServeHTTP(w, r)
+		}
+	})
+}
+
+// ghosttyMissing has the server answer 404 for the ghostty-web bundle once
+// open is called, or at once without one.
 func (s *shelley) ghosttyMissing(open string) {
 	var fail gate
 	if open != "" {
 		fail = s.gate(open)
 	}
-	s.route("GET /ghostty-web.js", func(w http.ResponseWriter, r *http.Request) {
+	s.routeGhostty(func(w http.ResponseWriter, r *http.Request) {
 		if fail != nil && !fail.wait(r) {
 			return
 		}
@@ -169,7 +181,7 @@ func (s *shelley) ghosttyMissing(open string) {
 
 func TestE2ETerminalGhosttyLoadFailure(t *testing.T) {
 	e2e(t, useful(0), ghosttyDesc(`Says why when ghostty-web fails to load, and xterm.js can take over.`, "gh-404",
-		`prints "xterm-took-over" and then echoes what it reads. The server answers 404 for /ghostty-web.js.`,
+		`prints "xterm-took-over" and then echoes what it reads. The server answers 404 for ghostty-web.`,
 		`
 1. RUN_SCRIPT
 2. The terminal should contain the text "Couldn't open the terminal". There should be exactly 1 ".terminal-panel-tab .terminal-panel-tab-error".
@@ -182,7 +194,7 @@ func TestE2ETerminalGhosttyLoadFailure(t *testing.T) {
 
 func TestE2ETerminalGhosttyXtermChosenWhileLoading(t *testing.T) {
 	e2e(t, useful(0), ghosttyDesc(`xterm.js chosen while ghostty-web loads takes over when the load fails.`, "gh-takeover",
-		`prints "xterm-took-over" and then echoes what it reads. The server holds the page's request for /ghostty-web.js until call "fail" has it answer 404.`,
+		`prints "xterm-took-over" and then echoes what it reads. The server holds the page's request for ghostty-web until call "fail" has it answer 404.`,
 		`
 1. RUN_SCRIPT
 2. Choose the terminal menu item "Render with xterm.js".

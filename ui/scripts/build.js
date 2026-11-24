@@ -10,23 +10,56 @@ import wawoff2 from "wawoff2";
 import { Resvg } from "@resvg/resvg-js";
 import { generateShikiLanguageManifest } from "./generate-shiki-language-manifest.mjs";
 
-// Esbuild plugin: rewrite any "monaco-editor*" import (including deep paths
-// like monaco-editor/esm/vs/editor/editor.api) to the runtime URL
-// /monaco-editor.js, marked external. Our custom bundle entry re-exports
-// everything monaco-vim needs from that single file.
-//
-// We also bypass monaco-vim's package.json exports map: it routes the
-// "browser" condition to a UMD bundle that esbuild wraps with a CJS
-// require() shim, which then tries to require('/monaco-editor.js') at
-// runtime and fails. Resolve directly to the ESM index.mjs instead.
-function monacoExternalPlugin() {
+// Esbuild plugin for the main build: the bundles it loads on demand are
+// addressed by their /assets/ URLs (see buildAsset), which stay external, and
+// any "monaco-editor*" import (including deep paths like
+// monaco-editor/esm/vs/editor/editor.api) becomes the Monaco bundle's URL, so
+// the app shares the one Monaco instance that bundle loads.
+function assetsExternalPlugin(monacoUrl) {
   return {
-    name: "monaco-external",
+    name: "assets-external",
     setup(build) {
+      build.onResolve({ filter: /^\/assets\// }, (args) => ({ path: args.path, external: true }));
       build.onResolve({ filter: /^monaco-editor(\/|$)/ }, () => ({
-        path: "/monaco-editor.js",
+        path: monacoUrl,
         external: true,
       }));
+    },
+  };
+}
+
+// Esbuild plugin: an SVG that CSS references with url() (primeicons' legacy
+// SVG font) is a file of its own, though scripts import SVGs as text.
+function cssSvgFilePlugin() {
+  return {
+    name: "css-svg-file",
+    setup(build) {
+      build.onResolve({ filter: /\.svg([?#].*)?$/ }, async (args) => {
+        if (args.kind !== "url-token" || args.pluginData?.cssSvg) return undefined;
+        const resolved = await build.resolve(args.path, {
+          kind: args.kind,
+          importer: args.importer,
+          resolveDir: args.resolveDir,
+          pluginData: { cssSvg: true },
+        });
+        return resolved.errors.length ? resolved : { ...resolved, namespace: "css-svg-file" };
+      });
+      build.onLoad({ filter: /.*/, namespace: "css-svg-file" }, (args) => ({
+        contents: fs.readFileSync(args.path),
+        loader: "file",
+      }));
+    },
+  };
+}
+
+// Esbuild plugin: bypass monaco-vim's package.json exports map, which routes
+// the "browser" condition to a UMD bundle that esbuild wraps with a CJS
+// require() shim. Resolve directly to the ESM index.mjs instead, so its
+// imports of monaco-editor bind to the Monaco bundled beside it.
+function monacoVimEsmPlugin() {
+  return {
+    name: "monaco-vim-esm",
+    setup(build) {
       const monacoVimEsm = path.resolve(process.cwd(), "node_modules/monaco-vim/dist/index.mjs");
       build.onResolve({ filter: /^monaco-vim$/ }, () => ({ path: monacoVimEsm }));
     },
@@ -94,6 +127,31 @@ async function esbuildText(options) {
   return result.outputFiles[0].text.trim();
 }
 
+// Bundles entry into dist/assets/ under names that carry a hash of the
+// content, and returns the /assets/ URLs of the entry's script (js) and of its
+// stylesheet (css) if it has one.
+async function buildAsset(name, entry, options) {
+  const result = await esbuild.build({
+    entryPoints: { [name]: entry },
+    bundle: true,
+    outdir: "dist/assets",
+    entryNames: "[name]-[hash]",
+    chunkNames: "[name]-[hash]",
+    assetNames: "[name]-[hash]",
+    minify: isProd,
+    sourcemap: !noSourceMaps,
+    metafile: true,
+    ...options,
+  });
+  const url = (output) => "/" + path.relative("dist", output);
+  // With splitting, what entry imports with import() are entry points too.
+  const entryPoint = path.relative(".", fs.realpathSync(entry));
+  const [js, meta] = Object.entries(result.metafile.outputs).find(
+    ([, o]) => o.entryPoint === entryPoint,
+  );
+  return { js: url(js), css: meta.cssBundle && url(meta.cssBundle) };
+}
+
 async function build() {
   const startTime = Date.now();
   try {
@@ -101,74 +159,77 @@ async function build() {
     // exact bundled Shiki catalog installed by pnpm.
     await generateShikiLanguageManifest();
 
-    // Ensure dist directory exists
-    if (!fs.existsSync("dist")) {
-      fs.mkdirSync("dist");
-    }
+    // Start empty: go:embed takes whatever is in dist/, and CI restores dist/
+    // as hardlinks into a shared cache, which writing in place would change.
+    fs.rmSync("dist", { recursive: true, force: true });
+    fs.mkdirSync("dist");
 
-    // Build Monaco editor worker separately (IIFE format for web worker)
+    // Bundles the app loads on demand, and the fonts its CSS uses, are named
+    // after their content in dist/assets/, which the server lets browsers keep
+    // for good (server/handlers.go).
+
+    // Monaco's editor worker, a classic worker (IIFE), which Monaco starts from
+    // the URL MonacoEnvironment.getWorkerUrl gives it.
     log("Building Monaco editor worker...");
-    await esbuild.build({
-      entryPoints: ["node_modules/monaco-editor/esm/vs/editor/editor.worker.js"],
-      bundle: true,
-      outfile: "dist/editor.worker.js",
-      format: "iife",
-      minify: isProd,
-      sourcemap: !noSourceMaps,
-    });
+    const editorWorker = await buildAsset(
+      "editor.worker",
+      "node_modules/monaco-editor/esm/vs/editor/editor.worker.js",
+      {
+        format: "iife",
+      },
+    );
 
-    // Build @pierre/diffs worker for syntax highlighting (IIFE format for web worker)
+    // The @pierre/diffs syntax highlighting worker, a classic worker (IIFE).
     log("Building diffs worker...");
-    await esbuild.build({
-      entryPoints: ["src/diffs-worker.ts"],
-      bundle: true,
-      outfile: "dist/diffs-worker.js",
-      format: "iife",
-      minify: isProd,
-      sourcemap: !noSourceMaps,
-    });
+    const diffsWorker = await buildAsset("diffs-worker", "src/diffs-worker.ts", { format: "iife" });
 
     // Build fenced-markdown Shiki syntax highlighting worker separately so
-    // initialization and tokenization never run on the UI thread.
+    // initialization and tokenization never run on the UI thread. It is a module
+    // worker, split so that each grammar it imports is a file of its own,
+    // fetched when a fence first asks for it.
     log("Building markdown highlight worker...");
-    await esbuild.build({
-      entryPoints: ["src/markdown-highlight-worker.ts"],
-      bundle: true,
-      outfile: "dist/markdown-highlight-worker.js",
-      format: "iife",
-      minify: isProd,
-      sourcemap: !noSourceMaps,
-    });
+    const markdownHighlightWorker = await buildAsset(
+      "markdown-highlight-worker",
+      "src/markdown-highlight-worker.ts",
+      { format: "esm", splitting: true },
+    );
 
     // Build Monaco editor as a separate chunk (JS + CSS).
-    // We bundle through src/monaco-bundle-entry.js so we can also surface
-    // the internal modules monaco-vim depends on (ShiftCommand) as named
-    // exports of /monaco-editor.js — that way monaco-vim runs against the
-    // *same* Monaco instance the rest of the app loads.
+    // We bundle through src/monaco-bundle-entry.js so that monaco-vim ships
+    // in the Monaco bundle too and runs against the *same* Monaco instance
+    // the rest of the app loads.
     log("Building Monaco editor bundle...");
-    await esbuild.build({
-      entryPoints: ["src/monaco-bundle-entry.js"],
-      bundle: true,
-      outfile: "dist/monaco-editor.js",
+    const monaco = await buildAsset("monaco-editor", "src/monaco-bundle-entry.js", {
       format: "esm",
-      minify: isProd,
-      sourcemap: !noSourceMaps,
       loader: {
         ".ttf": "file",
       },
+      plugins: [monacoVimEsmPlugin()],
     });
 
     // ghostty-web, the default terminal emulator, with its WebAssembly inlined.
-    // Fetched as /ghostty-web.js when the first terminal opens.
+    // Fetched when the first terminal opens.
     log("Building ghostty-web bundle...");
-    await esbuild.build({
-      entryPoints: ["node_modules/ghostty-web/dist/ghostty-web.js"],
-      bundle: true,
-      outfile: "dist/ghostty-web.js",
-      format: "esm",
-      minify: isProd,
-      sourcemap: !noSourceMaps,
-    });
+    const ghostty = await buildAsset(
+      "ghostty-web",
+      "node_modules/ghostty-web/dist/ghostty-web.js",
+      {
+        format: "esm",
+      },
+    );
+
+    // The URLs the main build compiles in for the bundles above.
+    const assetUrls = {
+      __EDITOR_WORKER_URL__: editorWorker.js,
+      __DIFFS_WORKER_URL__: diffsWorker.js,
+      __MARKDOWN_HIGHLIGHT_WORKER_URL__: markdownHighlightWorker.js,
+      __MONACO_URL__: monaco.js,
+      __MONACO_CSS_URL__: monaco.css,
+      __GHOSTTY_URL__: ghostty.js,
+    };
+    for (const [name, url] of Object.entries(assetUrls)) {
+      if (!url) throw new Error(`${name}: no output`);
+    }
 
     // The bookmarklet's page script, embedded in the app's bookmarklet link and
     // in dist/shelley-bookmarklet.html, a standalone page for making one.
@@ -210,39 +271,53 @@ async function build() {
 
     // Build the Vue 3 + PrimeVue app (src/vue/main.ts). It emits dist/main.js +
     // dist/main.css, which index.html links statically (see src/index.html).
+    // What main.js imports with import() (Shiki's grammars and themes, say),
+    // and the fonts main.css uses, go to dist/assets/ under content hashes.
     log("Building main application (src/vue/main.ts)...");
-    await esbuild.build({
-      entryPoints: ["src/vue/main.ts"],
+    const mainBuild = await esbuild.build({
+      entryPoints: { main: "src/vue/main.ts" },
       bundle: true,
-      outfile: "dist/main.js",
+      outdir: "dist",
+      entryNames: "[name]",
+      chunkNames: "assets/[name]-[hash]",
+      assetNames: "assets/[name]-[hash]",
+      splitting: true,
       format: "esm",
       minify: isProd,
       sourcemap: !noSourceMaps,
       metafile: true,
-      define: { ...bookmarkletDefine, __APP_BRIDGE_SOURCE__: JSON.stringify(appBridge) },
-      external: ["monaco-editor", "/monaco-editor.js", "/ghostty-web.js"],
+      define: {
+        ...bookmarkletDefine,
+        __APP_BRIDGE_SOURCE__: JSON.stringify(appBridge),
+        ...Object.fromEntries(Object.entries(assetUrls).map(([k, v]) => [k, JSON.stringify(v)])),
+      },
       loader: {
         ".png": "dataurl",
         ".svg": "text",
-        ".woff": "dataurl",
-        ".woff2": "dataurl",
-        ".ttf": "dataurl",
-        ".eot": "dataurl",
+        ".woff": "file",
+        ".woff2": "file",
+        ".ttf": "file",
+        ".eot": "file",
       },
-      // Prefer ESM entry points so dynamic imports (e.g. monaco-vim) end
-      // up using `import` rather than CJS `require` (which esbuild can't
-      // emit at runtime in the browser).
-      // monaco-vim's package.json exports a UMD bundle under the "browser"
-      // condition; esbuild picks that by default and wraps it in a CJS
-      // shim that requires() the external /monaco-editor.js at runtime,
-      // which fails in the browser. Force resolution to its ESM build.
-
-      // monaco-vim imports specific submodules of monaco-editor. Rewrite
-      // those to the same runtime URL the rest of the app uses, so we end
-      // up with a single Monaco instance instead of two. The rewritten
-      // imports are marked external (above) so esbuild emits them as-is.
-      plugins: [monacoExternalPlugin(), vuePlugin()],
+      plugins: [assetsExternalPlugin(monaco.js), cssSvgFilePlugin(), vuePlugin()],
     });
+    // Monaco is ~3.7MB of script: the app loads it with import(), once the
+    // page is idle or an editor opens. A static import of "monaco-editor"
+    // anywhere main.js reaches without import() would make every page load and
+    // run all of Monaco before it could start.
+    const staticImports = (file, seen = new Set()) => {
+      if (seen.has(file)) return seen;
+      seen.add(file);
+      for (const i of mainBuild.metafile.outputs[file]?.imports ?? []) {
+        if (i.kind === "import-statement") staticImports(i.path, seen);
+      }
+      return seen;
+    };
+    if (staticImports("dist/main.js").has(monaco.js)) {
+      throw new Error(
+        "dist/main.js statically imports Monaco: load it with import() (services/monaco.ts)",
+      );
+    }
 
     await esbuild.build({
       entryPoints: ["src/vue/debug-timelines.js"],
@@ -361,13 +436,13 @@ async function build() {
     // Generate gzip versions of large files and remove originals to reduce binary size
     // The server will decompress on-the-fly for the rare clients that don't support gzip
     log("\nGenerating gzip compressed files...");
+    // dist/assets/ is stored gzipped whole (source maps below).
+    const assets = fs.readdirSync("dist/assets").map((f) => `assets/${f}`);
+    // go:embed skips names that start with "." or "_".
+    const unembeddable = assets.filter((f) => /^assets\/[._]/.test(f));
+    if (unembeddable.length) throw new Error(`go:embed would skip ${unembeddable.join(", ")}`);
     const filesToCompress = [
-      "monaco-editor.js",
-      "ghostty-web.js",
-      "editor.worker.js",
-      "diffs-worker.js",
-      "markdown-highlight-worker.js",
-      "monaco-editor.css",
+      ...assets.filter((f) => !f.endsWith(".map")),
       "styles.css",
       "main.js",
       "main.css",
@@ -412,16 +487,8 @@ async function build() {
     // release.yml) drop them entirely; other builds gzip them so the embedded
     // binary stays small while devtools still work. The server serves
     // <name>.map from the embedded <name>.map.gz, exactly as for .js/.css.
-    log(noSourceMaps ? "\nRemoving source maps..." : "\nGzipping source maps...");
-    for (const file of fs.readdirSync("dist")) {
-      if (noSourceMaps) {
-        // dist/ isn't cleaned between builds, so also drop .map.gz left over
-        // from a previous dev build.
-        if (file.endsWith(".map") || file.endsWith(".map.gz")) {
-          fs.unlinkSync(`dist/${file}`);
-        }
-        continue;
-      }
+    log("\nGzipping source maps...");
+    for (const file of [...fs.readdirSync("dist"), ...assets]) {
       if (!file.endsWith(".map")) continue;
       const inputPath = `dist/${file}`;
       const input = fs.readFileSync(inputPath);
@@ -441,18 +508,6 @@ async function build() {
     // Write checksums for ETag support
     fs.writeFileSync("dist/checksums.json", JSON.stringify(checksums, null, 2));
     log("\nChecksums written to dist/checksums.json");
-
-    if (verbose) {
-      console.log("\nOther files:");
-      const otherFiles = fs
-        .readdirSync("dist")
-        .filter((f) => (f.endsWith(".ttf") || f.endsWith(".map")) && !f.endsWith(".gz"));
-      for (const file of otherFiles.sort()) {
-        const stats = fs.statSync(`dist/${file}`);
-        const sizeKb = (stats.size / 1024).toFixed(1);
-        console.log(`  ${file}: ${sizeKb} KB`);
-      }
-    }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     const totalGzKb = (totalGzSize / 1024).toFixed(0);

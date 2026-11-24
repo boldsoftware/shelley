@@ -32,6 +32,9 @@ interface PendingRequest {
   reject: (reason: Error) => void;
 }
 
+// The worker bundle's URL, which carries a content hash (scripts/build.js).
+declare const __MARKDOWN_HIGHLIGHT_WORKER_URL__: string;
+
 const MAX_CACHE_ENTRIES = 128;
 const pending = new Map<number, PendingRequest>();
 const cache = new Map<string, Promise<HighlightResult>>();
@@ -49,7 +52,8 @@ function cacheKey(language: string, source: string): string {
 function getWorker(): Worker {
   if (worker) return worker;
 
-  worker = new Worker("/markdown-highlight-worker.js");
+  // A module worker, which imports each grammar as a fence first needs it.
+  worker = new Worker(__MARKDOWN_HIGHLIGHT_WORKER_URL__, { type: "module" });
   worker.addEventListener("message", ({ data }: MessageEvent<HighlightResponse>) => {
     const request = pending.get(data.id);
     if (!request) return;

@@ -1,0 +1,93 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "xterm.js chosen while ghostty-web loads takes over when the load fails. The test seeded a conversation at /c/gh-takeover, whose directory holds t.sh, which prints \"xterm-took-over\" and then echoes what it reads. The server holds the page's request for ghostty-web until call \"fail\" has it answer 404. \"The terminal\" is '.terminal-panel-content [data-terminal-id][style*=\"display: block\"]' and \"the input\" is [data-testid=\"message-input\"]. To choose a terminal menu item, click the button with aria-label exactly \"Terminal menu\", then the button with exactly that text inside \".overflow-menu-panel\" (two real clicks). \"Read all output until it matches P\" means: retry the following steps as one block until they pass (timeout 15s): fill the input with \"\"; choose the terminal menu item \"Insert all output into input\" (both clicks inside the block); the input's value must match P (eval with expect true). \"Read the visible screen until it matches P\" is the same with the menu item \"Insert visible screen into input\". \"Set the theme to T\" means what the theme menu does, the eval: localStorage.setItem(\"shelley-theme\", \"T\"); document.documentElement.classList.toggle(\"dark\", \"T\" === \"dark\"). \n1. Navigate to /c/gh-takeover. Fill the input with \"!bash t.sh\" and click [data-testid=\"send-button\"].\n2. Choose the terminal menu item \"Render with xterm.js\".\n3. Call \"fail\" (returns \"released\").\n4. \".terminal-panel-tab-running\" should be visible. The terminal should not contain \"Couldn't open the terminal\" (assert_text_not_contains).\n5. Read all output until it contains \"xterm-took-over\". Now that xterm.js has taken over, the terminal still must not contain \"Couldn't open the terminal\" (assert_text_not_contains).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/gh-takeover"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": "!bash t.sh"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"send-button\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"]"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Terminal menu",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-menu-panel button",
+      "has_text": "Render with xterm.js",
+      "exact": true
+    },
+    {
+      "action": "call",
+      "value": "fail",
+      "expect": "released"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".terminal-panel-tab-running",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"]",
+      "text": "Couldn't open the terminal"
+    },
+    {
+      "action": "retry",
+      "timeout": "15s",
+      "steps": [
+        {
+          "action": "fill",
+          "selector": "[data-testid=\"message-input\"]",
+          "value": ""
+        },
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Terminal menu",
+          "exact": true
+        },
+        {
+          "action": "click",
+          "selector": ".overflow-menu-panel button",
+          "has_text": "Insert all output into input",
+          "exact": true
+        },
+        {
+          "action": "eval",
+          "expression": "document.querySelector('[data-testid=\"message-input\"]').value.includes('xterm-took-over')",
+          "expect": "true"
+        }
+      ]
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".terminal-panel-content [data-terminal-id][style*=\"display: block\"]",
+      "text": "Couldn't open the terminal"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-24T14:41:52.294812502Z",
+    "hostname": "phil-dev",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 296956,
+    "output_tokens": 4679,
+    "estimated_cost_usd": 0.22807514999999995,
+    "mode": "generated"
+  }
+}

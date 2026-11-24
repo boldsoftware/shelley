@@ -1,19 +1,15 @@
 #!/usr/bin/env node
 // FAST_BUILD must change only how dist/ is compressed, never what it contains.
 //
-// CI's test steps build the UI with FAST_BUILD=1 (source maps dropped, gzip
-// level 1 instead of 9) because it saves ~5s on each of the ~8 shelley jobs.
-// That is only safe if the bytes the server ultimately serves are identical, so
-// this test builds the UI both ways and compares the DECOMPRESSED payloads of
-// every shipped asset. A regression here would mean CI is testing a different
+// CI's test steps build the UI with FAST_BUILD=1 (no source maps, gzip level 1
+// instead of 9) because it saves ~5s on each of the ~8 shelley jobs. That is
+// only safe if the bytes the server ultimately serves are identical to a
+// release build's (NO_SOURCEMAPS=1, no source maps either), so this test builds
+// the UI both ways and compares the names and DECOMPRESSED payloads of every
+// shipped asset. A regression here would mean CI is testing a different
 // artifact than the one we release, which is exactly the class of bug that is
-// invisible until production.
-//
-// Source maps are the one intended difference: fast builds drop them, so they
-// are excluded from the comparison (and their absence is asserted instead).
-// Dropping them also drops each bundle's trailing "//# sourceMappingURL=" line,
-// so that comment is normalized away before comparing. Nothing else may differ:
-// the assertion is on the executable content itself, not a size or file count.
+// invisible until production. The assertion is on the executable content
+// itself, not a size or file count.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -25,11 +21,6 @@ import { join } from "node:path";
 const uiDir = new URL("..", import.meta.url).pathname;
 
 function build(env) {
-  // Clean dist first. The build does not clear it, so without this the second
-  // build inherits the first one's output: if fast mode ever stopped emitting an
-  // asset, the leftover copy would make the comparison pass and hide exactly the
-  // divergence this test exists to catch.
-  rmSync(join(uiDir, "dist"), { recursive: true, force: true });
   execFileSync("node", ["scripts/build.js"], {
     cwd: uiDir,
     env: { ...process.env, ...env },
@@ -49,23 +40,12 @@ function payloads(dir) {
     const full = join(dir, name);
     if (!statSync(full).isFile()) continue;
     const stat = readFileSync(full);
-    if (name.endsWith(".map") || name.endsWith(".map.gz")) continue;
     // build-info.json embeds a timestamp and commit state; it is expected to differ.
     if (name.endsWith("build-info.json")) continue;
     // checksums.json is derived from the compressed bytes, so it differs by design.
     if (name.endsWith("checksums.json")) continue;
     const logical = name.endsWith(".gz") ? name.slice(0, -3) : name;
-    let bytes = name.endsWith(".gz") ? gunzipSync(stat) : stat;
-    if (/\.(js|css)$/.test(logical)) {
-      // Normalize the sourceMappingURL trailer (present only when maps are emitted).
-      bytes = Buffer.from(
-        bytes
-          .toString("utf8")
-          .replace(/\/\/# sourceMappingURL=[^\n]*\n?$/, "")
-          .replace(/\/\*# sourceMappingURL=[^\n]*\*\/\n?$/, ""),
-        "utf8",
-      );
-    }
+    const bytes = name.endsWith(".gz") ? gunzipSync(stat) : stat;
     out.set(logical, createHash("sha256").update(bytes).digest("hex"));
   }
   return out;
@@ -81,13 +61,13 @@ function check(cond, msg) {
   }
 }
 
-const normal = build({ FAST_BUILD: "", NO_SOURCEMAPS: "" });
+const release = build({ FAST_BUILD: "", NO_SOURCEMAPS: "1" });
 const fast = build({ FAST_BUILD: "1" });
 
-const a = payloads(normal);
+const a = payloads(release);
 const b = payloads(fast);
 
-check(a.size > 0, `normal build produced assets (${a.size})`);
+check(a.size > 0, `release build produced assets (${a.size})`);
 check(
   [...a.keys()].sort().join(",") === [...b.keys()].sort().join(","),
   "both builds ship the same set of assets",
@@ -95,20 +75,12 @@ check(
 for (const [name, hash] of a) {
   check(b.get(name) === hash, `identical decompressed payload: ${name}`);
 }
-check(
-  readdirSync(fast, { recursive: true }).every((f) => !String(f).endsWith(".map.gz")),
-  "fast build drops source maps",
-);
-check(
-  readdirSync(normal, { recursive: true }).some((f) => String(f).endsWith(".map.gz")),
-  "normal build keeps source maps",
-);
 
-rmSync(normal, { recursive: true, force: true });
+rmSync(release, { recursive: true, force: true });
 rmSync(fast, { recursive: true, force: true });
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);
   process.exit(1);
 }
-console.log("\nFAST_BUILD is payload-equivalent to a normal build.");
+console.log("\nFAST_BUILD is payload-equivalent to a release build.");

@@ -24,6 +24,9 @@ func (s *shelley) reducedMotionSheets() string {
 	dist := filepath.Join(e2eModuleDir, "ui", "dist")
 	names, err := filepath.Glob(filepath.Join(dist, "*.css.gz"))
 	s.check(err)
+	assets, err := filepath.Glob(filepath.Join(dist, "assets", "*.css.gz"))
+	s.check(err)
+	names = append(names, assets...)
 	if len(names) == 0 {
 		s.fail("no .css.gz in %s: build the UI first", dist)
 	}

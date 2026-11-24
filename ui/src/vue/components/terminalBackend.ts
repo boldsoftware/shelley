@@ -265,6 +265,8 @@ function loadWebgl(term: XTerm, opts: TerminalViewOptions) {
   }
 }
 
+// The ghostty-web bundle's URL, which carries a content hash (scripts/build.js).
+declare const __GHOSTTY_URL__: string;
 type GhosttyModule = typeof GhosttyWeb;
 let ghosttyModule: Promise<GhosttyModule> | null = null;
 
@@ -274,9 +276,7 @@ let ghosttyModule: Promise<GhosttyModule> | null = null;
  * terminal would show text from a closed one.
  */
 async function loadGhostty() {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore - runtime URL, built by scripts/build.js
-  ghosttyModule ??= (import("/ghostty-web.js") as Promise<GhosttyModule>).catch((err) => {
+  ghosttyModule ??= (import(__GHOSTTY_URL__) as Promise<GhosttyModule>).catch((err) => {
     ghosttyModule = null; // let the next terminal try again
     throw err;
   });

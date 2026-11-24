@@ -10,10 +10,13 @@
 import type { SupportedLanguages } from "@pierre/diffs";
 import { getOrCreateWorkerPoolSingleton, type WorkerPoolManager } from "@pierre/diffs/worker";
 
+// The worker bundle's URL, which carries a content hash (scripts/build.js).
+declare const __DIFFS_WORKER_URL__: string;
+
 // Workers run shiki/TextMate tokenization off the main thread so large
 // conversations (hundreds of diffs) don't freeze the UI while highlighting.
 export const diffsPoolOptions = {
-  workerFactory: () => new Worker("/diffs-worker.js"),
+  workerFactory: () => new Worker(__DIFFS_WORKER_URL__),
 };
 
 // Languages to eagerly preload in the highlighter so the common cases render

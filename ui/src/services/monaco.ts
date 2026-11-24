@@ -1,6 +1,11 @@
 import type * as Monaco from "monaco-editor";
 import { hardWrapLines, DEFAULT_TEXT_WIDTH } from "./vimHardWrap";
 
+// The Monaco bundle's URLs, which carry content hashes (scripts/build.js).
+declare const __MONACO_URL__: string;
+declare const __MONACO_CSS_URL__: string;
+declare const __EDITOR_WORKER_URL__: string;
+
 // Global Monaco instance - loaded lazily, shared across components
 let monacoInstance: typeof Monaco | null = null;
 let monacoLoadPromise: Promise<typeof Monaco> | null = null;
@@ -16,22 +21,19 @@ export function loadMonaco(): Promise<typeof Monaco> {
   monacoLoadPromise = (async () => {
     // Configure Monaco environment for web workers before importing
     const monacoEnv: Monaco.Environment = {
-      getWorkerUrl: () => "/editor.worker.js",
+      getWorkerUrl: () => __EDITOR_WORKER_URL__,
     };
     (self as Window).MonacoEnvironment = monacoEnv;
 
     // Load Monaco CSS if not already loaded
-    if (!document.querySelector('link[href="/monaco-editor.css"]')) {
+    if (!document.querySelector(`link[href="${__MONACO_CSS_URL__}"]`)) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/monaco-editor.css";
+      link.href = __MONACO_CSS_URL__;
       document.head.appendChild(link);
     }
 
-    // Load Monaco from our local bundle (runtime URL, cast to proper types)
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore - dynamic runtime URL import
-    const monaco = (await import("/monaco-editor.js")) as typeof Monaco;
+    const monaco = (await import(__MONACO_URL__)) as typeof Monaco;
     monacoInstance = monaco;
     return monacoInstance;
   })();
@@ -39,11 +41,12 @@ export function loadMonaco(): Promise<typeof Monaco> {
   return monacoLoadPromise;
 }
 
-// Vim mode adapter (lazy-loaded so users without vim enabled don't pay for it).
+// Vim mode adapter. It ships inside the Monaco bundle (see
+// src/monaco-bundle-entry.js), so it loads with Monaco, not with main.js.
 let vimModulePromise: Promise<typeof import("monaco-vim")> | null = null;
 export function loadMonacoVim(): Promise<typeof import("monaco-vim")> {
   if (!vimModulePromise) {
-    vimModulePromise = import("monaco-vim");
+    vimModulePromise = loadMonaco().then((m) => m as unknown as typeof import("monaco-vim"));
   }
   return vimModulePromise;
 }

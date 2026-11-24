@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
+	"shelley.exe.dev/ui"
 )
 
 func TestHandleVersion(t *testing.T) {
@@ -479,6 +483,60 @@ func TestStaticFontRevalidates(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotModified {
 		t.Fatalf("revalidation status %d, want 304", rec.Code)
+	}
+}
+
+// Files under /assets/ are named after their content (ui/scripts/build.js), so
+// browsers may keep them for good; main.js, which names them, revalidates.
+func TestStaticAssetsImmutable(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+	mux := http.NewServeMux()
+	h.server.RegisterRoutes(mux)
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", path, nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+
+	main := get("/main.js")
+	if main.Code != http.StatusOK || main.Header().Get("Cache-Control") != "public, max-age=0, must-revalidate" {
+		t.Fatalf("/main.js: status %d, Cache-Control %q", main.Code, main.Header().Get("Cache-Control"))
+	}
+	assets, err := fs.Glob(ui.Dist, "dist/assets/*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	types := map[string]string{
+		".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+		".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf",
+		".eot": "application/vnd.ms-fontobject", ".svg": "image/svg+xml",
+	}
+	seen := map[string]bool{}
+	for _, a := range assets {
+		path := strings.TrimSuffix(strings.TrimPrefix(a, "dist"), ".gz")
+		ext := filepath.Ext(path)
+		if ext == ".map" {
+			continue
+		}
+		seen[ext] = true
+		rec := get(path)
+		if rec.Code != http.StatusOK || rec.Header().Get("Content-Encoding") != "gzip" ||
+			rec.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" ||
+			rec.Header().Get("Content-Type") != types[ext] {
+			t.Errorf("%s: status %d, Content-Encoding %q, Cache-Control %q, Content-Type %q", path, rec.Code,
+				rec.Header().Get("Content-Encoding"), rec.Header().Get("Cache-Control"), rec.Header().Get("Content-Type"))
+		}
+	}
+	for ext := range types {
+		if !seen[ext] {
+			t.Errorf("no %s under dist/assets", ext)
+		}
+	}
+	if rec := get("/assets/missing-0000.js"); rec.Code != http.StatusNotFound || rec.Header().Get("Cache-Control") != "" {
+		t.Errorf("missing asset: status %d, Cache-Control %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
 }
 
