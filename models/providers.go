@@ -172,6 +172,10 @@ func (m *Manager) providerEntry(row db.ModelProvider, wire string) (serviceEntry
 	case "gemini":
 		apiType = APITypeGemini
 		model.ReasoningSupport = "auto"
+		if _, known := modelsdev.LookupOutputLimit(row.Endpoint, wire); known {
+			// The adapter applies the catalog limit itself, with its streaming exceptions.
+			model.MaxTokens = 0
+		}
 	default:
 		return serviceEntry{}, fmt.Errorf("unsupported provider type: %s", row.ProviderType)
 	}

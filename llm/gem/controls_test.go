@@ -97,8 +97,10 @@ func TestModelAwareThinkingControls(t *testing.T) {
 	}
 }
 
-func TestArgonStreamingOutputLimit(t *testing.T) {
-	for _, model := range []string{"gemini-4-argon", "models/gemini-4-argon", "gemini-4-argon-2026-11-06"} {
+// Argon and Carbon cap non-streamed output at 32K, the catalog's limit, but
+// allow 64K when streaming, which this adapter always does.
+func TestStreamingOutputLimit(t *testing.T) {
+	for _, model := range []string{"gemini-4-argon", "models/gemini-4-argon", "gemini-4-argon-2026-11-06", "gemini-4-carbon", "models/gemini-4-carbon"} {
 		for _, endpoint := range []string{"", "https://generativelanguage.googleapis.com/v1beta", "https://gateway.example/v1beta", "https://openrouter.ai/api/v1"} {
 			for _, maxTokens := range []int{0, 4096, 200000} {
 				t.Run(model+"/"+endpoint+"/"+strconv.Itoa(maxTokens), func(t *testing.T) {

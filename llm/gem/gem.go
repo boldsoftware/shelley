@@ -505,9 +505,9 @@ func (s *Service) DefaultReasoningLevel() string {
 		return "off"
 	}
 	switch s.modelKey() {
-	case "gemini-4-argon", "gemini-3.8-flash", "gemini-3.6-flash":
+	case "gemini-4-argon", "gemini-4-carbon", "gemini-3.8-flash", "gemini-3.6-flash":
 		return "medium"
-	case "gemini-3-flash-preview":
+	case "gemini-4-neon", "gemini-4-hydrogen", "gemini-3-flash-preview":
 		return "high"
 	case "gemini-2.5-flash-lite":
 		return "off"
@@ -520,7 +520,8 @@ func (s *Service) DefaultReasoningLevel() string {
 // DefaultMaxTokens.
 func (s *Service) maxOutputTokens() int {
 	limit, found := modelsdev.LookupOutputLimit(s.URL, s.modelName())
-	if s.modelKey() == "gemini-4-argon" {
+	switch s.modelKey() {
+	case "gemini-4-argon", "gemini-4-carbon":
 		// The catalog's 32K limit is non-streaming; this adapter always streams.
 		limit, found = 65536, true
 	}

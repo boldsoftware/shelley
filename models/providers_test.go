@@ -358,3 +358,49 @@ func TestSavedProviderReasoningDoesNotOverrideInternalRequests(t *testing.T) {
 		})
 	}
 }
+
+// Saved Gemini connections stream, so Argon and Carbon get their 64K streaming
+// output limit rather than the catalog's 32K non-streaming one.
+func TestSavedGeminiProviderStreamingOutputLimit(t *testing.T) {
+	for _, tc := range []struct{ endpoint, model string }{
+		{"https://generativelanguage.googleapis.com/v1beta", "gemini-4-argon"},
+		{"https://generativelanguage.googleapis.com/v1beta", "gemini-4-carbon"},
+		{"https://llm.int.exe.xyz/google/v1beta", "gemini-4-carbon"},
+	} {
+		t.Run(tc.endpoint+"/"+tc.model, func(t *testing.T) {
+			got := 0
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var request struct {
+					GenerationConfig struct {
+						MaxOutputTokens int `json:"maxOutputTokens"`
+					} `json:"generationConfig"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					t.Error(err)
+				}
+				got = request.GenerationConfig.MaxOutputTokens
+				w.Header().Set("Content-Type", "text/event-stream")
+				fmt.Fprint(w, "data: "+`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"hi"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1}}`+"\n\n")
+			}))
+			defer upstream.Close()
+			manager, err := NewManager(&Config{HTTPC: upstream.Client()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry, err := manager.providerEntry(db.ModelProvider{
+				ProviderID: "google", ProviderType: "gemini", APIKey: "secret", Endpoint: tc.endpoint,
+			}, tc.model)
+			if err != nil {
+				t.Fatal(err)
+			}
+			service := entry.service.(*reasoningService)
+			service.Service.(*gem.Service).URL = upstream.URL + "/v1beta"
+			if _, err := service.Do(t.Context(), &llm.Request{Messages: []llm.Message{llm.UserStringMessage("hi")}}); err != nil {
+				t.Fatal(err)
+			}
+			if got != 65536 {
+				t.Errorf("maxOutputTokens = %d, want 65536", got)
+			}
+		})
+	}
+}
