@@ -189,6 +189,7 @@ func TestOwesReport(t *testing.T) {
 		{"final report", []generated.Message{prompt, report("a", true), result("a", false), marker, notice}, false},
 		{"progress report", []generated.Message{prompt, report("a", false), result("a", false)}, true},
 		{"failed final report", []generated.Message{prompt, report("a", true), result("a", true)}, true},
+		{"final report without a result", []generated.Message{prompt, report("a", true)}, true},
 		{"report before this prompt", []generated.Message{prompt, report("a", true), result("a", false), marker, prompt}, true},
 		{"job notice after a reply", []generated.Message{prompt, reply, notice}, true},
 		{"parent message after a report", []generated.Message{prompt, report("a", true), result("a", false), marker, parentMessage}, true},

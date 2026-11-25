@@ -58,7 +58,7 @@ func (s *Server) pokeActionReports() {
 
 // startActionReports runs the report worker until shutdown: it sends the
 // reports due at startup and whenever poked, and retries after errors.
-// Reports queued before a restart drain with recoverChannelQueues.
+// Reports queued before a restart drain with recoverUnwatchedQueues.
 func (s *Server) startActionReports() {
 	s.workspace.workers.Add(1)
 	go func() {

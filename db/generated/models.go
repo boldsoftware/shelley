@@ -248,6 +248,14 @@ type ProfileRepo struct {
 	Repository  string `json:"repository"`
 }
 
+type WaitNudge struct {
+	ConversationID string    `json:"conversation_id"`
+	Kind           string    `json:"kind"`
+	Subject        string    `json:"subject"`
+	Since          time.Time `json:"since"`
+	Sent           int64     `json:"sent"`
+}
+
 type WorkspaceConversation struct {
 	ConversationID string `json:"conversation_id"`
 	Project        string `json:"project"`

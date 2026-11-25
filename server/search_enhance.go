@@ -314,6 +314,7 @@ OPTIONAL BATCH READ RECIPE — only if more evidence is necessary: messages.llm_
           json_extract(m.user_data,'$.sender_conversation_id') IS NULL
           AND json_extract(m.user_data,'$.background_job_id') IS NULL
           AND json_extract(m.user_data,'$.mcp_server_change') IS NULL
+          AND json_extract(m.user_data,'$.wait_nudge') IS NULL
         ))
         AND j.value->>'Type'=2 AND length(trim(COALESCE(j.value->>'Text','')))>0
     ), scored AS (

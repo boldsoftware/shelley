@@ -85,6 +85,14 @@ WHERE conversation_id = ? AND type NOT IN ('slug', 'livetranscript')
 ORDER BY sequence_id DESC
 LIMIT 1;
 
+-- name: GetLatestTurnMessage :one
+-- The latest message of a turn's own: what the agent said, or what it was
+-- told or a tool returned.
+SELECT * FROM messages
+WHERE conversation_id = ? AND type IN ('user', 'agent')
+ORDER BY sequence_id DESC
+LIMIT 1;
+
 -- name: DeleteMessage :exec
 DELETE FROM messages
 WHERE message_id = ?;
@@ -287,6 +295,7 @@ WITH hits AS (
           json_extract(m.user_data, '$.sender_conversation_id') IS NULL
           AND json_extract(m.user_data, '$.background_job_id') IS NULL
           AND json_extract(m.user_data, '$.mcp_server_change') IS NULL
+          AND json_extract(m.user_data, '$.wait_nudge') IS NULL
       ))
 )
 SELECT CAST(n.hit_id AS TEXT) AS hit_id, CAST(n.message_id AS TEXT) AS message_id, CAST(n.type AS TEXT) AS speaker,

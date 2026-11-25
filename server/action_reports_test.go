@@ -205,7 +205,7 @@ func TestQueuedActionReportRecovers(t *testing.T) {
 	}); err != nil || !queued {
 		t.Fatalf("queue: %v %v", queued, err)
 	}
-	s.recoverChannelQueues(t.Context())
+	s.recoverUnwatchedQueues(t.Context())
 	if reports := awaitActionReports(t, s, id, 1); len(reports) != 1 || reports[0].Text != "left queued" {
 		t.Fatalf("reports: %+v", reports)
 	}

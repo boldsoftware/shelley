@@ -85,6 +85,27 @@ export function mcpNoticeSource(userData: unknown): McpNoticeMessageSource | nul
   return { mcpServerChange: change, serverName: typeof name === "string" ? name : "" };
 }
 
+// A wait nudge is a user message to the model (that delegated work it waits
+// on, a background job or a subagent, has gone long without news) but a
+// system notice to the reader.
+export interface WaitNudgeSource {
+  kind: "background_job" | "subagent";
+  // The job's ID, or the subagent's conversation ID.
+  subject: string;
+  // The subagent's slug.
+  slug: string;
+}
+
+export function waitNudgeSource(userData: unknown): WaitNudgeSource | null {
+  const parsed = parseUserData(userData);
+  if (!parsed) return null;
+  const { wait_nudge: kind, subject, slug } = parsed;
+  if ((kind !== "background_job" && kind !== "subagent") || typeof subject !== "string") {
+    return null;
+  }
+  return { kind, subject, slug: typeof slug === "string" ? slug : "" };
+}
+
 function backgroundJobOutcome(parsed: Record<string, unknown>): BackgroundJobOutcome | null {
   const { command, exit_code: exitCode, duration, log_path: logPath, tail } = parsed;
   if (

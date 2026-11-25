@@ -814,7 +814,7 @@ func TestChannelQueuesDrainWithoutTheUI(t *testing.T) {
 	}
 
 	queue("q1", "left queued")
-	server.recoverChannelQueues(t.Context())
+	server.recoverUnwatchedQueues(t.Context())
 	drained("q1: left queued")
 
 	queue("q2", "retried")

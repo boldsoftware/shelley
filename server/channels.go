@@ -390,18 +390,18 @@ func (s *Server) lockChannelChat(ctx context.Context, chatID string) (func(), er
 	}
 }
 
-// recoverChannelQueues drains, at startup, the queues of conversations
-// holding a texted message or a project action's report.
+// recoverUnwatchedQueues drains, at startup, the queues of conversations
+// holding a texted message, a project action's report or a wait nudge.
 // Nobody may be watching their UI, so messages left queued by the previous
 // process would otherwise wait for the conversation's next message.
-func (s *Server) recoverChannelQueues(ctx context.Context) {
+func (s *Server) recoverUnwatchedQueues(ctx context.Context) {
 	var conversations []generated.Conversation
 	err := s.db.Queries(ctx, func(q *generated.Queries) (err error) {
-		conversations, err = q.ListChannelConversationsWithQueuedMessages(ctx)
+		conversations, err = q.ListConversationsWithUnwatchedQueues(ctx)
 		return err
 	})
 	if err != nil {
-		s.logger.Error("Failed to scan channel queues", "error", err)
+		s.logger.Error("Failed to scan unwatched queues", "error", err)
 		return
 	}
 	for _, conv := range conversations {

@@ -7,7 +7,7 @@
     ref="rootRef"
     :class="[
       'message',
-      jobNotice
+      jobNotice || waitNudge
         ? 'message-tool message-tool-card'
         : source
           ? 'message-tool message-conversation'
@@ -18,6 +18,7 @@
   >
     <div class="message-content" data-testid="message-content">
       <BackgroundJobNoticeCard v-if="jobNotice" :source="jobNotice" :text="text" />
+      <WaitNudgeCard v-else-if="waitNudge" :source="waitNudge" :text="text" />
       <template v-else>
         <ConversationMessageAuthor v-if="source" :source="source" />
         <div class="whitespace-pre-wrap break-words">{{ text }}</div>
@@ -98,8 +99,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 import { type QueuedMessage, queuedMessageText } from "../../types";
-import { messageSource } from "../../utils/messageSource";
+import { messageSource, waitNudgeSource } from "../../utils/messageSource";
 import BackgroundJobNoticeCard from "./BackgroundJobNoticeCard.vue";
+import WaitNudgeCard from "./WaitNudgeCard.vue";
 import ConversationMessageAuthor from "./ConversationMessageAuthor.vue";
 
 const props = defineProps<{
@@ -127,6 +129,7 @@ const source = computed(() => messageSource(props.queued.user_data));
 const jobNotice = computed(() =>
   source.value && "backgroundJobId" in source.value ? source.value : null,
 );
+const waitNudge = computed(() => waitNudgeSource(props.queued.user_data));
 // A running turn takes injected messages and ready transcriptions after its
 // current tool call; the rest wait for the turn to end.
 const status = computed(() =>

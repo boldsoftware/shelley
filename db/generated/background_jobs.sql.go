@@ -54,6 +54,45 @@ func (q *Queries) InsertBackgroundJob(ctx context.Context, arg InsertBackgroundJ
 	return err
 }
 
+const listAllRunningBackgroundJobs = `-- name: ListAllRunningBackgroundJobs :many
+SELECT job_id, conversation_id, tool_use_id, command, pid, process_start_time, log_path, exit_path, started_at, notified, exited FROM background_jobs WHERE NOT exited ORDER BY started_at
+`
+
+func (q *Queries) ListAllRunningBackgroundJobs(ctx context.Context) ([]BackgroundJob, error) {
+	rows, err := q.db.QueryContext(ctx, listAllRunningBackgroundJobs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BackgroundJob{}
+	for rows.Next() {
+		var i BackgroundJob
+		if err := rows.Scan(
+			&i.JobID,
+			&i.ConversationID,
+			&i.ToolUseID,
+			&i.Command,
+			&i.Pid,
+			&i.ProcessStartTime,
+			&i.LogPath,
+			&i.ExitPath,
+			&i.StartedAt,
+			&i.Notified,
+			&i.Exited,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRunningBackgroundJobs = `-- name: ListRunningBackgroundJobs :many
 SELECT job_id, conversation_id, tool_use_id, command, pid, process_start_time, log_path, exit_path, started_at, notified, exited FROM background_jobs WHERE conversation_id = ? AND NOT exited ORDER BY started_at
 `

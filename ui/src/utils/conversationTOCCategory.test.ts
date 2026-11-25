@@ -40,6 +40,18 @@ assert.equal(
   category("user", { user_data: JSON.stringify({ background_job_id: "job-1" }) }),
   "background",
 );
+assert.equal(
+  category("user", {
+    user_data: JSON.stringify({ wait_nudge: "background_job", subject: "job-1", Text: "t" }),
+  }),
+  "background",
+);
+assert.equal(
+  category("user", {
+    user_data: JSON.stringify({ wait_nudge: "subagent", subject: "c1", slug: "s", Text: "t" }),
+  }),
+  "subagent",
+);
 for (const metadata of [
   { distilled: "true" },
   { cwd_change: true, from: "/old", to: "/new" },

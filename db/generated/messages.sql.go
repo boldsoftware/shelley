@@ -347,6 +347,40 @@ func (q *Queries) GetLatestActionableMessage(ctx context.Context, conversationID
 	return i, err
 }
 
+const getLatestTurnMessage = `-- name: GetLatestTurnMessage :one
+SELECT message_id, conversation_id, sequence_id, type, llm_data, user_data, usage_data, created_at, display_data, excluded_from_context, generation, llm_api_url, model_name, forked_from_message_id, user_email, other_usage_data, external_message_id FROM messages
+WHERE conversation_id = ? AND type IN ('user', 'agent')
+ORDER BY sequence_id DESC
+LIMIT 1
+`
+
+// The latest message of a turn's own: what the agent said, or what it was
+// told or a tool returned.
+func (q *Queries) GetLatestTurnMessage(ctx context.Context, conversationID string) (Message, error) {
+	row := q.db.QueryRowContext(ctx, getLatestTurnMessage, conversationID)
+	var i Message
+	err := row.Scan(
+		&i.MessageID,
+		&i.ConversationID,
+		&i.SequenceID,
+		&i.Type,
+		&i.LlmData,
+		&i.UserData,
+		&i.UsageData,
+		&i.CreatedAt,
+		&i.DisplayData,
+		&i.ExcludedFromContext,
+		&i.Generation,
+		&i.LlmApiUrl,
+		&i.ModelName,
+		&i.ForkedFromMessageID,
+		&i.UserEmail,
+		&i.OtherUsageData,
+		&i.ExternalMessageID,
+	)
+	return i, err
+}
+
 const getMaxSequenceIDsForAllConversations = `-- name: GetMaxSequenceIDsForAllConversations :many
 SELECT conversation_id, CAST(COALESCE(MAX(sequence_id), 0) AS INTEGER) AS max_sequence_id
 FROM messages
@@ -1233,6 +1267,7 @@ WITH hits AS (
           json_extract(m.user_data, '$.sender_conversation_id') IS NULL
           AND json_extract(m.user_data, '$.background_job_id') IS NULL
           AND json_extract(m.user_data, '$.mcp_server_change') IS NULL
+          AND json_extract(m.user_data, '$.wait_nudge') IS NULL
       ))
 )
 SELECT CAST(n.hit_id AS TEXT) AS hit_id, CAST(n.message_id AS TEXT) AS message_id, CAST(n.type AS TEXT) AS speaker,

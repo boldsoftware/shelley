@@ -573,15 +573,17 @@ INSERT INTO conversations (conversation_id, user_initiated, model, conversation_
 VALUES (?, TRUE, ?, ?, ?, ?)
 RETURNING *;
 
--- name: ListChannelConversationsWithQueuedMessages :many
+-- name: ListConversationsWithUnwatchedQueues :many
 -- Conversations with queued messages nobody may be watching: those bound to
 -- an external chat, and those holding a project action's report or, unless
--- archived, a texted message. Used once at startup to drain them.
+-- archived, a texted message or a wait nudge. Used once at startup to drain
+-- them.
 SELECT * FROM conversations
 WHERE queued_messages != '[]' AND (external_conversation_id IS NOT NULL OR EXISTS (
     SELECT 1 FROM json_each(CASE WHEN json_valid(queued_messages) THEN queued_messages ELSE '[]' END)
     WHERE json_extract(value, '$.user_data.action_run_id') IS NOT NULL
-       OR (NOT conversations.archived AND json_extract(value, '$.external_message_id') IS NOT NULL)
+       OR (NOT conversations.archived AND (json_extract(value, '$.external_message_id') IS NOT NULL
+           OR json_extract(value, '$.user_data.wait_nudge') IS NOT NULL))
 ))
 ORDER BY created_at ASC;
 
@@ -611,3 +613,8 @@ SET next_prompt_suggestion = sqlc.arg('next_prompt_suggestion'),
     next_prompt_suggestion_seq = sqlc.arg('next_prompt_suggestion_seq')
 WHERE conversation_id = sqlc.arg('conversation_id')
   AND next_prompt_suggestion_seq <= sqlc.arg('next_prompt_suggestion_seq');
+
+-- name: ListWorkingSubagents :many
+-- Children mid-turn; the wait nudges look among them for silent subagents.
+SELECT * FROM conversations
+WHERE agent_working AND parent_conversation_id IS NOT NULL;

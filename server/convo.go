@@ -1332,13 +1332,26 @@ func (cm *ConversationManager) queueMessage(ctx context.Context, modelID string,
 	return cm.queueMessageLocked(ctx, modelID, message, midTurn)
 }
 
+// fencedByStop reports whether userData marks a message that a stopped
+// conversation must not take: a subagent's report, or a wait nudge.
+func fencedByStop(userData any) bool {
+	switch data := userData.(type) {
+	case senderMessageUserData:
+		return data.SenderRelationship == senderRelationshipSubagent
+	case waitNudgeUserData:
+		return true
+	}
+	return false
+}
+
 func (cm *ConversationManager) queueMessageLocked(ctx context.Context, modelID string, message llm.Message, midTurn bool) error {
 	s := cm.server
-	// A subagent report must not slip between Stop's initial check and its
-	// queue clear. Stop raises this fence before taking the same lifecycle
-	// lock; whichever obtains it first determines whether the report lands
-	// before Stop (and gets cleared) or is rejected afterward.
-	if source, ok := turnUserDataFromContext(ctx).(senderMessageUserData); ok && source.SenderRelationship == senderRelationshipSubagent {
+	// A subagent report, or a wait nudge, must not slip between Stop's
+	// initial check and its queue clear. Stop raises this fence before taking
+	// the same lifecycle lock; whichever obtains it first determines whether
+	// the message lands before Stop (and gets cleared) or is rejected
+	// afterward.
+	if fencedByStop(turnUserDataFromContext(ctx)) {
 		s.mu.Lock()
 		stopped := s.stoppedParents[cm.conversationID]
 		s.mu.Unlock()

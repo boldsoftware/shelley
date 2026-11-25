@@ -252,7 +252,7 @@ func TestNewAssistantThreadKeepsOldTexts(t *testing.T) {
 	}, db.SentDraft{}); err != nil {
 		t.Fatal(err)
 	}
-	server.recoverChannelQueues(t.Context())
+	server.recoverUnwatchedQueues(t.Context())
 	idle(old)
 	texts(old, "m1: hello m1", "q1: hello q1")
 }

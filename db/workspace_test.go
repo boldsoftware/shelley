@@ -1045,7 +1045,7 @@ func TestQueuedTextsToRecover(t *testing.T) {
 	}
 	var got []string
 	if err := database.Queries(ctx, func(q *generated.Queries) error {
-		convs, err := q.ListChannelConversationsWithQueuedMessages(ctx)
+		convs, err := q.ListConversationsWithUnwatchedQueues(ctx)
 		for _, c := range convs {
 			got = append(got, c.ConversationID)
 		}

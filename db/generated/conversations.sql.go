@@ -1026,66 +1026,6 @@ func (q *Queries) ListArchivedConversations(ctx context.Context, arg ListArchive
 	return items, nil
 }
 
-const listChannelConversationsWithQueuedMessages = `-- name: ListChannelConversationsWithQueuedMessages :many
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies FROM conversations
-WHERE queued_messages != '[]' AND (external_conversation_id IS NOT NULL OR EXISTS (
-    SELECT 1 FROM json_each(CASE WHEN json_valid(queued_messages) THEN queued_messages ELSE '[]' END)
-    WHERE json_extract(value, '$.user_data.action_run_id') IS NOT NULL
-       OR (NOT conversations.archived AND json_extract(value, '$.external_message_id') IS NOT NULL)
-))
-ORDER BY created_at ASC
-`
-
-// Conversations with queued messages nobody may be watching: those bound to
-// an external chat, and those holding a project action's report or, unless
-// archived, a texted message. Used once at startup to drain them.
-func (q *Queries) ListChannelConversationsWithQueuedMessages(ctx context.Context) ([]Conversation, error) {
-	rows, err := q.db.QueryContext(ctx, listChannelConversationsWithQueuedMessages)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Conversation{}
-	for rows.Next() {
-		var i Conversation
-		if err := rows.Scan(
-			&i.ConversationID,
-			&i.Slug,
-			&i.UserInitiated,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Cwd,
-			&i.Archived,
-			&i.ParentConversationID,
-			&i.Model,
-			&i.ConversationOptions,
-			&i.CurrentGeneration,
-			&i.AgentWorking,
-			&i.Tags,
-			&i.IsDraft,
-			&i.Draft,
-			&i.QueuedMessages,
-			&i.TurnInterrupted,
-			&i.ExternalConversationID,
-			&i.ExternalEndpoint,
-			&i.NextPromptSuggestion,
-			&i.NextPromptSuggestionSeq,
-			&i.DraftUpdatedAt,
-			&i.NextPromptQuickReplies,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listConversations = `-- name: ListConversations :many
 SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq, c.draft_updated_at, c.next_prompt_quick_replies,
   -- See conversation_previews.
@@ -1201,6 +1141,121 @@ ORDER BY created_at ASC
 // transcription item. Used once at startup to recover detached workers.
 func (q *Queries) ListConversationsWithQueuedTranscriptions(ctx context.Context) ([]Conversation, error) {
 	rows, err := q.db.QueryContext(ctx, listConversationsWithQueuedTranscriptions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Conversation{}
+	for rows.Next() {
+		var i Conversation
+		if err := rows.Scan(
+			&i.ConversationID,
+			&i.Slug,
+			&i.UserInitiated,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Cwd,
+			&i.Archived,
+			&i.ParentConversationID,
+			&i.Model,
+			&i.ConversationOptions,
+			&i.CurrentGeneration,
+			&i.AgentWorking,
+			&i.Tags,
+			&i.IsDraft,
+			&i.Draft,
+			&i.QueuedMessages,
+			&i.TurnInterrupted,
+			&i.ExternalConversationID,
+			&i.ExternalEndpoint,
+			&i.NextPromptSuggestion,
+			&i.NextPromptSuggestionSeq,
+			&i.DraftUpdatedAt,
+			&i.NextPromptQuickReplies,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listConversationsWithUnwatchedQueues = `-- name: ListConversationsWithUnwatchedQueues :many
+SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies FROM conversations
+WHERE queued_messages != '[]' AND (external_conversation_id IS NOT NULL OR EXISTS (
+    SELECT 1 FROM json_each(CASE WHEN json_valid(queued_messages) THEN queued_messages ELSE '[]' END)
+    WHERE json_extract(value, '$.user_data.action_run_id') IS NOT NULL
+       OR (NOT conversations.archived AND (json_extract(value, '$.external_message_id') IS NOT NULL
+           OR json_extract(value, '$.user_data.wait_nudge') IS NOT NULL))
+))
+ORDER BY created_at ASC
+`
+
+// Conversations with queued messages nobody may be watching: those bound to
+// an external chat, and those holding a project action's report or, unless
+// archived, a texted message or a wait nudge. Used once at startup to drain
+// them.
+func (q *Queries) ListConversationsWithUnwatchedQueues(ctx context.Context) ([]Conversation, error) {
+	rows, err := q.db.QueryContext(ctx, listConversationsWithUnwatchedQueues)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Conversation{}
+	for rows.Next() {
+		var i Conversation
+		if err := rows.Scan(
+			&i.ConversationID,
+			&i.Slug,
+			&i.UserInitiated,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Cwd,
+			&i.Archived,
+			&i.ParentConversationID,
+			&i.Model,
+			&i.ConversationOptions,
+			&i.CurrentGeneration,
+			&i.AgentWorking,
+			&i.Tags,
+			&i.IsDraft,
+			&i.Draft,
+			&i.QueuedMessages,
+			&i.TurnInterrupted,
+			&i.ExternalConversationID,
+			&i.ExternalEndpoint,
+			&i.NextPromptSuggestion,
+			&i.NextPromptSuggestionSeq,
+			&i.DraftUpdatedAt,
+			&i.NextPromptQuickReplies,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkingSubagents = `-- name: ListWorkingSubagents :many
+SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies FROM conversations
+WHERE agent_working AND parent_conversation_id IS NOT NULL
+`
+
+// Children mid-turn; the wait nudges look among them for silent subagents.
+func (q *Queries) ListWorkingSubagents(ctx context.Context) ([]Conversation, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkingSubagents)
 	if err != nil {
 		return nil, err
 	}

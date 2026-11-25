@@ -19,3 +19,6 @@ SELECT COUNT(*) FROM background_jobs WHERE conversation_id = ? AND (NOT exited O
 
 -- name: ListRunningBackgroundJobs :many
 SELECT * FROM background_jobs WHERE conversation_id = ? AND NOT exited ORDER BY started_at;
+
+-- name: ListAllRunningBackgroundJobs :many
+SELECT * FROM background_jobs WHERE NOT exited ORDER BY started_at;

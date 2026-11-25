@@ -157,6 +157,14 @@ func provenanceTag(rawUserData []byte) (string, []xml.Attr, error) {
 		if err := json.Unmarshal(rawUserData, &job); err == nil && job.BackgroundJobID != "" {
 			return "background_job", []xml.Attr{{Name: xml.Name{Local: "id"}, Value: job.BackgroundJobID}}, nil
 		}
+		var nudge waitNudgeUserData
+		if err := json.Unmarshal(rawUserData, &nudge); err == nil && nudge.Kind != "" {
+			attrs := []xml.Attr{{Name: xml.Name{Local: "kind"}, Value: string(nudge.Kind)}, {Name: xml.Name{Local: "id"}, Value: nudge.Subject}}
+			if nudge.Slug != "" {
+				attrs = append(attrs, xml.Attr{Name: xml.Name{Local: "slug"}, Value: nudge.Slug})
+			}
+			return "wait_nudge", attrs, nil
+		}
 		var action actionUserData
 		if err := json.Unmarshal(rawUserData, &action); err == nil && action.ActionRunID != "" {
 			return "project_action", []xml.Attr{{Name: xml.Name{Local: "run_id"}, Value: action.ActionRunID}}, nil

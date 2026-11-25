@@ -311,10 +311,12 @@ func fromParent(msg generated.Message) bool {
 }
 
 // owesReport reports whether the parent has sent something in msgs that no
-// successful message_parent(end_turn=true) has answered yet. Messages the
-// user types into the subagent are owed nothing.
+// successful message_parent(end_turn=true) has answered yet. A call whose
+// result is not recorded has not answered it: it may be queued behind a
+// tool call that hangs. Messages the user types into the subagent are owed
+// nothing.
 func owesReport(msgs []generated.Message) bool {
-	failed := make(map[string]bool) // tool_use IDs whose results are errors
+	succeeded := make(map[string]bool) // tool_use IDs whose results are not errors
 	for i := len(msgs) - 1; i >= 0; i-- {
 		msg, err := convertToLLMMessage(msgs[i])
 		if err != nil {
@@ -323,7 +325,7 @@ func owesReport(msgs []generated.Message) bool {
 		switch msgs[i].Type {
 		case string(db.MessageTypeAgent):
 			for _, c := range msg.Content {
-				if c.Type == llm.ContentTypeToolUse && c.ToolName == messageParentTool.Name && !failed[c.ID] && messageParentTool.EndsTurnWhen(c.ToolInput) {
+				if c.Type == llm.ContentTypeToolUse && c.ToolName == messageParentTool.Name && succeeded[c.ID] && messageParentTool.EndsTurnWhen(c.ToolInput) {
 					return false
 				}
 			}
@@ -332,7 +334,7 @@ func owesReport(msgs []generated.Message) bool {
 			for _, c := range msg.Content {
 				if c.Type == llm.ContentTypeToolResult {
 					results = true
-					failed[c.ToolUseID] = c.ToolError
+					succeeded[c.ToolUseID] = !c.ToolError
 				}
 			}
 			if !results && fromParent(msgs[i]) {

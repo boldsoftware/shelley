@@ -2346,6 +2346,7 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 	if err := s.recoverBackgroundJobs(context.Background()); err != nil {
 		s.logger.Error("Failed to recover background jobs", "error", err)
 	}
+	go s.waitNudgeRoutine()
 
 	// Start TCP server in goroutine
 	serverErrCh := make(chan error, 2)
@@ -2380,14 +2381,14 @@ func (s *Server) StartWithListeners(tcpListener net.Listener, socketPath string)
 
 	// Resume conversations interrupted by an upgrade restart now that the
 	// listeners (and therefore ports, streams and the subagent runner) are live.
-	// Channel queues drain now, and again once the resumes settle: a resumed
+	// Unwatched queues drain now, and again once the resumes settle: a resumed
 	// turn drains its queue when it ends, but one whose resume failed is left
 	// idle. Draining twice is harmless; idle drains coalesce.
-	go s.recoverChannelQueues(context.Background())
+	go s.recoverUnwatchedQueues(context.Background())
 	go func() {
 		s.resumeInterruptedConversations(context.Background(), resumeTurns)
 		if len(resumeTurns) > 0 {
-			s.recoverChannelQueues(context.Background())
+			s.recoverUnwatchedQueues(context.Background())
 		}
 	}()
 

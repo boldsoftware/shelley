@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { messageSource, parseLegacyBackgroundJobNotice, actionReportSource } from "./messageSource";
+import {
+  messageSource,
+  parseLegacyBackgroundJobNotice,
+  actionReportSource,
+  waitNudgeSource,
+} from "./messageSource";
 
 for (const relationship of ["subagent", "parent"] as const) {
   const data = {
@@ -162,3 +167,16 @@ assert.deepEqual(
 assert.equal(actionReportSource({ action_run_id: "" }), null);
 assert.equal(actionReportSource({ action_run_id: "r1" }), null, "only reports");
 assert.equal(actionReportSource({ background_job_id: "1" }), null);
+
+// Wait nudges name what the conversation waits on.
+assert.deepEqual(
+  waitNudgeSource('{"wait_nudge":"subagent","subject":"c1","slug":"fix-tests","Text":"x"}'),
+  { kind: "subagent", subject: "c1", slug: "fix-tests" },
+);
+assert.deepEqual(waitNudgeSource({ wait_nudge: "background_job", subject: "1a2b3c4d" }), {
+  kind: "background_job",
+  subject: "1a2b3c4d",
+  slug: "",
+});
+assert.equal(waitNudgeSource({ wait_nudge: "other", subject: "1" }), null);
+assert.equal(waitNudgeSource({ background_job_id: "1" }), null);

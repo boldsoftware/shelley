@@ -226,6 +226,10 @@
             <SlackEventCard v-if="entityIndex === 0" :event="slackEvent" :text="messageText" />
           </template>
 
+          <template v-else-if="waitNudge">
+            <WaitNudgeCard v-if="entityIndex === 0" :source="waitNudge" :text="messageText" />
+          </template>
+
           <template v-else-if="mcpNotice">
             <McpServerNoticeCard v-if="entityIndex === 0" :source="mcpNotice" :text="messageText" />
           </template>
@@ -338,11 +342,17 @@ import MessageContentBlock from "./MessageContentBlock.vue";
 import CitedText from "./CitedText.vue";
 import { coalesceContent, splitContentEntities } from "../../utils/coalesceContent";
 import { perfCount } from "../../utils/perf";
-import { messageSource, mcpNoticeSource, actionReportSource } from "../../utils/messageSource";
+import {
+  messageSource,
+  mcpNoticeSource,
+  actionReportSource,
+  waitNudgeSource,
+} from "../../utils/messageSource";
 import { slackEventOf } from "../../utils/slack";
 import ConversationMessageCard from "./ConversationMessageCard.vue";
 import BackgroundJobNoticeCard from "./BackgroundJobNoticeCard.vue";
 import McpServerNoticeCard from "./McpServerNoticeCard.vue";
+import WaitNudgeCard from "./WaitNudgeCard.vue";
 import SlackEventCard from "./SlackEventCard.vue";
 import ActionRunCard from "./ActionRunCard.vue";
 import MessageDisplayData from "./MessageDisplayData.vue";
@@ -491,6 +501,10 @@ const slackEvent = computed(() =>
 // Notices that the registered MCP servers changed render as a system card.
 const mcpNotice = computed(() =>
   isUser.value && !isDistilledUser.value ? mcpNoticeSource(props.message.user_data) : null,
+);
+// Nudges about delegated work gone long without news render as a tool card.
+const waitNudge = computed(() =>
+  isUser.value && !isDistilledUser.value ? waitNudgeSource(props.message.user_data) : null,
 );
 const authorEmail = computed(() =>
   isUser.value && !isDistilledUser.value && showUserEmails?.value
@@ -731,7 +745,7 @@ const hasRenderableContent = computed(() => {
 
 // ---- Message container classes ----
 const messageClasses = computed(() => {
-  if (jobNotice.value || conversationSender.value || actionReport.value) {
+  if (jobNotice.value || conversationSender.value || actionReport.value || waitNudge.value) {
     return "message message-tool message-tool-card";
   }
   if (isUser.value && !isDistilledUser.value) {
