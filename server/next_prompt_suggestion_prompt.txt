@@ -1,16 +1,11 @@
 <next_prompt_suggestion>
-Shelley sent this message, not the user. The user's message box is empty, and Shelley wants to fill it with a suggestion of what they will most likely type next. They can accept it, edit it, or ignore it; it is never sent on its own.
+This is not a task to work on: do not call any tools, and answer immediately, without extended thinking. Your whole reply is the one JSON object described below.
 
-Predict the user's next message from the whole conversation, from their goals and how they have reacted so far. Often the likeliest next step acts on something already produced: apply or commit a change, test it, fix one specific flaw, redo it differently, reformat it, or ask for more of the same. Otherwise, pick the most grounded follow-up question, answer, or instruction. Keep the concrete details it depends on. Do not invent facts or a new agenda.
+This request was added automatically; the user didn't write it. It asks for a pre-fill of the user's empty message box: a shortcut that saves typing in the obvious case. Don't think for them: pre-fill only when the next step is obvious, and otherwise leave the box empty.
 
-Write the suggestion in the user's voice, as one line of at most 240 characters, with no alternatives or explanation. If no next message is clearly likelier than others, the suggestion is null.
+Reply with only this JSON: {"suggestion": "<text>" or null, "quick_replies": ["<reply>", ...]}
 
-Do not use tools. Reply with only this JSON: {"suggestion": "<the message>" or null, "quick_replies": ["<reply>", ...]}
+suggestion: an editable one-line draft of the user's next message, or null. Write one only when the next step is obvious, so that you'd be surprised if the user wanted something else, and it can be stated succinctly. Phrase it as the shortest text that would move the work forward if the user chose that direction. Reports often hint at next steps, but users usually answer a report in their own direction, so null is the usual answer after one, even when a next step seems natural. Use null after open-ended questions, for anything only the user can judge, and whenever you are unsure. The draft must not echo your message or invent anything the user hasn't said: no opinions, results, or new requirements.
 
-"quick_replies": 0-4 buttons that send their text immediately when tapped, best first.
-- Each must be a complete, unambiguous reply to a question you just asked or a choice you just offered ("Yes", "Cedar"), or the obvious go-ahead you are waiting for ("Commit it"). Only offer choices you actually offered; never turn your examples or side remarks into options.
-- Name a choice by its content in 1-3 words ("Cedar", "Push first"), never by its label ("Option B", "(a)", "#2").
-- Each must tell you what to do next. A bare "No", "Not now", "Keep as is", "Nothing" or "Stop here" does not; the user can simply not reply, so never offer it. A no is fine only with what to do instead ("Keep marin", "Skip tests; commit").
-- At most 24 characters, ideally 1-3 words. No two that mean the same thing, nothing that needs editing, no opinions.
-- Use [] when no such reply is clearly right. [] is common and fine.
+quick_replies: 0-4 buttons that send their exact text immediately, the next level of shortcut: offer them only when you are confident a reply of one or two words would be natural, useful, and complete, such as answering a question you asked or accepting something you offered. [] is common. Each must stand alone, needing no editing and no other context for you to act on it, so name the thing itself, not a label or number from your message: if you asked "Postgres or SQLite?", offer "Postgres" and "SQLite", not "Option 1". Never offer a reply that leaves you nothing to do. One or two words each, terse like a button label: a verb and its object, with no "the" or "please". Never more than 24 characters.
 </next_prompt_suggestion>
