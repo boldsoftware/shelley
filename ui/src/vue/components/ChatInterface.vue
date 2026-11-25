@@ -4879,7 +4879,9 @@ async function sendMessage(
           });
       // A queued message starts no turn (e.g. it waits behind a failed
       // recording), so drop the optimistic indicator for the server's state.
-      if (accepted.status === "queued") syncTransientFromStore(id);
+      if (accepted.status === "queued" && id === currentConversationId) {
+        agentWorking.value = messageStore.getTransient(id).agentWorking;
+      }
     }
     if (fromComposer) forgetUnsaved(session, sent);
   } catch (err) {
@@ -6008,9 +6010,12 @@ watch(
     streamingThinking.value = "";
 
     unsubStore = messageStore.subscribe(focusedId, () => scheduleStoreSync(focusedId, false));
-    unsubTransient = messageStore.subscribeTransient(focusedId, () =>
-      scheduleStoreSync(focusedId, true),
-    );
+    unsubTransient = messageStore.subscribeTransient(focusedId, (working) => {
+      // A hidden tab may not get another frame until it is visible again.
+      // Update the busy state (and favicon) without waiting for a redraw.
+      if (working !== undefined && focusedId === currentConversationId) agentWorking.value = working;
+      scheduleStoreSync(focusedId, true);
+    });
 
     // A draft conversation has no server-side messages by definition: it only
     // carries composer text. Never spin or hit the network for it — that path
