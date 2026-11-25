@@ -812,7 +812,13 @@ func (s *Service) effectiveThinkingLevel(level llm.ThinkingLevel) llm.ThinkingLe
 	return level
 }
 
-// SupportsThinkingOff reports whether an explicit off request omits thinking.
+// hasThinkingToggle reports whether the model's controls list off explicitly.
+func (s *Service) hasThinkingToggle() bool {
+	caps, found := s.ReasoningOverride.Lookup(s.URL, cmp.Or(s.Model, DefaultModel))
+	return found && slices.Contains(caps.Levels, llm.ThinkingLevelOff)
+}
+
+// SupportsThinkingOff reports whether an explicit off request turns thinking off.
 func (s *Service) SupportsThinkingOff() bool {
 	level := s.effectiveThinkingLevel(llm.ThinkingLevelOff)
 	return s.DisableReasoning || level == llm.ThinkingLevelOff || level == llm.ThinkingLevelDefault
@@ -825,6 +831,11 @@ func (s *Service) applyAnthropicThinking(req *request, level llm.ThinkingLevel, 
 	level = s.effectiveThinkingLevel(level)
 	adaptive := s.adaptiveThinking()
 	if level == llm.ThinkingLevelOff || level == llm.ThinkingLevelDefault {
+		if level == llm.ThinkingLevelOff && adaptive && s.hasThinkingToggle() {
+			// Toggle models (e.g. Haiku 5.5) think when the parameter is
+			// omitted. Other adaptive models reject "disabled" with a 400.
+			req.Thinking = &thinking{Type: "disabled"}
+		}
 		return
 	}
 	if adaptive {

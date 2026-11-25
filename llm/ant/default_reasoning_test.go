@@ -91,3 +91,47 @@ func TestDisableReasoningOverridesEndpointControls(t *testing.T) {
 		}
 	}
 }
+
+// Haiku 5.5 and Sonnet 5 think when the thinking parameter is omitted, so an
+// explicit off must send {"type":"disabled"}. Models without a toggle reject
+// that with a 400 (verified live), so they keep omitting it or clamping.
+func TestExplicitOffDisablesDefaultThinking(t *testing.T) {
+	for _, tc := range []struct {
+		name, model string
+		override    *modelsdev.ReasoningCapabilities
+		level       llm.ThinkingLevel
+		want        string // thinking.type, "" for omitted
+	}{
+		{"haiku 5.5 off", Claude55Haiku, nil, llm.ThinkingLevelOff, "disabled"},
+		{"sonnet 5 off", Claude5Sonnet, nil, llm.ThinkingLevelOff, "disabled"},
+		{"haiku 5.5 default stays omitted", Claude55Haiku, nil, llm.ThinkingLevelDefault, ""},
+		{"opus 5.5 off clamps to adaptive", Claude55Opus, nil, llm.ThinkingLevelOff, "adaptive"},
+		{"legacy budget off stays omitted", Claude45Sonnet, nil, llm.ThinkingLevelOff, ""},
+		{"unknown adaptive off stays omitted", "claude-opus-9", nil, llm.ThinkingLevelOff, ""},
+		{"override with off", "gateway-claude-sonnet-5-5", &modelsdev.ReasoningCapabilities{Supported: true, Levels: []llm.ThinkingLevel{llm.ThinkingLevelOff, llm.ThinkingLevelHigh}}, llm.ThinkingLevelOff, "disabled"},
+		{"override unsupported stays omitted", Claude55Haiku, &modelsdev.ReasoningCapabilities{}, llm.ThinkingLevelOff, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &Service{Model: tc.model, ReasoningOverride: tc.override}
+			got := s.fromLLMRequest(&llm.Request{
+				ThinkingLevel: tc.level,
+				ToolChoice:    &llm.ToolChoice{Type: llm.ToolChoiceTypeTool, Name: "bash"},
+			})
+			gotType := ""
+			if got.Thinking != nil {
+				gotType = got.Thinking.Type
+			}
+			if gotType != tc.want {
+				t.Fatalf("thinking = %+v, want type %q", got.Thinking, tc.want)
+			}
+			if gotType == "disabled" {
+				if *got.Thinking != (thinking{Type: "disabled"}) || got.OutputConfig != nil {
+					t.Fatalf("disabled thinking carries extra fields: %+v, output_config %+v", got.Thinking, got.OutputConfig)
+				}
+				if got.ToolChoice == nil {
+					t.Fatal("disabled thinking dropped the forced tool choice")
+				}
+			}
+		})
+	}
+}
