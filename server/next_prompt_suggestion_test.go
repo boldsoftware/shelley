@@ -310,15 +310,25 @@ func TestNextPromptSuggestionSkipsTextedAssistantTurns(t *testing.T) {
 func TestParseNextPromptSuggestion(t *testing.T) {
 	t.Parallel()
 	for reply, want := range map[string]string{
-		`{"suggestion":"  Add a regression test  "}`:               "Add a regression test",
-		`{"suggestion":null}`:                                      "",
-		`{"suggestion":"` + strings.Repeat("é", 240) + `"}`:        strings.Repeat("é", 240),
-		`{"suggestion":"` + strings.Repeat("é", 241) + `"}`:        "error",
-		`{"suggestion":"one\ntwo"}`:                                "error",
-		`{"suggestion":"one` + "\u2028" + `two"}`:                  "error",
-		`{"suggestion":3}`:                                         "error",
-		"```json\n{\"suggestion\":\"Add a regression test\"}\n```": "error",
-		`Sure! Try asking for tests.`:                              "error",
+		`{"suggestion":"  Add a regression test  "}`:                    "Add a regression test",
+		`{"suggestion":null}`:                                           "",
+		`{"suggestion":"` + strings.Repeat("é", 240) + `"}`:             strings.Repeat("é", 240),
+		`{"suggestion":"` + strings.Repeat("é", 241) + `"}`:             "error",
+		`{"suggestion":"one\ntwo"}`:                                     "error",
+		`{"suggestion":"one` + "\u2028" + `two"}`:                       "error",
+		`{"suggestion":3}`:                                              "error",
+		"```json\n{\"suggestion\":\"Add a regression test\"}\n```":      "Add a regression test",
+		"\n```\n{\"suggestion\":\"Add a regression test\"}\n```\n":      "Add a regression test",
+		"```JSON\n{\"suggestion\":\"Add a regression test\"}```":        "Add a regression test",
+		"``` json\r\n{\"suggestion\":\"Add a regression test\"}\r\n```": "Add a regression test",
+		"```json {\"suggestion\":\"Add a regression test\"} ```":        "Add a regression test",
+		"```{\"suggestion\":\"Add a regression test\"}```":              "Add a regression test",
+		"~~~json\n{\"suggestion\":\"Add a regression test\"}\n~~~":      "Add a regression test",
+		"````json\n{\"suggestion\":\"Add a regression test\"}\n````":    "Add a regression test",
+		"```json\n{\"suggestion\":null}\n```\nDone.":                    "error",
+		"```json\n{\"suggestion\":\"Add a regression test\"}":           "error",
+		"Here:\n```json\n{\"suggestion\":null}\n```":                    "error",
+		`Sure! Try asking for tests.`:                                   "error",
 	} {
 		got, _, err := parseNextPromptSuggestion(&llm.Response{Content: []llm.Content{{Type: llm.ContentTypeText, Text: reply}}})
 		if err != nil {
@@ -356,6 +366,7 @@ func TestParseNextPromptQuickReplies(t *testing.T) {
 		{`{"suggestion":null,"quick_replies":["Yes","  "]}`, []string{"Yes"}},
 		{`{"suggestion":null,"quick_replies":["Yes",3]}`, []string{"Yes"}},
 		{`{"suggestion":null,"quick_replies":["Yes",null]}`, []string{"Yes"}},
+		{"```json\n{\"suggestion\":null,\"quick_replies\":[\"Yes\"]}\n```", []string{"Yes"}},
 		{`{"suggestion":"` + strings.Repeat("x", 241) + `","quick_replies":["Yes"]}`, []string{"Yes"}},
 		{`{"suggestion":null,"quick_replies":"Yes"}`, nil},
 		{`{"suggestion":null,"quick_replies":{"Yes":1}}`, nil},

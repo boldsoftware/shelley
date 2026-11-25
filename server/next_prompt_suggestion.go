@@ -90,15 +90,15 @@ func (cm *ConversationManager) suggestNextPrompt(ctx context.Context, endSeq int
 
 // parseNextPromptSuggestion returns the suggested message, or "" when the
 // model had none, and its quick replies. A reply that breaks the requested
-// format is an error. So is an unusable suggestion, but then the quick
-// replies are still returned. They are kept up to the first unusable one,
-// and at most four.
+// format is an error, though a code fence around the JSON is fine. So is an
+// unusable suggestion, but then the quick replies are still returned. They
+// are kept up to the first unusable one, and at most four.
 func parseNextPromptSuggestion(resp *llm.Response) (string, []string, error) {
 	var reply struct {
 		Suggestion   *string         `json:"suggestion"`
 		QuickReplies json.RawMessage `json:"quick_replies"`
 	}
-	if err := json.Unmarshal([]byte(llm.FirstText(resp)), &reply); err != nil {
+	if err := json.Unmarshal([]byte(unfence(llm.FirstText(resp))), &reply); err != nil {
 		types := make([]string, len(resp.Content))
 		for i, c := range resp.Content {
 			types[i] = c.Type.String()
@@ -131,6 +131,27 @@ func parseNextPromptSuggestion(resp *llm.Response) (string, []string, error) {
 		return "", quickReplies, fmt.Errorf("not one line of at most %d characters: %q", nextPromptSuggestionMaxRunes, text)
 	}
 	return text, quickReplies, nil
+}
+
+// unfence returns text without a Markdown code fence wrapped around all of
+// it, which some models add to JSON despite being asked not to: any run of
+// three or more backticks or tildes, an optional language tag, and the same
+// run closing it, on separate lines or not.
+func unfence(text string) string {
+	text = strings.TrimSpace(text)
+	fence := text[:len(text)-len(strings.TrimLeft(text, "`"))]
+	if fence == "" {
+		fence = text[:len(text)-len(strings.TrimLeft(text, "~"))]
+	}
+	if len(fence) < 3 || len(text) < 2*len(fence) || !strings.HasSuffix(text, fence) {
+		return text
+	}
+	body := text[len(fence) : len(text)-len(fence)]
+	tag, rest, ok := strings.Cut(body, "{")
+	if !ok || len(strings.Fields(tag)) > 1 {
+		return text
+	}
+	return strings.TrimSpace("{" + rest)
 }
 
 // oneLine reports whether text is one line of at most maxRunes characters.
