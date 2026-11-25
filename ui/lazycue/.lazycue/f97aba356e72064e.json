@@ -1,0 +1,67 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A patch tool card's header button opens the patched file in the editor without a watcher error. The conversation /c/{{SLUG}} patched the file {{FILE}}, which now contains \"updated example\". Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The first completed patch card ('.patch-tool[data-testid=\"tool-call-completed\"]') should be visible (wait up to 15s). 3. Click the button named \"Open in editor\" in that card. 4. A dialog (role \"dialog\") whose accessible name contains \"Edit {{FILE}}\" should become visible (up to 15s). 5. In that dialog, a \".view-line\" containing \"updated example\" should be visible (up to 15s). 6. Eval window.__pageErrors.filter(m =\u003e /before initialization|watcher callback/.test(m)).length and expect 0. 7. Press Escape. 8. The dialog should no longer be visible. 9. The patch card should still be visible (the editor is not nested in it).",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".patch-tool[data-testid=\"tool-call-completed\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".patch-tool[data-testid=\"tool-call-completed\"]"
+      },
+      "role": "button",
+      "name": "Open in editor"
+    },
+    {
+      "action": "wait_visible",
+      "role": "dialog",
+      "name": "Edit {{FILE}}",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "within": {
+        "role": "dialog",
+        "name": "Edit {{FILE}}"
+      },
+      "selector": ".view-line",
+      "has_text": "updated example",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.__pageErrors.filter(m =\u003e /before initialization|watcher callback/.test(m)).length",
+      "expect": "0"
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "wait_hidden",
+      "role": "dialog",
+      "name": "Edit {{FILE}}"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".patch-tool[data-testid=\"tool-call-completed\"]"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-25T00:53:34.926879916Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 23830,
+    "output_tokens": 602,
+    "estimated_cost_usd": 0.045004199999999994,
+    "mode": "generated"
+  }
+}

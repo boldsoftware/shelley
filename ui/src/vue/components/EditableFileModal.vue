@@ -404,9 +404,12 @@ watch(isDesktop, (desktop) => {
 // --- File load (when opened / path / loadUrl change) ---
 watch(
   () => [props.isOpen, props.path, props.loadUrl] as const,
-  () => {
+  (_value, _oldValue, onCleanup) => {
     if (!props.isOpen) return;
     let cancelled = false;
+    onCleanup(() => {
+      cancelled = true;
+    });
     loadStatus.value = "loading";
     // Assume the prop path until (or unless) the load response reports the
     // real one; see resolvedPath.
@@ -443,14 +446,9 @@ watch(
         if (!cancelled) loadStatus.value = "error";
       }
     })();
-    // store cancel on a ref-keyed closure via the watcher's cleanup
-    currentLoadCancel = () => {
-      cancelled = true;
-    };
   },
   { immediate: true },
 );
-let currentLoadCancel: (() => void) | null = null;
 
 // --- Load Monaco when opened ---
 watch(
@@ -713,7 +711,6 @@ watch(
         clearTimeout(statusTimeout);
         statusTimeout = null;
       }
-      currentLoadCancel?.();
       disposeEditor();
       content.value = null;
       previewText.value = "";

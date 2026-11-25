@@ -12,7 +12,15 @@ import (
 // file in the same standalone Monaco editor the fuzzy finder uses, so a patch
 // can be inspected/fixed in place without hunting for the path.
 func TestE2EPatchToolOpenInEditor(t *testing.T) {
-	e2e(t, useful(0), `A patch tool card's header button opens the patched file in the editor. The conversation /c/{{SLUG}} patched the file {{FILE}}, which now contains "updated example". Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The first completed patch card ('.patch-tool[data-testid="tool-call-completed"]') should be visible (wait up to 15s). 3. Click the button named "Open in editor" in that card. 4. A dialog (role "dialog") whose accessible name contains "Edit {{FILE}}" should become visible (up to 15s). 5. In that dialog, a ".view-line" containing "updated example" should be visible (up to 15s). 6. Press Escape. 7. The dialog should no longer be visible. 8. The patch card should still be visible (the editor is not nested in it).`, func(s *shelley) {
+	e2e(t, useful(1), `A patch tool card's header button opens the patched file in the editor without a watcher error. The conversation /c/{{SLUG}} patched the file {{FILE}}, which now contains "updated example". Perform the steps in order. 1. Navigate to /c/{{SLUG}}. 2. The first completed patch card ('.patch-tool[data-testid="tool-call-completed"]') should be visible (wait up to 15s). 3. Click the button named "Open in editor" in that card. 4. A dialog (role "dialog") whose accessible name contains "Edit {{FILE}}" should become visible (up to 15s). 5. In that dialog, a ".view-line" containing "updated example" should be visible (up to 15s). 6. Eval window.__pageErrors.filter(m => /before initialization|watcher callback/.test(m)).length and expect 0. 7. Press Escape. 8. The dialog should no longer be visible. 9. The patch card should still be visible (the editor is not nested in it).`, func(s *shelley) {
+		s.initScript(toolComponentsPageErrors + `
+for (const level of ['error', 'warn']) {
+  const log = console[level];
+  console[level] = (...args) => {
+    window.__pageErrors.push(args.map(String).join(' '));
+    log.apply(console, args);
+  };
+}`)
 		dir := s.tempDir("patchedit")
 		file := s.write(filepath.Join(dir, "notes.txt"), "an example line\n")
 		// The predictable model's "patch: <path>" replaces "example" in that file.
