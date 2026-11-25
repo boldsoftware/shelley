@@ -42,7 +42,7 @@
         :disabled="!text.trim()"
         @click="emit('submit')"
       >
-        Add Comment
+        {{ submitLabel ?? "Add Comment" }}
       </button>
     </div>
   </div>
@@ -52,6 +52,7 @@
 import { onMounted, onUnmounted, ref } from "vue";
 
 const props = defineProps<{
+  submitLabel?: string;
   /** What is being commented on, e.g. "Line 12, new" or "a 300x180 region". */
   where: string;
   text: string;

@@ -1,0 +1,119 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A working text file on a phone is review-only. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Click the row titled \"only.txt\" in \".diff-rethink-mobile-files\" and wait for the modified Monaco editor to show \"after\". There is no button named \"Edit\" in the viewer. Evaluate that \".diff-viewer-rethink .editor.modified textarea.inputarea\" has readOnly === true and tabIndex === -1. Tap the \"after\" line in the modified editor; the rail input \".diff-rethink-rail-input\" opens above the rail's Cancel (\".diff-rethink-cancel-comment\") and Save Comment (\".diff-rethink-comment-change\") buttons. In an eval with expect true, assert the input's bounding-box bottom is at or above both buttons' tops and its value is empty. There is no \".diff-viewer-selected-text\" code excerpt. Click Cancel without submitting. Call \"working-file-content\" and confirm it still returns \"after\\n\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label='More options']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title='only.txt']"
+    },
+    {
+      "action": "wait_text",
+      "text": "after",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "button[aria-label='Edit']"
+    },
+    {
+      "action": "eval",
+      "expression": "const el = document.querySelector('.diff-viewer-rethink .editor.modified textarea.inputarea'); [el.readOnly, el.tabIndex]",
+      "expect": "[true,-1]"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-rethink .editor.modified .view-line",
+      "has_text": "after"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-rail-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-cancel-comment",
+      "timeout": "10s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-comment-change",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "(async () =\u003e { const input = document.querySelector('.diff-rethink-rail-input'); const cancel = document.querySelector('.diff-rethink-cancel-comment'); const save = document.querySelector('.diff-rethink-comment-change'); const ib = input.getBoundingClientRect(); const cb = cancel.getBoundingClientRect(); const sb = save.getBoundingClientRect(); return ib.bottom \u003c= cb.top \u0026\u0026 ib.bottom \u003c= sb.top \u0026\u0026 input.value === ''; })()",
+      "expect": "true"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-viewer-selected-text"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-cancel-comment"
+    },
+    {
+      "action": "call",
+      "value": "working-file-content",
+      "expect": "after\n"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-25T23:47:07.221970099Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 90013,
+    "output_tokens": 3848,
+    "estimated_cost_usd": 0.1074519,
+    "mode": "generated"
+  }
+}

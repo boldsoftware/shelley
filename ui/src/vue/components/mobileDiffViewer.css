@@ -175,6 +175,30 @@
       sans-serif;
   }
 
+  .diff-viewer-rethink .diff-viewer-main > .diff-rethink-change-nav:has(.diff-draft-review-toggle) {
+    grid-template-columns: minmax(0, max-content) max-content 44px minmax(0, 1fr) 44px 44px;
+    column-gap: 6px;
+  }
+
+  .diff-viewer-rethink .diff-viewer-main > .diff-rethink-change-nav .diff-draft-review-toggle {
+    grid-column: 3;
+    height: 36px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .diff-viewer-rethink
+    .diff-viewer-main
+    > .diff-rethink-change-nav
+    .diff-draft-review-toggle.has-comments {
+    background: #0864ed;
+    color: white;
+  }
+
   .diff-viewer-rethink .diff-viewer-main {
     min-width: 0;
     background: var(--diff-main) !important;
@@ -861,5 +885,28 @@
   }
   .diff-viewer-rethink .diff-viewer-main > .is-commenting .diff-rethink-comment-change {
     grid-column: 3;
+  }
+  .diff-viewer-rethink .diff-viewer-editor .monaco-editor .diff-comment-target-line {
+    box-shadow: inset 3px 0 var(--blue-text);
+    background: color-mix(in srgb, var(--blue-text) 24%, transparent) !important;
+  }
+  .diff-viewer-rethink .diff-viewer-editor .monaco-editor .diff-comment-target-gutter {
+    border-inline-start: 3px solid var(--blue-text);
+  }
+  .diff-viewer-rethink .diff-rethink-tap-comment {
+    position: absolute;
+    z-index: 5;
+    right: 30px;
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--blue-border);
+    border-radius: 999px;
+    background: var(--bg-base);
+    color: var(--diff-accent);
+    box-shadow: 0 2px 8px #0002;
+    font:
+      600 12px/1 system-ui,
+      sans-serif;
+    cursor: pointer;
   }
 }

@@ -821,7 +821,7 @@
       :conversation-id="conversationId ?? undefined"
       :on-vm="onVm"
       :is-open="showGitGraph"
-      :covered="showDiffViewer"
+      :covered="showDiffViewer || diffDraftReviewOpen"
       :can-open-diff="true"
       :mobile-diff="isMobile"
       :selection-from="diffViewerTransfer?.diff ?? diffViewerInitialCommit"
@@ -829,7 +829,11 @@
       @close="onGitGraphClose"
       @clear-selection="clearDiffViewerSelection"
       @open-diff="onGitGraphOpenDiff"
-    />
+    >
+      <template #review>
+        <DiffReviewButton :count="diffDraftNotes.length" @open="openDiffDraftReview" />
+      </template>
+    </GitGraphViewer>
 
     <!-- Image annotation view. Opened by clicking any image in the
          conversation (see composables/imageComment.ts); its comments land in
@@ -869,9 +873,50 @@
       :follow-review-conversation="followReviewConversation"
       @close="onDiffViewerClose"
       @open-git-graph="onOpenGitGraphFromDiff"
-      @comment-text-change="(text: string) => (diffCommentText = text)"
+      :review-notes="diffDraftNotes"
+      :review-machine="diffDraftMachine"
+      :review-open="diffDraftReviewOpen"
+      @save-review-comment="saveDiffDraftNote"
+      @open-review="openDiffDraftReview"
       @cwd-change="(cwd: string) => (diffViewerCwd = cwd)"
     />
+
+    <dialog ref="diffDraftDialog" class="diff-draft-review" aria-labelledby="diff-draft-heading" @close="onDiffDraftClose" @click.self="dismissDiffDraftBackdrop">
+      <header>
+        <div>
+          <h2 id="diff-draft-heading">Draft review</h2>
+          <small>{{ diffDraftNotes.length }} {{ diffDraftNotes.length === 1 ? "comment" : "comments" }}</small>
+        </div>
+        <button class="btn-text" type="button" aria-label="Close draft review" autofocus @click="diffDraftDialog?.close()">×</button>
+      </header>
+      <div class="diff-draft-review-notes" :inert="diffDraftSending">
+        <p v-if="!diffDraftNotes.length">Select a line in a diff to save a comment here.</p>
+        <article v-for="note in diffDraftNotes" :key="note.id">
+          <div class="diff-draft-review-location">
+            <button class="diff-draft-file-link" type="button" :disabled="note.machine !== diffDraftMachine || diffDraftSending" @click="openDiffDraftFile(note)">{{ draftCommentLocation(note) }}</button>
+            <small :title="`${note.machine}:${note.root}`">{{ note.machine === "local" ? "" : `${note.machine} · ` }}{{ note.root.split("/").filter(Boolean).at(-1) || note.root }}</small>
+          </div>
+          <form v-if="editingDiffDraftId === note.id" @submit.prevent="applyDiffDraftEdit(note)">
+            <textarea v-model="diffDraftEdit" aria-label="Edit draft comment" rows="3" />
+            <button class="btn-text" type="submit" :disabled="!diffDraftEdit.trim()">Save</button>
+            <button class="btn-text" type="button" @click="editingDiffDraftId = null">Cancel</button>
+          </form>
+          <template v-else>
+            <p>{{ note.text }}</p>
+            <div class="diff-draft-note-actions">
+              <details v-if="note.quote"><summary>Quote</summary><pre>{{ note.quote }}</pre></details>
+              <button class="btn-text" type="button" @click="editingDiffDraftId = note.id; diffDraftEdit = note.text">Edit</button>
+              <button class="btn-text" type="button" @click="diffDraftNotes = diffDraftNotes.filter((item) => item.id !== note.id)">Remove</button>
+            </div>
+          </template>
+        </article>
+      </div>
+      <footer>
+        <p v-if="diffDraftSendError" class="text-error" role="alert">{{ diffDraftSendError }}</p>
+
+        <button class="diff-viewer-btn diff-viewer-btn-primary" type="button" :disabled="!diffDraftNotes.length || editingDiffDraftId !== null || sending || diffDraftSending" @click="onDiffReviewToChat">{{ diffDraftSending ? "Sending…" : "Send to Chat" }}</button>
+      </footer>
+    </dialog>
 
     <!-- AGENTS.md Editor Modal -->
     <AgentsMdEditorModal :is-open="showAgentsMdEditor" @close="showAgentsMdEditor = false" />
@@ -1075,6 +1120,9 @@ import type { ReviewConversationStart } from "./useReviewRecording";
 import ImageCommentModal from "./ImageCommentModal.vue";
 import MarkdownDocModal from "./MarkdownDocModal.vue";
 import GitGraphViewer from "./GitGraphViewer.vue";
+import DiffReviewButton from "./DiffReviewButton.vue";
+import "./draftDiffReview.css";
+import { type DraftDiffComment, type NewDraftDiffComment, draftCommentLocation, formatDraftDiffReview } from "./draftDiffReview";
 import AgentsMdEditorModal from "./AgentsMdEditorModal.vue";
 import TerminalPanel from "./TerminalPanel.vue";
 import VersionChecker from "./VersionChecker.vue";
@@ -1847,6 +1895,23 @@ const diffViewerInitialTo = ref<string | undefined>(undefined);
 const diffViewerCwd = ref<string | undefined>(undefined);
 const diffViewerInitialFile = ref<string | undefined>(undefined);
 const diffCommentText = ref("");
+const diffDraftNotes = ref<DraftDiffComment[]>([]);
+const diffDraftDialog = ref<HTMLDialogElement | null>(null);
+const diffDraftReviewOpen = ref(false);
+const diffDraftSending = ref(false);
+const diffDraftSendError = ref("");
+const editingDiffDraftId = ref<number | null>(null);
+const diffDraftEdit = ref("");
+const diffDraftMachine = computed(() => {
+  const vm = workspace.vmFor(props.conversationId);
+  return vm ? `VM ${vm.vm_name}` : "local";
+});
+let nextDiffDraftId = 0;
+watch(() => props.conversationId, (id, previousId) => {
+  if (!previousId && id === lazyDraftId.value) return;
+  diffDraftNotes.value = [];
+  diffDraftDialog.value?.close();
+});
 // The image being annotated, if any (module state so any image in the message
 // tree can open the view without prop drilling).
 const imageCommentTarget = useImageCommentTarget();
@@ -4790,13 +4855,14 @@ async function sendMessage(
       skills,
       keep_found_secrets: keepFoundSecrets || undefined,
     };
-    if (isDraft) undoSubmit = props.onComposerSubmit?.(request.message, selectedCwd.value || null);
+    if (isDraft && fromComposer) undoSubmit = props.onComposerSubmit?.(request.message, selectedCwd.value || null);
     let effectiveId = props.conversationId || draftConvId;
     if (!effectiveId && inflightCreate) effectiveId = await inflightCreate;
     // A project's conversation starts on the server's project path, not
     // from a draft; the draft saved before the project was picked goes.
-    if ((!effectiveId || (isDraft && composerProject.value)) && props.onFirstMessage) {
-      await sendFirstMessage(message.trim(), skills, keepFoundSecrets);
+    if ((!effectiveId || (fromComposer && isDraft && composerProject.value)) && props.onFirstMessage) {
+      const start = fromComposer ? sendFirstMessage : startFirstMessage;
+      await start(message.trim(), skills, keepFoundSecrets);
       if (effectiveId) {
         clearCachedDraft(effectiveId);
         void api.deleteConversation(effectiveId).catch(console.error);
@@ -5421,10 +5487,73 @@ function onDiffViewerClose() {
   if (!showGitGraph.value) focusMessageInputIfUnfocused();
 }
 
+function saveDiffDraftNote(note: NewDraftDiffComment) {
+  diffDraftNotes.value.push({ ...note, id: ++nextDiffDraftId });
+}
+
+function openDiffDraftReview(event: MouseEvent) {
+  const dialog = diffDraftDialog.value;
+  const anchor = event.currentTarget;
+  if (!dialog || dialog.open || !(anchor instanceof HTMLElement)) return;
+  const rect = anchor.getBoundingClientRect();
+  dialog.style.setProperty("--review-top", `${rect.bottom + 6}px`);
+  dialog.style.setProperty("--review-left", `${rect.left}px`);
+
+  diffDraftSendError.value = "";
+  dialog.showModal();
+  diffDraftReviewOpen.value = true;
+}
+
+function dismissDiffDraftBackdrop(event: MouseEvent) {
+  const dialog = diffDraftDialog.value;
+  if (!dialog) return;
+  const rect = dialog.getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right ||
+      event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
+}
+
+function onDiffDraftClose() {
+  diffDraftReviewOpen.value = false;
+  editingDiffDraftId.value = null;
+}
+
+function applyDiffDraftEdit(note: DraftDiffComment) {
+  if (!diffDraftEdit.value.trim()) return;
+  note.text = diffDraftEdit.value.trim();
+  editingDiffDraftId.value = null;
+}
+
+function openDiffDraftFile(note: DraftDiffComment) {
+  diffDraftDialog.value?.close();
+  onGitGraphOpenDiff(note.diff, note.cwd, note.path, note.to);
+}
+
+async function onDiffReviewToChat() {
+  const text = formatDraftDiffReview(diffDraftNotes.value);
+  if (!text || sending.value || diffDraftSending.value) return;
+  const notes = diffDraftNotes.value;
+  diffDraftSendError.value = "";
+  diffDraftSending.value = true;
+  try {
+    await sendMessage(text, [], false, false);
+    if (diffDraftNotes.value !== notes) return;
+    diffDraftDialog.value?.close();
+    diffDraftNotes.value = [];
+    showGitGraph.value = false;
+    returnToDiffFromGraph.value = false;
+    onDiffViewerClose();
+  } catch (err) {
+    diffDraftSendError.value = err instanceof Error ? err.message : "Couldn’t send the review.";
+  } finally {
+    diffDraftSending.value = false;
+  }
+}
+
 function onOpenGitGraphFromDiff() {
   showGitGraph.value = true;
   returnToDiffFromGraph.value = true;
-  onDiffViewerClose();
+  if (isMobile.value) onDiffViewerClose();
+  else showDiffViewer.value = false;
 }
 
 function onGitGraphOpenDiff(commit: string, cwd: string, file?: string, to?: string) {

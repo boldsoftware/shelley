@@ -38,6 +38,7 @@
             :current="review.current"
           />
         </div>
+        <DiffReviewButton v-if="mobileOverview || (selectedMessage && !showCommentDialog) || mobileFileListOpen" :count="reviewNotes?.length ?? 0" :disabled="recordingLocked" @open="emit('open-review', $event)" />
         <ReviewRecordButton
           v-if="canRecord || review.phase.value !== 'idle'"
           :phase="review.phase.value"
@@ -116,23 +117,26 @@
             </button>
           </nav>
           <div v-if="isMobile && (!selectedMessage || showCommentDialog)" class="diff-rethink-change-nav" :class="{ 'is-commenting': showCommentDialog }" :inert="mobileFileListOpen">
+
             <textarea
               v-if="showCommentDialog"
               ref="commentInput"
               v-model="commentText"
               class="diff-viewer-comment-input diff-rethink-rail-input"
               :aria-label="commentReady ? `Comment on ${lineCommentLabel(showCommentDialog, true)}` : 'Comment draft'"
+
               :placeholder="commentReady ? 'Enter your comment...' : 'Select a changed text hunk to comment...'"
               @keydown.esc.stop="showCommentDialog = null"
             />
             <span class="diff-rethink-bottom-change-label">{{ changeLabel }}</span>
             <template v-if="showCommentDialog">
               <button class="diff-rethink-cancel-comment" type="button" @click="showCommentDialog = null">Cancel</button>
-              <button class="diff-rethink-comment-change" type="button" :disabled="!commentReady || !commentText.trim()" @pointerdown.prevent @click="submitHunkComment">OK</button>
+              <button class="diff-rethink-comment-change" type="button" :disabled="!commentReady || !commentText.trim()" @pointerdown.prevent @click="submitHunkComment">Save Comment</button>
             </template>
             <button v-else class="diff-rethink-comment-change" type="button" aria-label="Comment on current hunk" :disabled="editorBlocked || revealPending || !changeCount || recordingLocked" @click="commentOnCurrentHunk">
               Comment
             </button>
+            <DiffReviewButton v-if="reviewNotes?.length && !showCommentDialog && !mobileFileListOpen" :count="reviewNotes.length" :disabled="recordingLocked" @open="emit('open-review', $event)" />
             <button v-if="showCommentDialog || (fileDiff && (hasPrevFile || (!editorBlocked && currentChangeIndex > 0)))" class="diff-rethink-prev-change" :aria-label="prevChangeGoesToFile ? (prevChangeGoesToCommit ? 'Previous commit' : 'Previous file') : showCommentDialog ? 'Previous hunk' : 'Previous hunk (,)'" :disabled="!!showCommentDialog && (loading || revealPending || (!hasPrevFile && (editorBlocked || currentChangeIndex <= 0)))" @pointerdown="showCommentDialog && $event.preventDefault()" @click="showCommentDialog ? navigateCommentHunk(-1) : goToPreviousChange()"><span v-html="PREV_CHANGE_ICON" /></button>
             <button v-if="showCommentDialog || (fileDiff && (hasNextFile || (!editorBlocked && currentChangeIndex < changeCount - 1)))" class="diff-rethink-next-change" :aria-label="nextChangeGoesToFile ? 'Next file' : showCommentDialog ? 'Next hunk' : 'Next hunk (.)'" :disabled="!!showCommentDialog && (loading || revealPending || (!hasNextFile && (editorBlocked || currentChangeIndex >= changeCount - 1)))" @pointerdown="showCommentDialog && $event.preventDefault()" @click="showCommentDialog ? navigateCommentHunk(1) : goToNextChange()"><span v-html="NEXT_CHANGE_ICON" /></button>
           </div>
@@ -173,7 +177,17 @@
             </section>
           </DiffCommitMessage>
 
-          <div class="diff-viewer-files-pane" data-review="Files" v-show="!selectedMessage || rawMessage" :inert="mobileFileListOpen">
+          <div
+            ref="filesPaneRef"
+            class="diff-viewer-files-pane"
+            data-review="Files"
+            v-show="!selectedMessage || rawMessage"
+            :inert="mobileFileListOpen"
+            @touchstart.capture="startCodeTap"
+            @touchmove.capture="moveCodeTap"
+            @touchend.capture="endCodeTap"
+            @touchcancel.capture="codeTap = null"
+          >
             <div v-if="loading && !fileDiff" class="diff-viewer-loading">
               <div class="spinner"></div>
               <span>Loading...</span>
@@ -245,6 +259,17 @@
             />
             <div v-if="isMobile && revealPending && fileDiff && !editorBlocked && monacoLoaded" class="diff-rethink-reveal-wait">Loading changes…</div>
 
+            <template v-if="lineTapPrompt && !recordingLocked">
+              <button
+                type="button"
+                class="diff-rethink-tap-comment"
+                :style="{ top: `${lineTapPrompt.bubbleTop}px` }"
+                :aria-label="`Comment on ${lineCommentLabel(lineTapPrompt, true)}`"
+                @pointerdown.prevent
+                @click="openTappedLineComment"
+              >{{ lineTapPrompt.startLine === lineTapPrompt.endLine ? "＋ Comment" : `＋ Comment on ${lineTapPrompt.endLine - lineTapPrompt.startLine + 1} lines` }}</button>
+            </template>
+
             <!-- Floating "add comment" prompt shown next to a selection in comment mode -->
             <button
               v-if="commentPrompt"
@@ -302,6 +327,8 @@ import {
   type CommentDialogInfo,
 } from "../composables/monacoComments";
 import CommentDialog from "./CommentDialog.vue";
+import { type DraftDiffComment, type NewDraftDiffComment, mountDraftDiffComments } from "./draftDiffReview";
+import DiffReviewButton from "./DiffReviewButton.vue";
 import CommitPicker from "./CommitPicker.vue";
 
 import DirectoryPickerModal from "./DirectoryPickerModal.vue";
@@ -341,6 +368,12 @@ const props = defineProps<{
   // lists this host's repositories, can't pick.
   onVm?: boolean;
   isOpen: boolean;
+  // Machine (VM name with namespace) the cwd is on; use reviewMachine ?? 'local'.
+  reviewMachine?: string;
+  // Parent-owned review modal/panel is open; skip this viewer's key handler.
+  reviewOpen?: boolean;
+  // Draft review notes owned by the parent.
+  reviewNotes?: readonly DraftDiffComment[];
   initialCommit?: string;
   initialTo?: string;
   // File to select once initialCommit's file list loads (e.g. from the git
@@ -356,7 +389,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "open-git-graph"): void;
-  (e: "comment-text-change", text: string): void;
+  (e: "save-review-comment", note: NewDraftDiffComment): void;
+  (e: "open-review", event: MouseEvent): void;
   (e: "cwd-change", cwd: string): void;
 }>();
 
@@ -392,6 +426,8 @@ const diffs = ref<GitDiffInfo[]>([]);
 const showDirPicker = ref(false);
 const selectedDiff = ref<string | null>(null);
 const selectedTo = ref("working");
+const gitRoot = ref("");
+const modelVersion = ref(0);
 const files = ref<GitFileInfo[]>([]);
 const selectedFile = ref<string | null>(null);
 defineExpose({
@@ -468,6 +504,7 @@ const editorContainerRef = ref<HTMLDivElement | null>(null);
 const mainRef = ref<HTMLDivElement | null>(null);
 let diffEditor: Monaco.editor.IStandaloneDiffEditor | null = null;
 let currentHunkDecorations: Monaco.editor.IEditorDecorationsCollection | null = null;
+let commentTargetDecorations: Monaco.editor.IEditorDecorationsCollection | null = null;
 let currentHunkZoneObserver: MutationObserver | null = null;
 function markCurrentDeletedZone() {
   if (!diffEditor) return;
@@ -537,10 +574,72 @@ const {
 const hunkDrafts = new Map<string, string>();
 const commentInput = ref<HTMLTextAreaElement | null>(null);
 const commentFile = ref<string | null>(null);
+const filesPaneRef = ref<HTMLDivElement | null>(null);
+const lineTapPrompt = ref<(CommentDialogInfo & { anchor: number; startLine: number; endLine: number; bubbleTop: number }) | null>(null);
+
+watch([selectedDiff, selectedTo, selectedFile, mobileFileListOpen, () => props.cwd, () => props.isOpen], () => {
+  lineTapPrompt.value = null;
+});
+
+function codeCommentHunkIndex(changes: readonly Monaco.editor.ILineChange[], side: "left" | "right", line: number) {
+  return changes.findIndex(change => side === "left"
+    ? line >= change.originalStartLineNumber && line <= change.originalEndLineNumber
+    : line >= change.modifiedStartLineNumber && line <= change.modifiedEndLineNumber);
+}
 const commentReady = computed(() =>
   commentFile.value === selectedFile.value && !loading.value && !revealPending.value &&
   !editorBlocked.value && !selectedMessage.value,
 );
+const markedCommentTarget = computed(() => showCommentDialog.value
+  ? (commentReady.value ? showCommentDialog.value : null)
+  : lineTapPrompt.value);
+
+function deletedLineAtOffset(change: Monaco.editor.ILineChange, offset: number) {
+  const original = diffEditor!.getOriginalEditor();
+  let line = change.originalStartLineNumber;
+  const top = original.getTopForLineNumber(line, true);
+  // Monaco inserts view zones in the original editor for wrapped deleted rows.
+  while (line < change.originalEndLineNumber &&
+         original.getTopForLineNumber(line + 1, true) - top <= offset) line++;
+  return line;
+}
+
+function markDeletedCommentTarget() {
+  if (!diffEditor) return;
+  const target = markedCommentTarget.value;
+  const changes = diffEditor.getLineChanges()?.filter(change => change.originalEndLineNumber > 0) ?? [];
+  diffEditor.getModifiedEditor().getDomNode()
+    ?.querySelectorAll<HTMLElement>(".view-lines.line-delete[monaco-view-zone]").forEach((zone, index) => {
+      const change = changes[index];
+      const matches = target?.side === "left" && change &&
+        (target.endLine ?? target.line) >= change.originalStartLineNumber &&
+        (target.startLine ?? target.line) <= change.originalEndLineNumber;
+      zone.querySelectorAll<HTMLElement>(":scope > .view-line").forEach(row => {
+        const line = matches ? deletedLineAtOffset(change, row.offsetTop) : 0;
+        const active = !!target && line >= (target.startLine ?? target.line) && line <= (target.endLine ?? target.line);
+        if (row.classList.contains("diff-comment-target-line") !== active) {
+          row.classList.toggle("diff-comment-target-line", active);
+        }
+      });
+    });
+}
+
+function markCommentTarget() {
+  if (!diffEditor || !monacoMod) return;
+  const editor = diffEditor.getModifiedEditor();
+  const target = markedCommentTarget.value;
+  if (target?.side === "right" && editor.getModel()) {
+    commentTargetDecorations ??= editor.createDecorationsCollection();
+    commentTargetDecorations.set([{
+      range: new monacoMod.Range(target.startLine ?? target.line, 1, target.endLine ?? target.line, 1),
+      options: { isWholeLine: true, className: "diff-comment-target-line", linesDecorationsClassName: "diff-comment-target-gutter", zIndex: 30 },
+    }]);
+  } else {
+    commentTargetDecorations?.clear();
+  }
+  markDeletedCommentTarget();
+}
+watch([markedCommentTarget, modelVersion], markCommentTarget, { flush: "post" });
 const hunkDraftKey = (target: CommentDialogInfo) =>
   `${commentFile.value}:${target.side}:${target.startLine ?? target.line}:${target.endLine ?? target.line}`;
 const pendingDraftKey = (path: string | null) => `${path}:pending`;
@@ -567,7 +666,7 @@ function submitHunkComment() {
   const target = showCommentDialog.value;
   if (!target || !commentReady.value || !commentText.value.trim()) return;
   hunkDrafts.delete(hunkDraftKey(target));
-  handleAddComment(true);
+  handleAddComment();
 }
 
 function revealCommentTarget() {
@@ -608,10 +707,18 @@ function commentOnCurrentHunk() {
   const change = diffEditor.getLineChanges()?.[Math.max(0, currentChangeIndex.value)];
   if (!change) return;
   const deleted = change.modifiedEndLineNumber === 0;
-  const model = (deleted ? diffEditor.getOriginalEditor() : diffEditor.getModifiedEditor()).getModel();
+  openCodeComment(
+    deleted ? "left" : "right",
+    deleted ? change.originalStartLineNumber : change.modifiedStartLineNumber,
+    deleted ? change.originalEndLineNumber : change.modifiedEndLineNumber,
+  );
+}
+
+function openCodeComment(side: "left" | "right", startLine: number, endLine: number) {
+  lineTapPrompt.value = null;
+  if (!diffEditor || !monacoMod) return;
+  const model = (side === "left" ? diffEditor.getOriginalEditor() : diffEditor.getModifiedEditor()).getModel();
   if (!model) return;
-  const startLine = deleted ? change.originalStartLineNumber : change.modifiedStartLineNumber;
-  const endLine = deleted ? change.originalEndLineNumber : change.modifiedEndLineNumber;
   const previous = showCommentDialog.value;
   const pendingText = previous && commentFile.value === null ? commentText.value : "";
   if (previous && commentFile.value === selectedFile.value) {
@@ -621,7 +728,7 @@ function commentOnCurrentHunk() {
   commentPrompt.value = null;
   showCommentDialog.value = {
     line: startLine,
-    side: deleted ? "left" : "right",
+    side,
     startLine,
     endLine,
     selectedText: model.getValueInRange(
@@ -796,9 +903,26 @@ function openDirPicker() {
   if (!recordingLocked.value && !props.onVm) showDirPicker.value = true;
 }
 
-function emitComment(block: string) {
-  review.note({ type: "comment", where: "Comment", text: block.trim() });
-  emit("comment-text-change", block);
+function reviewMachine() {
+  return props.reviewMachine ?? "local";
+}
+
+function emitComment(_block: string) {
+  const target = showCommentDialog.value;
+  const fd = fileDiff.value;
+  const text = commentText.value.trim();
+  if (!target || !fd || !selectedDiff.value || !text || fd.path !== selectedFile.value) return;
+  const raw = target.side === "left" ? fd.oldContent : fd.newContent;
+  const line = target.startLine ?? target.line;
+  const endLine = target.endLine ?? target.line;
+  const quote = target.selectedText?.trim()
+    ? target.selectedText
+    : raw.split("\n").slice(line - 1, endLine).join("\n");
+  emit("save-review-comment", {
+    cwd: props.cwd, root: gitRoot.value, machine: reviewMachine(),
+    diff: selectedDiff.value, to: selectedTo.value, path: fd.path, side: target.side,
+    line, endLine, quote, text, snapshot: raw,
+  });
 }
 
 function openPreviewComment(message: GitCommitMessage, quote: string) {
@@ -812,9 +936,12 @@ function openPreviewComment(message: GitCommitMessage, quote: string) {
 function submitPreviewComment() {
   const target = previewComment.value;
   if (!target || !previewCommentText.value.trim()) return;
-  const subject = truncateWithEllipsis(target.message.subject, 40);
-  const quote = truncateWithEllipsis(target.quote.trim(), 160).split("\n").map((line) => `> ${line}`).join("\n");
-  emitComment(`> commit ${target.message.hash.slice(0, 8)} (${subject})\n${quote}\n${previewCommentText.value.trim()}\n\n`);
+  emit("save-review-comment", {
+    cwd: props.cwd, root: gitRoot.value, machine: reviewMachine(),
+    diff: selectedDiff.value ?? "", to: selectedTo.value,
+    path: COMMIT_MSG_PREFIX + target.message.hash, side: "right",
+    line: null, endLine: null, quote: target.quote, text: previewCommentText.value.trim(), snapshot: null,
+  });
   previewComment.value = null;
   previewCommentText.value = "";
 }
@@ -1036,6 +1163,7 @@ function createEditor() {
     changeCount.value = diffEditor?.getLineChanges()?.length ?? 0;
     syncDeletedOverview();
     markCurrentHunk();
+    markCommentTarget();
   });
   editorSizeObserver?.disconnect();
   editorSizeObserver = new ResizeObserver(() => {
@@ -1049,6 +1177,7 @@ function createEditor() {
   modEditor.onDidLayoutChange(syncDeletedOverview);
   currentHunkZoneObserver = new MutationObserver(() => {
     markCurrentDeletedZone();
+    markDeletedCommentTarget();
     syncDeletedOverview();
   });
   currentHunkZoneObserver.observe(editorHost, {
@@ -1059,7 +1188,13 @@ function createEditor() {
   });
   diffEditor.getOriginalEditor().updateOptions({ domReadOnly: true, tabIndex: -1, renderLineHighlight: "none" });
 
-  modEditor.onDidScrollChange(({ scrollTopChanged, scrollHeightChanged }) => {
+  let previousScrollTop = modEditor.getScrollTop();
+  modEditor.onDidScrollChange(({ scrollTopChanged, scrollHeightChanged, scrollTop }) => {
+    if (scrollTopChanged && lineTapPrompt.value && filesPaneRef.value) {
+      lineTapPrompt.value.bubbleTop = Math.max(0, Math.min(filesPaneRef.value.clientHeight - 43,
+        lineTapPrompt.value.bubbleTop + previousScrollTop - scrollTop));
+    }
+    previousScrollTop = scrollTop;
     if (scrollHeightChanged) syncDeletedOverview();
     if (!scrollTopChanged || !isMobile.value || showCommentDialog.value || revealPending.value ||
         fileDiff.value?.path !== selectedFile.value) return;
@@ -1080,6 +1215,29 @@ function createEditor() {
 let editorSizeObserver:ResizeObserver|null=null;
 let initialReveal: (() => void) | null = null;
 function expandHiddenContext(e:MouseEvent){const target=e.target as Element,bar=target.closest('.diff-hidden-lines'),link=bar?.querySelector('a');if(link&&!link.contains(target)){e.preventDefault();(link as HTMLElement).click();}}
+let draftNotesCleanup: (() => void) | null = null;
+watch(
+  [() => props.reviewNotes, fileDiff, modelVersion, editorReady, selectedDiff, selectedTo, gitRoot, () => props.reviewMachine],
+  () => {
+    draftNotesCleanup?.();
+    draftNotesCleanup = null;
+    const fd = fileDiff.value;
+    if (!diffEditor || !editorReady.value || !fd || isCommitMessageFile(fd.path) || !selectedDiff.value) return;
+    const model = diffEditor.getModel();
+    if (!model) return;
+    const matching = (side: "left" | "right") => (props.reviewNotes ?? []).filter((note) =>
+      note.line !== null && note.root === gitRoot.value && note.machine === reviewMachine() &&
+      note.diff === selectedDiff.value && note.to === selectedTo.value && note.path === fd.path &&
+      note.side === side && note.snapshot === (side === "left" ? fd.oldContent : fd.newContent));
+    const cleanups = [
+      mountDraftDiffComments(diffEditor.getOriginalEditor(), matching("left")),
+      mountDraftDiffComments(diffEditor.getModifiedEditor(), matching("right")),
+    ];
+    draftNotesCleanup = () => cleanups.forEach((fn) => fn());
+  },
+  { deep: true, flush: "post" },
+);
+onUnmounted(() => draftNotesCleanup?.());
 let commentsCleanup: (() => void) | null = null;
 let highlightsCleanup: (() => void) | null = null;
 
@@ -1101,6 +1259,7 @@ function disposeEditor() {
   model?.modified.dispose();
   diffEditor = null;
   currentHunkDecorations = null;
+  commentTargetDecorations = null;
 
 }
 
@@ -1185,6 +1344,7 @@ watch(
     diffEditor.setModel({ original: originalModel, modified: modifiedModel });
     prev?.original.dispose();
     prev?.modified.dispose();
+    modelVersion.value++;
 
     // For new/deleted files one side is empty; shrink it so the non-empty
     // side gets most of the width instead of wasting half the screen.
@@ -1295,6 +1455,7 @@ async function loadDiffs() {
     const response = await api.getGitDiffs(cwd, props.conversationId, initialCommit === "working" ? undefined : initialCommit, false);
     if (requestId !== loadDiffsRequestId) return;
     diffs.value = response.diffs;
+    gitRoot.value = response.gitRoot;
 
     const mobileCommit = isMobile.value && !initialCommit
       ? response.diffs.find((diff) => diff.id !== "working")?.id
@@ -1452,6 +1613,94 @@ function startFileSwipe(e: TouchEvent) {
     id: touch.identifier, x: touch.clientX, y: touch.clientY, time: e.timeStamp,
     path: selectedFile.value,
   };
+}
+
+let codeTap: { id: number; x: number; y: number; time: number; path: string | null } | null = null;
+
+function startCodeTap(e: TouchEvent) {
+  codeTap = null;
+  const element = e.target;
+  if (!isMobile.value || !(element instanceof Element) ||
+      element.closest("button, a, [role='button'], .diffOverview, .scrollbar")) return;
+  if (e.touches.length !== 1 || selectedMessage.value) return;
+  if (!showCommentDialog.value &&
+      !diffEditor?.getModifiedEditor().getSelection()?.isEmpty()) return;
+  const touch = e.touches[0];
+  codeTap = { id: touch.identifier, x: touch.clientX, y: touch.clientY, time: e.timeStamp, path: selectedFile.value };
+}
+
+function moveCodeTap(e: TouchEvent) {
+  const touch = e.touches[0];
+  if (codeTap && (e.touches.length !== 1 || touch.identifier !== codeTap.id ||
+      Math.hypot(touch.clientX - codeTap.x, touch.clientY - codeTap.y) > 8)) codeTap = null;
+}
+
+function endCodeTap(e: TouchEvent) {
+  const tap = codeTap;
+  codeTap = null;
+  if (!tap || e.touches.length || e.changedTouches.length !== 1 || e.timeStamp - tap.time > 300 ||
+      tap.path !== selectedFile.value || loading.value || revealPending.value || editorBlocked.value ||
+      recordingLocked.value || mobileFileListOpen.value) return;
+  const touch = e.changedTouches[0];
+  if (touch.identifier !== tap.id || Math.hypot(touch.clientX - tap.x, touch.clientY - tap.y) > 8) return;
+  if (showCommentDialog.value) {
+    e.preventDefault();
+    if (commentText.value.trim()) commentInput.value?.focus({ preventScroll: true });
+    else showCommentDialog.value = null;
+    return;
+  }
+  if (!diffEditor || !monacoMod) return;
+  if (!(e.target as Element).closest(".view-line")) {
+    lineTapPrompt.value = null;
+    return;
+  }
+  const editor = diffEditor.getModifiedEditor();
+  if (!editor.getSelection()?.isEmpty()) return;
+  const deletedZone = (e.target as Element).closest<HTMLElement>(".view-lines.line-delete[monaco-view-zone]");
+  if (deletedZone) {
+    const zones = editor.getDomNode()?.querySelectorAll(".view-lines.line-delete[monaco-view-zone]");
+    const index = zones ? Array.from(zones).indexOf(deletedZone) : -1;
+    const change = diffEditor.getLineChanges()?.filter(change => change.originalEndLineNumber > 0)[index];
+    if (!change || window.getSelection()?.toString()) return;
+    const line = deletedLineAtOffset(change, tap.y - deletedZone.getBoundingClientRect().top);
+    e.preventDefault();
+    showLineTapPrompt(e.target as Element, "left", line);
+    return;
+  }
+  const target = editor.getTargetAtClientPoint(tap.x, tap.y);
+  const type = monacoMod.editor.MouseTargetType;
+  if (!target || (target.type !== type.CONTENT_TEXT && target.type !== type.CONTENT_EMPTY)) return;
+  const line = target.position.lineNumber;
+  e.preventDefault();
+  showLineTapPrompt(e.target as Element, "right", line);
+}
+
+function showLineTapPrompt(element: Element, side: "left" | "right", line: number) {
+  const pane = filesPaneRef.value?.getBoundingClientRect();
+  const row = element.closest(".view-line")?.getBoundingClientRect();
+  if (!pane || !row) return;
+  const previous = lineTapPrompt.value;
+  if (previous?.side === side && previous.anchor === line && previous.startLine === previous.endLine) {
+    lineTapPrompt.value = null;
+    return;
+  }
+  const anchor = previous?.side === side ? previous.anchor : line;
+  const startLine = Math.min(anchor, line);
+  const endLine = Math.max(anchor, line);
+  const top = Math.max(0, row.top - pane.top);
+  const bottom = Math.min(pane.height, row.bottom - pane.top);
+  lineTapPrompt.value = {
+    side, line: startLine, anchor, startLine, endLine,
+    bubbleTop: bottom + 46 <= pane.height ? bottom + 3 : Math.max(0, top - 43),
+  };
+}
+
+function openTappedLineComment() {
+  const target = lineTapPrompt.value;
+  if (!target) return;
+  const index = codeCommentHunkIndex(diffEditor?.getLineChanges() ?? [], target.side, target.line);
+  if (index >= 0) currentChangeIndex.value = index;
+  openCodeComment(target.side, target.startLine, target.endLine);
 }
 
 function startCodeSwipe(e: TouchEvent) {
@@ -1671,6 +1920,7 @@ watch(
 
 // --- Keyboard shortcuts (capture phase) ---
 function handleKeyDown(e: KeyboardEvent) {
+  if (props.reviewOpen) return;
   if (e.key === "Escape") {
 
     // If Monaco's find widget is open, let Monaco close it.

@@ -10,7 +10,7 @@
 
      Emits (React callback props):
        close             -> onClose
-       comment-text-change -> onCommentTextChange(text)
+       save-review-comment -> add a note to the shared draft review
        cwd-change        -> onCwdChange(cwd) -->
 <template>
   <div v-if="isOpen" class="diff-viewer-overlay">
@@ -266,6 +266,12 @@
               </button>
             </div>
             <VimToggle :enabled="vimEnabled" @change="setVimEnabled" />
+            <button type="button" class="diff-viewer-btn diff-viewer-btn-secondary" :disabled="recordingLocked" @click="emit('open-git-graph')">Git Graph</button>
+            <DiffReviewButton
+              :count="reviewNotes?.length ?? 0"
+              :disabled="recordingLocked"
+              @open="emit('open-review', $event)"
+            />
             <ReviewRecordButton
               v-if="canRecord || review.phase.value !== 'idle'"
               :phase="review.phase.value"
@@ -612,6 +618,7 @@
             ? `${showCommentDialog.selectedText}\n${highlightQuote(showCommentDialog.highlight)}`
             : showCommentDialog.selectedText
         "
+        submit-label="Save Comment"
         @submit="handleAddComment"
         @cancel="showCommentDialog = null"
       />
@@ -641,6 +648,8 @@ import {
   truncateWithEllipsis,
   useMonacoComments,
 } from "../composables/monacoComments";
+import { type DraftDiffComment, type NewDraftDiffComment, mountDraftDiffComments } from "./draftDiffReview";
+import DiffReviewButton from "./DiffReviewButton.vue";
 import VimToggle from "./VimToggle.vue";
 import CommentDialog from "./CommentDialog.vue";
 import CommitPicker from "./CommitPicker.vue";
@@ -681,6 +690,10 @@ const props = defineProps<{
   // lists this host's repositories, can't pick.
   onVm?: boolean;
   isOpen: boolean;
+  // Machine (VM name with namespace) the cwd is on; defaults to 'local'.
+  reviewMachine?: string;
+  // A parent-owned review modal is open; skip the viewer's keyboard handler.
+  reviewOpen?: boolean;
   initialCommit?: string;
   initialTo?: string;
   // File to select once initialCommit's file list loads (e.g. from the git
@@ -692,10 +705,13 @@ const props = defineProps<{
   recordingConversationId?: string;
   startReviewConversation?: () => ReviewConversationStart;
   followReviewConversation?: () => (conversationId: string) => void;
+  reviewNotes?: readonly DraftDiffComment[];
 }>();
 const emit = defineEmits<{
   (e: "close"): void;
-  (e: "comment-text-change", text: string): void;
+  (e: "save-review-comment", note: NewDraftDiffComment): void;
+  (e: "open-review", event: MouseEvent): void;
+  (e: "open-git-graph"): void;
   (e: "cwd-change", cwd: string): void;
 }>();
 
@@ -1045,9 +1061,22 @@ function openDirPicker() {
   if (!recordingLocked.value && !props.onVm) showDirPicker.value = true;
 }
 
-function emitComment(block: string) {
-  review.note({ type: "comment", where: "Comment", text: block.trim() });
-  emit("comment-text-change", block);
+function emitComment() {
+  const target = showCommentDialog.value;
+  const fd = fileDiff.value;
+  const diff = selectedDiff.value;
+  const root = gitRoot.value;
+  if (!target || !fd || !diff || !root || fd.path !== selectedFile.value) return;
+  const snapshot = target.side === "left" ? fd.oldContent : fd.newContent;
+  const line = target.startLine ?? target.line;
+  const endLine = target.endLine ?? target.line;
+  const quote = target.selectedText ?? snapshot.split("\n").slice(line - 1, endLine).join("\n");
+  emit("save-review-comment", {
+    cwd: props.cwd, root, machine: props.reviewMachine ?? "local", diff, to: selectedTo.value,
+    path: fd.path, side: target.side, line, endLine, snapshot,
+    quote: target.highlight ? `${quote}\n${highlightQuote(target.highlight)}` : quote,
+    text: commentText.value.trim(),
+  });
 }
 
 watch(
@@ -1453,6 +1482,25 @@ watch(
   { flush: "post" },
 );
 
+// Keep notes in the review even when their original file snapshot no longer matches.
+watch(
+  [() => props.reviewNotes, fileDiff, modifiedEditor, () => props.isOpen],
+  (_, __, onCleanup) => {
+    const fd = fileDiff.value;
+    if (!props.isOpen || !fd || !diffEditor || !props.reviewNotes?.length) return;
+    const notes = props.reviewNotes.filter((note) =>
+      note.root === gitRoot.value && note.machine === (props.reviewMachine ?? "local") &&
+      note.diff === selectedDiff.value && note.to === selectedTo.value && note.path === fd.path,
+    );
+    const cleanups = [
+      mountDraftDiffComments(diffEditor.getModifiedEditor(), notes.filter((note) => note.side === "right" && note.snapshot === fd.newContent)),
+      mountDraftDiffComments(diffEditor.getOriginalEditor(), notes.filter((note) => note.side === "left" && note.snapshot === fd.oldContent)),
+    ];
+    onCleanup(() => cleanups.forEach((cleanup) => cleanup()));
+  },
+  { deep: true, flush: "post" },
+);
+
 function revealHighlight(line: number) {
   if (!diffEditor) return;
   const editor = diffEditor.getModifiedEditor();
@@ -1826,6 +1874,7 @@ watch(
 
 // --- Keyboard shortcuts (capture phase) ---
 function handleKeyDown(e: KeyboardEvent) {
+  if (props.reviewOpen) return;
   if (e.key === "Escape") {
     // If Monaco's find widget is open, let Monaco close it.
     const findWidget = editorContainerRef.value?.querySelector(".find-widget.visible");
@@ -1851,6 +1900,7 @@ function handleKeyDown(e: KeyboardEvent) {
     }
     if (showCommentDialog.value) {
       showCommentDialog.value = null;
+
     } else {
       requestClose();
     }

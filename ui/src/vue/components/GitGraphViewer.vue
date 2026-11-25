@@ -13,6 +13,7 @@
   <div v-if="isOpen" class="diff-viewer-overlay" @click="emit('close')">
     <div class="diff-viewer-container git-graph-container" @click.stop>
       <div class="git-graph-toolbar" :class="{ 'git-graph-toolbar-mobile': mobileDiff && canOpenDiff }">
+        <slot name="review" />
         <div
           class="git-graph-scope"
           role="group"

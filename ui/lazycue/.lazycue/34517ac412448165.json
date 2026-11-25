@@ -1,0 +1,201 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "An open phone comment rail navigates between files without losing focus or mixing their drafts. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". Use these selectors directly; wait for conditions, never sleep.\n1. Click button.diff-tree-row[title=\"first.txt\"], wait for the modified Monaco editor, then click .diff-rethink-change-nav [aria-label=\"Comment on current hunk\"]. Resize to 390x420. Save the textarea .diff-rethink-rail-input as window.railInput. Fill it with \"First file draft\" using the native textarea value setter and a bubbling input event.\n2. Click .diff-rethink-next-change. Wait for .diff-rethink-file-name to read second.txt and the textarea aria-label to read \"Comment on Line 1, new\" (the new comment target is ready). Check that the textarea is still window.railInput, empty, and focused. Fill it with \"Second file draft\" using the same setter and event.\n3. Click .diff-rethink-prev-change. Wait for .diff-rethink-file-name to read first.txt and the textarea value to read \"First file draft\". Check that it is still window.railInput and focused.\n4. Click .diff-rethink-next-change. Wait for .diff-rethink-file-name to read second.txt and the textarea value to read \"Second file draft\". Check that it is still window.railInput and focused. Click .diff-rethink-cancel-comment and wait for the textarea to close.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label='More options']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button.diff-tree-row[title=\"first.txt\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": "button.diff-tree-row[title=\"first.txt\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .monaco-editor",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-change-nav [aria-label=\"Comment on current hunk\"]"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 420
+    },
+    {
+      "action": "wait_visible",
+      "selector": "textarea.diff-rethink-rail-input",
+      "timeout": "10s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.railInput = document.querySelector('textarea.diff-rethink-rail-input'); window.railInput !== null ? 'found' : 'not found'",
+      "expect": "found"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const el = window.railInput; const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; nativeInputValueSetter.call(el, 'First file draft'); el.dispatchEvent(new Event('input', { bubbles: true })); return el.value; })()",
+      "expect": "First file draft"
+    },
+    {
+      "action": "assert_value",
+      "selector": "textarea.diff-rethink-rail-input",
+      "value": "First file draft"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-next-change"
+    },
+    {
+      "action": "wait_text",
+      "text": "second.txt",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "textarea[aria-label=\"Comment on Line 1, new\"]",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const current = document.querySelector('textarea.diff-rethink-rail-input'); const same = current === window.railInput; const val = current ? current.value : 'NOT FOUND'; const focused = document.activeElement === current; return JSON.stringify({same, val, focused}); })()"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ return document.querySelector('textarea.diff-rethink-rail-input') === window.railInput; })()",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('textarea.diff-rethink-rail-input').value",
+      "expect": ""
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === window.railInput",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){ const el = window.railInput; const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; nativeInputValueSetter.call(el, 'Second file draft'); el.dispatchEvent(new Event('input', { bubbles: true })); return el.value; })()",
+      "expect": "Second file draft"
+    },
+    {
+      "action": "assert_value",
+      "selector": "textarea.diff-rethink-rail-input",
+      "value": "Second file draft"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-prev-change"
+    },
+    {
+      "action": "wait_text",
+      "text": "first.txt",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "textarea.diff-rethink-rail-input",
+      "value": "First file draft"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('textarea.diff-rethink-rail-input') === window.railInput",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === window.railInput",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-next-change"
+    },
+    {
+      "action": "wait_text",
+      "text": "second.txt",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "textarea.diff-rethink-rail-input",
+      "value": "Second file draft"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('textarea.diff-rethink-rail-input') === window.railInput",
+      "expect": "true"
+    },
+    {
+      "action": "eval",
+      "expression": "document.activeElement === window.railInput",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-cancel-comment"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": "textarea.diff-rethink-rail-input",
+      "timeout": "10s"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-25T04:41:58.828389677Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 99816,
+    "output_tokens": 5230,
+    "estimated_cost_usd": 0.1407138,
+    "mode": "generated"
+  }
+}

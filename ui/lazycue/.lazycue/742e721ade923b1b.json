@@ -1,0 +1,130 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A reload mid-recording still sends it to the composer's draft, without putting a saved review comment in that composer. Use condition waits, never sleep steps. In the diff viewer (\".diff-viewer-overlay\"), \"the start button\" is data-testid \"review-record-start\", \"the stop button\" data-testid \"review-record-stop\", \"the cancel button\" data-testid \"review-record-cancel\", \"the status\" data-testid \"review-recording-status\", \"where\" data-testid \"review-recording-where\" (its textContent joins its crumbs with no separator) and \"said\" data-testid \"review-recording-said\"; \"the tooltip\" is \".p-tooltip\". \"Wait for the commit message\" means: wait (up to 30s) until a \".diff-viewer-overlay .editor.modified .view-line\" containing \"Rename value20\" is visible; the viewer opens on the repository's HEAD commit {{SHORT}}, which renames line 20 of src/app.ts to \"const renamedValue = 20;\". {{QUERY}} is the query string that opens the diff viewer on that commit in the repository. \"It is sent\" means data-testid \"review-recording-sent\" becomes visible (wait up to 30s: sending takes several requests). \"Wait for the clock to start\" means: wait until the time element of the stop button no longer reads \"00:00\" (eval document.querySelector(\"[data-testid=review-record-stop] time\")?.textContent !== \"00:00\", expect true). \"Comment on the commit message\" means: click the commit message's line (\".diff-viewer-overlay .editor.modified .view-line\" containing \"Rename value20\"), fill \".diff-viewer-comment-input\" with \"Keep the old name.\", and click the button named exactly \"Save Comment\". Call \"drafts\" counts the drafts the page made (POST /api/conversations/draft) and makes {{DRAFT_ID}} the first one's id; call \"chats\" returns the JSON list of the paths chat requests went to. Perform the steps in order.\n1. Navigate to /new. Fill the message input (data-testid \"message-input\") with \"Unrelated composer draft\". Call \"drafts\" until it returns exactly \"1\"; the URL should end with \"/c/{{DRAFT_ID}}\". Navigate to /c/{{DRAFT_ID}}?{{QUERY}} and wait for the commit message.\n2. Click the start button; the stop button should become visible. Wait for the clock to start.\n3. Comment on the commit message. The message input's value is still exactly \"Unrelated composer draft\". Call \"drafts\" should return exactly \"1\".\n4. The saved recording names the draft while it is still recording: this eval should come to return exactly [\"{{DRAFT_ID}}\"]:\nnew Promise((resolve, reject) =\u003e { const open = indexedDB.open(\"shelley-review-recordings\"); open.onerror = () =\u003e reject(open.error); open.onsuccess = () =\u003e { const all = open.result.transaction(\"sessions\").objectStore(\"sessions\").getAll(); all.onsuccess = () =\u003e { open.result.close(); resolve(JSON.stringify(all.result.map((session) =\u003e session.conversationId))); }; }; })\n5. Without stopping, navigate to /c/{{DRAFT_ID}}?{{QUERY}}. data-testid \"review-recording-pending\" should contain \"Unsent recording\".\n6. Click data-testid \"review-recording-send\". It is sent.\n7. Call \"chats\" should return exactly [\"/api/conversation/{{DRAFT_ID}}/chat\"], and call \"drafts\" still exactly \"1\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "set_viewport",
+      "width": 1500,
+      "height": 900,
+      "scale": 2.75,
+      "mobile": true,
+      "touch": true
+    },
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=message-input]",
+      "value": "Unrelated composer draft"
+    },
+    {
+      "action": "call",
+      "value": "drafts",
+      "expect": "1"
+    },
+    {
+      "action": "assert_url",
+      "text": "/c/{{DRAFT_ID}}"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{DRAFT_ID}}?{{QUERY}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=review-record-start]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=review-record-stop]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('[data-testid=review-record-stop] time')?.textContent !== '00:00'",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .editor.modified .view-line",
+      "has_text": "Rename value20"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-viewer-comment-input",
+      "value": "Keep the old name."
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save Comment",
+      "exact": true
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=message-input]",
+      "value": "Unrelated composer draft"
+    },
+    {
+      "action": "call",
+      "value": "drafts",
+      "expect": "1"
+    },
+    {
+      "action": "eval",
+      "expression": "new Promise((resolve, reject) =\u003e { const open = indexedDB.open(\"shelley-review-recordings\"); open.onerror = () =\u003e reject(open.error); open.onsuccess = () =\u003e { const all = open.result.transaction(\"sessions\").objectStore(\"sessions\").getAll(); all.onsuccess = () =\u003e { open.result.close(); resolve(JSON.stringify(all.result.map((session) =\u003e session.conversationId))); }; }; })",
+      "expect": "[\"{{DRAFT_ID}}\"]"
+    },
+    {
+      "action": "navigate",
+      "url": "/c/{{DRAFT_ID}}?{{QUERY}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=review-recording-pending]",
+      "has_text": "Unsent recording",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": "[data-testid=review-recording-pending]",
+      "text": "Unsent recording"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=review-recording-send]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid=review-recording-sent]",
+      "timeout": "30s"
+    },
+    {
+      "action": "call",
+      "value": "chats",
+      "expect": "[\"/api/conversation/{{DRAFT_ID}}/chat\"]"
+    },
+    {
+      "action": "call",
+      "value": "drafts",
+      "expect": "1"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-25T23:52:59.85860693Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 83517,
+    "output_tokens": 3325,
+    "estimated_cost_usd": 0.09993584999999999,
+    "mode": "generated"
+  }
+}

@@ -619,18 +619,18 @@ func TestE2EReviewRecordingOutsideConversation(t *testing.T) {
 	})
 }
 
-const reviewComment = `"Comment on the commit message" means: click the commit message's line (".diff-viewer-overlay .editor.modified .view-line" containing "Rename value20"), fill ".diff-viewer-comment-input" with "Keep the old name.", and click the button named exactly "Add Comment". `
+const reviewComment = `"Comment on the commit message" means: click the commit message's line (".diff-viewer-overlay .editor.modified .view-line" containing "Rename value20"), fill ".diff-viewer-comment-input" with "Keep the old name.", and click the button named exactly "Save Comment". `
 
-func TestE2EReviewRecordingCommentSharesConversation(t *testing.T) {
-	e2e(t, useful(0), `A comment made while recording on the new page shares the recording's conversation. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+reviewComment+`The server answers the recording's chat requests with 503 "unavailable" until call "accept chats". Call "drafts" counts the drafts the page made (POST /api/conversations/draft) and makes {{DRAFT_ID}} the first one's id; call "chats" returns the JSON list of the paths chat requests went to. To match the message input's (data-testid "message-input") value against a regular expression, eval the regex's test() on it, expecting true. Perform the steps in order.
+func TestE2EReviewRecordingKeepsCommentReviewSeparate(t *testing.T) {
+	e2e(t, useful(1), `A saved diff comment stays in the draft review while a recording from the new page retries in one conversation. Use condition waits, never sleep steps. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+reviewComment+`The server answers the recording's chat requests with 503 "unavailable" until call "accept chats". Call "drafts" counts the drafts the page made (POST /api/conversations/draft) and makes {{DRAFT_ID}} the first one's id; call "chats" returns the JSON list of the paths chat requests went to. Perform the steps in order.
 1. Navigate to /new?{{QUERY}} and wait for the commit message.
 2. Click the start button; the stop button should become visible.
 3. Comment on the commit message.
-4. The comment lands in the composer, which saves it as the page's draft: the message input's value should match /Keep the old name\.\n*$/. Call "drafts" should return exactly "1". The page's URL should then end with exactly "/c/{{DRAFT_ID}}" (eval location.href.endsWith("/c/{{DRAFT_ID}}"), expect true).
-5. Wait for the clock to start, then click the stop button. data-testid "review-recording-error" should contain "unavailable".
+4. The comment does not enter the composer or create a conversation: eval document.querySelector('[data-testid="message-input"]').value should return exactly ""; call "drafts" should return exactly "0". There is a button with accessible name exactly "Open draft review, 1 comment".
+5. Wait for the clock to start, then click the stop button. data-testid "review-recording-error" should contain "unavailable". Call "drafts" should return exactly "1".
 6. Call "accept chats", then click data-testid "review-recording-send". It is sent.
 7. Both attempts went to the page's draft, and no other was made: call "chats" should return exactly ["/api/conversation/{{DRAFT_ID}}/chat","/api/conversation/{{DRAFT_ID}}/chat"], and call "drafts" still exactly "1".
-8. ".conversation-item[data-conversation-id='{{DRAFT_ID}}']" should have class "active" (eval classList.contains("active"), expect true), and the message input's value should still match /Keep the old name\.\n*$/.`, func(s *shelley) {
+8. ".conversation-item[data-conversation-id='{{DRAFT_ID}}']" should have class "active" (eval classList.contains("active"), expect true), and the message input's value should still be empty. Click the button with accessible name exactly "Open draft review, 1 comment". The open dialog ".diff-draft-review[open]" has exactly one article containing "Keep the old name.". Call "chats" still returns exactly ["/api/conversation/{{DRAFT_ID}}/chat","/api/conversation/{{DRAFT_ID}}/chat"]: the comment has not been sent with the recording.`, func(s *shelley) {
 		rv := newReview(s, true)
 		rv.routeDrafts()
 		var accept atomic.Bool
@@ -650,11 +650,11 @@ func TestE2EReviewRecordingCommentSharesConversation(t *testing.T) {
 	})
 }
 
-func TestE2EReviewRecordingReloadKeepsCommentDraft(t *testing.T) {
-	e2e(t, useful(0), `A reload mid-recording still sends it to the draft a comment made. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewComment+`Call "drafts" counts the drafts the page made (POST /api/conversations/draft) and makes {{DRAFT_ID}} the first one's id; call "chats" returns the JSON list of the paths chat requests went to. Perform the steps in order.
-1. Navigate to /new?{{QUERY}} and wait for the commit message.
-2. Click the start button; the stop button should become visible.
-3. Comment on the commit message. The page's URL should come to end with "/c/" and an id, nothing after it (eval /\/c\/[^/?]+$/.test(location.href), expect true). Call "drafts" should return exactly "1".
+func TestE2EReviewRecordingReloadKeepsComposerDraft(t *testing.T) {
+	e2e(t, useful(0), `A reload mid-recording still sends it to the composer's draft, without putting a saved review comment in that composer. Use condition waits, never sleep steps. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+reviewComment+`Call "drafts" counts the drafts the page made (POST /api/conversations/draft) and makes {{DRAFT_ID}} the first one's id; call "chats" returns the JSON list of the paths chat requests went to. Perform the steps in order.
+1. Navigate to /new. Fill the message input (data-testid "message-input") with "Unrelated composer draft". Call "drafts" until it returns exactly "1"; the URL should end with "/c/{{DRAFT_ID}}". Navigate to /c/{{DRAFT_ID}}?{{QUERY}} and wait for the commit message.
+2. Click the start button; the stop button should become visible. Wait for the clock to start.
+3. Comment on the commit message. The message input's value is still exactly "Unrelated composer draft". Call "drafts" should return exactly "1".
 4. The saved recording names the draft while it is still recording: this eval should come to return exactly ["{{DRAFT_ID}}"]:
 new Promise((resolve, reject) => { const open = indexedDB.open("shelley-review-recordings"); open.onerror = () => reject(open.error); open.onsuccess = () => { const all = open.result.transaction("sessions").objectStore("sessions").getAll(); all.onsuccess = () => { open.result.close(); resolve(JSON.stringify(all.result.map((session) => session.conversationId))); }; }; })
 5. Without stopping, navigate to /c/{{DRAFT_ID}}?{{QUERY}}. data-testid "review-recording-pending" should contain "Unsent recording".
