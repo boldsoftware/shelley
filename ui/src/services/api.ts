@@ -1,6 +1,7 @@
 import {
   Conversation,
   ConversationRead,
+  ConversationUnreadMark,
   ConversationWithParticipants,
   ConversationWithState,
   ResourceKind,
@@ -229,6 +230,14 @@ class ApiService {
       "Failed to mark conversation as read",
       "POST",
       { read_at: readAt },
+    );
+  }
+
+  async markConversationUnread(conversationId: string): Promise<ConversationUnreadMark> {
+    return apiJSON(
+      `/api/conversation/${conversationId}/unread`,
+      "Failed to mark conversation as unread",
+      "POST",
     );
   }
 

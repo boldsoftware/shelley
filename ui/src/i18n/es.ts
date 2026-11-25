@@ -109,6 +109,7 @@ export const es: TranslationKeys = {
   viewArchived: "Ver archivadas",
   rename: "Renombrar",
   editTags: "Editar etiquetas",
+  markUnread: "Marcar como no leído",
   addTagPlaceholder: "Añadir etiqueta…",
   removeTag: "Quitar etiqueta",
   addTag: "Añadir",

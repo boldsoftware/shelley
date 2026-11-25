@@ -108,6 +108,7 @@ export const zhCN: TranslationKeys = {
   viewArchived: "查看已归档",
   rename: "重命名",
   editTags: "编辑标签",
+  markUnread: "标记为未读",
   addTagPlaceholder: "添加标签…",
   removeTag: "删除标签",
   addTag: "添加",

@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
@@ -139,27 +141,165 @@ func TestConversationReadHTTPIdentityAndSharedListHash(t *testing.T) {
 func TestConversationReadStreamFramesArePrivate(t *testing.T) {
 	srv, _, _ := newTestServer(t)
 	srv.requireHeader = "X-Test-User"
-	private := StreamResponse{ConversationRead: &generated.ConversationReadMarkersRow{ConversationID: "c", ReadAt: 7}, readUserID: "alice"}
-	for _, tc := range []struct {
-		name string
-		user string
-		want bool
-	}{
-		{name: "owner", user: "alice", want: true},
-		{name: "different user", user: "bob", want: false},
-		{name: "anonymous", user: "", want: false},
+	for kind, private := range map[string]StreamResponse{
+		"read":   {ConversationRead: &generated.ConversationReadMarkersRow{ConversationID: "c", ReadAt: 7}, readUserID: "alice"},
+		"unread": {ConversationUnread: &generated.ConversationUnreadMarksRow{ConversationID: "c", UnreadAt: 7}, readUserID: "alice"},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/api/stream2", nil)
-			if tc.user != "" {
-				req.Header.Set("X-Test-User", tc.user)
-			}
-			if got := srv.streamEventVisible(req, private); got != tc.want {
-				t.Fatalf("visible = %v, want %v", got, tc.want)
-			}
-		})
+		for _, tc := range []struct {
+			name string
+			user string
+			want bool
+		}{
+			{name: "owner", user: "alice", want: true},
+			{name: "different user", user: "bob", want: false},
+			{name: "anonymous", user: "", want: false},
+		} {
+			t.Run(kind+"/"+tc.name, func(t *testing.T) {
+				req := httptest.NewRequest(http.MethodGet, "/api/stream2", nil)
+				if tc.user != "" {
+					req.Header.Set("X-Test-User", tc.user)
+				}
+				if got := srv.streamEventVisible(req, private); got != tc.want {
+					t.Fatalf("visible = %v, want %v", got, tc.want)
+				}
+			})
+		}
 	}
 	if !srv.streamEventVisible(httptest.NewRequest(http.MethodGet, "/api/stream2", nil), StreamResponse{}) {
 		t.Fatal("ordinary shared stream event should remain visible")
+	}
+}
+
+// streamFrame waits for a frame of rec's stream satisfying ok.
+func streamFrame(t *testing.T, rec *flusherRecorder, ok func(StreamResponse) bool) StreamResponse {
+	t.Helper()
+	timer := time.NewTimer(streamWaitTimeout)
+	defer timer.Stop()
+	for {
+		for _, line := range strings.Split(rec.getString(), "\n") {
+			var frame StreamResponse
+			if data, found := strings.CutPrefix(line, "data: "); found && json.Unmarshal([]byte(data), &frame) == nil && ok(frame) {
+				return frame
+			}
+		}
+		select {
+		case <-rec.flushed:
+		case <-timer.C:
+			t.Fatalf("no such frame; body=%s", rec.getString())
+		}
+	}
+}
+
+func TestConversationMarkUnread(t *testing.T) {
+	srv, database, _ := newTestServer(t)
+	srv.requireHeader = "X-Test-User"
+	mux := http.NewServeMux()
+	srv.RegisterRoutes(mux)
+	ctx := t.Context()
+	// The conversation has no reply to be unread about.
+	conversation, err := database.CreateConversation(ctx, nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := conversation.ConversationID
+	request := func(user, method, path, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		if user != "" {
+			req.Header.Set("X-Test-User", user)
+		}
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+	stream := func(user string) *flusherRecorder {
+		t.Helper()
+		streamCtx, cancel := context.WithCancel(ctx)
+		rec := newFlusherRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/stream2", nil).WithContext(streamCtx)
+		req.Header.Set("X-Test-User", user)
+		done := make(chan struct{})
+		go func() {
+			mux.ServeHTTP(rec, req)
+			close(done)
+		}()
+		t.Cleanup(func() { cancel(); <-done })
+		streamFrame(t, rec, func(f StreamResponse) bool { return f.ConversationReads != nil })
+		return rec
+	}
+	list := func(user string) ConversationWithState {
+		t.Helper()
+		var rows []ConversationWithState
+		if err := json.Unmarshal(request(user, http.MethodGet, "/api/conversations", "").Body.Bytes(), &rows); err != nil || len(rows) != 1 || rows[0].Unread == nil {
+			t.Fatalf("%s list = %+v, %v", user, rows, err)
+		}
+		return rows[0]
+	}
+	snapshot := func(user string) db.ConversationReads {
+		t.Helper()
+		return *streamFrame(t, stream(user), func(f StreamResponse) bool { return f.ConversationReads != nil }).ConversationReads
+	}
+
+	phone, bob := stream("alice"), stream("bob")
+	_, hashBefore, err := srv.conversationListStream.snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unreadPath := "/api/conversation/" + id + "/unread"
+	if rec := request("", http.MethodPost, unreadPath, ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous mark status = %d", rec.Code)
+	}
+	if rec := request("alice", http.MethodPost, "/api/conversation/missing/unread", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("missing conversation mark status = %d", rec.Code)
+	}
+	rec := request("alice", http.MethodPost, unreadPath, "")
+	var mark generated.ConversationUnreadMarksRow
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &mark) != nil || mark.ConversationID != id || mark.UnreadAt <= 0 {
+		t.Fatalf("mark = %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Alice's other devices hear of it; Bob doesn't, and his list is unchanged.
+	live := streamFrame(t, phone, func(f StreamResponse) bool { return f.ConversationUnread != nil })
+	if *live.ConversationUnread != mark {
+		t.Fatalf("live mark = %+v, want %+v", live.ConversationUnread, mark)
+	}
+	if row := list("alice"); !*row.Unread || row.UnreadAt != mark.UnreadAt || row.LastAttentionAt != 0 {
+		t.Fatalf("alice's marked row = %+v", row)
+	}
+	if row := list("bob"); *row.Unread || row.UnreadAt != 0 {
+		t.Fatalf("bob's row = %+v", row)
+	}
+	if reads := snapshot("alice"); len(reads.UnreadMarks) != 1 || reads.UnreadMarks[0] != mark {
+		t.Fatalf("alice's snapshot = %+v", reads)
+	}
+	if reads := snapshot("bob"); len(reads.UnreadMarks) != 0 {
+		t.Fatalf("bob's snapshot = %+v", reads)
+	}
+	// Bob's own mark follows Alice's on the stream; only his reaches him.
+	if rec := request("bob", http.MethodPost, unreadPath, ""); rec.Code != http.StatusOK {
+		t.Fatalf("bob's mark status = %d", rec.Code)
+	}
+	streamFrame(t, bob, func(f StreamResponse) bool { return f.ConversationUnread != nil })
+	if n := strings.Count(bob.getString(), "conversation_unread"); n != 1 {
+		t.Fatalf("bob received %d marks, want his own", n)
+	}
+	_, hashAfter, err := srv.conversationListStream.snapshot(ctx)
+	if err != nil || hashAfter != hashBefore {
+		t.Fatalf("private mark changed the shared list hash: %s -> %s, %v", hashBefore, hashAfter, err)
+	}
+
+	// Reading through the mark clears it.
+	readPath := "/api/conversation/" + id + "/read"
+	if rec := request("alice", http.MethodPost, readPath, fmt.Sprintf(`{"read_at":%d}`, mark.UnreadAt+1)); rec.Code != http.StatusBadRequest {
+		t.Fatalf("read past the mark status = %d", rec.Code)
+	}
+	if rec := request("alice", http.MethodPost, readPath, fmt.Sprintf(`{"read_at":%d}`, mark.UnreadAt)); rec.Code != http.StatusOK {
+		t.Fatalf("read of the mark status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if row := list("alice"); *row.Unread || row.UnreadAt != 0 || *row.ReadAt != mark.UnreadAt {
+		t.Fatalf("alice's read row = %+v", row)
+	}
+	if reads := snapshot("alice"); len(reads.UnreadMarks) != 0 {
+		t.Fatalf("alice's snapshot after reading = %+v", reads)
 	}
 }

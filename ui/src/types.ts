@@ -18,9 +18,11 @@ export type Conversation = GeneratedConversation;
 // Read fields are a client-only overlay, never part of the shared list/hash.
 export type ConversationWithState = ConversationWithStateForTS & {
   read_at?: number;
+  unread_at?: number;
   unread?: boolean;
 };
 export type ConversationRead = import("./generated-types").ConversationReadMarkersRow;
+export type ConversationUnreadMark = import("./generated-types").ConversationUnreadMarksRow;
 export type { ConversationParticipant } from "./generated-types";
 export type ConversationWithParticipants = Conversation & {
   participants?: import("./generated-types").ConversationParticipant[] | null;

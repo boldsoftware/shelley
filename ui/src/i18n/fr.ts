@@ -110,6 +110,7 @@ export const fr: TranslationKeys = {
   viewArchived: "Voir les archives",
   rename: "Renommer",
   editTags: "Modifier les étiquettes",
+  markUnread: "Marquer comme non lu",
   addTagPlaceholder: "Ajouter une étiquette…",
   removeTag: "Supprimer l’étiquette",
   addTag: "Ajouter",

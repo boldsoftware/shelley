@@ -138,6 +138,15 @@
         >
       </button>
       <button
+        v-if="canMarkUnread"
+        class="overflow-menu-item"
+        data-testid="mark-unread"
+        @click="onMarkUnread"
+      >
+        <i class="pi pi-envelope chat-menu-icon" aria-hidden="true" />
+        {{ t("markUnread") }}
+      </button>
+      <button
         v-if="canArchive"
         class="overflow-menu-item"
         :title="archiveNote || undefined"
@@ -384,6 +393,7 @@ const props = defineProps<{
   cwd: string;
   links: Link[];
   canArchive: boolean;
+  canMarkUnread: boolean;
   /** For a conversation on its own VM: archiving deletes the VM. */
   archiveNote: string;
   canExport: boolean;
@@ -401,6 +411,7 @@ const emit = defineEmits<{
   (e: "open-terminal"): void;
   (e: "open-external-link", url: string): void;
   (e: "archive"): void;
+  (e: "mark-unread"): void;
   (e: "export"): void;
   (e: "edit-agents-md"): void;
   (e: "edit-file"): void;
@@ -433,6 +444,7 @@ const onDiffs = () => (emit("open-diffs"), hide());
 const onGitGraph = () => (emit("open-git-graph"), hide());
 const onTerminal = () => (emit("open-terminal"), hide());
 const onArchive = () => (emit("archive"), hide());
+const onMarkUnread = () => (emit("mark-unread"), hide());
 const onExport = () => (emit("export"), hide());
 const onEditAgentsMd = () => (emit("edit-agents-md"), hide());
 const onEditFile = () => (emit("edit-file"), hide());

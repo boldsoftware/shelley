@@ -1055,6 +1055,7 @@ const props = defineProps<{
   navTab: NavTab;
   // The VM shown in the main pane (from the prod tab), if any.
   currentVm: string | null;
+  markUnread: (id: string) => Promise<void>;
 }>();
 
 const emit = defineEmits<{
@@ -1729,6 +1730,15 @@ function toggleSubagents(e: MouseEvent, conversationId: string) {
   expandedSubagents.value = next;
 }
 
+async function markConversationUnread(id: string) {
+  try {
+    rowError.value = "";
+    await props.markUnread(id);
+  } catch (err) {
+    rowError.value = errorMessage(err);
+  }
+}
+
 async function loadArchivedConversations() {
   loadingArchived.value = true;
   try {
@@ -1908,7 +1918,17 @@ function conversationActions(conversation: Conversation): MenuItem[] {
     icon: "pi pi-pencil",
     command: ({ originalEvent }) => handleStartRename(originalEvent as MouseEvent, conversation),
   };
-  if (workspace.isAssistant(id)) return [rename];
+  // Search results lack the unread overlay, so ask the list.
+  const markUnread: MenuItem[] = unreadConversationIds.value.has(id)
+    ? []
+    : [
+        {
+          label: t("markUnread"),
+          icon: "pi pi-envelope",
+          command: () => void markConversationUnread(id),
+        },
+      ];
+  if (workspace.isAssistant(id)) return [rename, ...markUnread];
   const note = workspace.archiveNote(id);
   const items: MenuItem[] = [
     {
@@ -1923,6 +1943,7 @@ function conversationActions(conversation: Conversation): MenuItem[] {
       icon: "pi pi-tag",
       command: ({ originalEvent }) => handleOpenTagEditor(originalEvent as MouseEvent, id),
     },
+    ...markUnread,
   ];
   const current = workspace.projectFor(id);
   const targets = workspace.data.value?.projects.filter((p) => p.name !== current?.name) ?? [];

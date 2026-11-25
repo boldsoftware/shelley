@@ -18,8 +18,8 @@ it, and an older server that doesn't ship the field is equivalent to
 advertising none.
 
 Capabilities advertise optional behavior. Current capabilities include
-`thinking-levels`, `drafts`, `queued-transcriptions`, and `composer-text`;
-clients that do not recognize one ignore it.
+`thinking-levels`, `drafts`, `queued-transcriptions`, `composer-text`, and
+`mark-unread`; clients that do not recognize one ignore it.
 
 ## Stream architecture
 
@@ -109,8 +109,12 @@ Unless noted, results exclude **archived** conversations.
 | `preview`, `preview_updated_at` | the start (300 chars) of the agent's latest reply to the user, and that message's time (RFC 3339): the last text block, or the trimmed `text` of a `message_user`, `send_to_thread` or `send_to_channel` call, in the newest agent message with one; with `message_user` on, text blocks don't count. Empty until there is one |
 | `last_attention_at` | Server timestamp for the latest qualifying reply, error or directed notice, in Unix milliseconds. Absent until one arrives. |
 
-`GET /api/conversations` adds the user's effective `read_at` and `unread`.
-A chat is unread when `last_attention_at > max(first_seen_at, receipt.read_at)`.
+#### Unread
+
+`GET /api/conversations` adds the user's effective `read_at`, `unread_at`
+(their unread mark, below; absent without one, or once a receipt reaches it)
+and `unread`. A chat is unread
+when `max(last_attention_at, unread_at) > max(first_seen_at, receipt.read_at)`.
 The server starts tracking new messages at rollout. Existing users start at
 rollout and new users start at their first visit. Successful `message_user`
 deliveries advance the timestamp, including tool-only turns. Ordinary tool activity and user sends leave it unchanged.
@@ -120,7 +124,33 @@ Opening a chat in a focused, visible tab sends the observed reply timestamp to
 `{conversation_id, read_at}` and streams it to the same user's other devices.
 A late acknowledgment cannot clear a newer reply or move a receipt backward.
 
-The global stream opens with a private `conversation_reads` snapshot containing `{first_seen_at, receipts: [{conversation_id, read_at}]}`.
+`POST /api/conversation/<id>/unread` (capability `mark-unread`; no body) marks
+the chat unread for the user, like Mail's "Mark as Unread", replies or not. It
+returns `{conversation_id, unread_at}` and streams it to the user's other
+devices as a private `conversation_unread` frame. `unread_at` is a server time
+later than every receipt, and a repeated mark never moves it back. A receipt
+clears the mark once its `read_at` reaches `unread_at`, so the acknowledgment
+to send is `max(last_attention_at, unread_at)`; `read_at` may be any time up to
+the later of the latest reply and the mark. A receipt for an earlier reply
+leaves the mark. Clients that predate marks neither show them nor clear them,
+except by reading a reply newer than the mark.
+
+A mark should survive the view it was made in. A client showing the chat when
+it learns of a new mark (it set the mark from that chat's menu, or another
+device did) holds it: it sends no receipts for the chat, newer replies
+included, until the user opens the chat again. Focus and visibility changes
+are not openings; showing another chat (or none) and coming back, or loading
+the page, is. Sending a message in the chat also reads it, and a receipt from
+another device that reaches the mark ends the hold. A reconnect's
+`conversation_reads` snapshot can bring a new mark for the shown chat; hold
+that too. It follows the reconnect's list replay, so send no receipts on a new
+connection before its snapshot. The first snapshot's marks are not new
+(loading the page opened the chat), except one the client is still waiting
+to hear back about. Send no receipts for a chat while marking it.
+
+The global stream opens with a private `conversation_reads` snapshot containing
+`{first_seen_at, receipts: [{conversation_id, read_at}], unread_marks: [{conversation_id, unread_at}]}`,
+where `unread_marks` lists only marks no receipt has reached.
 These timestamps are private to the requesting identity.
 
 ### Single conversation
@@ -286,8 +316,13 @@ interface StreamResponse {
   tool_progress?: ToolProgress;
   stream_delta?: StreamDelta;
   notification_event?: NotificationEvent;
-  conversation_reads?: { first_seen_at: number; receipts: { conversation_id: string; read_at: number }[] };
+  conversation_reads?: {
+    first_seen_at: number;
+    receipts: { conversation_id: string; read_at: number }[];
+    unread_marks: { conversation_id: string; unread_at: number }[];
+  };
   conversation_read?: { conversation_id: string; read_at: number };
+  conversation_unread?: { conversation_id: string; unread_at: number };
 
   // Conversation-list patch stream:
   conversation_list_patch?: {
@@ -351,10 +386,11 @@ boundaries, the server replays the missed patches; otherwise it sends a
 fresh reset event.
 
 After subscribing to live updates, every `/api/stream2` connection receives a
-private `conversation_reads` timestamp snapshot. Later read receipts are sent
-as private `conversation_read` frames only to that identity. Merge snapshots,
-POST responses, and live frames per conversation with `MAX(read_at)`; none changes a shared
-conversation-list hash.
+private `conversation_reads` timestamp snapshot. Later read receipts and unread
+marks are sent as private `conversation_read` and `conversation_unread` frames
+only to that identity. Merge snapshots, POST responses, and live frames per
+conversation with `MAX(read_at)` and `MAX(unread_at)`; none changes a shared
+conversation-list hash. The list rows carry no `unread`: compute it as above.
 
 ### Git
 

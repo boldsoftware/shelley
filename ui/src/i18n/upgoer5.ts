@@ -108,6 +108,7 @@ export const upgoer5: TranslationKeys = {
   viewArchived: "See Put Away",
   rename: "Give New Name",
   editTags: "Change Word Stickers",
+  markUnread: "Mark as Not Read",
   addTagPlaceholder: "Add a Word Sticker…",
   removeTag: "Take off Word Sticker",
   addTag: "Add",

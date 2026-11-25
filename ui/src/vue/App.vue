@@ -66,6 +66,7 @@
         @removed="handleConversationRemoved"
         @unarchived="handleConversationUnarchived"
         @renamed="handleConversationRenamed"
+        :mark-unread="markUnread"
         @pointerenter="drawerHovered = true"
         @pointerleave="onDrawerPointerLeave"
       />
@@ -113,6 +114,7 @@
           :is-assistant="workspace.isAssistant(currentConversationId)"
           :on-select-conversation="selectConversation"
           :on-archive-conversation="archiveFromChat"
+          :on-mark-unread="markShownUnread"
           :current-conversation="currentConversation"
           :conversations="conversations"
           :on-conversation-update="updateConversation"
@@ -413,13 +415,13 @@ import {
   type Conversation,
   type ConversationWithState,
   type ConversationListPatchEvent,
-  type ConversationRead,
   type ResourceKind,
   type ResourceStatus,
   type HookHealthStatus,
   type ChatRequest,
 } from "../types";
 import { api, ApiError, machineParams } from "../services/api";
+import { ReadMarks } from "../utils/readMarks";
 import { hookDiagnosticPrompt } from "../utils/hookHealth";
 import {
   absorbUnreachable,
@@ -554,20 +556,7 @@ const reloadPage = () => window.location.reload();
 const conversations = shallowRef<ConversationWithState[]>([]);
 const drawerList = shallowRef<ConversationWithState[]>([]);
 let drawerFrame: number | null = null;
-const firstSeenAt = ref<number | null>(null);
-const readTimes = reactive(new Map<string, number>());
-
-function observeRead({ conversation_id: id, read_at }: ConversationRead) {
-  if (read_at > (readTimes.get(id) ?? 0)) readTimes.set(id, read_at);
-}
-
-function unreadTime(c: ConversationWithState) {
-  const time = c.last_attention_at ?? 0;
-  return firstSeenAt.value !== null &&
-    time > Math.max(firstSeenAt.value, readTimes.get(c.conversation_id) ?? 0)
-    ? time
-    : 0;
-}
+const readMarks = reactive(new ReadMarks());
 
 const currentConversationId = ref<string | null>(null);
 // Subagent tool widgets (SubagentTool.vue) join their slug against the live
@@ -828,7 +817,11 @@ provide(ComposerPreviewKey, {
   }),
 });
 const drawerConversations = computed(() => {
-  const rows = drawerList.value.map((c) => (unreadTime(c) ? { ...c, unread: true } : c));
+  const rows = drawerList.value.map((c) =>
+    readMarks.unreadTime(c)
+      ? { ...c, unread: true, unread_at: readMarks.unreadMark(c.conversation_id) }
+      : c,
+  );
   const list = withComposerRow(rows, composer.value, creating.value);
   return lingering.value ? withComposerRow(list, lingering.value, null) : list;
 });
@@ -946,22 +939,56 @@ const currentConversation = computed<ConversationWithState | undefined>(() => {
 
 const openUnreadTime = computed(() => {
   const c = currentConversation.value;
-  return c && drawerCurrentConversationId.value === c.conversation_id ? unreadTime(c) : 0;
+  return c && drawerCurrentConversationId.value === c.conversation_id ? readMarks.ackTime(c) : 0;
 });
-const pendingReads = new Set<number>();
+const pendingReads = new Set<string>();
 
 async function acknowledgeOpenConversation() {
   const time = openUnreadTime.value;
   const id = currentConversationId.value;
-  if (!id || !time || pendingReads.has(time) || document.hidden || !document.hasFocus()) return;
-  pendingReads.add(time);
+  const key = `${id} ${time}`;
+  if (!id || !time || pendingReads.has(key) || document.hidden || !document.hasFocus()) return;
+  pendingReads.add(key);
   try {
-    observeRead(await api.acknowledgeConversationRead(id, time));
+    readMarks.read(await api.acknowledgeConversationRead(id, time));
   } finally {
-    pendingReads.delete(time);
+    pendingReads.delete(key);
   }
 }
-watch(openUnreadTime, acknowledgeOpenConversation);
+// Two conversations can be unread through the same time.
+watch([currentConversationId, openUnreadTime], acknowledgeOpenConversation);
+// Showing another conversation (or none) ends the hold of a mark set while
+// the shown one was open; opening that one again reads it.
+watch(drawerCurrentConversationId, () => readMarks.release());
+
+async function markUnread(id: string) {
+  if (readMarks.marking.has(id)) return;
+  readMarks.marking.add(id);
+  try {
+    readMarks.mark(await api.markConversationUnread(id), drawerCurrentConversationId.value);
+  } finally {
+    readMarks.marking.delete(id);
+  }
+}
+// The shown conversation's "Mark as unread", while it is read. Workspace
+// mode's Assistant row shows no unread state, so it has none.
+const markShownUnread = computed(() => {
+  const c = currentConversation.value;
+  return c &&
+    drawerCurrentConversationId.value === c.conversation_id &&
+    !c.is_draft &&
+    !c.archived &&
+    !(workspaceMode && workspace.isAssistant(c.conversation_id)) &&
+    !readMarks.unreadTime(c)
+    ? async () => {
+        try {
+          await markUnread(c.conversation_id);
+        } catch (err) {
+          console.error("Failed to mark conversation unread:", err);
+        }
+      }
+    : undefined;
+});
 
 const mostRecentCwd = computed(() => {
   const conversation = currentConversation.value?.cwd
@@ -1325,6 +1352,8 @@ function updateConversation(updatedConversation: Conversation) {
 }
 
 function handleMessageSent(conversationId: string) {
+  // Writing in a conversation reads it, as opening it does.
+  if (conversationId === readMarks.held) readMarks.release();
   if (conversationId === currentConversationId.value) messageSentTrigger.value++;
 }
 
@@ -1709,11 +1738,9 @@ onMounted(() => {
   globalStreamHandle = connectGlobalStream({
     getHash: () => conversationListHash,
     onListPatch: handleConversationListPatch,
-    onConversationReads: (snapshot) => {
-      firstSeenAt.value = snapshot.first_seen_at;
-      snapshot.receipts?.forEach(observeRead);
-    },
-    onConversationRead: observeRead,
+    onConversationReads: (reads) => readMarks.snapshot(reads, drawerCurrentConversationId.value),
+    onConversationRead: (read) => readMarks.read(read),
+    onConversationUnread: (mark) => readMarks.mark(mark, drawerCurrentConversationId.value),
     onNotificationEvent: handleNotificationEvent,
     onModelsChanged: () => modelsRefreshTrigger.value++,
     onWorkspaceChanged: refreshWorkspace,
@@ -1729,6 +1756,7 @@ onMounted(() => {
     onHookHealth: applyHookHealth,
     onStaleBuild: () => (uiUpdated.value = true),
     onReconnect: () => {
+      readMarks.reconnected();
       reconnectNonce.value++;
       refreshWorkspace();
     },

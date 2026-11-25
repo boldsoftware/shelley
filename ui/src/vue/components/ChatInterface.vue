@@ -82,6 +82,7 @@
               !isAssistant
             )
           "
+          :can-mark-unread="!!onMarkUnread"
           :archive-note="workspace.archiveNote(conversationId)"
           :can-export="!!(conversationId && messages.length > 0)"
           :has-update="hasUpdate"
@@ -93,6 +94,7 @@
           @open-terminal="openInAppTerminal"
           @open-external-link="openExternalLink"
           @archive="archiveFromMenu"
+          @mark-unread="onMarkUnread?.()"
           @export="openExport"
           @edit-agents-md="showAgentsMdEditor = true"
           @edit-file="props.onOpenFileFinder?.()"
@@ -1131,6 +1133,8 @@ const props = withDefaults(
     isAssistant?: boolean;
     onSelectConversation?: (conversation: Conversation) => void;
     onArchiveConversation?: (conversationId: string) => Promise<void>;
+    /** Marks the conversation unread; absent when it can't be (it is unread). */
+    onMarkUnread?: () => void;
     currentConversation?: Conversation;
     conversations: Conversation[];
     onConversationUpdate?: (conversation: Conversation) => void;

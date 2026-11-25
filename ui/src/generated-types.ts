@@ -112,9 +112,15 @@ export interface ConversationReadMarkersRow {
   read_at: number;
 }
 
+export interface ConversationUnreadMarksRow {
+  conversation_id: string;
+  unread_at: number;
+}
+
 export interface ConversationReads {
   first_seen_at: number;
   receipts: ConversationReadMarkersRow[] | null;
+  unread_marks: ConversationUnreadMarksRow[] | null;
 }
 
 export interface NotificationEventForTS {
@@ -130,6 +136,7 @@ export interface StreamResponseForTS {
   conversation?: Conversation | null;
   conversation_state?: ConversationStateForTS | null;
   conversation_read?: ConversationReadMarkersRow | null;
+  conversation_unread?: ConversationUnreadMarksRow | null;
   conversation_reads?: ConversationReads | null;
   heartbeat?: boolean;
   notification_event?: NotificationEventForTS | null;

@@ -108,6 +108,7 @@ export const vi: TranslationKeys = {
   viewArchived: "Xem danh sách lưu trữ",
   rename: "Đổi tên",
   editTags: "Sửa thẻ",
+  markUnread: "Đánh dấu là chưa đọc",
   addTagPlaceholder: "Thêm thẻ…",
   removeTag: "Xóa thẻ",
   addTag: "Thêm",

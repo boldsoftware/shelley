@@ -96,6 +96,65 @@ func (q *Queries) ConversationReadMarkers(ctx context.Context, userID string) ([
 	return items, nil
 }
 
+const conversationUnreadMarks = `-- name: ConversationUnreadMarks :many
+SELECT mark.conversation_id, mark.marked_at AS unread_at FROM conversation_unread_marks AS mark
+WHERE mark.user_id = ? AND NOT EXISTS (
+    SELECT 1 FROM conversation_marks AS receipt
+    WHERE receipt.kind = 'read' AND receipt.user_id = mark.user_id
+      AND receipt.conversation_id = mark.conversation_id AND receipt.marked_at >= mark.marked_at
+)
+ORDER BY mark.conversation_id
+`
+
+type ConversationUnreadMarksRow struct {
+	ConversationID string `json:"conversation_id"`
+	UnreadAt       int64  `json:"unread_at"`
+}
+
+// Marks no receipt has reached yet.
+func (q *Queries) ConversationUnreadMarks(ctx context.Context, userID string) ([]ConversationUnreadMarksRow, error) {
+	rows, err := q.db.QueryContext(ctx, conversationUnreadMarks, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConversationUnreadMarksRow{}
+	for rows.Next() {
+		var i ConversationUnreadMarksRow
+		if err := rows.Scan(&i.ConversationID, &i.UnreadAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markConversationUnread = `-- name: MarkConversationUnread :one
+INSERT INTO conversation_unread_marks (user_id, conversation_id, marked_at)
+SELECT ?1, c.conversation_id, (SELECT marked_at FROM next_conversation_mark)
+FROM conversations AS c WHERE c.conversation_id = ?2
+ON CONFLICT (user_id, conversation_id) DO UPDATE SET marked_at = MAX(marked_at, excluded.marked_at)
+RETURNING marked_at
+`
+
+type MarkConversationUnreadParams struct {
+	UserID         string `json:"user_id"`
+	ConversationID string `json:"conversation_id"`
+}
+
+func (q *Queries) MarkConversationUnread(ctx context.Context, arg MarkConversationUnreadParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, markConversationUnread, arg.UserID, arg.ConversationID)
+	var marked_at int64
+	err := row.Scan(&marked_at)
+	return marked_at, err
+}
+
 const startConversationReads = `-- name: StartConversationReads :exec
 INSERT INTO conversation_marks (kind, user_id, marked_at)
 SELECT 'visit', ?1, CASE WHEN EXISTS (
@@ -112,22 +171,29 @@ func (q *Queries) StartConversationReads(ctx context.Context, userID string) err
 
 const upsertConversationRead = `-- name: UpsertConversationRead :one
 INSERT INTO conversation_marks (kind, user_id, conversation_id, marked_at)
-SELECT 'read', ?1, reply.conversation_id, CAST(?2 AS INTEGER)
-FROM conversation_marks AS reply
-WHERE reply.kind = 'reply' AND reply.user_id = '' AND reply.conversation_id = ?3
-  AND reply.marked_at >= ?2
+SELECT 'read', ?1, ?2, CAST(?3 AS INTEGER)
+WHERE EXISTS (
+    SELECT 1 FROM conversation_marks
+    WHERE kind = 'reply' AND user_id = '' AND conversation_id = ?2
+      AND marked_at >= ?3
+    UNION ALL
+    SELECT 1 FROM conversation_unread_marks
+    WHERE user_id = ?1 AND conversation_id = ?2
+      AND marked_at >= ?3
+)
 ON CONFLICT (kind, user_id, conversation_id) DO UPDATE SET marked_at = MAX(marked_at, excluded.marked_at)
 RETURNING marked_at
 `
 
 type UpsertConversationReadParams struct {
 	UserID         string `json:"user_id"`
-	ReadAt         int64  `json:"read_at"`
 	ConversationID string `json:"conversation_id"`
+	ReadAt         int64  `json:"read_at"`
 }
 
+// A receipt may reach the latest reply or the user's unread mark.
 func (q *Queries) UpsertConversationRead(ctx context.Context, arg UpsertConversationReadParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, upsertConversationRead, arg.UserID, arg.ReadAt, arg.ConversationID)
+	row := q.db.QueryRowContext(ctx, upsertConversationRead, arg.UserID, arg.ConversationID, arg.ReadAt)
 	var marked_at int64
 	err := row.Scan(&marked_at)
 	return marked_at, err

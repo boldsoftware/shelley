@@ -56,8 +56,28 @@ func (s *Server) handleConversationRead(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, http.StatusOK, event)
 }
 
+func (s *Server) handleConversationUnread(w http.ResponseWriter, r *http.Request, conversationID string) {
+	if !s.requireReadUser(w, r) {
+		return
+	}
+	userID := s.userIDFromRequest(r)
+	unreadAt, err := s.db.MarkConversationUnread(r.Context(), userID, conversationID)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "Conversation not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		s.internalError(w, "Failed to mark conversation unread", err)
+		return
+	}
+	event := generated.ConversationUnreadMarksRow{ConversationID: conversationID, UnreadAt: unreadAt}
+	s.streamPub.Broadcast(StreamResponse{ConversationUnread: &event, readUserID: userID})
+	writeJSON(w, http.StatusOK, event)
+}
+
 func (s *Server) streamEventVisible(r *http.Request, event StreamResponse) bool {
-	return event.ConversationRead == nil || (s.requireHeader == "" || s.userIDFromRequest(r) != "") && event.readUserID == s.userIDFromRequest(r)
+	return event.ConversationRead == nil && event.ConversationUnread == nil ||
+		(s.requireHeader == "" || s.userIDFromRequest(r) != "") && event.readUserID == s.userIDFromRequest(r)
 }
 
 func (s *Server) personalizeConversationReads(ctx context.Context, conversations []ConversationWithState, userID string) error {
@@ -69,11 +89,16 @@ func (s *Server) personalizeConversationReads(ctx context.Context, conversations
 	for _, receipt := range reads.Receipts {
 		positions[receipt.ConversationID] = receipt.ReadAt
 	}
+	marks := make(map[string]int64, len(reads.UnreadMarks))
+	for _, mark := range reads.UnreadMarks {
+		marks[mark.ConversationID] = mark.UnreadAt
+	}
 	for i := range conversations {
 		c := &conversations[i]
 		readAt := max(positions[c.ConversationID], reads.FirstSeenAt)
-		unread := c.LastAttentionAt > readAt
+		unread := max(c.LastAttentionAt, marks[c.ConversationID]) > readAt
 		c.ReadAt = &readAt
+		c.UnreadAt = marks[c.ConversationID]
 		c.Unread = &unread
 	}
 	return nil

@@ -108,6 +108,7 @@ export const en: TranslationKeys = {
   viewArchived: "View Archived",
   rename: "Rename",
   editTags: "Edit tags",
+  markUnread: "Mark as unread",
   addTagPlaceholder: "Add tag…",
   removeTag: "Remove tag",
   addTag: "Add",

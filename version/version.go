@@ -59,6 +59,10 @@ func Capabilities() []string {
 		// "defaults": a key-value store of JSON values for clients'
 		// settings. See GET/POST /api/defaults.
 		"defaults",
+		// "mark-unread": POST /api/conversation/<id>/unread marks a
+		// conversation unread for the user until a read receipt reaches
+		// its unread_at. See "Unread" in API.md.
+		"mark-unread",
 	}
 }
 

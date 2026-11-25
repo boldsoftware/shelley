@@ -108,6 +108,7 @@ export const ja: TranslationKeys = {
   viewArchived: "アーカイブを表示",
   rename: "名前を変更",
   editTags: "タグを編集",
+  markUnread: "未読にする",
   addTagPlaceholder: "タグを追加…",
   removeTag: "タグを削除",
   addTag: "追加",

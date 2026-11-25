@@ -108,6 +108,7 @@ export const zhTW: TranslationKeys = {
   viewArchived: "檢視已封存",
   rename: "重新命名",
   editTags: "編輯標籤",
+  markUnread: "標示為未讀",
   addTagPlaceholder: "新增標籤…",
   removeTag: "刪除標籤",
   addTag: "新增",

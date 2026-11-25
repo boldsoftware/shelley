@@ -108,6 +108,7 @@ export const ru: TranslationKeys = {
   viewArchived: "Показать архив",
   rename: "Переименовать",
   editTags: "Редактировать теги",
+  markUnread: "Отметить как непрочитанное",
   addTagPlaceholder: "Добавить тег…",
   removeTag: "Удалить тег",
   addTag: "Добавить",

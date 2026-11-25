@@ -102,10 +102,11 @@
             class="btn-icon-sm drawer-chapters-toggle"
             :aria-label="chaptersExpanded ? 'Hide chapters' : 'Show chapters'"
             :aria-expanded="chaptersExpanded"
-            :aria-controls="chaptersExpanded ? `conversation-chapters-${conversation.conversation_id}` : undefined"
+            :aria-controls="
+              chaptersExpanded ? `conversation-chapters-${conversation.conversation_id}` : undefined
+            "
             v-tooltip.top="chaptersExpanded ? 'Hide chapters' : 'Show chapters'"
             @click.stop="chaptersExpanded = !chaptersExpanded"
-
             @auxclick.stop
           >
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -638,16 +639,25 @@ const isDraft = computed(() => !!props.conversation.is_draft);
 // Stands in for a conversation the server has yet to create: nothing to edit.
 const isPlaceholder = computed(() => props.conversation.conversation_id === COMPOSER_ROW_ID);
 const chapters = computed(() => ctx.chapterIndex.value[props.conversation.conversation_id] ?? []);
-const chapterSlot = computed(() => !workspaceMode && ctx.searchOpen.value && !ctx.selectionMode.value);
-const chaptersAvailable = computed(() =>
-  !ctx.selectionMode.value && !isDraft.value && !isPlaceholder.value &&
-  ctx.searchOpen.value && chapters.value.length > 0 &&
-  (!ctx.searchText.value.trim() || ctx.chapterScores.value.has(props.conversation.conversation_id)),
+const chapterSlot = computed(
+  () => !workspaceMode && ctx.searchOpen.value && !ctx.selectionMode.value,
+);
+const chaptersAvailable = computed(
+  () =>
+    !ctx.selectionMode.value &&
+    !isDraft.value &&
+    !isPlaceholder.value &&
+    ctx.searchOpen.value &&
+    chapters.value.length > 0 &&
+    (!ctx.searchText.value.trim() ||
+      ctx.chapterScores.value.has(props.conversation.conversation_id)),
 );
 const chaptersExpanded = ref(false);
 watch(
   [() => ctx.searchOpen.value, () => ctx.searchText.value, () => !ctx.searchQuery.value.trim()],
-  ([open, text]) => { chaptersExpanded.value = open && !!text.trim(); },
+  ([open, text]) => {
+    chaptersExpanded.value = open && !!text.trim();
+  },
   { immediate: true },
 );
 // A draft being typed here previews the composer, not the last autosave.
@@ -664,10 +674,11 @@ const deletable = computed(
 const isActive = computed(
   () => props.conversation.conversation_id === ctx.currentConversationId.value,
 );
-// An unread row's title is bold once its agent stops working.
+// An unread row's title is bold once its agent stops working. The open one's
+// is too while the user's "Mark as unread" holds it.
 const unread = computed(
   () =>
-    !isActive.value &&
+    (!isActive.value || !!convState.value.unread_at) &&
     !isWorking.value &&
     convState.value.unread &&
     !itemArchived.value &&

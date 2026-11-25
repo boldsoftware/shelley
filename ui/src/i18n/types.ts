@@ -108,6 +108,7 @@ export interface TranslationKeys {
   viewArchived: string;
   rename: string;
   editTags: string;
+  markUnread: string;
   addTagPlaceholder: string;
   removeTag: string;
   addTag: string;

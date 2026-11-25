@@ -958,6 +958,9 @@ func (s *Server) registerConversationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/conversation/{id}/read", func(w http.ResponseWriter, r *http.Request) {
 		s.handleConversationRead(w, r, r.PathValue("id"))
 	})
+	mux.HandleFunc("POST /api/conversation/{id}/unread", func(w http.ResponseWriter, r *http.Request) {
+		s.handleConversationUnread(w, r, r.PathValue("id"))
+	})
 	// POST endpoints - small responses, no compression needed
 	mux.HandleFunc("POST /api/conversation/{id}/chat", func(w http.ResponseWriter, r *http.Request) {
 		s.handleChatConversation(w, r, r.PathValue("id"))

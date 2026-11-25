@@ -18,6 +18,7 @@
 import type {
   ConversationListPatchEvent,
   ConversationRead,
+  ConversationUnreadMark,
   ResourceStatus,
   HookHealthStatus,
   NotificationEvent,
@@ -71,6 +72,7 @@ export interface GlobalStreamOptions {
   onListPatch: (event: ConversationListPatchEvent) => void;
   onConversationReads?: (reads: NonNullable<StreamResponse["conversation_reads"]>) => void;
   onConversationRead?: (read: ConversationRead) => void;
+  onConversationUnread?: (mark: ConversationUnreadMark) => void;
   onNotificationEvent?: (event: NotificationEvent) => void;
   /** Refresh the existing model catalog trigger after a server-side change. */
   onModelsChanged?: () => void;
@@ -142,6 +144,7 @@ export function connectGlobalStream({
   onListPatch,
   onConversationReads,
   onConversationRead,
+  onConversationUnread,
   onNotificationEvent,
   onModelsChanged,
   onWorkspaceChanged,
@@ -263,6 +266,7 @@ export function connectGlobalStream({
   const handleEvent = (data: StreamResponse) => {
     if (data.conversation_reads) onConversationReads?.(data.conversation_reads);
     if (data.conversation_read) onConversationRead?.(data.conversation_read);
+    if (data.conversation_unread) onConversationUnread?.(data.conversation_unread);
     if (data.ui_build && staleBuild(data.ui_build)) {
       // The server runs a newer UI than this page (it was upgraded or
       // restarted since), whose API may have changed underneath. Load it

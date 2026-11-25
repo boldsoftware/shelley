@@ -95,6 +95,7 @@ type ConversationWithState struct {
 	// the ordinary REST list response.
 	LastAttentionAt int64  `json:"last_attention_at,omitempty"`
 	ReadAt          *int64 `json:"read_at,omitempty"`
+	UnreadAt        int64  `json:"unread_at,omitempty"`
 	Unread          *bool  `json:"unread,omitempty"`
 	Working         bool   `json:"working"`
 	GitRepoRoot     string `json:"git_repo_root,omitempty"`
@@ -110,9 +111,10 @@ type ConversationWithState struct {
 
 // StreamResponse represents the response format for conversation streaming
 type StreamResponse struct {
-	ConversationReads *db.ConversationReads                 `json:"conversation_reads,omitempty"`
-	ConversationRead  *generated.ConversationReadMarkersRow `json:"conversation_read,omitempty"`
-	// readUserID is never serialized; it filters private cursor frames.
+	ConversationReads  *db.ConversationReads                 `json:"conversation_reads,omitempty"`
+	ConversationRead   *generated.ConversationReadMarkersRow `json:"conversation_read,omitempty"`
+	ConversationUnread *generated.ConversationUnreadMarksRow `json:"conversation_unread,omitempty"`
+	// readUserID is never serialized; it filters private read frames.
 	readUserID       string
 	ModelsChanged    bool `json:"models_changed,omitempty"`
 	WorkspaceChanged bool `json:"workspace_changed,omitempty"`
