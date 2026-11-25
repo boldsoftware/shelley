@@ -12,6 +12,7 @@ import (
 
 	"shelley.exe.dev/db"
 	"shelley.exe.dev/llm"
+	"shelley.exe.dev/llm/predictable"
 	"shelley.exe.dev/models"
 )
 
@@ -671,5 +672,23 @@ func TestGenerateSlug_UsageOnAppendedMarker(t *testing.T) {
 	}
 	if updated.Slug == nil || *updated.Slug != "my-generated-slug" {
 		t.Errorf("slug on conversation = %v, want my-generated-slug", updated.Slug)
+	}
+}
+
+type predictableProvider struct{}
+
+func (predictableProvider) GetWorkhorseService(string) (llm.Service, error) {
+	return predictable.NewService(), nil
+}
+
+// The predictable model titles a conversation after its first message, so
+// tests (bin/dev-shelley's clients) tell their conversations apart.
+func TestGenerateSlug_PredictableModelTitlesAfterTheMessage(t *testing.T) {
+	slug, err := generateSlugText(t.Context(), predictableProvider{}, "echo: away-x1", "predictable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slug != "echo-away-x1" {
+		t.Errorf("slug = %q, want %q", slug, "echo-away-x1")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 	"testing/synctest"
+	"time"
 	"unicode/utf8"
 
 	"shelley.exe.dev/llm"
@@ -42,6 +43,37 @@ func TestDoStreamsAStreamReply(t *testing.T) {
 	})
 }
 
+// A "stream <total>/<every>: " reply streams a piece every <every>, as
+// many as <total> takes.
+func TestDoStreamsATimedReplyAtItsPace(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var streamed string
+		var times []time.Time
+		req := &llm.Request{
+			Messages: []llm.Message{llm.UserStringMessage("stream 2s/250ms: one two three four five six seven eight")},
+			OnStream: func(d llm.StreamDelta) {
+				streamed += d.Text
+				times = append(times, time.Now())
+			},
+		}
+		resp, err := NewService().Do(t.Context(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if streamed != resp.Content[0].Text || streamed != "one two three four five six seven eight" {
+			t.Errorf("streamed %q, returned %q", streamed, resp.Content[0].Text)
+		}
+		if len(times) != 8 {
+			t.Fatalf("streamed in %d pieces, want 8 (2s / 250ms)", len(times))
+		}
+		for i := 1; i < len(times); i++ {
+			if gap := times[i].Sub(times[i-1]); gap != 250*time.Millisecond {
+				t.Errorf("piece %d came %v after the last, want 250ms", i, gap)
+			}
+		}
+	})
+}
+
 // Any other reply comes back whole: nothing streams.
 func TestDoReturnsOtherRepliesWhole(t *testing.T) {
 	for _, message := range []string{"echo: a reply of some length", "think: about it"} {
@@ -71,4 +103,38 @@ func TestDoStopsStreamingWhenCancelled(t *testing.T) {
 			t.Fatalf("got %d pieces, response %v, error %v; want one piece and context.Canceled", calls, resp, err)
 		}
 	})
+}
+
+func TestDoAcknowledgesABackgroundJobsNotice(t *testing.T) {
+	const notice = "Background job dd135837 finished: exit 0, 7s. Log: /tmp/shelley-jobs/dd135837.log\nCommand: sleep 6"
+	const fallback = "edit predictable.go to add a response for that one..."
+	for _, tc := range []struct{ name, input, want string }{
+		{"job notice", `<background_job id="dd135837">` + notice + `</background_job>`, "Noted: the background job finished."},
+		{"notice text typed by user", notice, fallback},
+		{"envelope quoted by user", `<user_message sequence_id="1">&lt;background_job id="dd135837"&gt;` + notice + `&lt;/background_job&gt;</user_message>`, fallback},
+		{"lost job", `<background_job id="dd135837">Background job dd135837 lost (host rebooted or killed). Log: /tmp/shelley-jobs/dd135837.log</background_job>`, fallback},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := NewService().Do(t.Context(), &llm.Request{Messages: []llm.Message{llm.UserStringMessage(tc.input)}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := resp.Content[0].Text; got != tc.want {
+				t.Errorf("reply %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// Asked for a title, it answers with the source message, whatever the
+// prompt around it says.
+func TestDoTitlesAConversationAfterItsSourceMessage(t *testing.T) {
+	prompt := "Sum this up in a few words.\n\n<SOURCE_MESSAGE>\necho: away\n</SOURCE_MESSAGE>\n\nThen stop."
+	resp, err := NewService().Do(t.Context(), &llm.Request{Messages: []llm.Message{llm.UserStringMessage(prompt)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := resp.Content[0].Text; got != "echo: away" {
+		t.Errorf("reply %q, want the source message", got)
+	}
 }

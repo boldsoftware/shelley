@@ -70,6 +70,9 @@ func requestMentions(req *llm.Request, needle string) bool {
 //   - "echo: <text>" - echoes the text back
 //   - "stream: <text>" - echoes the text back, streamed slowly enough for a
 //     client to see it grow
+//   - "stream <total>/<every>: <text>" - the same, a piece every <every>
+//     for <total> ("stream 3s/50ms: ..."), as a test asks a reply to grow
+//   - Shelley's <background_job> completion notice - a short acknowledgement
 //   - "bash: <command>" - triggers bash tool with command
 //   - "bash-bg: <command>" - triggers bash tool with background=true
 //   - "bash@<ssh_target>: <command>", "bash-bg@<ssh_target>: <command>" - the
@@ -180,6 +183,12 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 			}
 		}
 	}
+	// Shelley's notice that a background job finished: before unwrapping, so
+	// text a user typed (inside its own envelope) isn't taken for one. Other
+	// notices (a lost job) get the fallback, as any message it doesn't know.
+	if strings.HasPrefix(inputText, "<background_job ") && strings.Contains(inputText, " finished: ") {
+		return s.makeResponse("Noted: the background job finished.", inputTokens), nil
+	}
 	// The real LLM sees the sequence marker or the parent's provenance; for
 	// this test fixture, unwrap the text so its deterministic commands still
 	// work in channel chats and subagents.
@@ -196,6 +205,13 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 
 	if strings.HasPrefix(inputText, "<next_prompt_suggestion>") {
 		return s.makeNextPromptSuggestionResponse(req, inputTokens), nil
+	}
+
+	// A conversation's title: its first message, as a model would sum it up
+	// (the server makes it a slug), so each conversation's title is its own.
+	if _, after, ok := strings.Cut(inputText, "<SOURCE_MESSAGE>"); ok {
+		source, _, _ := strings.Cut(after, "</SOURCE_MESSAGE>")
+		return s.makeResponse(strings.TrimSpace(source), inputTokens), nil
 	}
 
 	if id, ok := idleNudgeFirstRow(req); ok {
@@ -328,7 +344,13 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 		// returned without streaming: many tests take a turn's timing from
 		// this model.
 		if text, ok := strings.CutPrefix(inputText, "stream: "); ok {
-			if err := streamText(ctx, req, text); err != nil {
+			if err := streamText(ctx, req, text, streamPieces, streamPace); err != nil {
+				return nil, err
+			}
+			return s.makeResponse(text, inputTokens), nil
+		}
+		if pieces, every, text, ok := timedStream(inputText); ok {
+			if err := streamText(ctx, req, text, pieces, every); err != nil {
 				return nil, err
 			}
 			return s.makeResponse(text, inputTokens), nil
@@ -539,29 +561,44 @@ func (s *Service) makeRefusalResponse(inputTokens uint64) *llm.Response {
 	}
 }
 
-// A streamed reply goes out in at most streamPieces pieces, so that a long
+// A "stream: " reply goes out in at most streamPieces pieces, so that a long
 // one costs no more than a short one, with streamPace between them: long
-// enough for a client to see the reply grow. Both are fixed for now: time to
-// first token and output tokens per second are meant to become independent
-// parameters.
+// enough for a client to see the reply grow.
 const (
 	streamPieces = 4
 	streamPace   = 75 * time.Millisecond
 )
 
+// timedStream reads "stream <total>/<every>: <text>": a piece every <every>,
+// as many as <total> takes (at least one).
+func timedStream(input string) (pieces int, every time.Duration, text string, ok bool) {
+	spec, text, found := strings.Cut(input, ": ")
+	spec, isStream := strings.CutPrefix(spec, "stream ")
+	if !found || !isStream {
+		return 0, 0, "", false
+	}
+	totalSpec, everySpec, found := strings.Cut(spec, "/")
+	total, err1 := time.ParseDuration(totalSpec)
+	every, err2 := time.ParseDuration(everySpec)
+	if !found || err1 != nil || err2 != nil || every <= 0 {
+		return 0, 0, "", false
+	}
+	return max(1, int(total/every)), every, text, true
+}
+
 // streamText sends text through req.OnStream in pieces, as a streaming
 // provider adapter does before it returns the reply. A piece never ends
 // inside a character. Cancelled part way, it returns the context's error.
-func streamText(ctx context.Context, req *llm.Request, text string) error {
+func streamText(ctx context.Context, req *llm.Request, text string, pieces int, pace time.Duration) error {
 	if req.OnStream == nil {
 		return nil
 	}
 	runes := []rune(text)
-	size := (len(runes) + streamPieces - 1) / streamPieces
+	size := (len(runes) + pieces - 1) / pieces
 	for start := 0; start < len(runes); start += size {
 		if start > 0 {
 			select {
-			case <-time.After(streamPace):
+			case <-time.After(pace):
 			case <-ctx.Done():
 				return ctx.Err()
 			}

@@ -92,6 +92,7 @@ func TestBashBackgroundJobNotifiesConversation(t *testing.T) {
 		return false
 	})
 	waitForIdle(t, server, id)
+	waitForMessageContaining(t, database, id, "Noted: the background job finished.", 10*time.Second)
 	if n := len(backgroundJobNotices(t, database, id)); n != 1 {
 		t.Fatalf("%d notices, want 1", n)
 	}
