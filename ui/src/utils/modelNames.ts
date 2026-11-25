@@ -50,6 +50,10 @@ const WORDS: Record<string, string> = {
   sol: "Sol",
   terra: "Terra",
   luna: "Luna",
+  argon: "Argon",
+  carbon: "Carbon",
+  hydrogen: "Hydrogen",
+  neon: "Neon",
 };
 
 // Hosting-provider suffixes that carry no model identity; dropped when they

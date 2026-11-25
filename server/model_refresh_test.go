@@ -293,6 +293,66 @@ func TestHandleModelsAssignsTiers(t *testing.T) {
 	}
 }
 
+// The exe.dev LLM integration advertises Gemini 4 alongside Gemini 3.x; the
+// picker should lead with Gemini 4 and point 3.x chats at its successor.
+func TestHandleModelsHighlightsGemini4(t *testing.T) {
+	var advertised []modelsources.IntegrationModel
+	for _, native := range []string{"gemini-4-neon", "gemini-4-hydrogen", "gemini-4-carbon", "gemini-4-argon", "gemini-3.8-flash", "gemini-3.1-pro-preview"} {
+		advertised = append(advertised, modelsources.IntegrationModel{
+			ID: "google/" + native, Provider: "google", NativeID: native, APIs: []string{"gemini_generate_content"},
+		})
+	}
+	built := modelsources.Build(models.All(), []modelsources.Source{modelsources.LLMIntegration(&modelsources.LLMIntegrationConfig{
+		Name: "llm", Host: "llm.int.exe.xyz", URL: "https://llm.int.exe.xyz", Models: advertised,
+	}, "")}, &http.Client{}, nil)
+	mgr, err := models.NewManager(&models.Config{Models: built, Logger: slog.Default()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{db: testDB(t), llmManager: mgr, logger: slog.Default()}
+
+	rec := httptest.NewRecorder()
+	s.handleModels(rec, httptest.NewRequest(http.MethodGet, "/api/models", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())
+	}
+	var got []ModelInfo
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	listed := map[string]ModelInfo{}
+	for _, m := range got {
+		listed[m.ID] = m
+	}
+	for id, want := range map[string]struct {
+		tier    int
+		upgrade string
+	}{
+		"gemini-4-neon":     {tier: models.Tier1},
+		"gemini-4-hydrogen": {tier: models.Tier1},
+		"gemini-4-carbon":   {tier: models.Tier1},
+		"gemini-4-argon":    {tier: models.Tier2},
+		"gemini-3.8-flash":  {tier: models.Tier2, upgrade: "gemini-4-hydrogen"},
+		"gemini-3.1-pro":    {tier: models.Tier2, upgrade: "gemini-4-neon"},
+	} {
+		m, ok := listed[id]
+		if !ok {
+			t.Errorf("%s missing from %+v", id, got)
+			continue
+		}
+		var upgrade string
+		if m.Upgrade != nil {
+			upgrade = m.Upgrade.To
+			if m.Upgrade.Kind != string(models.UpgradeGeneration) || m.Upgrade.Line != "Gemini" {
+				t.Errorf("%s upgrade = %+v", id, m.Upgrade)
+			}
+		}
+		if m.Tier != want.tier || upgrade != want.upgrade {
+			t.Errorf("%s tier = %d upgrade = %q, want %d %q", id, m.Tier, upgrade, want.tier, want.upgrade)
+		}
+	}
+}
+
 func TestAssignModelTiersKeepsCustomModelsProminent(t *testing.T) {
 	modelList := []ModelInfo{
 		{ID: "gpt-5.6-sol", Source: "llm.int.exe.xyz", Ready: true},

@@ -30,6 +30,8 @@ func TestBestUpgrade(t *testing.T) {
 		"gpt-5.4-mini":                  "gpt-6.1-terra/generation/OpenAI",
 		"gpt-5.4-nano":                  "gpt-6-luna/generation/OpenAI",
 		"deepseek-v4.1-flash-fireworks": "deepseek-v4.1-flash-1017-fireworks/version/DeepSeek Flash",
+		"gemini-3.1-pro":                "gemini-4-neon/generation/Gemini",
+		"gemini-3.8-flash":              "gemini-4-hydrogen/generation/Gemini",
 	}
 	for _, id := range IDs() {
 		to, kind, line := BestUpgrade(id, ready)
@@ -65,6 +67,10 @@ func TestBestUpgradeFallsBackPastMissingTarget(t *testing.T) {
 	// 6.1 Terra is unavailable; the ready 5.6 Terra still beats the mini.
 	if to, kind, line := BestUpgrade("gpt-5.4-mini", map[string]bool{"gpt-5.6-terra": true}); to != "gpt-5.6-terra" || kind != UpgradeGeneration || line != "OpenAI" {
 		t.Fatalf("got %q %q %q", to, kind, line)
+	}
+	// Without Neon, Gemini 3.1 Pro's successor is Carbon.
+	if to, kind, _ := BestUpgrade("gemini-3.1-pro", map[string]bool{"gemini-4-carbon": true, "gemini-4-hydrogen": true}); to != "gemini-4-carbon" || kind != UpgradeGeneration {
+		t.Fatalf("got %q %q", to, kind)
 	}
 	// Codex reaches the Sol line, not the Luna the tier list hides it behind.
 	if to, _, _ := BestUpgrade("gpt-5.3-codex", map[string]bool{"gpt-6-luna": true, "gpt-6.1-sol": true}); to != "gpt-6.1-sol" {

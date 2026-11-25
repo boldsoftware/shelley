@@ -1267,12 +1267,13 @@ func TestIntegrationBuildsGeminiModels(t *testing.T) {
 	}
 	bs := Build(models.All(), []Source{LLMIntegration(&LLMIntegrationConfig{
 		Name: "llm", Host: "llm.int.exe.xyz", URL: srv.URL,
-		Models: []IntegrationModel{gemini("gemini-3.1-pro-preview"), gemini("gemini-4-neon")},
+		Models: []IntegrationModel{gemini("gemini-3.1-pro-preview"), gemini("gemini-4-neon"), gemini("gemini-4-argon")},
 	}, "")}, &http.Client{}, nil)
 
 	for _, want := range []struct{ id, native string }{
-		{"gemini-3.1-pro", "gemini-3.1-pro-preview"}, // a Shelley catalog model
+		{"gemini-3.1-pro", "gemini-3.1-pro-preview"}, // Shelley catalog models
 		{"gemini-4-neon", "gemini-4-neon"},
+		{"gemini-4-argon", "gemini-4-argon"}, // not in Shelley's catalog
 	} {
 		b := findBuilt(bs, want.id)
 		if b == nil {

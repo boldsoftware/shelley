@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -55,6 +56,28 @@ func TestGPT62InBuiltInCatalog(t *testing.T) {
 		if m.Provider != ProviderOpenAI || m.APIModelName != id || m.Description != description ||
 			m.APIType != APITypeOpenAIResponses || m.DefaultBaseURL != DefaultOpenAIBaseURL || m.OpenAI.ModelName != id {
 			t.Fatalf("%s = %+v", id, m)
+		}
+	}
+}
+
+func TestGemini4InBuiltInCatalog(t *testing.T) {
+	index := func(id string) int { return slices.IndexFunc(All(), func(m Model) bool { return m.ID == id }) }
+	for id, description := range map[string]string{
+		"gemini-4-neon": "Gemini 4 Neon", "gemini-4-hydrogen": "Gemini 4 Hydrogen", "gemini-4-carbon": "Gemini 4 Carbon",
+	} {
+		m := ByID(id)
+		if m == nil {
+			t.Fatalf("%s not in built-in catalog", id)
+		}
+		if m.Provider != ProviderGemini || m.APIModelName != id || m.Description != description ||
+			m.APIType != APITypeGemini || m.DefaultBaseURL != DefaultGeminiBaseURL {
+			t.Fatalf("%s = %+v", id, m)
+		}
+		// Gemini 4 holds the flagship slot; 3.x stays selectable further down.
+		for _, old := range []string{"gemini-3.1-pro", "gemini-3.8-flash"} {
+			if index(old) < 0 || index(id) > index(old) {
+				t.Fatalf("%s at %d, %s at %d", id, index(id), old, index(old))
+			}
 		}
 	}
 }

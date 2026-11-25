@@ -180,6 +180,25 @@ func TestAssignTiers(t *testing.T) {
 		}
 	})
 
+	t.Run("Gemini 4 shadows Gemini 3.x", func(t *testing.T) {
+		tiers := AssignTiers([]string{"gemini-4-neon", "gemini-4-hydrogen", "gemini-4-carbon", "gemini-3.8-flash", "gemini-3.1-pro"})
+		for id, want := range map[string]int{
+			"gemini-4-neon": Tier1, "gemini-4-hydrogen": Tier1, "gemini-4-carbon": Tier1,
+			"gemini-3.8-flash": Tier2, "gemini-3.1-pro": Tier2,
+		} {
+			if tiers[id] != want {
+				t.Errorf("%s tier = %d, want %d", id, tiers[id], want)
+			}
+		}
+	})
+
+	t.Run("Gemini 3.x stays prominent without Gemini 4", func(t *testing.T) {
+		tiers := AssignTiers([]string{"gemini-3.8-flash", "gemini-3.1-pro"})
+		if tiers["gemini-3.8-flash"] != Tier1 || tiers["gemini-3.1-pro"] != Tier1 {
+			t.Fatalf("tiers = %v", tiers)
+		}
+	})
+
 	t.Run("every input id is assigned a tier", func(t *testing.T) {
 		avail := IDs()
 		tiers := AssignTiers(avail)

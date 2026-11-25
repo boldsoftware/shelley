@@ -75,6 +75,12 @@ eq("kimi-k2.6-fireworks", "Kimi K2.6");
 eq("minimax-m3", "MiniMax M3");
 eq("minimax-m2p7", "MiniMax M2.7");
 eq("qwen3.7-plus-fireworks", "Qwen3.7 Plus");
+eq("gemini-4-neon", "Gemini 4 Neon");
+eq("gemini-4-hydrogen", "Gemini 4 Hydrogen");
+eq("gemini-4-carbon", "Gemini 4 Carbon");
+eq("gemini-4-argon", "Gemini 4 Argon");
+eq("gemini-3.8-flash", "Gemini 3.8 Flash");
+eq("gemini-3.1-pro", "Gemini 3.1 Pro");
 
 // Unknown ids pass through verbatim.
 eq("predictable", "predictable");

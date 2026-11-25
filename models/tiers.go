@@ -79,6 +79,9 @@ var shadowPairs = []shadowPair{
 	// 1017 is a minor update to V4.1 Flash at the identical rate card, better on
 	// every axis DeepSeek reports, and shorter-winded per task.
 	{Better: "deepseek-v4.1-flash-1017-fireworks", Worse: "deepseek-v4.1-flash-fireworks"},
+	// Gemini 4 dropped the Pro name: Neon and Carbon succeed 3.1 Pro.
+	{Better: "gemini-4-neon", Worse: "gemini-3.1-pro"},
+	{Better: "gemini-4-carbon", Worse: "gemini-3.1-pro"},
 
 	// Arguable / cross-family supersessions. We still encode them so the
 	// default list stays lean; the reasoning is noted inline.
@@ -94,6 +97,9 @@ var shadowPairs = []shadowPair{
 	{Better: "gpt-5.6-terra", Worse: "claude-sonnet-5"},   // cheaper and stronger, and it doesn't run away with fan-out work
 	{Better: "gpt-5.6-luna", Worse: "claude-haiku-4.5"},
 	{Better: "gpt-5.6-luna", Worse: "gpt-5.3-codex"},
+	// Hydrogen is Gemini 4's fast, cheap model, in Flash's place. It costs twice
+	// as much as 3.8 Flash until Flash's price rises to match on 2027-01-01.
+	{Better: "gemini-4-hydrogen", Worse: "gemini-3.8-flash"},
 }
 
 // AssignTiers computes the tier (Tier1 or Tier2) for each of the given model

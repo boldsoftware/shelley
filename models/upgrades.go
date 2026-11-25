@@ -19,13 +19,16 @@ const (
 )
 
 // generationEdges are the hand-written hops out of the old GPT-5.x names,
-// which carry no size in their id.
+// which carry no size in their id, and out of Gemini 3.x Pro and Flash,
+// which Gemini 4 renamed.
 var generationEdges = map[string]string{
-	"gpt-5.5":       "gpt-6-sol",
-	"gpt-5.4":       "gpt-6-sol",
-	"gpt-5.3-codex": "gpt-6-sol",
-	"gpt-5.4-mini":  "gpt-6.1-terra",
-	"gpt-5.4-nano":  "gpt-6-luna",
+	"gpt-5.5":          "gpt-6-sol",
+	"gpt-5.4":          "gpt-6-sol",
+	"gpt-5.3-codex":    "gpt-6-sol",
+	"gpt-5.4-mini":     "gpt-6.1-terra",
+	"gpt-5.4-nano":     "gpt-6-luna",
+	"gemini-3.1-pro":   "gemini-4-neon",
+	"gemini-3.8-flash": "gemini-4-hydrogen",
 }
 
 // lineTokens are an id's name parts with version-like ones (4.7, v4.1, 1017)
@@ -76,6 +79,7 @@ var providerNames = map[Provider]string{
 	ProviderOpenAI:    "OpenAI",
 	ProviderAnthropic: "Anthropic",
 	ProviderFireworks: "Fireworks",
+	ProviderGemini:    "Gemini",
 	ProviderBuiltIn:   "Shelley",
 }
 

@@ -84,6 +84,9 @@ export const DEFAULT_MODELS: Record<ProviderType, { name: string; model_name: st
     { name: "GPT-5.3 Codex", model_name: "gpt-5.3-codex" },
   ],
   gemini: [
+    { name: "Gemini 4 Neon", model_name: "gemini-4-neon" },
+    { name: "Gemini 4 Hydrogen", model_name: "gemini-4-hydrogen" },
+    { name: "Gemini 4 Carbon", model_name: "gemini-4-carbon" },
     { name: "Gemini 3.1 Pro", model_name: "gemini-3.1-pro-preview" },
     { name: "Gemini 3.8 Flash", model_name: "gemini-3.8-flash" },
     { name: "Gemini 3.6 Flash", model_name: "gemini-3.6-flash" },

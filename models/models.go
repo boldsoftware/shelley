@@ -328,13 +328,18 @@ func All() []Model {
 			OpenAI: oai.GLM53FlashFireworks,
 		},
 		{
-			ID: "gemini-3.1-pro", Provider: ProviderGemini,
-			Description: "Gemini 3.1 Pro", APIModelName: "gemini-3.1-pro-preview",
+			ID: "gemini-4-neon", Provider: ProviderGemini,
+			Description: "Gemini 4 Neon", APIModelName: "gemini-4-neon",
 			APIType: APITypeGemini, DefaultBaseURL: DefaultGeminiBaseURL,
 		},
 		{
-			ID: "gemini-3.8-flash", Provider: ProviderGemini,
-			Description: "Gemini 3.8 Flash", APIModelName: "gemini-3.8-flash",
+			ID: "gemini-4-hydrogen", Provider: ProviderGemini,
+			Description: "Gemini 4 Hydrogen", APIModelName: "gemini-4-hydrogen",
+			APIType: APITypeGemini, DefaultBaseURL: DefaultGeminiBaseURL,
+		},
+		{
+			ID: "gemini-4-carbon", Provider: ProviderGemini,
+			Description: "Gemini 4 Carbon", APIModelName: "gemini-4-carbon",
 			APIType: APITypeGemini, DefaultBaseURL: DefaultGeminiBaseURL,
 		},
 		{
@@ -407,6 +412,16 @@ func All() []Model {
 			Description: "GPT-5.3 Codex", APIModelName: oai.GPT53Codex.ModelName,
 			APIType: APITypeOpenAIResponses, DefaultBaseURL: DefaultOpenAIBaseURL,
 			OpenAI: oai.GPT53Codex,
+		},
+		{
+			ID: "gemini-3.1-pro", Provider: ProviderGemini,
+			Description: "Gemini 3.1 Pro", APIModelName: "gemini-3.1-pro-preview",
+			APIType: APITypeGemini, DefaultBaseURL: DefaultGeminiBaseURL,
+		},
+		{
+			ID: "gemini-3.8-flash", Provider: ProviderGemini,
+			Description: "Gemini 3.8 Flash", APIModelName: "gemini-3.8-flash",
+			APIType: APITypeGemini, DefaultBaseURL: DefaultGeminiBaseURL,
 		},
 		{
 			ID: "deepseek-v4.1-flash-1017-fireworks", Provider: ProviderFireworks,
