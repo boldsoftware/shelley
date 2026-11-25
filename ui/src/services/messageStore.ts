@@ -467,6 +467,7 @@ function convRange(id: string): IDBKeyRange {
 }
 
 type Listener = () => void;
+type TransientListener = (working?: boolean) => void;
 
 // ─── MessageStore ─────────────────────────────────────────────────────────────
 
@@ -530,7 +531,7 @@ export class MessageStore {
   /** One disk read/decrypt per conversation, even if several load triggers race. */
   private hydrations = new Map<string, Promise<ConversationCacheRecord | null>>();
   private listenersById = new Map<string, Set<Listener>>();
-  private transientListenersById = new Map<string, Set<Listener>>();
+  private transientListenersById = new Map<string, Set<TransientListener>>();
   private allListeners = new Set<Listener>();
   /** Pending write-behind operations. `settle()` awaits these. */
   private inflight = new Set<Promise<unknown>>();
@@ -1880,7 +1881,7 @@ export class MessageStore {
     const t = this.getTransient(id);
     if (t.agentWorking === working && !notifyUnchanged) return;
     t.agentWorking = working;
-    this.notifyTransient(id);
+    this.notifyTransient(id, working);
   }
 
   resetTransient(id: string): void {
@@ -2120,7 +2121,7 @@ export class MessageStore {
     };
   }
 
-  subscribeTransient(id: string, cb: Listener): () => void {
+  subscribeTransient(id: string, cb: TransientListener): () => void {
     let set = this.transientListenersById.get(id);
     if (!set) {
       set = new Set();
@@ -2149,10 +2150,10 @@ export class MessageStore {
     for (const cb of this.allListeners) cb();
   }
 
-  private notifyTransient(id: string): void {
+  private notifyTransient(id: string, working?: boolean): void {
     perfCount("store.notifyTransient");
     const set = this.transientListenersById.get(id);
-    if (set) for (const cb of set) cb();
+    if (set) for (const cb of set) cb(working);
   }
 }
 
