@@ -410,6 +410,28 @@ conversation-list hash.
 - `GET/POST/PUT/DELETE /api/notification-channels[/<id>]`,
   `GET /api/notification-channel-types` — notification CRUD.
 
+### Defaults
+
+A key-value store of JSON values that clients keep their settings in
+(capability `defaults`); Shelley itself never reads them. Prefix keys with
+the client's name (exehome uses `exehome.`). A key is 1–128 letters,
+digits, `.`, `_` or `-`, starting with a letter or digit; a value is any
+JSON but `null`, at most 1 MiB compacted. An entry is `{"key", "value",
+"version", "created_at", "updated_at"}`: `version` counts the key's
+changes, deleting included, so it never repeats, even for a key made
+again; the times are to the millisecond, and `updated_at` moves on every
+change.
+
+- `GET /api/defaults?prefix=` — `{"defaults": [entry, ...]}` whose keys
+  start with `prefix` (literally; all if empty), by key.
+- `GET /api/defaults/<key>` — the entry, or `404`.
+- `POST /api/defaults/<key>` — `{"value", "version"?}` → the entry. Writing
+  the value the key has makes no new version. With `version`, the write
+  happens only if the key is at that version (`0`: it doesn't exist), else
+  `409`, for read-modify-write.
+- `DELETE /api/defaults/<key>?version=` — `204`, or `404`; with
+  `version`, `409` unless the key is at it (`0`: it doesn't exist).
+
 ### Profiles
 
 A profile is a named set of conversation settings: `model` (`""` means the

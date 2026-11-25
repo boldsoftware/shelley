@@ -56,6 +56,9 @@ func Capabilities() []string {
 		// clients relay Live's events and follow its instructions. See
 		// /api/conversation/<id>/live-session/<session>/{stream,events}.
 		"live-call-events",
+		// "defaults": a key-value store of JSON values for clients'
+		// settings. See GET/POST /api/defaults.
+		"defaults",
 	}
 }
 

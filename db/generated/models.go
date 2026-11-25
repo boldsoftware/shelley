@@ -111,6 +111,14 @@ type ConversationVm struct {
 	ReplacedAt      string `json:"replaced_at"`
 }
 
+type Default struct {
+	Key       string    `json:"key"`
+	Value     *string   `json:"value"`
+	Version   int64     `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type LiveCallTranscript struct {
 	ConversationID string    `json:"conversation_id"`
 	Call           int64     `json:"call"`

@@ -767,6 +767,12 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	api.HandleFunc("POST /api/embed-origins", s.handleAddEmbedOrigin)
 	api.HandleFunc("DELETE /api/embed-origins", s.handleDeleteEmbedOrigin)
 
+	// Defaults: a key-value store clients keep their settings in.
+	api.HandleFunc("GET /api/defaults", s.handleListDefaults)
+	api.HandleFunc("GET /api/defaults/{key}", s.handleGetDefault)
+	api.HandleFunc("POST /api/defaults/{key}", s.handlePostDefault)
+	api.HandleFunc("DELETE /api/defaults/{key}", s.handleDeleteDefault)
+
 	// Version endpoints
 	mux.HandleFunc("GET /version", s.handleVersion)
 	mux.HandleFunc("GET /version-check", s.handleVersionCheck)
