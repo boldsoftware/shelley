@@ -141,6 +141,7 @@ type conversationWithStateForTS struct {
 	ExternalEndpoint        *string                      `json:"external_endpoint"`
 	NextPromptSuggestion    string                       `json:"next_prompt_suggestion"`
 	NextPromptSuggestionSeq int64                        `json:"next_prompt_suggestion_seq"`
+	NextPromptQuickReplies  string                       `json:"next_prompt_quick_replies"`
 	Working                 bool                         `json:"working"`
 	GitRepoRoot             string                       `json:"git_repo_root,omitempty"`
 	GitWorktreeRoot         string                       `json:"git_worktree_root,omitempty"`

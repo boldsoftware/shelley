@@ -33,6 +33,7 @@ function conversation(
     external_endpoint: null,
     next_prompt_suggestion: "",
     next_prompt_suggestion_seq: 0,
+    next_prompt_quick_replies: "[]",
     running_background_jobs: 0,
     ...overrides,
   };

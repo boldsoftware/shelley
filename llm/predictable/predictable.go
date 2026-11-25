@@ -1489,7 +1489,10 @@ That's a variety of table widths for testing!`
 
 // makeNextPromptSuggestionResponse suggests asking for more about the reply
 // the suggestion request follows, as an echo so that sending it works too.
-// A reply of "no suggestion" gets none.
+// A reply of "no suggestion" gets none. A reply whose last line is
+// "Quick replies: a,b" offers those, split at commas but otherwise verbatim
+// so tests can try what the server keeps; otherwise, one ending in "?"
+// offers "Yes" and "No".
 func (s *Service) makeNextPromptSuggestionResponse(req *llm.Request, inputTokens uint64) *llm.Response {
 	var reply string
 	if n := len(req.Messages); n >= 2 {
@@ -1504,7 +1507,14 @@ func (s *Service) makeNextPromptSuggestionResponse(req *llm.Request, inputTokens
 		runes := []rune(strings.Join(strings.Fields(reply), " "))
 		suggestion = "echo: More about " + string(runes[:min(len(runes), 100)])
 	}
-	text, _ := json.Marshal(map[string]any{"suggestion": suggestion})
+	quickReplies := []string{}
+	lines := strings.Split(strings.TrimSpace(reply), "\n")
+	if list, ok := strings.CutPrefix(lines[len(lines)-1], "Quick replies: "); ok {
+		quickReplies = strings.Split(list, ",")
+	} else if strings.HasSuffix(strings.TrimSpace(reply), "?") {
+		quickReplies = []string{"Yes", "No"}
+	}
+	text, _ := json.Marshal(map[string]any{"suggestion": suggestion, "quick_replies": quickReplies})
 	return s.makeResponse(string(text), inputTokens)
 }
 

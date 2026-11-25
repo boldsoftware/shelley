@@ -84,6 +84,7 @@ type Conversation struct {
 	NextPromptSuggestion    string     `json:"next_prompt_suggestion"`
 	NextPromptSuggestionSeq int64      `json:"next_prompt_suggestion_seq"`
 	DraftUpdatedAt          *time.Time `json:"draft_updated_at"`
+	NextPromptQuickReplies  string     `json:"next_prompt_quick_replies"`
 }
 
 type ConversationTheme struct {

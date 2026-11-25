@@ -2104,3 +2104,46 @@ func TestDraftUpdatedAtIncreases(t *testing.T) {
 		}
 	}
 }
+
+// Quick replies are written with the suggestion, under its sequence id, and
+// read back as written; none reads back as nil.
+func TestSetNextPromptSuggestionStoresQuickReplies(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	ctx := t.Context()
+	conv, err := database.CreateConversation(ctx, nil, true, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conv.NextPromptQuickReplies != "[]" {
+		t.Fatalf("new conversation quick replies = %q, want []", conv.NextPromptQuickReplies)
+	}
+	state := func() (string, string, int64) {
+		t.Helper()
+		c, err := database.GetConversationByID(ctx, conv.ConversationID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.NextPromptSuggestion, c.NextPromptQuickReplies, c.NextPromptSuggestionSeq
+	}
+	usage := llm.PurposedUsage{Purpose: "next_prompt_suggestion"}
+	if _, err := database.SetNextPromptSuggestion(ctx, conv.ConversationID, 5, "Commit it", []string{"Yes", "Option B"}, usage); err != nil {
+		t.Fatal(err)
+	}
+	if text, replies, seq := state(); text != "Commit it" || replies != `["Yes","Option B"]` || seq != 5 {
+		t.Fatalf("state = %q %q %d", text, replies, seq)
+	}
+	// An older turn's suggestion replaces neither.
+	if _, err := database.SetNextPromptSuggestion(ctx, conv.ConversationID, 4, "Stale", []string{"No"}, usage); err != nil {
+		t.Fatal(err)
+	}
+	if text, replies, seq := state(); text != "Commit it" || replies != `["Yes","Option B"]` || seq != 5 {
+		t.Fatalf("after a stale write, state = %q %q %d", text, replies, seq)
+	}
+	if _, err := database.SetNextPromptSuggestion(ctx, conv.ConversationID, 7, "", nil, usage); err != nil {
+		t.Fatal(err)
+	}
+	if text, replies, seq := state(); text != "" || replies != "[]" || seq != 7 {
+		t.Fatalf("after a write of none, state = %q %q %d", text, replies, seq)
+	}
+}

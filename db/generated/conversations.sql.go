@@ -14,7 +14,7 @@ const archiveConversation = `-- name: ArchiveConversation :one
 UPDATE conversations
 SET archived = TRUE
 WHERE conversation_id = ?
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 func (q *Queries) ArchiveConversation(ctx context.Context, conversationID string) (Conversation, error) {
@@ -43,6 +43,7 @@ func (q *Queries) ArchiveConversation(ctx context.Context, conversationID string
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -163,7 +164,7 @@ func (q *Queries) CountConversationsByGeneration(ctx context.Context) ([]CountCo
 const createChannelConversation = `-- name: CreateChannelConversation :one
 INSERT INTO conversations (conversation_id, user_initiated, model, conversation_options, external_conversation_id, external_endpoint)
 VALUES (?, TRUE, ?, ?, ?, ?)
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 type CreateChannelConversationParams struct {
@@ -206,6 +207,7 @@ func (q *Queries) CreateChannelConversation(ctx context.Context, arg CreateChann
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -213,7 +215,7 @@ func (q *Queries) CreateChannelConversation(ctx context.Context, arg CreateChann
 const createConversation = `-- name: CreateConversation :one
 INSERT INTO conversations (conversation_id, slug, user_initiated, cwd, model, conversation_options)
 VALUES (?, ?, ?, ?, ?, ?)
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 type CreateConversationParams struct {
@@ -258,6 +260,7 @@ func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversation
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -265,7 +268,7 @@ func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversation
 const createDraftConversation = `-- name: CreateDraftConversation :one
 INSERT INTO conversations (conversation_id, slug, user_initiated, cwd, model, conversation_options, is_draft, draft, draft_updated_at)
 VALUES (?, ?, TRUE, ?, ?, ?, TRUE, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 type CreateDraftConversationParams struct {
@@ -313,6 +316,7 @@ func (q *Queries) CreateDraftConversation(ctx context.Context, arg CreateDraftCo
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -320,7 +324,7 @@ func (q *Queries) CreateDraftConversation(ctx context.Context, arg CreateDraftCo
 const createSubagentConversation = `-- name: CreateSubagentConversation :one
 INSERT INTO conversations (conversation_id, slug, user_initiated, cwd, parent_conversation_id)
 VALUES (?, ?, FALSE, ?, ?)
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 type CreateSubagentConversationParams struct {
@@ -361,6 +365,7 @@ func (q *Queries) CreateSubagentConversation(ctx context.Context, arg CreateSuba
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -410,7 +415,7 @@ func (q *Queries) ForceUpdateConversationModel(ctx context.Context, arg ForceUpd
 }
 
 const getConversation = `-- name: GetConversation :one
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at FROM conversations
+SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies FROM conversations
 WHERE conversation_id = ?
 `
 
@@ -440,12 +445,13 @@ func (q *Queries) GetConversation(ctx context.Context, conversationID string) (C
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
 
 const getConversationBySlug = `-- name: GetConversationBySlug :one
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at FROM conversations
+SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies FROM conversations
 WHERE slug = ?
 `
 
@@ -475,12 +481,13 @@ func (q *Queries) GetConversationBySlug(ctx context.Context, slug *string) (Conv
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
 
 const getConversationBySlugAndParent = `-- name: GetConversationBySlugAndParent :one
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at FROM conversations
+SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies FROM conversations
 WHERE slug = ? AND parent_conversation_id = ?
 `
 
@@ -515,6 +522,7 @@ func (q *Queries) GetConversationBySlugAndParent(ctx context.Context, arg GetCon
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -690,7 +698,7 @@ func (q *Queries) GetSubagentUsage(ctx context.Context, parentConversationID *st
 }
 
 const getSubagents = `-- name: GetSubagents :many
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at FROM conversations
+SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies FROM conversations
 WHERE parent_conversation_id = ?
 ORDER BY created_at ASC
 `
@@ -727,6 +735,7 @@ func (q *Queries) GetSubagents(ctx context.Context, parentConversationID *string
 			&i.NextPromptSuggestion,
 			&i.NextPromptSuggestionSeq,
 			&i.DraftUpdatedAt,
+			&i.NextPromptQuickReplies,
 		); err != nil {
 			return nil, err
 		}
@@ -790,7 +799,7 @@ SET current_generation = current_generation + 1,
     turn_interrupted = FALSE,
     updated_at = CURRENT_TIMESTAMP
 WHERE conversation_id = ?
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 func (q *Queries) IncrementConversationGeneration(ctx context.Context, conversationID string) (Conversation, error) {
@@ -819,6 +828,7 @@ func (q *Queries) IncrementConversationGeneration(ctx context.Context, conversat
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -856,7 +866,7 @@ func (q *Queries) ListAgentWorkingConversationIDs(ctx context.Context) ([]string
 }
 
 const listAllConversations = `-- name: ListAllConversations :many
-SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq, c.draft_updated_at,
+SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq, c.draft_updated_at, c.next_prompt_quick_replies,
   -- See conversation_previews.
   CAST(COALESCE((
     SELECT p.preview_packed FROM conversation_previews p
@@ -937,6 +947,7 @@ func (q *Queries) ListAllConversations(ctx context.Context, arg ListAllConversat
 			&i.Conversation.NextPromptSuggestion,
 			&i.Conversation.NextPromptSuggestionSeq,
 			&i.Conversation.DraftUpdatedAt,
+			&i.Conversation.NextPromptQuickReplies,
 			&i.PreviewPacked,
 			&i.MaxSequenceID,
 			&i.ParticipantsJson,
@@ -957,7 +968,7 @@ func (q *Queries) ListAllConversations(ctx context.Context, arg ListAllConversat
 }
 
 const listArchivedConversations = `-- name: ListArchivedConversations :many
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at FROM conversations
+SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies FROM conversations
 WHERE archived = TRUE
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?
@@ -1000,6 +1011,7 @@ func (q *Queries) ListArchivedConversations(ctx context.Context, arg ListArchive
 			&i.NextPromptSuggestion,
 			&i.NextPromptSuggestionSeq,
 			&i.DraftUpdatedAt,
+			&i.NextPromptQuickReplies,
 		); err != nil {
 			return nil, err
 		}
@@ -1015,7 +1027,7 @@ func (q *Queries) ListArchivedConversations(ctx context.Context, arg ListArchive
 }
 
 const listChannelConversationsWithQueuedMessages = `-- name: ListChannelConversationsWithQueuedMessages :many
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at FROM conversations
+SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies FROM conversations
 WHERE queued_messages != '[]' AND (external_conversation_id IS NOT NULL OR EXISTS (
     SELECT 1 FROM json_each(CASE WHEN json_valid(queued_messages) THEN queued_messages ELSE '[]' END)
     WHERE json_extract(value, '$.user_data.action_run_id') IS NOT NULL
@@ -1059,6 +1071,7 @@ func (q *Queries) ListChannelConversationsWithQueuedMessages(ctx context.Context
 			&i.NextPromptSuggestion,
 			&i.NextPromptSuggestionSeq,
 			&i.DraftUpdatedAt,
+			&i.NextPromptQuickReplies,
 		); err != nil {
 			return nil, err
 		}
@@ -1074,7 +1087,7 @@ func (q *Queries) ListChannelConversationsWithQueuedMessages(ctx context.Context
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq, c.draft_updated_at,
+SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq, c.draft_updated_at, c.next_prompt_quick_replies,
   -- See conversation_previews.
   CAST(COALESCE((
     SELECT p.preview_packed FROM conversation_previews p
@@ -1158,6 +1171,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.Conversation.NextPromptSuggestion,
 			&i.Conversation.NextPromptSuggestionSeq,
 			&i.Conversation.DraftUpdatedAt,
+			&i.Conversation.NextPromptQuickReplies,
 			&i.PreviewPacked,
 			&i.MaxSequenceID,
 			&i.ParticipantsJson,
@@ -1178,7 +1192,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 }
 
 const listConversationsWithQueuedTranscriptions = `-- name: ListConversationsWithQueuedTranscriptions :many
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at FROM conversations
+SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies FROM conversations
 WHERE queued_messages LIKE '%"kind":"transcription"%'
 ORDER BY created_at ASC
 `
@@ -1217,6 +1231,7 @@ func (q *Queries) ListConversationsWithQueuedTranscriptions(ctx context.Context)
 			&i.NextPromptSuggestion,
 			&i.NextPromptSuggestionSeq,
 			&i.DraftUpdatedAt,
+			&i.NextPromptQuickReplies,
 		); err != nil {
 			return nil, err
 		}
@@ -1265,7 +1280,7 @@ const promoteDraftConversation = `-- name: PromoteDraftConversation :one
 UPDATE conversations
 SET is_draft = FALSE, updated_at = CURRENT_TIMESTAMP
 WHERE conversation_id = ? AND is_draft = TRUE
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 // Clears the draft state when the user sends the first message. The text
@@ -1297,6 +1312,7 @@ func (q *Queries) PromoteDraftConversation(ctx context.Context, conversationID s
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -1315,7 +1331,7 @@ func (q *Queries) ResetAllAgentWorking(ctx context.Context) error {
 }
 
 const searchArchivedConversations = `-- name: SearchArchivedConversations :many
-SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at FROM conversations
+SELECT conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies FROM conversations
 WHERE slug LIKE '%' || ? || '%' AND archived = TRUE
 ORDER BY updated_at DESC
 LIMIT ? OFFSET ?
@@ -1359,6 +1375,7 @@ func (q *Queries) SearchArchivedConversations(ctx context.Context, arg SearchArc
 			&i.NextPromptSuggestion,
 			&i.NextPromptSuggestionSeq,
 			&i.DraftUpdatedAt,
+			&i.NextPromptQuickReplies,
 		); err != nil {
 			return nil, err
 		}
@@ -1374,7 +1391,7 @@ func (q *Queries) SearchArchivedConversations(ctx context.Context, arg SearchArc
 }
 
 const searchConversations = `-- name: SearchConversations :many
-SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq, c.draft_updated_at,
+SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq, c.draft_updated_at, c.next_prompt_quick_replies,
   -- See conversation_previews.
   CAST(COALESCE((
     SELECT p.preview_packed FROM conversation_previews p
@@ -1453,6 +1470,7 @@ func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversatio
 			&i.Conversation.NextPromptSuggestion,
 			&i.Conversation.NextPromptSuggestionSeq,
 			&i.Conversation.DraftUpdatedAt,
+			&i.Conversation.NextPromptQuickReplies,
 			&i.PreviewPacked,
 			&i.MaxSequenceID,
 			&i.ParticipantsJson,
@@ -1485,7 +1503,7 @@ WITH fts_hits AS (
   ORDER BY eligible.updated_at DESC
   LIMIT ?4 + ?3
 )
-SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq, c.draft_updated_at,
+SELECT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq, c.draft_updated_at, c.next_prompt_quick_replies,
   CAST(CASE WHEN c.slug LIKE ?1 ESCAPE '\' THEN 0 ELSE 1 END AS INTEGER) AS slug_rank,
   -- See conversation_previews.
   CAST(COALESCE((
@@ -1584,6 +1602,7 @@ func (q *Queries) SearchConversationsFTSList(ctx context.Context, arg SearchConv
 			&i.Conversation.NextPromptSuggestion,
 			&i.Conversation.NextPromptSuggestionSeq,
 			&i.Conversation.DraftUpdatedAt,
+			&i.Conversation.NextPromptQuickReplies,
 			&i.SlugRank,
 			&i.PreviewPacked,
 			&i.MaxSequenceID,
@@ -1678,7 +1697,7 @@ func (q *Queries) SearchConversationsFTSSnippets(ctx context.Context, arg Search
 }
 
 const searchConversationsWithMessages = `-- name: SearchConversationsWithMessages :many
-SELECT DISTINCT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq, c.draft_updated_at,
+SELECT DISTINCT c.conversation_id, c.slug, c.user_initiated, c.created_at, c.updated_at, c.cwd, c.archived, c.parent_conversation_id, c.model, c.conversation_options, c.current_generation, c.agent_working, c.tags, c.is_draft, c.draft, c.queued_messages, c.turn_interrupted, c.external_conversation_id, c.external_endpoint, c.next_prompt_suggestion, c.next_prompt_suggestion_seq, c.draft_updated_at, c.next_prompt_quick_replies,
   CAST(CASE WHEN c.slug LIKE '%' || ?1 || '%' THEN 0 ELSE 1 END AS INTEGER) AS slug_rank,
   -- See conversation_previews.
   CAST(COALESCE((
@@ -1767,6 +1786,7 @@ func (q *Queries) SearchConversationsWithMessages(ctx context.Context, arg Searc
 			&i.Conversation.NextPromptSuggestion,
 			&i.Conversation.NextPromptSuggestionSeq,
 			&i.Conversation.DraftUpdatedAt,
+			&i.Conversation.NextPromptQuickReplies,
 			&i.SlugRank,
 			&i.PreviewPacked,
 			&i.MaxSequenceID,
@@ -1817,7 +1837,7 @@ SET current_generation = ?1,
     turn_interrupted = ?2,
     updated_at = CURRENT_TIMESTAMP
 WHERE conversation_id = ?3
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 type SetConversationGenerationParams struct {
@@ -1855,6 +1875,7 @@ func (q *Queries) SetConversationGeneration(ctx context.Context, arg SetConversa
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -1880,13 +1901,15 @@ func (q *Queries) SetConversationTurnInterrupted(ctx context.Context, arg SetCon
 const setNextPromptSuggestion = `-- name: SetNextPromptSuggestion :exec
 UPDATE conversations
 SET next_prompt_suggestion = ?1,
-    next_prompt_suggestion_seq = ?2
-WHERE conversation_id = ?3
-  AND next_prompt_suggestion_seq <= ?2
+    next_prompt_quick_replies = ?2,
+    next_prompt_suggestion_seq = ?3
+WHERE conversation_id = ?4
+  AND next_prompt_suggestion_seq <= ?3
 `
 
 type SetNextPromptSuggestionParams struct {
 	NextPromptSuggestion    string `json:"next_prompt_suggestion"`
+	NextPromptQuickReplies  string `json:"next_prompt_quick_replies"`
 	NextPromptSuggestionSeq int64  `json:"next_prompt_suggestion_seq"`
 	ConversationID          string `json:"conversation_id"`
 }
@@ -1894,7 +1917,12 @@ type SetNextPromptSuggestionParams struct {
 // Leaves the conversation list order alone. A suggestion for an older turn
 // never replaces one for a newer turn.
 func (q *Queries) SetNextPromptSuggestion(ctx context.Context, arg SetNextPromptSuggestionParams) error {
-	_, err := q.db.ExecContext(ctx, setNextPromptSuggestion, arg.NextPromptSuggestion, arg.NextPromptSuggestionSeq, arg.ConversationID)
+	_, err := q.db.ExecContext(ctx, setNextPromptSuggestion,
+		arg.NextPromptSuggestion,
+		arg.NextPromptQuickReplies,
+		arg.NextPromptSuggestionSeq,
+		arg.ConversationID,
+	)
 	return err
 }
 
@@ -1902,7 +1930,7 @@ const unarchiveConversation = `-- name: UnarchiveConversation :one
 UPDATE conversations
 SET archived = FALSE
 WHERE conversation_id = ?
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 func (q *Queries) UnarchiveConversation(ctx context.Context, conversationID string) (Conversation, error) {
@@ -1931,6 +1959,7 @@ func (q *Queries) UnarchiveConversation(ctx context.Context, conversationID stri
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -1939,7 +1968,7 @@ const updateConversationCwd = `-- name: UpdateConversationCwd :one
 UPDATE conversations
 SET cwd = ?, updated_at = CURRENT_TIMESTAMP
 WHERE conversation_id = ?
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 type UpdateConversationCwdParams struct {
@@ -1973,6 +2002,7 @@ func (q *Queries) UpdateConversationCwd(ctx context.Context, arg UpdateConversat
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -1990,7 +2020,7 @@ SET draft = COALESCE(?1, draft),
     updated_at = CASE WHEN is_draft THEN CURRENT_TIMESTAMP ELSE updated_at END
 WHERE conversation_id = ?4
   AND (is_draft = TRUE OR (?2 IS NULL AND ?3 IS NULL))
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 type UpdateConversationDraftParams struct {
@@ -2043,6 +2073,7 @@ func (q *Queries) UpdateConversationDraft(ctx context.Context, arg UpdateConvers
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -2083,7 +2114,7 @@ const updateConversationParent = `-- name: UpdateConversationParent :one
 UPDATE conversations
 SET parent_conversation_id = ?, updated_at = CURRENT_TIMESTAMP
 WHERE conversation_id = ?
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 type UpdateConversationParentParams struct {
@@ -2117,6 +2148,7 @@ func (q *Queries) UpdateConversationParent(ctx context.Context, arg UpdateConver
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -2143,7 +2175,7 @@ const updateConversationSlug = `-- name: UpdateConversationSlug :one
 UPDATE conversations
 SET slug = ?, updated_at = CURRENT_TIMESTAMP
 WHERE conversation_id = ?
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 type UpdateConversationSlugParams struct {
@@ -2177,6 +2209,7 @@ func (q *Queries) UpdateConversationSlug(ctx context.Context, arg UpdateConversa
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }
@@ -2185,7 +2218,7 @@ const updateConversationTags = `-- name: UpdateConversationTags :one
 UPDATE conversations
 SET tags = ?
 WHERE conversation_id = ?
-RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft, queued_messages, turn_interrupted, external_conversation_id, external_endpoint, next_prompt_suggestion, next_prompt_suggestion_seq, draft_updated_at, next_prompt_quick_replies
 `
 
 type UpdateConversationTagsParams struct {
@@ -2221,6 +2254,7 @@ func (q *Queries) UpdateConversationTags(ctx context.Context, arg UpdateConversa
 		&i.NextPromptSuggestion,
 		&i.NextPromptSuggestionSeq,
 		&i.DraftUpdatedAt,
+		&i.NextPromptQuickReplies,
 	)
 	return i, err
 }

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -319,7 +320,7 @@ func TestParseNextPromptSuggestion(t *testing.T) {
 		"```json\n{\"suggestion\":\"Add a regression test\"}\n```": "error",
 		`Sure! Try asking for tests.`:                              "error",
 	} {
-		got, err := parseNextPromptSuggestion(&llm.Response{Content: []llm.Content{{Type: llm.ContentTypeText, Text: reply}}})
+		got, _, err := parseNextPromptSuggestion(&llm.Response{Content: []llm.Content{{Type: llm.ContentTypeText, Text: reply}}})
 		if err != nil {
 			got = "error"
 		}
@@ -327,4 +328,114 @@ func TestParseNextPromptSuggestion(t *testing.T) {
 			t.Errorf("parse(%q) = %q, want %q", reply, got, want)
 		}
 	}
+}
+
+// Quick replies are kept up to the first unusable one: dropping only that
+// one would promote worse replies into its place. A tap sends a reply as
+// typed, so one that would run a command is unusable. Replies past the
+// fourth are ignored, and quick replies survive an unusable suggestion.
+func TestParseNextPromptQuickReplies(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		reply string
+		want  []string
+	}{
+		{`{"suggestion":null}`, nil},
+		{`{"suggestion":null,"quick_replies":null}`, nil},
+		{`{"suggestion":null,"quick_replies":[]}`, nil},
+		{`{"suggestion":"Commit it","quick_replies":[" Yes ","Option B"]}`, []string{"Yes", "Option B"}},
+		{`{"suggestion":null,"quick_replies":["A","B","C","D","E"]}`, []string{"A", "B", "C", "D"}},
+		{`{"suggestion":null,"quick_replies":["A","B","C","D","","/archive"]}`, []string{"A", "B", "C", "D"}},
+		{`{"suggestion":null,"quick_replies":["Yes","/archive"]}`, []string{"Yes"}},
+		{`{"suggestion":null,"quick_replies":["/archive","Yes"]}`, nil},
+		{`{"suggestion":null,"quick_replies":["Yes","Push first","!ls","Commit"]}`, []string{"Yes", "Push first"}},
+		{`{"suggestion":null,"quick_replies":["Yes"," !rm -rf ~"]}`, []string{"Yes"}},
+		{`{"suggestion":null,"quick_replies":["yes","Yes","YES","` + strings.Repeat("é", 24) + `"]}`, []string{"yes", strings.Repeat("é", 24)}},
+		{`{"suggestion":null,"quick_replies":["Yes","` + strings.Repeat("é", 25) + `"]}`, []string{"Yes"}},
+		{`{"suggestion":null,"quick_replies":["Yes","one\ntwo"]}`, []string{"Yes"}},
+		{`{"suggestion":null,"quick_replies":["Yes","  "]}`, []string{"Yes"}},
+		{`{"suggestion":null,"quick_replies":["Yes",3]}`, []string{"Yes"}},
+		{`{"suggestion":null,"quick_replies":["Yes",null]}`, []string{"Yes"}},
+		{`{"suggestion":"` + strings.Repeat("x", 241) + `","quick_replies":["Yes"]}`, []string{"Yes"}},
+		{`{"suggestion":null,"quick_replies":"Yes"}`, nil},
+		{`{"suggestion":null,"quick_replies":{"Yes":1}}`, nil},
+	} {
+		_, got, _ := parseNextPromptSuggestion(&llm.Response{Content: []llm.Content{{Type: llm.ContentTypeText, Text: tc.reply}}})
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("parse(%q) quick replies = %q, want %q", tc.reply, got, tc.want)
+		}
+	}
+}
+
+// Quick replies are an extra: a malformed list costs only them, never the
+// suggestion beside it.
+func TestParseNextPromptMalformedQuickRepliesKeepSuggestion(t *testing.T) {
+	t.Parallel()
+	for _, reply := range []string{
+		`{"suggestion":"Commit it","quick_replies":"Yes"}`,
+		`{"suggestion":"Commit it","quick_replies":{"Yes":1}}`,
+		`{"suggestion":"Commit it","quick_replies":7}`,
+	} {
+		got, quickReplies, err := parseNextPromptSuggestion(&llm.Response{Content: []llm.Content{{Type: llm.ContentTypeText, Text: reply}}})
+		if got != "Commit it" || quickReplies != nil || err != nil {
+			t.Errorf("parse(%q) = %q, %q, %v; want \"Commit it\", none, no error", reply, got, quickReplies, err)
+		}
+	}
+}
+
+// Quick replies are stored with the suggestion, under its sequence id, and
+// reach clients wherever the conversation does: its stream, its fetch, and
+// the conversation list, as a JSON array in a string, like tags.
+func TestNextPromptQuickRepliesReachClients(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		h := newSuggestionHarness(t, true)
+		defer stopActiveConversationLoops(h.server)
+		mux := http.NewServeMux()
+		h.server.RegisterRoutes(mux)
+		h.NewConversation("echo: water the basil", "")
+		synctest.Wait()
+		manager, err := h.server.getOrCreateConversationManager(t.Context(), h.convID, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		next := manager.subpub.Subscribe(ctx, -1)
+
+		h.Chat("echo: Prune the rosemary?")
+		synctest.Wait()
+		conv, err := h.db.GetConversationByID(t.Context(), h.convID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := `["Yes","No"]`; conv.NextPromptQuickReplies != want || conv.NextPromptSuggestionSeq != lastTurnEnd(t, h) {
+			t.Fatalf("quick replies = %q at %d, want %q after the turn ending at %d", conv.NextPromptQuickReplies, conv.NextPromptSuggestionSeq, want, lastTurnEnd(t, h))
+		}
+		const field = `"next_prompt_quick_replies":"[\"Yes\",\"No\"]"`
+		streamed := false
+		for !streamed {
+			event, ok := next()
+			if !ok {
+				t.Fatal("the stream never carried the quick replies")
+			}
+			b, _ := json.Marshal(event)
+			streamed = strings.Contains(string(b), field)
+		}
+		if body := call(t, mux, http.StatusOK, "GET", "/api/conversation/"+h.convID, "").Body.String(); !strings.Contains(body, field) {
+			t.Fatalf("conversation fetch lacks %s: %s", field, body)
+		}
+		if body := call(t, mux, http.StatusOK, "GET", "/api/conversations", "").Body.String(); !strings.Contains(body, field) {
+			t.Fatalf("conversation list lacks %s: %s", field, body)
+		}
+
+		h.Chat("echo: Pruned.")
+		synctest.Wait()
+		if text, seq := suggestionState(t, h); text != "echo: More about Pruned." || seq != lastTurnEnd(t, h) {
+			t.Fatalf("suggestion = %q at %d, want it after the turn ending at %d", text, seq, lastTurnEnd(t, h))
+		}
+		if body := call(t, mux, http.StatusOK, "GET", "/api/conversation/"+h.convID, "").Body.String(); !strings.Contains(body, `"next_prompt_quick_replies":"[]"`) {
+			t.Fatalf("conversation fetch has quick replies after a turn with none: %s", body)
+		}
+	})
 }

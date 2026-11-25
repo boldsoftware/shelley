@@ -26,6 +26,7 @@ export interface Conversation {
   next_prompt_suggestion: string;
   next_prompt_suggestion_seq: number;
   draft_updated_at: string | null;
+  next_prompt_quick_replies: string;
 }
 
 export interface Usage {
@@ -173,6 +174,7 @@ export interface ConversationWithStateForTS {
   external_endpoint: string | null;
   next_prompt_suggestion: string;
   next_prompt_suggestion_seq: number;
+  next_prompt_quick_replies: string;
   working: boolean;
   git_repo_root?: string;
   git_worktree_root?: string;

@@ -2105,14 +2105,22 @@ func createUsageMessageTx(ctx context.Context, q *generated.Queries, conversatio
 	})
 }
 
-// SetNextPromptSuggestion records the suggested next user message for the
-// turn that ended at sequence id seq, together with the usage marker for the
-// call that produced it, in one transaction. An empty text records that the
-// model had no suggestion. Returns the marker, which the caller must publish.
-func (db *DB) SetNextPromptSuggestion(ctx context.Context, conversationID string, seq int64, text string, usage llm.PurposedUsage) (*generated.Message, error) {
+// SetNextPromptSuggestion records the suggested next user message and quick
+// replies for the turn that ended at sequence id seq, together with the
+// usage marker for the call that produced them, in one transaction. An empty
+// text records that the model had no suggestion. Returns the marker, which
+// the caller must publish.
+func (db *DB) SetNextPromptSuggestion(ctx context.Context, conversationID string, seq int64, text string, quickReplies []string, usage llm.PurposedUsage) (*generated.Message, error) {
 	usageJSON, err := marshalJSON([]llm.PurposedUsage{usage})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal usage: %w", err)
+	}
+	if quickReplies == nil {
+		quickReplies = []string{}
+	}
+	quickRepliesJSON, err := json.Marshal(quickReplies)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal quick replies: %w", err)
 	}
 	var message generated.Message
 	err = db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
@@ -2123,6 +2131,7 @@ func (db *DB) SetNextPromptSuggestion(ctx context.Context, conversationID string
 		return q.SetNextPromptSuggestion(ctx, generated.SetNextPromptSuggestionParams{
 			ConversationID:          conversationID,
 			NextPromptSuggestion:    text,
+			NextPromptQuickReplies:  string(quickRepliesJSON),
 			NextPromptSuggestionSeq: seq,
 		})
 	})

@@ -127,6 +127,7 @@ function placeholder(
     external_endpoint: null,
     next_prompt_suggestion: "",
     next_prompt_suggestion_seq: 0,
+    next_prompt_quick_replies: "[]",
     working: row.sent !== null,
     git_repo_root: sibling?.git_repo_root,
     git_worktree_root: sibling?.git_worktree_root,

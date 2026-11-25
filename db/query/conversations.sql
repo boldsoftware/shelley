@@ -607,6 +607,7 @@ ORDER BY c.current_generation;
 -- never replaces one for a newer turn.
 UPDATE conversations
 SET next_prompt_suggestion = sqlc.arg('next_prompt_suggestion'),
+    next_prompt_quick_replies = sqlc.arg('next_prompt_quick_replies'),
     next_prompt_suggestion_seq = sqlc.arg('next_prompt_suggestion_seq')
 WHERE conversation_id = sqlc.arg('conversation_id')
   AND next_prompt_suggestion_seq <= sqlc.arg('next_prompt_suggestion_seq');

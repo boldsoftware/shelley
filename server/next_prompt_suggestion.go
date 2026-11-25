@@ -22,6 +22,8 @@ var nextPromptSuggestionPrompt string
 const (
 	nextPromptSuggestionPurpose  = "next_prompt_suggestion"
 	nextPromptSuggestionMaxRunes = 240
+	nextPromptQuickRepliesMax    = 4
+	nextPromptQuickReplyMaxRunes = 24
 )
 
 // suggestNextPromptLocked asks the model, in the background, what the user
@@ -72,13 +74,13 @@ func (cm *ConversationManager) suggestNextPrompt(ctx context.Context, endSeq int
 	if err != nil {
 		return err
 	}
-	text, err := parseNextPromptSuggestion(resp)
+	text, quickReplies, err := parseNextPromptSuggestion(resp)
 	if err != nil {
 		cm.logger.Warn("unusable next prompt suggestion", "error", err)
 	}
 	// Record what was spent even if the conversation moved on meanwhile.
 	usage := llm.PurposedUsage{Purpose: nextPromptSuggestionPurpose, Usage: resp.UsageWithMeta()}
-	marker, err := s.db.SetNextPromptSuggestion(context.WithoutCancel(ctx), cm.conversationID, endSeq, text, usage)
+	marker, err := s.db.SetNextPromptSuggestion(context.WithoutCancel(ctx), cm.conversationID, endSeq, text, quickReplies, usage)
 	if err != nil {
 		return err
 	}
@@ -87,25 +89,52 @@ func (cm *ConversationManager) suggestNextPrompt(ctx context.Context, endSeq int
 }
 
 // parseNextPromptSuggestion returns the suggested message, or "" when the
-// model had none. A reply that breaks the requested format is an error.
-func parseNextPromptSuggestion(resp *llm.Response) (string, error) {
+// model had none, and its quick replies. A reply that breaks the requested
+// format is an error. So is an unusable suggestion, but then the quick
+// replies are still returned. They are kept up to the first unusable one,
+// and at most four.
+func parseNextPromptSuggestion(resp *llm.Response) (string, []string, error) {
 	var reply struct {
-		Suggestion *string `json:"suggestion"`
+		Suggestion   *string         `json:"suggestion"`
+		QuickReplies json.RawMessage `json:"quick_replies"`
 	}
 	if err := json.Unmarshal([]byte(llm.FirstText(resp)), &reply); err != nil {
 		types := make([]string, len(resp.Content))
 		for i, c := range resp.Content {
 			types[i] = c.Type.String()
 		}
-		return "", fmt.Errorf("decode %q (stop reason %v, content %v): %w", llm.FirstText(resp), resp.StopReason, types, err)
+		return "", nil, fmt.Errorf("decode %q (stop reason %v, content %v): %w", llm.FirstText(resp), resp.StopReason, types, err)
+	}
+	// A malformed list costs only the quick replies, not the suggestion.
+	var items []any
+	_ = json.Unmarshal(reply.QuickReplies, &items)
+	var quickReplies []string
+	for _, r := range items {
+		if len(quickReplies) == nextPromptQuickRepliesMax {
+			break
+		}
+		text, _ := r.(string)
+		text = strings.TrimSpace(text)
+		// A tap sends the reply as typed, so it must not run a command.
+		if text == "" || !oneLine(text, nextPromptQuickReplyMaxRunes) || strings.ContainsAny(text[:1], "/!") {
+			break
+		}
+		if !slices.ContainsFunc(quickReplies, func(q string) bool { return strings.EqualFold(q, text) }) {
+			quickReplies = append(quickReplies, text)
+		}
 	}
 	if reply.Suggestion == nil {
-		return "", nil
+		return "", quickReplies, nil
 	}
 	text := strings.TrimSpace(*reply.Suggestion)
-	lineBreak := func(r rune) bool { return unicode.In(r, unicode.Cc, unicode.Zl, unicode.Zp) }
-	if utf8.RuneCountInString(text) > nextPromptSuggestionMaxRunes || strings.ContainsFunc(text, lineBreak) {
-		return "", fmt.Errorf("not one line of at most %d characters: %q", nextPromptSuggestionMaxRunes, text)
+	if !oneLine(text, nextPromptSuggestionMaxRunes) {
+		return "", quickReplies, fmt.Errorf("not one line of at most %d characters: %q", nextPromptSuggestionMaxRunes, text)
 	}
-	return text, nil
+	return text, quickReplies, nil
+}
+
+// oneLine reports whether text is one line of at most maxRunes characters.
+func oneLine(text string, maxRunes int) bool {
+	lineBreak := func(r rune) bool { return unicode.In(r, unicode.Cc, unicode.Zl, unicode.Zp) }
+	return utf8.RuneCountInString(text) <= maxRunes && !strings.ContainsFunc(text, lineBreak)
 }
