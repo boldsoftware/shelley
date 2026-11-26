@@ -90,7 +90,7 @@ func workhorseThinkingLevel(service llm.Service) llm.ThinkingLevel {
 			return llm.ClampThinkingLevel(llm.ThinkingLevelOff, s.levels)
 		}
 		return llm.ThinkingLevelOff
-	case *gem.Service:
+	case *gem.Service, *gem.InteractionsService:
 		if levels := llm.SupportedReasoningLevels(s); llm.SupportsReasoning(s) && len(levels) > 0 {
 			return llm.ClampThinkingLevel(llm.ThinkingLevelOff, levels)
 		}
@@ -102,7 +102,7 @@ func workhorseThinkingLevel(service llm.Service) llm.ThinkingLevel {
 
 func isNativeGemini(service llm.Service) bool {
 	switch s := service.(type) {
-	case *gem.Service:
+	case *gem.Service, *gem.InteractionsService:
 		return true
 	case *loggingService:
 		return isNativeGemini(s.service)
@@ -157,6 +157,8 @@ func workhorseSupportsReasoningOff(svc llm.Service) bool {
 			(req.ReasoningEffort == "" || req.ReasoningEffort == "none" || req.ReasoningEffort == "off") &&
 			workhorseSupportsReasoningOff(s.Service)
 	case *gem.Service:
+		return s.SupportsThinkingOff()
+	case *gem.InteractionsService:
 		return s.SupportsThinkingOff()
 	case *ant.Service:
 		return s.SupportsThinkingOff()

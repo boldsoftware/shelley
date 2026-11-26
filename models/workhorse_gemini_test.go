@@ -144,3 +144,10 @@ func TestNonNativeGeminiWorkhorseKeepsThinkingOff(t *testing.T) {
 	assertReasoningDisabled(t, inner.request)
 	assertRequestUnchanged(t, request)
 }
+
+func TestInteractionsWorkhorseRequiresNativeThinkingOff(t *testing.T) {
+	svc := &gem.InteractionsService{Model: "gemini-2.5-flash"}
+	if workhorseSupportsReasoningOff(svc) {
+		t.Fatal("Interactions 2.5 Flash cannot be selected for requests that require reasoning off")
+	}
+}

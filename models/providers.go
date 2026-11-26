@@ -169,13 +169,15 @@ func (m *Manager) providerEntry(row db.ModelProvider, wire string) (serviceEntry
 		apiType = APITypeOpenAIChat
 	case "openai-responses":
 		apiType = APITypeOpenAIResponses
-	case "gemini":
+	case "gemini", "gemini-interactions":
 		apiType = APITypeGemini
-		model.ReasoningSupport = "auto"
+		if row.ProviderType == "gemini-interactions" {
+			apiType = APITypeGeminiInteractions
+		}
 		if _, known := modelsdev.LookupOutputLimit(row.Endpoint, wire); known {
-			// The adapter applies the catalog limit itself, with its streaming exceptions.
 			model.MaxTokens = 0
 		}
+		model.ReasoningSupport = "auto"
 	default:
 		return serviceEntry{}, fmt.Errorf("unsupported provider type: %s", row.ProviderType)
 	}
@@ -184,10 +186,11 @@ func (m *Manager) providerEntry(row db.ModelProvider, wire string) (serviceEntry
 	if catalog := ByID(wire); exact && catalog != nil && apiType == APITypeOpenAIResponses && catalog.APIType == apiType {
 		cfg.OpenAIModel.TextVerbosity, cfg.OpenAIModel.SupportsApplyPatch = catalog.OpenAI.TextVerbosity, catalog.OpenAI.SupportsApplyPatch
 	}
+	isGemini := apiType == APITypeGemini || apiType == APITypeGeminiInteractions
 	service := wrapReasoningService(NewService(cfg), &model).(*reasoningService)
-	service.disableWebSearch = apiType != APITypeGemini
+	service.disableWebSearch = !isGemini
 	// Advertise levels without imposing a custom-model override map.
-	if apiType != APITypeGemini {
+	if !isGemini {
 		service.levels = known.Reasoning.Levels
 	}
 
@@ -198,7 +201,7 @@ func (m *Manager) providerEntry(row db.ModelProvider, wire string) (serviceEntry
 	provider := ProviderOpenAI
 	if row.ProviderType == "anthropic" {
 		provider = ProviderAnthropic
-	} else if row.ProviderType == "gemini" {
+	} else if isGemini {
 		provider = ProviderGemini
 	}
 	return serviceEntry{

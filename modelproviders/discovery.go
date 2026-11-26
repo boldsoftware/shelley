@@ -38,7 +38,7 @@ func (m *Manager) discover(ctx context.Context, p db.ModelProvider) ([]db.Provid
 	cursorParam := "after"
 	if p.ProviderType == "anthropic" {
 		cursorParam = "after_id"
-	} else if p.ProviderType == "gemini" {
+	} else if isGeminiProvider(p.ProviderType) {
 		cursorParam = "pageToken"
 	}
 	result := []db.ProviderModel{}
@@ -91,7 +91,7 @@ func fetchModelPage(ctx context.Context, client *http.Client, providerType, targ
 	if providerType == "anthropic" {
 		req.Header.Set("x-api-key", key)
 		req.Header.Set("anthropic-version", "2023-06-01")
-	} else if providerType == "gemini" {
+	} else if isGeminiProvider(providerType) {
 		req.Header.Set("x-goog-api-key", key)
 	} else {
 		req.Header.Set("Authorization", "Bearer "+key)
@@ -116,7 +116,7 @@ func fetchModelPage(ctx context.Context, client *http.Client, providerType, targ
 	}
 	*bodyLeft -= int64(len(body))
 
-	if providerType == "gemini" {
+	if isGeminiProvider(providerType) {
 		return parseGeminiModelPage(body)
 	}
 

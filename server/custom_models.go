@@ -175,6 +175,15 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, apiModels)
 }
 
+func validateCustomModelProvider(w http.ResponseWriter, provider string) bool {
+	switch provider {
+	case "anthropic", "openai", "openai-responses", "gemini", "gemini-interactions":
+		return true
+	}
+	http.Error(w, "provider_type must be 'anthropic', 'openai', 'openai-responses', 'gemini', or 'gemini-interactions'", http.StatusBadRequest)
+	return false
+}
+
 func (s *Server) handleCreateModel(w http.ResponseWriter, r *http.Request) {
 	var req CreateModelRequest
 	if !decodeJSON(w, r, &req) {
@@ -187,9 +196,7 @@ func (s *Server) handleCreateModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate provider type
-	if req.ProviderType != "anthropic" && req.ProviderType != "openai" && req.ProviderType != "openai-responses" && req.ProviderType != "gemini" {
-		http.Error(w, "provider_type must be 'anthropic', 'openai', 'openai-responses', or 'gemini'", http.StatusBadRequest)
+	if !validateCustomModelProvider(w, req.ProviderType) {
 		return
 	}
 
@@ -273,6 +280,10 @@ func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request, model
 
 	var req UpdateModelRequest
 	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	if !validateCustomModelProvider(w, req.ProviderType) {
 		return
 	}
 

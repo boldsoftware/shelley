@@ -294,6 +294,8 @@ type Message struct {
 
 	// Origin identifies the provider request that produced an assistant message.
 	Origin *MessageOrigin `json:"Origin,omitempty"`
+	// GeminiInteractionsSteps is native replay data, not display content.
+	GeminiInteractionsSteps json.RawMessage `json:",omitempty"`
 
 	// ExcludedFromContext indicates this message should be stored but not sent back to the LLM.
 	// Used for truncated responses we want to keep for cost tracking but that would confuse the LLM.
@@ -723,17 +725,18 @@ func (t ThinkingLevel) ThinkingEffort() string {
 }
 
 type Response struct {
-	ID           string
-	Type         string
-	Role         MessageRole
-	Model        string
-	Origin       *MessageOrigin
-	Content      []Content
-	StopReason   StopReason
-	StopSequence *string
-	Usage        Usage
-	StartTime    *time.Time
-	EndTime      *time.Time
+	ID                      string
+	Type                    string
+	Role                    MessageRole
+	Model                   string
+	Origin                  *MessageOrigin
+	GeminiInteractionsSteps json.RawMessage
+	Content                 []Content
+	StopReason              StopReason
+	StopSequence            *string
+	Usage                   Usage
+	StartTime               *time.Time
+	EndTime                 *time.Time
 	// URL is the LLM API endpoint this response came from. Providers set it
 	// so the loop can record which endpoint produced the usage data.
 	URL string
@@ -754,9 +757,10 @@ type RefusalDetails struct {
 
 func (m *Response) ToMessage() Message {
 	return Message{
-		Role:    m.Role,
-		Origin:  m.Origin,
-		Content: m.Content,
+		Role:                    m.Role,
+		Origin:                  m.Origin,
+		Content:                 m.Content,
+		GeminiInteractionsSteps: m.GeminiInteractionsSteps,
 		// End of turn unless there are client tools to call (ToolUse) or the
 		// server paused mid-turn to run a server-side tool (Pause).
 		EndOfTurn: m.StopReason != StopReasonToolUse && m.StopReason != StopReasonPause,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -687,5 +688,98 @@ func TestCustomModelTestEndpoint(t *testing.T) {
 	// Verify that we got a non-empty response
 	if message == "" || message == "Test failed: empty response from model" {
 		t.Error("Got empty response error despite having a valid API key")
+	}
+}
+
+func TestCustomModelGeminiInteractionsCreateAndTest(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1beta/interactions" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w,
+			"event: step.start\ndata: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}\n\n"+
+				"event: step.delta\ndata: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"text\",\"text\":\"hello\"}}\n\n"+
+				"event: step.stop\ndata: {\"event_type\":\"step.stop\",\"index\":0}\n\n"+
+				"event: interaction.completed\ndata: {\"event_type\":\"interaction.completed\",\"interaction\":{\"status\":\"completed\",\"usage\":{\"total_input_tokens\":2,\"total_output_tokens\":1}}}\n\n")
+	}))
+	defer upstream.Close()
+
+	h := NewTestHarness(t)
+	body := fmt.Sprintf(`{
+		"display_name": "Gemini 4 Interactions",
+		"provider_type": "gemini-interactions",
+		"endpoint": %q,
+		"api_key": "test-key",
+		"model_name": "gemini-4-hydrogen",
+		"max_tokens": 65536
+	}`, upstream.URL+"/v1beta")
+
+	req := httptest.NewRequest("POST", "/api/custom-models", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.server.handleCreateModel(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("handleCreateModel status = %d: %s", w.Code, w.Body.String())
+	}
+
+	var created ModelAPI
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal created model: %v", err)
+	}
+	if created.ProviderType != "gemini-interactions" {
+		t.Errorf("ProviderType = %q, want gemini-interactions", created.ProviderType)
+	}
+
+	testReqBody := fmt.Sprintf(`{
+		"model_id": %q,
+		"provider_type": "gemini-interactions",
+		"endpoint": %q,
+		"model_name": "gemini-4-hydrogen"
+	}`, created.ModelID, upstream.URL+"/v1beta")
+	treq := httptest.NewRequest("POST", "/api/custom-models-test", strings.NewReader(testReqBody))
+	treq.Header.Set("Content-Type", "application/json")
+	tw := httptest.NewRecorder()
+	h.server.handleTestModel(tw, treq)
+	if tw.Code != http.StatusOK {
+		t.Fatalf("handleTestModel status = %d: %s", tw.Code, tw.Body.String())
+	}
+	var res map[string]any
+	if err := json.Unmarshal(tw.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal test response: %v", err)
+	}
+	if ok, _ := res["success"].(bool); !ok {
+		t.Fatalf("expected test success, got %+v", res)
+	}
+}
+
+func TestCustomModelUpdateRejectsInvalidProvider(t *testing.T) {
+	h := NewTestHarness(t)
+	model, err := h.db.CreateModel(t.Context(), generated.CreateModelParams{
+		ModelID: "update-provider", DisplayName: "Test", ProviderType: "openai",
+		Endpoint: "https://example.test/v1", ApiKey: "test-key", ModelName: "test-model",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, provider := range []string{"", "bogus"} {
+		body, err := json.Marshal(UpdateModelRequest{ProviderType: provider, DisplayName: model.DisplayName, Endpoint: model.Endpoint, ModelName: model.ModelName})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPut, "/api/custom-models/"+model.ModelID, bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.server.handleUpdateModel(rec, req, model.ModelID)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("provider %q: status=%d body=%s", provider, rec.Code, rec.Body.String())
+		}
+	}
+	stored, err := h.db.GetModel(t.Context(), model.ModelID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.ProviderType != "openai" {
+		t.Fatalf("stored provider = %q, want openai", stored.ProviderType)
 	}
 }

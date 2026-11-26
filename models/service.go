@@ -53,7 +53,7 @@ func APIEndpoint(apiType APIType, baseURL string) string {
 		return baseURL + "/v1/messages"
 	case APITypeOpenAIResponses, APITypeOpenAIChat:
 		return baseURL + "/v1"
-	case APITypeGemini:
+	case APITypeGemini, APITypeGeminiInteractions:
 		return baseURL + "/v1beta"
 	}
 	return baseURL
@@ -92,16 +92,23 @@ func NewService(cfg ServiceConfig) llm.Service {
 			Model: cfg.Model, SupportsImages_: cfg.SupportsImages, MaxTokens: cfg.MaxTokens,
 			ReasoningEffort: cfg.ReasoningEffort,
 		}
+	case APITypeGeminiInteractions:
+		return &gem.InteractionsService{
+			URL: cfg.URL, APIKey: cfg.APIKey, HTTPC: cfg.HTTPC,
+			Model: cfg.Model, SupportsImages_: cfg.SupportsImages, MaxTokens: cfg.MaxTokens,
+			ReasoningEffort: cfg.ReasoningEffort,
+		}
 	}
 	return nil
 }
 
 // customAPITypes maps a stored custom-model provider_type to its protocol.
 var customAPITypes = map[string]APIType{
-	"anthropic":        APITypeAnthropicMessages,
-	"openai":           APITypeOpenAIChat,
-	"openai-responses": APITypeOpenAIResponses,
-	"gemini":           APITypeGemini,
+	"anthropic":           APITypeAnthropicMessages,
+	"openai":              APITypeOpenAIChat,
+	"openai-responses":    APITypeOpenAIResponses,
+	"gemini":              APITypeGemini,
+	"gemini-interactions": APITypeGeminiInteractions,
 }
 
 // customServiceConfig is the ServiceConfig for a custom model row. Custom

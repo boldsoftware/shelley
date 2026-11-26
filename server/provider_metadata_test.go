@@ -9,12 +9,14 @@ import (
 	"shelley.exe.dev/llm"
 )
 
-func TestLlmDataForAPIStripsOpenAIResponsesReasoningMetadata(t *testing.T) {
+func TestLlmDataForAPIStripsProviderReplayMetadata(t *testing.T) {
 	stored, err := json.Marshal(llm.Message{
-		Role: llm.MessageRoleAssistant,
+		Role:                    llm.MessageRoleAssistant,
+		GeminiInteractionsSteps: json.RawMessage(`[{"type":"thought","signature":"private"}]`),
 		Content: []llm.Content{{
-			Type: llm.ContentTypeThinking,
-			Text: "Visible reasoning summary.",
+			Type:      llm.ContentTypeThinking,
+			Text:      "Visible reasoning summary.",
+			Signature: "opaque",
 			OpenAIResponsesReasoning: &llm.OpenAIResponsesReasoningMetadata{
 				ID:               "rs_private",
 				EncryptedContent: "encrypted-private-state",
@@ -23,7 +25,7 @@ func TestLlmDataForAPIStripsOpenAIResponsesReasoningMetadata(t *testing.T) {
 					Text: "Visible reasoning summary.",
 				}},
 			},
-		}},
+		}, {Type: llm.ContentTypeWebSearchToolResult, ToolUseID: "search_1", GeminiServerTool: json.RawMessage(`{"signature":"opaque-search"}`)}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -38,8 +40,14 @@ func TestLlmDataForAPIStripsOpenAIResponsesReasoningMetadata(t *testing.T) {
 	if err := json.Unmarshal([]byte(*apiData), &got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Content) != 1 || got.Content[0].Text != "Visible reasoning summary." {
+	if len(got.Content) != 2 || got.Content[0].Text != "Visible reasoning summary." {
 		t.Fatalf("visible content changed: %+v", got.Content)
+	}
+	if got.GeminiInteractionsSteps != nil || got.Content[0].Signature != "" || got.Content[1].GeminiServerTool != nil {
+		t.Fatal("Gemini replay data leaked to API")
+	}
+	if got.Content[1].ToolUseID != "search_1" {
+		t.Fatal("displayable search result lost its call ID")
 	}
 	if got.Content[0].OpenAIResponsesReasoning != nil {
 		t.Fatalf("provider metadata leaked to API: %+v", got.Content[0].OpenAIResponsesReasoning)

@@ -250,6 +250,10 @@ func llmDataForAPI(llmData *string, msgType, messageID string) (*string, *bool) 
 	}
 
 	changed := stripImageDataFromContents(msg.Content, messageID)
+	if msg.GeminiInteractionsSteps != nil {
+		msg.GeminiInteractionsSteps = nil
+		changed = true
+	}
 	for i := range msg.Content {
 		if msgType == string(db.MessageTypeAgent) && msg.Content[i].Type == llm.ContentTypeText {
 			// Stripping shifts the text under any Citations annotation, whose
@@ -271,6 +275,11 @@ func llmDataForAPI(llmData *string, msgType, messageID string) (*string, *bool) 
 		}
 		if msg.Content[i].OpenAIResponsesReasoning != nil {
 			msg.Content[i].OpenAIResponsesReasoning = nil
+			changed = true
+		}
+		if msg.Content[i].GeminiServerTool != nil || msg.Content[i].Signature != "" {
+			msg.Content[i].GeminiServerTool = nil
+			msg.Content[i].Signature = ""
 			changed = true
 		}
 	}

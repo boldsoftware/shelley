@@ -13,7 +13,6 @@ import (
 
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/gem/gemini"
-	"shelley.exe.dev/models/modelsdev"
 )
 
 const (
@@ -126,9 +125,11 @@ func (s *Service) buildGeminiRequest(req *llm.Request) (*gemini.Request, error) 
 		}
 
 		// Map each content item to Gemini's format
+		foreignOrigin := msg.Origin.Known() && (msg.Origin.Provider != "gemini" ||
+			(msg.Origin.Transport != "" && msg.Origin.Transport != "gemini-generate-content"))
 		for _, c := range msg.Content {
-			if msg.Origin.Known() && msg.Origin.Provider != "gemini" {
-				if c.Type == llm.ContentTypeThinking || c.Type == llm.ContentTypeRedactedThinking {
+			if foreignOrigin {
+				if c.Type == llm.ContentTypeThinking || c.Type == llm.ContentTypeRedactedThinking || len(c.GeminiServerTool) != 0 {
 					continue
 				}
 				c.Signature = ""
@@ -478,9 +479,7 @@ func convertGeminiResponse(res *gemini.Response) (*llm.Response, error) {
 func (s *Service) Provider() string { return "gemini" }
 
 func (s *Service) SupportsServerSideWebSearch() bool {
-	model := s.modelKey()
-	return strings.HasPrefix(model, "gemini-3.") || strings.HasPrefix(model, "gemini-3-") ||
-		strings.HasPrefix(model, "gemini-4-") || strings.HasPrefix(model, "gemini-4.")
+	return supportsServerSideWebSearch(s.modelKey())
 }
 
 // DefaultReasoningLevel reports the effective configured level, or the documented
@@ -501,34 +500,14 @@ func (s *Service) DefaultReasoningLevel() string {
 			}
 		}
 	}
-	if found && !caps.Supported {
-		return "off"
-	}
-	switch s.modelKey() {
-	case "gemini-4-argon", "gemini-4-carbon", "gemini-3.8-flash", "gemini-3.6-flash":
-		return "medium"
-	case "gemini-4-neon", "gemini-4-hydrogen", "gemini-3-flash-preview":
-		return "high"
-	case "gemini-2.5-flash-lite":
-		return "off"
-	}
-	return ""
+	return documentedDefaultReasoningLevel(s.modelKey(), found, caps.Supported)
 }
 
 // maxOutputTokens applies the native model limit, including streaming overrides.
 // MaxTokens can lower that limit, never raise it. Unknown models use MaxTokens or
 // DefaultMaxTokens.
 func (s *Service) maxOutputTokens() int {
-	limit, found := modelsdev.LookupOutputLimit(s.URL, s.modelName())
-	switch s.modelKey() {
-	case "gemini-4-argon", "gemini-4-carbon":
-		// The catalog's 32K limit is non-streaming; this adapter always streams.
-		limit, found = 65536, true
-	}
-	if !found {
-		return cmp.Or(s.MaxTokens, DefaultMaxTokens)
-	}
-	return min(cmp.Or(s.MaxTokens, limit), limit)
+	return maxOutputTokensFor(s.URL, s.modelName(), s.MaxTokens, DefaultMaxTokens)
 }
 
 // SupportsReasoning reports whether generic thinking controls are known.
