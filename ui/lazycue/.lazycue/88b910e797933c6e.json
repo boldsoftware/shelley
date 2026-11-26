@@ -1,0 +1,241 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Mark as unread keeps a chat bold until it is opened again, and a chat marked while open stays unread in its focused tab. Conversations {{A}} and {{B}} exist and have been read. Call \"unread A\" (or \"unread B\") returns whether the server lists that conversation as unread for this user, \"true\" or \"false\". Call \"mark B\" marks {{B}} unread from another device. Call \"reply B\" sends {{B}} the message \"echo: newer reply N\", N counting from 1, and returns once its agent has answered. \"The row of X\" is \".conversation-item[data-conversation-id=\\\"X\\\"]\", and \"X is bold\" means the row of X has the class \"conversation-item-unread\". The context menu is data-testid \"conversation-context-menu\"; its items are its elements with role menuitem (a \"selector\" scoping a \"role\"), and its item \"X\" is the one named exactly X. The chat's menu opens with the button \"More options\"; its \"Mark as unread\" is data-testid \"mark-unread\". Perform the numbered steps in order, each fully. A button \"X\" is {\"role\": \"button\", \"name\": \"X\", \"exact\": true}, with a \"selector\" to scope it when it is a row's, a menu's or a group's; but \"there is no button X\" counts {\"role\": \"button\", \"name\": \"X\"} without exact, so that a name containing X counts too. Texts that \"are exactly [...]\" are checked with assert_texts. \"There is no S\", \"no S\" or \"none\" means no element matches at all: assert_count 0, never a visibility check. Whether an element \"has the class X\" is an eval of its classList.contains('X') (polled with expect), never a visibility check: a collapsed drawer may have no size. Every selector you need is given here, so do not explore the source code or read other tests (the old Playwright spec is being replaced and does not apply): write all the steps in one run_steps call right away, and look something up only if a step fails. 1. Navigate to /new and wait for data-testid \"message-input\". The rows of {{A}} and {{B}} are visible, and neither is bold. 2. Right-click the row of {{A}} (center). The context menu's items' trimmed texts are exactly [\"Archive\",\"Rename\",\"Edit tags\",\"Mark as unread\"]. Click its item \"Mark as unread\". 3. There is no context menu element. {{A}} is bold. Call \"unread A\" expecting \"true\". 4. Right-click the row of {{A}} (center). The context menu's items' trimmed texts are exactly [\"Archive\",\"Rename\",\"Edit tags\"]. Press Escape. 5. Click the row of {{B}}. The URL ends with /c/{{B_SLUG}}, and {{B}} is not bold. 6. Click the button \"More options\", then data-testid \"mark-unread\". 7. {{B}} is bold. Call \"unread B\" expecting \"true\". Click the button \"More options\": \".overflow-menu-panel\" is visible, and there is no data-testid \"mark-unread\". Press Escape. 8. Call \"reply B\". The row of {{B}}'s \".conversation-preview\" comes to contain the text \"newer reply 1\". {{B}} is still bold, and call \"unread B\" expecting \"true\". 9. Click the row of {{A}}. {{A}} comes to be not bold, and call \"unread A\" until it returns \"false\". {{B}} is still bold. 10. Click the row of {{B}}. {{B}} comes to be not bold, and call \"unread B\" until it returns \"false\". 11. Call \"mark B\". {{B}} comes to be bold. 12. Call \"reply B\". The row of {{B}}'s \".conversation-preview\" comes to contain the text \"newer reply 2\". {{B}} is still bold, and call \"unread B\" expecting \"true\".",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/new"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{A}}\"]"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".conversation-item[data-conversation-id=\"{{B}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{A}}\"]').classList.contains('conversation-item-unread')",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{B}}\"]').classList.contains('conversation-item-unread')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{A}}\"]",
+      "button": "right"
+    },
+    {
+      "action": "assert_texts",
+      "selector": "[data-testid='conversation-context-menu'] [role='menuitem']",
+      "texts": [
+        "Archive",
+        "Rename",
+        "Edit tags",
+        "Mark as unread"
+      ]
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='conversation-context-menu'] [role='menuitem']",
+      "has_text": "Mark as unread",
+      "exact": true
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='conversation-context-menu']",
+      "count": 0
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{A}}\"]').classList.contains('conversation-item-unread')",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "unread A",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{A}}\"]",
+      "button": "right"
+    },
+    {
+      "action": "assert_texts",
+      "selector": "[data-testid='conversation-context-menu'] [role='menuitem']",
+      "texts": [
+        "Archive",
+        "Rename",
+        "Edit tags"
+      ]
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{B}}\"]"
+    },
+    {
+      "action": "assert_url",
+      "text": "/c/{{B_SLUG}}"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{B}}\"]').classList.contains('conversation-item-unread')",
+      "expect": "false"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='mark-unread']"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{B}}\"]').classList.contains('conversation-item-unread')",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "unread B",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".overflow-menu-panel"
+    },
+    {
+      "action": "assert_count",
+      "selector": "[data-testid='mark-unread']",
+      "count": 0
+    },
+    {
+      "action": "press_key",
+      "key": "Escape"
+    },
+    {
+      "action": "call",
+      "value": "reply B"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "assert_text_contains",
+          "selector": ".conversation-item[data-conversation-id=\"{{B}}\"] .conversation-preview",
+          "text": "newer reply 1"
+        }
+      ],
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{B}}\"]').classList.contains('conversation-item-unread')",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "unread B",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{A}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{A}}\"]').classList.contains('conversation-item-unread')",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "unread A",
+      "expect": "false"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{B}}\"]').classList.contains('conversation-item-unread')",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "selector": ".conversation-item[data-conversation-id=\"{{B}}\"]"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{B}}\"]').classList.contains('conversation-item-unread')",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "unread B",
+      "expect": "false"
+    },
+    {
+      "action": "call",
+      "value": "mark B"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{B}}\"]').classList.contains('conversation-item-unread')",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "reply B"
+    },
+    {
+      "action": "retry",
+      "steps": [
+        {
+          "action": "assert_text_contains",
+          "selector": ".conversation-item[data-conversation-id=\"{{B}}\"] .conversation-preview",
+          "text": "newer reply 2"
+        }
+      ],
+      "timeout": "30s"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelector('.conversation-item[data-conversation-id=\"{{B}}\"]').classList.contains('conversation-item-unread')",
+      "expect": "true"
+    },
+    {
+      "action": "call",
+      "value": "unread B",
+      "expect": "true"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-26T01:13:08.950655709Z",
+    "hostname": "exe-ci-07",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 30581,
+    "output_tokens": 4572,
+    "estimated_cost_usd": 0.09701955,
+    "ci_run": "https://buildkite.com/bold-software/exe-kite-queue/builds/25633",
+    "mode": "generated"
+  }
+}
