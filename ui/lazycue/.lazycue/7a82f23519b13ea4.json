@@ -1,0 +1,295 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A phone's diff file picker follows the ranked order, and a highlight comment uses the comment rail. Use condition waits, never sleep steps. Use the supplied selectors directly. The conversation at /c/{{SLUG}} works in a git repo whose top commit, \"Highlighted commit\", changes src/zeta.ts (line 160 becomes \"const critical = true;\"), README.md and src/alpha.ts, and carries commit highlights that rank the files zeta.ts, README.md, alpha.ts and comment on src/zeta.ts line 160 (\"The one line that matters.\") and README.md line 3 (\"Docs follow the code.\"). \"The overlay\" is the \".diff-viewer-overlay\" element; \"the files\" are the overlay's \".diff-tree-row[aria-selected]\" elements, in document order; \"the second file\" is the one at index 1 (pick it with \"nth\": 1, scoped with \"within\" the overlay). Perform the steps in order.\n1. Navigate to /c/{{SLUG}} and wait for the message input ([data-testid=\"message-input\"]) to be visible (allow 30s).\n2. Open the Diffs workspace tool: wait for the \".header\" element to be visible, then click the button with accessible name exactly \"Diffs\" inside \".chat-workspace-actions\" (when that toolbar is not shown, click the button named exactly \"More options\" and then the button whose name starts with \"Diffs\" in \".chat-overflow-popover\"). The overlay becomes visible (allow 30s).\n3. Click the first \".diff-rethink-message-files .diff-tree-code-row\" in the overlay, then click \".diff-rethink-file-jump\" to open the file picker.\n4. Assert the texts of \".diff-rethink-mobile-files .diff-tree-code-row[aria-selected] .diff-tree-label\" are exactly \"zeta.ts\", \"README.md\", \"alpha.ts\", in order (the rows include extra icons and counts; check only their .diff-tree-label children). Click the first row; \".diff-rethink-file-name\" reads \"zeta.ts\", and \".diff-rethink-file-position\" contains \"File 1 of 3\".\n5. The narrow diff is inline; the comment still shows under its line: \"the callout\" is the overlay's \".diff-highlight-callout-text\": it has exactly the text \"The one line that matters.\" and is in the viewport.\n6. A tap on the callout's button opens the comment rail, though Monaco claims touches inside the editor: tap (touch start, then touch end) the button with role \"button\" and name exactly \"Comment\" inside the overlay's element with role \"note\". The \".diff-rethink-rail-input\" is visible, focused, and has aria-label \"Comment on Line 160, new\". There is no \".diff-viewer-comment-dialog\" or \".diff-viewer-selected-text\".\n7. Fill \".diff-rethink-rail-input\" with \"Why this line?\" and click \".diff-rethink-change-nav .diff-rethink-comment-change\" (Save Comment). The rail input closes and the \"Comment on current hunk\" button returns.\n8. The message input ([data-testid=\"message-input\"]) is still empty. Click \".diff-rethink-change-nav .diff-draft-review-toggle\" (the visible mobile rail's review button, not the hidden desktop duplicate). The open \".diff-draft-review[open]\" has exactly one article containing \"src/zeta.ts:160 (new)\" and \"Why this line?\". Expand its Quote details. Its pre text is exactly \"const critical = true;\\n★ The one line that matters.\".\n9. Click \"Send to Chat\". The review and diff close. One \".message-user\" contains \"src/zeta.ts:160 (new)\", \"\u003e const critical = true;\", \"\u003e ★ The one line that matters.\", and \"Why this line?\". The composer is still empty.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "30s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".header",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options",
+      "exact": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      },
+      "role": "button",
+      "name": "Diffs"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "30s"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-rethink-message-files .diff-tree-code-row",
+      "nth": 0
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-rethink-file-jump"
+    },
+    {
+      "action": "assert_texts",
+      "within": {
+        "selector": ".diff-rethink-mobile-files"
+      },
+      "selector": ".diff-tree-code-row[aria-selected] .diff-tree-label",
+      "texts": [
+        "zeta.ts",
+        "README.md",
+        "alpha.ts"
+      ]
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-rethink-mobile-files"
+      },
+      "selector": ".diff-tree-code-row[aria-selected]",
+      "nth": 0
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .diff-rethink-file-name",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-rethink-file-name",
+      "text": "zeta.ts"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-rethink-file-position",
+      "text": "File 1 of 3"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay .diff-highlight-callout-text",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-highlight-callout-text",
+      "text": "The one line that matters."
+    },
+    {
+      "action": "assert_in_viewport",
+      "within": {
+        "selector": ".diff-viewer-overlay"
+      },
+      "selector": ".diff-highlight-callout-text"
+    },
+    {
+      "action": "touch",
+      "value": "start",
+      "within": {
+        "selector": "[role='note']"
+      },
+      "role": "button",
+      "name": "Comment",
+      "exact": true
+    },
+    {
+      "action": "touch",
+      "value": "end"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-rail-input",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_focused",
+      "selector": ".diff-rethink-rail-input"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-rethink-rail-input",
+      "attribute": "aria-label",
+      "value": "Comment on Line 160, new"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-viewer-comment-dialog"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-viewer-selected-text"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-rethink-rail-input",
+      "value": "Why this line?"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-rethink-change-nav"
+      },
+      "selector": ".diff-rethink-comment-change"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-rethink-rail-input",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-change-nav .diff-rethink-comment-change[aria-label='Comment on current hunk']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-change-nav .diff-draft-review-toggle",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-draft-review[open]",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "within": {
+        "selector": ".diff-draft-review[open]"
+      },
+      "selector": "article",
+      "count": 1
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".diff-draft-review[open]"
+      },
+      "selector": "article",
+      "text": "src/zeta.ts:160 (new)"
+    },
+    {
+      "action": "assert_text_contains",
+      "within": {
+        "selector": ".diff-draft-review[open]"
+      },
+      "selector": "article",
+      "text": "Why this line?"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-draft-review[open] article"
+      },
+      "selector": "summary"
+    },
+    {
+      "action": "assert_text",
+      "within": {
+        "selector": ".diff-draft-review[open] article"
+      },
+      "selector": "pre",
+      "text": "const critical = true;\n★ The one line that matters."
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-draft-review[open]"
+      },
+      "role": "button",
+      "name": "Send to Chat"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-draft-review[open]",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_text",
+      "text": "src/zeta.ts:160 (new)",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-user",
+      "has_text": "src/zeta.ts:160 (new)",
+      "text": "src/zeta.ts:160 (new)"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-user",
+      "has_text": "Why this line?",
+      "text": "\u003e const critical = true;"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-user",
+      "has_text": "Why this line?",
+      "text": "\u003e ★ The one line that matters."
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-user",
+      "has_text": "Why this line?",
+      "text": "Why this line?"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": ""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-26T00:48:49.59691669Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 368988,
+    "output_tokens": 9693,
+    "estimated_cost_usd": 0.32747190000000004,
+    "mode": "generated"
+  }
+}

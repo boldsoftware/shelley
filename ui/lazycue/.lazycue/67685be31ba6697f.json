@@ -1,0 +1,250 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "On a phone, selecting rendered commit text saves just its quote in a draft review without changing the composer. Use condition waits, never sleep steps. window.selectTextIn(selector, text) selects text within an element. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. The heading \".diff-commit-message-content h2\" reads \"Polish mobile preview\". Eval window.selectTextIn('.diff-commit-message-content h2', 'mobile preview'). The button \"Comment selection\" becomes visible. Click it. The \".diff-viewer-comment-dialog\" is visible and its \".diff-viewer-selected-text\" reads \"mobile preview\". Fill \".diff-viewer-comment-input\" with \"Please clarify\" and press the comma and period keys while the input is focused; its value is \"Please clarify,.\". Click the dialog's \"Save Comment\" button. The dialog disappears, and [data-testid=\"message-input\"] still has value exactly \"\". Open \".diff-viewer-header-mobile .diff-draft-review-toggle\" (the visible mobile header, not the hidden desktop duplicate). The open \".diff-draft-review[open]\" has one article containing \"Please clarify,.\". Expand its \"Quote\" details: the pre text is exactly \"mobile preview\", not \"Polish mobile preview\". Close the draft review with \"Close draft review\". Select \"body excerpt\" in \".diff-commit-message-body\" with window.selectTextIn; \"Comment selection\" becomes visible. Click it and verify the dialog's selected text reads \"body excerpt\". Fill the input with \"Body feedback\" and click \"Save Comment\". Reopen the mobile header's review button. The review has two articles; the second contains \"Body feedback\", and expanding its Quote shows exactly \"body excerpt\". Click \"Send to Chat\". The diff and review close. A single \".message-user\" contains both \"\u003e mobile preview\" and \"\u003e body excerpt\" with their respective feedback, but not \"\u003e Polish mobile preview\". The composer is still empty.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label=\"Diffs\"]"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-commit-message-content h2",
+      "text": "Polish mobile preview"
+    },
+    {
+      "action": "eval",
+      "expression": "window.selectTextIn('.diff-commit-message-content h2', 'mobile preview')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button",
+      "has_text": "Comment selection"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Comment selection"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-dialog"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-viewer-comment-dialog .diff-viewer-selected-text",
+      "text": "mobile preview"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-viewer-comment-input",
+      "value": "Please clarify"
+    },
+    {
+      "action": "press_key",
+      "key": ","
+    },
+    {
+      "action": "press_key",
+      "key": "."
+    },
+    {
+      "action": "assert_value",
+      "selector": ".diff-viewer-comment-input",
+      "value": "Please clarify,."
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-viewer-comment-dialog"
+      },
+      "role": "button",
+      "name": "Save Comment"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-comment-dialog"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-header-mobile .diff-draft-review-toggle",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-draft-review[open]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-draft-review[open] article",
+      "count": 1
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-draft-review[open] article",
+      "text": "Please clarify,."
+    },
+    {
+      "action": "click",
+      "selector": ".diff-draft-review[open] article details summary",
+      "has_text": "Quote"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-draft-review[open] article details pre",
+      "text": "mobile preview"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-draft-review[open]"
+      },
+      "role": "button",
+      "name": "Close draft review"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-draft-review[open]"
+    },
+    {
+      "action": "eval",
+      "expression": "window.selectTextIn('.diff-commit-message-body', 'body excerpt')"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button",
+      "has_text": "Comment selection"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Comment selection"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-dialog"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-viewer-comment-dialog .diff-viewer-selected-text",
+      "text": "body excerpt"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-viewer-comment-input",
+      "value": "Body feedback"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-viewer-comment-dialog"
+      },
+      "role": "button",
+      "name": "Save Comment"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-comment-dialog"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-header-mobile .diff-draft-review-toggle",
+      "visible": true
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-draft-review[open]"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-draft-review[open] article",
+      "count": 2
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-draft-review[open] article:nth-child(2)",
+      "text": "Body feedback"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-draft-review[open] article:nth-child(2) details summary",
+      "has_text": "Quote"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-draft-review[open] article:nth-child(2) details pre",
+      "text": "body excerpt"
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-draft-review[open]"
+      },
+      "role": "button",
+      "name": "Send to Chat"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-overlay"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".message-user",
+      "nth": -1
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-user",
+      "nth": -1,
+      "text": "\u003e mobile preview"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-user",
+      "nth": -1,
+      "text": "\u003e body excerpt"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".message-user",
+      "nth": -1,
+      "text": "\u003e Polish mobile preview"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-26T00:40:45.790961522Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 223194,
+    "output_tokens": 10001,
+    "estimated_cost_usd": 0.27615554999999997,
+    "mode": "generated"
+  }
+}

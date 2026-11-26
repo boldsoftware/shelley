@@ -295,6 +295,7 @@
         v-model:text="previewCommentText"
         :where="`Commit ${previewComment.message.hash.slice(0, 8)}`"
         :quoted="truncateWithEllipsis(previewComment.quote, 160)"
+        submit-label="Save Comment"
         @submit="submitPreviewComment"
         @cancel="previewComment = null"
       />
@@ -321,6 +322,7 @@ import { isDarkModeActive } from "../../services/theme";
 
 import {
 
+  highlightQuote,
   lineCommentLabel,
   truncateWithEllipsis,
   useMonacoComments,
@@ -921,7 +923,8 @@ function emitComment(_block: string) {
   emit("save-review-comment", {
     cwd: props.cwd, root: gitRoot.value, machine: reviewMachine(),
     diff: selectedDiff.value, to: selectedTo.value, path: fd.path, side: target.side,
-    line, endLine, quote, text, snapshot: raw,
+    line, endLine, quote: target.highlight ? `${quote}\n${highlightQuote(target.highlight)}` : quote,
+    text, snapshot: raw,
   });
 }
 

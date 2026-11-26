@@ -1,0 +1,200 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "A short mobile commit message shows its links after the body without an expand control, and its metadata Comment action saves the whole message in a draft review. Use condition waits, never sleep steps. Navigate to /c/{{SLUG}}. Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"Diffs\" (\".overflow-toolbar-action[aria-label=\\\"Diffs\\\"]\"). The \".diff-viewer-overlay\" should be visible. The \".diff-commit-message-body\" contains \"Short body note\". There is no \"Show more\" button in \".diff-commit-message\". The \".diff-commit-message-links\" contains \"Open on GitHub\" and \"Open raw commit\"; verify with eval expecting true that the body precedes the links in document order. Click the \"Comment\" button in \".diff-commit-message-mobile-meta\". The comment dialog's selected text contains both \"Short mobile message\" and \"Short body note\". Fill its input with \"Whole message feedback\" and click \"Save Comment\". The comment dialog closes and [data-testid=\"message-input\"] still has value exactly \"\". Click \".diff-viewer-header-mobile .diff-draft-review-toggle\" (the visible mobile header, not the hidden desktop duplicate). The open \".diff-draft-review[open]\" has exactly one article containing \"Whole message feedback\". Expand its Quote details: the pre contains \"Short mobile message\" and \"Short body note\". Click \"Send to Chat\". The review and diff close, and one \".message-user\" contains \"\u003e Short mobile message\", \"\u003e Short body note\", and \"Whole message feedback\". The composer is still empty.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "button[aria-label='More options']",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".overflow-toolbar-action[aria-label=\"Diffs\"]",
+      "within": {
+        "selector": ".chat-overflow-popover"
+      }
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_text",
+      "text": "Short body note",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-commit-message-body",
+      "text": "Short body note"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": ".diff-commit-message-expand"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-commit-message-links",
+      "text": "Open on GitHub"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-commit-message-links",
+      "text": "Open raw commit"
+    },
+    {
+      "action": "eval",
+      "expression": "(() =\u003e { const body = document.querySelector('.diff-commit-message-body'); const links = document.querySelector('.diff-commit-message-links'); return !!(body \u0026\u0026 links \u0026\u0026 (body.compareDocumentPosition(links) \u0026 Node.DOCUMENT_POSITION_FOLLOWING)); })()",
+      "expect": "true"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Comment",
+      "within": {
+        "selector": ".diff-commit-message-mobile-meta"
+      }
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-comment-dialog",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-viewer-comment-dialog pre",
+      "text": "Short mobile message"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-viewer-comment-dialog pre",
+      "text": "Short body note"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-viewer-comment-input",
+      "value": "Whole message feedback"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save Comment"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-comment-dialog",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-header-mobile .diff-draft-review-toggle"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-draft-review[open]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-draft-review[open] article",
+      "count": 1
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-draft-review[open] article",
+      "text": "Whole message feedback"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-draft-review[open] article summary"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-draft-review[open] article pre",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-draft-review[open] article pre",
+      "text": "Short mobile message"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-draft-review[open] article pre",
+      "text": "Short body note"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Send to Chat"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-draft-review[open]",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "wait_text",
+      "text": "Whole message feedback",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-user",
+      "has_text": "Whole message feedback",
+      "text": "\u003e Short mobile message"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-user",
+      "has_text": "Whole message feedback",
+      "text": "\u003e Short body note"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".message-user",
+      "has_text": "Whole message feedback",
+      "text": "Whole message feedback"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid=\"message-input\"]",
+      "value": ""
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-26T00:36:59.200996906Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 338038,
+    "output_tokens": 8250,
+    "estimated_cost_usd": 0.3059952,
+    "mode": "generated"
+  }
+}

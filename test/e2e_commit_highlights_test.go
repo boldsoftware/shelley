@@ -76,14 +76,15 @@ func TestE2ECommitHighlightsSidebarRanksFiles(t *testing.T) {
 }
 
 func TestE2ECommitHighlightsCalloutCommentButton(t *testing.T) {
-	e2e(t, useful(0), `A highlight callout's Comment button answers the highlight. `+commitHighlightsOpen+`3. Click the second file. "The callout" is the overlay's ".diff-highlight-callout-text"; it is in the viewport.
+	e2e(t, useful(0), `A highlight callout's Comment button saves an answer in the draft review. Use condition waits, never sleep steps. `+commitHighlightsOpen+`3. Click the second file. "The callout" is the overlay's ".diff-highlight-callout-text"; it is in the viewport.
 4. Comment mode marks the line under the pointer, but not over a callout, where a click doesn't comment on a line. "The hover mark" is the overlay's ".diff-viewer-line-hover". Hover the overlay's ".view-line" whose text contains "const critical = true;": there is then exactly 1 hover mark.
 5. The callout lets the pointer through to the space reserved for it: move the mouse (a hover step with a "point", no hit test) to x = the callout's left + 10 and y = its top + half its height (from getBoundingClientRect()). There is then no hover mark (count 0).
 6. Screen readers reach the callout and its button: "the note" is the overlay's element with role "note"; its text contains "The one line that matters.". "The button" is the note's element with role "button" and name "Comment".
 7. A quiet icon with a full touch target that doesn't heighten the note: in one eval with expect "true", the button's getBoundingClientRect() width and height are exactly 24 and 24, and the note's height is within 0.5 of the height of the note's ".diff-highlight-callout-text" + 8.
 8. Click the button. "The dialog" is the ".diff-viewer-comment-dialog": its text contains "Add Comment (Line 160, new)", and its ".diff-viewer-selected-text" text, with whitespace runs collapsed to single spaces and trimmed, is exactly "const critical = true; ★ The one line that matters.".
-9. Fill the dialog's ".diff-viewer-comment-input" with "Why this line?" and click the dialog's button named "Add Comment". The dialog is then not visible.
-10. The comment quotes the line and the highlight it answers: press Escape. The overlay is then not visible, and the message input's value is exactly these three lines followed by an empty line: "> src/zeta.ts:160: const critical = true;\n> ★ The one line that matters.\nWhy this line?\n\n" (with real newlines; check the value in an eval with expect, as a JSON string, to see the newlines).`, func(s *shelley) {
+9. Fill the dialog's ".diff-viewer-comment-input" with "Why this line?" and click the dialog's button named "Save Comment". The dialog is then not visible, and the composer ([data-testid="message-input"]) is still empty.
+10. Click the overlay's ".diff-draft-review-toggle". The open ".diff-draft-review[open]" has one article containing "src/zeta.ts:160 (new)" and "Why this line?". Expand its Quote details; its pre text is exactly "const critical = true;\n★ The one line that matters.".
+11. Click "Send to Chat". The review and diff close. One ".message-user" contains "src/zeta.ts:160 (new)", "> const critical = true;", "> ★ The one line that matters.", and "Why this line?". The composer is still empty.`, func(s *shelley) {
 		s.viewport(1600, 900)
 		s.commitHighlightsRepo("sidebar")
 	})
@@ -114,13 +115,13 @@ func TestE2ECommitHighlightsCalloutsKeepSpace(t *testing.T) {
 }
 
 func TestE2ECommitHighlightsPhoneFilePicker(t *testing.T) {
-	e2e(t, useful(0), `A phone's diff file picker follows the ranked order, and a highlight comment uses the comment rail. Use condition waits, never sleep steps. Use the supplied selectors directly. `+commitHighlightsOpen+`3. Click the first ".diff-rethink-message-files .diff-tree-code-row" in the overlay, then click ".diff-rethink-file-jump" to open the file picker.
-4. The labels of ".diff-rethink-mobile-files .diff-tree-code-row[aria-selected]" are in order "zeta.ts", "README.md", "alpha.ts". Click the first row; ".diff-rethink-file-name" reads "zeta.ts", and ".diff-rethink-file-position" contains "File 1 of 3".
+	e2e(t, useful(1), `A phone's diff file picker follows the ranked order, and a highlight comment uses the comment rail. Use condition waits, never sleep steps. Use the supplied selectors directly. `+commitHighlightsOpen+`3. Click the first ".diff-rethink-message-files .diff-tree-code-row" in the overlay, then click ".diff-rethink-file-jump" to open the file picker.
+4. Assert the texts of ".diff-rethink-mobile-files .diff-tree-code-row[aria-selected] .diff-tree-label" are exactly "zeta.ts", "README.md", "alpha.ts", in order (the rows include extra icons and counts; check only their .diff-tree-label children). Click the first row; ".diff-rethink-file-name" reads "zeta.ts", and ".diff-rethink-file-position" contains "File 1 of 3".
 5. The narrow diff is inline; the comment still shows under its line: "the callout" is the overlay's ".diff-highlight-callout-text": it has exactly the text "The one line that matters." and is in the viewport.
 6. A tap on the callout's button opens the comment rail, though Monaco claims touches inside the editor: tap (touch start, then touch end) the button with role "button" and name exactly "Comment" inside the overlay's element with role "note". The ".diff-rethink-rail-input" is visible, focused, and has aria-label "Comment on Line 160, new". There is no ".diff-viewer-comment-dialog" or ".diff-viewer-selected-text".
-7. Save the rail input node as window.highlightInput, fill ".diff-rethink-rail-input" with "Why this line?", and click ".diff-rethink-change-nav .diff-rethink-comment-change" (the exact OK button). The rail input remains visible, empty, focused, and identical to window.highlightInput.
-8. The message input ([data-testid="message-input"]) has exactly this value, including the final empty line: "> src/zeta.ts:160: const critical = true;\n> ★ The one line that matters.\nWhy this line?\n\n". Check its value in an eval with expect as a JSON string, preserving the newlines.
-9. Click ".diff-rethink-cancel-comment". The rail input disappears and the "Comment on current hunk" button returns.`, func(s *shelley) {
+7. Fill ".diff-rethink-rail-input" with "Why this line?" and click ".diff-rethink-change-nav .diff-rethink-comment-change" (Save Comment). The rail input closes and the "Comment on current hunk" button returns.
+8. The message input ([data-testid="message-input"]) is still empty. Click ".diff-rethink-change-nav .diff-draft-review-toggle" (the visible mobile rail's review button, not the hidden desktop duplicate). The open ".diff-draft-review[open]" has exactly one article containing "src/zeta.ts:160 (new)" and "Why this line?". Expand its Quote details. Its pre text is exactly "const critical = true;\n★ The one line that matters.".
+9. Click "Send to Chat". The review and diff close. One ".message-user" contains "src/zeta.ts:160 (new)", "> const critical = true;", "> ★ The one line that matters.", and "Why this line?". The composer is still empty.`, func(s *shelley) {
 		s.viewport(390, 844)
 		s.commitHighlightsRepo("header")
 	})
