@@ -44,6 +44,8 @@ func TestGitFileDiffLargeMetadataAndTextBypass(t *testing.T) {
 	h := NewTestHarness(t)
 	mib := bytes.Repeat([]byte(strings.Repeat("x", 255)+"\n"), 4096)
 	binaryLarge := append([]byte{0}, bytes.Repeat([]byte("b"), 2<<20)...)
+	// Text whose first 512 bytes, all that's read of it, end mid-rune.
+	accentedLarge := append([]byte("x"), bytes.Repeat([]byte("é"), 1<<20+1)...)
 	cases := []struct {
 		path                 string
 		old, new             []byte
@@ -58,6 +60,7 @@ func TestGitFileDiffLargeMetadataAndTextBypass(t *testing.T) {
 		{"binary.bin", binaryLarge, binaryLarge, true, true, true, "Combined file size"},
 		{"added.txt", nil, append(bytes.Clone(mib), mib...), false, true, false, ""},
 		{"deleted.txt", binaryLarge, nil, true, false, true, "Combined file size"},
+		{"accented.txt", nil, accentedLarge, false, true, false, "Combined file size"},
 		{"empty-added.txt", nil, nil, false, true, false, ""},
 		{"empty-deleted.txt", nil, nil, true, false, false, ""},
 	}

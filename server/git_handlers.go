@@ -113,6 +113,22 @@ func (m machine) diffRange(gitRoot, diffID, toRef string) ([]string, error) {
 	return []string{parent, toRef}, nil
 }
 
+// looksBinary reports whether data, all of a file or (cut) its start, is
+// binary: it has a NUL, or isn't UTF-8 but for a rune the cut split.
+func looksBinary(data []byte, cut bool) bool {
+	if cut {
+		for i := len(data) - 1; i >= 0 && i >= len(data)-utf8.UTFMax; i-- {
+			if utf8.RuneStart(data[i]) {
+				if !utf8.FullRune(data[i:]) {
+					data = data[:i]
+				}
+				break
+			}
+		}
+	}
+	return bytes.IndexByte(data, 0) >= 0 || !utf8.Valid(data)
+}
+
 // getGitRoot returns the git repository root for the given directory
 func getGitRoot(dir string) (string, error) { return localMachine.gitRoot(dir) }
 
@@ -926,8 +942,8 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, filepath.Base(cleanPath), time.Time{}, bytes.NewReader([]byte(content)))
 		return
 	}
-	oldBinary := strings.ContainsRune(oldContent, 0) || !utf8.ValidString(oldContent)
-	newBinary := strings.ContainsRune(newContent, 0) || !utf8.ValidString(newContent)
+	oldBinary := looksBinary(oldData, int64(len(oldData)) < oldSide.size)
+	newBinary := looksBinary(newData, int64(len(newData)) < newSide.size)
 	oldImage := oldBinary && strings.HasPrefix(http.DetectContentType([]byte(oldContent)), "image/")
 	newImage := newBinary && strings.HasPrefix(http.DetectContentType([]byte(newContent)), "image/")
 	oldAudio := oldBinary && strings.HasPrefix(http.DetectContentType([]byte(oldContent)), "audio/")
