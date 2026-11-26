@@ -315,6 +315,8 @@ export interface InitData {
   // True once the "upgrade your other conversations too?" offer has been
   // answered, so it is never made again.
   model_upgrade_prompt_done?: boolean;
+  /** Global speaker voice for GPT-Live calls (resolved from server default). */
+  live_voice?: string;
   banner?: string; // If set, shown as a top-of-page banner (e.g. to mark demo instances)
 }
 

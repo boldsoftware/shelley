@@ -29,6 +29,7 @@
          (e: "open-feature-flags-modal"): void                // onOpenFeatureFlagsModal
          (e: "open-secrets-modal"): void                      // onOpenSecretsModal
          (e: "open-favicon-emoji-picker"): void                // onOpenFaviconEmojiPicker
+         (e: "open-live-voice-modal"): void                   // onOpenLiveVoiceModal
          (e: "open-embed-modal"): void                        // onOpenEmbedModal
          (e: "next-conversation"): void                       // onNextConversation
          (e: "previous-conversation"): void                   // onPreviousConversation
@@ -182,6 +183,7 @@ const emit = defineEmits<{
   (e: "open-feature-flags-modal"): void;
   (e: "open-secrets-modal"): void;
   (e: "open-favicon-emoji-picker"): void;
+  (e: "open-live-voice-modal"): void;
   (e: "open-embed-modal"): void;
   (e: "next-conversation"): void;
   (e: "previous-conversation"): void;
@@ -226,6 +228,7 @@ const ICON_FOLDER = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="ro
 const ICON_HOME = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7m-14 0v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>`;
 const ICON_WORKTREE = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>`;
 const ICON_LANG = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>`;
+const ICON_VOICE = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" /></svg>`;
 const ICON_TRASH = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" /></svg>`;
 const ICON_CHAT = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>`;
 const ICON_FILE = `${SVG_OPEN}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>`;
@@ -533,6 +536,19 @@ const actionItems = computed<CommandItem[]>(() => {
       emit("close");
     },
     keywords: ["notification", "notify", "alert", "discord", "webhook", "browser", "favicon"],
+  });
+
+  items.push({
+    id: "live-voice",
+    type: "action",
+    title: "Live voice",
+    subtitle: "Choose the speaker voice for live calls",
+    icon: ICON_VOICE,
+    action: () => {
+      emit("open-live-voice-modal");
+      emit("close");
+    },
+    keywords: ["voice", "speaker", "live", "call", "audio", "tts"],
   });
 
   // Workspace mode's favicon is exe's logo, not the emoji.

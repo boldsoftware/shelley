@@ -715,6 +715,12 @@ func (s *Server) serveIndexWithInit(w http.ResponseWriter, r *http.Request, fs h
 	// Whether this VM has an exe.dev "notify" integration, so the UI can show
 	// the auto-configured push-notification toggle.
 	initData["exe_notify_available"] = s.exeNotifyAvailable()
+	liveVoice, err := s.currentLiveVoice(r.Context())
+	if err != nil {
+		s.internalError(w, "Failed to get live voice", err)
+		return
+	}
+	initData["live_voice"] = liveVoice
 	initData["ui_build"] = s.uiBuild()
 	if s.Banner != "" {
 		initData["banner"] = s.Banner

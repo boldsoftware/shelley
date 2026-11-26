@@ -10671,7 +10671,8 @@ svg {
 .model-provider-suffix,
 .model-provider-empty,
 .model-provider-load-error,
-.secrets-narrow {
+.secrets-narrow,
+.live-voice-default {
   color: var(--text-secondary);
   font-size: var(--font-size-12);
 }
@@ -17376,6 +17377,41 @@ kbd {
 .language-picker-check {
   margin-left: auto;
   font-size: var(--font-size-14);
+}
+
+.live-voice-hint {
+  margin: 0 0 0.75rem;
+  color: var(--text-secondary);
+  font-size: var(--font-size-12);
+}
+
+.live-voice-filter {
+  width: 100%;
+  margin-bottom: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-size-13);
+}
+
+.live-voice-options {
+  max-height: min(22rem, 55vh);
+  overflow-y: auto;
+}
+
+.live-voice-status {
+  padding: 0.75rem 0.25rem;
+  color: var(--text-secondary);
+  font-size: var(--font-size-13);
+}
+
+.live-voice-error {
+  margin-bottom: 0.5rem;
+  color: var(--error-text);
+  font-size: var(--font-size-13);
 }
 
 .bookmarklet-modal {

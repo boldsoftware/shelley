@@ -308,6 +308,11 @@
           </div>
         </div>
       </div>
+      <button class="overflow-menu-item" aria-haspopup="dialog" @click="onLiveVoice">
+        <i class="pi pi-volume-up chat-menu-icon" aria-hidden="true" />
+        Live voice
+        <span class="overflow-menu-language">{{ liveVoice }}</span>
+      </button>
       <button class="overflow-menu-item" aria-haspopup="dialog" @click="onLanguagePicker">
         <i class="pi pi-globe chat-menu-icon" aria-hidden="true" />
         {{ t("switchLanguage") }}
@@ -375,6 +380,7 @@ import { useI18n } from "../composables/i18n";
 import { bookmarkletHref } from "../../bookmarklet/href";
 import { BOOKMARKLET_SOURCE } from "../../bookmarklet/source";
 import { useConversationView } from "../composables/conversationView";
+import { useLiveVoice } from "../composables/liveVoice";
 import { menuShortcutLabel } from "../../utils/menuShortcuts";
 import { tildifyPath } from "../../utils/tildify";
 import { workspaceMode } from "../../utils/workspaceMode";
@@ -416,10 +422,12 @@ const emit = defineEmits<{
   (e: "edit-agents-md"): void;
   (e: "edit-file"): void;
   (e: "open-mcp-servers"): void;
+  (e: "open-live-voice"): void;
   (e: "check-version"): void;
 }>();
 
 const { t, locale, setLocale } = useI18n();
+const { liveVoice } = useLiveVoice();
 const { conversationViewMode, setConversationViewMode } = useConversationView(
   toRef(props, "messageUser"),
 );
@@ -449,6 +457,7 @@ const onExport = () => (emit("export"), hide());
 const onEditAgentsMd = () => (emit("edit-agents-md"), hide());
 const onEditFile = () => (emit("edit-file"), hide());
 const onMcpServers = () => (emit("open-mcp-servers"), hide());
+const onLiveVoice = () => (emit("open-live-voice"), hide());
 const onCheckVersion = () => (emit("check-version"), hide());
 const bookmarkletLink = bookmarkletHref(BOOKMARKLET_SOURCE, location.origin);
 const bookmarkletOpen = ref(false);

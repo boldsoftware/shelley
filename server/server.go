@@ -784,6 +784,8 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /exit", s.handleExit)
 	api.HandleFunc("GET /api/favicon-emoji", s.handleGetFaviconEmoji)
 	api.HandleFunc("PUT /api/favicon-emoji", s.handleSetFaviconEmoji)
+	api.HandleFunc("GET /api/live-voice", s.handleGetLiveVoice)
+	api.HandleFunc("PUT /api/live-voice", s.handleSetLiveVoice)
 	mux.HandleFunc("GET /settings", s.handleGetSettings)
 	mux.HandleFunc("POST /settings", s.handleSetSetting)
 	mux.HandleFunc("GET /feature-flags", s.handleGetFeatureFlags)

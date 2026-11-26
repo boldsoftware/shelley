@@ -18,6 +18,11 @@ type liveSessionRequest struct {
 		Model        string            `json:"model"`
 		Instructions string            `json:"instructions"`
 		Input        []liveHistoryItem `json:"input"`
+		Audio        *struct {
+			Output *struct {
+				Voice string `json:"voice"`
+			} `json:"output"`
+		} `json:"audio"`
 	} `json:"session"`
 	Transport struct {
 		SDP string `json:"sdp"`
@@ -95,6 +100,9 @@ func TestLiveSession(t *testing.T) {
 	if req.Session.Model != "gpt-live-1" || req.Transport.SDP != "v=0\r\nm=audio test" || voicePrompt(req) != juniper {
 		t.Fatalf("session = %+v", req)
 	}
+	if req.Session.Audio != nil {
+		t.Fatalf("default voice should omit session.audio, got %+v", req.Session.Audio)
+	}
 	for _, want := range []string{"Delegation policy:", "Answer yourself first.", "are status questions, not small talk", "Interruption policy:", "Backend state: idle.", "Working directory: " + cwd + ".", "Backend model: model-b."} {
 		if !strings.Contains(req.Session.Instructions, want) {
 			t.Errorf("instructions lack %q:\n%s", want, req.Session.Instructions)
@@ -119,7 +127,14 @@ func TestLiveSession(t *testing.T) {
 	}
 	e.want(200, "PUT", "/api/profiles/Personal", `{"model":"model-b","voice_prompt":"`+juniper+`"}`)
 
-	// A draft speaks as the profile its first send would start from.
+	// A global voice applies to the next call across existing conversations and drafts; ""/marin omits audio.
+	e.want(200, "PUT", "/api/live-voice", `{"voice":"cedar"}`)
+	req = call(id, "")
+	if req.Session.Audio == nil || req.Session.Audio.Output == nil || req.Session.Audio.Output.Voice != "cedar" {
+		t.Fatalf("session audio = %+v, want voice cedar", req.Session.Audio)
+	}
+
+	// A draft speaks as the profile its first send would start from, with the global voice.
 	var draft struct {
 		ConversationID string `json:"conversation_id"`
 	}
@@ -127,17 +142,23 @@ func TestLiveSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	req = call(draft.ConversationID, "")
-	if voicePrompt(req) != "" {
-		t.Errorf("the default profile has no voice prompt: %s", req.Session.Instructions)
+	if voicePrompt(req) != "" || req.Session.Audio == nil || req.Session.Audio.Output == nil || req.Session.Audio.Output.Voice != "cedar" {
+		t.Errorf("the default profile has no voice prompt, but uses global voice cedar: audio=%+v %s", req.Session.Audio, req.Session.Instructions)
 	}
 	if len(req.Session.Input) != 1 || req.Session.Input[0].Role != "developer" {
 		t.Errorf("empty draft history = %+v", req.Session.Input)
 	}
 	req = call(draft.ConversationID, `,"cwd":"`+cwd+`","conversation_options":{"profile":"Personal","thinking_level":"high"}`)
-	if voicePrompt(req) != juniper || !strings.Contains(req.Session.Instructions, "Backend model: model-b.") || !strings.Contains(req.Session.Instructions, "Working directory: "+cwd+".") {
-		t.Errorf("draft selection: %s", req.Session.Instructions)
+	if voicePrompt(req) != juniper || req.Session.Audio == nil || req.Session.Audio.Output == nil || req.Session.Audio.Output.Voice != "cedar" || !strings.Contains(req.Session.Instructions, "Backend model: model-b.") || !strings.Contains(req.Session.Instructions, "Working directory: "+cwd+".") {
+		t.Errorf("draft selection: audio=%+v %s", req.Session.Audio, req.Session.Instructions)
 	}
 	if row, err := e.database.GetConversationByID(t.Context(), draft.ConversationID); err != nil || !row.IsDraft || row.Model != nil {
 		t.Fatalf("calling changed the draft: %+v", row)
+	}
+
+	// Resetting the global voice omits session.audio again.
+	e.want(200, "PUT", "/api/live-voice", `{"voice":""}`)
+	if req := call(id, ""); req.Session.Audio != nil {
+		t.Fatalf("cleared global voice still sent audio: %+v", req.Session.Audio)
 	}
 }

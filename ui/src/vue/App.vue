@@ -134,6 +134,7 @@
           :cwd-sync-trigger="cwdSyncTrigger"
           :on-open-models-modal="(mode = 'manage') => (modelsModalMode = mode)"
           :on-open-mcp-servers-modal="() => (mcpServersModalOpen = true)"
+          :on-open-live-voice-modal="() => (liveVoiceModalOpen = true)"
           :on-open-file-finder="openFileFinder"
           :on-open-command-palette="() => (commandPaletteOpen = true)"
           :ephemeral-terminals="ephemeralTerminals"
@@ -244,6 +245,12 @@
             commandPaletteOpen = false;
           }
         "
+        @open-live-voice-modal="
+          () => {
+            liveVoiceModalOpen = true;
+            commandPaletteOpen = false;
+          }
+        "
         @open-embed-modal="
           () => {
             embedModalOpen = true;
@@ -336,6 +343,16 @@
         "
       />
 
+      <LiveVoiceModal
+        :is-open="liveVoiceModalOpen"
+        @close="
+          () => {
+            liveVoiceModalOpen = false;
+            focusMessageInputIfUnfocused();
+          }
+        "
+      />
+
       <EmbedModal
         :is-open="embedModalOpen"
         @close="
@@ -398,6 +415,7 @@ import ConversationDrawer from "./components/ConversationDrawer.vue";
 import CommandPalette from "./components/CommandPalette.vue";
 import ModelsModal from "./components/ModelsModal.vue";
 import McpServersModal from "./components/McpServersModal.vue";
+import LiveVoiceModal from "./components/LiveVoiceModal.vue";
 import IntegrationsModal from "./components/IntegrationsModal.vue";
 import NotificationsModal from "./components/NotificationsModal.vue";
 import FeatureFlagsModal from "./components/FeatureFlagsModal.vue";
@@ -693,6 +711,7 @@ function openSecretPill(event: MouseEvent) {
   secretsModal.value = { target: pill.dataset.secretId };
 }
 const faviconEmojiPickerOpen = ref(false);
+const liveVoiceModalOpen = ref(false);
 // Fuzzy file finder (Cmd/Ctrl+P) + the generic editor it opens.
 const fileFinderOpen = ref(false);
 const editorFilePath = ref<string | null>(null);

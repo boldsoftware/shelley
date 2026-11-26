@@ -99,6 +99,7 @@
           @edit-agents-md="showAgentsMdEditor = true"
           @edit-file="props.onOpenFileFinder?.()"
           @open-mcp-servers="props.onOpenMcpServersModal?.()"
+          @open-live-voice="props.onOpenLiveVoiceModal?.()"
           @check-version="openVersionModal"
         >
           <template v-if="isMobile" #models="{ hide }">
@@ -1157,6 +1158,7 @@ const props = withDefaults(
     cwdSyncTrigger?: number;
     onOpenModelsModal?: (mode?: "manage" | "add") => void;
     onOpenMcpServersModal?: () => void;
+    onOpenLiveVoiceModal?: () => void;
     onOpenFileFinder?: () => void;
     onOpenCommandPalette?: () => void;
     ephemeralTerminals: EphemeralTerminal[];

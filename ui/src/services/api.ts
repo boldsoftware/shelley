@@ -1223,6 +1223,20 @@ export const faviconEmojiApi = {
   },
 };
 
+export interface LiveVoiceConfig {
+  voice: string;
+  voices: string[];
+}
+
+export const liveVoiceApi = {
+  async get(): Promise<LiveVoiceConfig> {
+    return apiJSON("/api/live-voice", "Failed to load voice setting");
+  },
+  async set(voice: string): Promise<LiveVoiceConfig> {
+    return apiJSON("/api/live-voice", "Failed to save voice setting", "PUT", { voice });
+  },
+};
+
 // The origins whose pages may frame Shelley, as the Edit with Shelley
 // snippet does. Each call
 // returns the list as it stands after it.

@@ -144,6 +144,11 @@ func (s *Server) handleLiveSession(w http.ResponseWriter, r *http.Request, conve
 		s.internalError(w, "Load voice prompt", err)
 		return
 	}
+	voice, err := s.currentLiveVoice(r.Context())
+	if err != nil {
+		s.internalError(w, "Load live voice", err)
+		return
+	}
 	history, lastSeq, err := s.liveContext(r.Context(), conversationID)
 	if err != nil {
 		s.internalError(w, "Load Live context", err)
@@ -156,13 +161,19 @@ func (s *Server) handleLiveSession(w http.ResponseWriter, r *http.Request, conve
 			conversation.Model = &profile.Model
 		}
 	}
+	session := map[string]any{
+		"model":        "gpt-live-1",
+		"instructions": liveInstructions(profile.VoicePrompt, s.liveSituation(conversation)),
+		"input":        append(history, liveHistoryItem{Type: "message", Role: "developer", Content: []liveHistoryText{{Type: "input_text", Text: liveGreeting}}}),
+		"delegation":   map[string]string{"type": "client"},
+	}
+	if voice != "" && voice != defaultLiveVoice {
+		session["audio"] = map[string]any{
+			"output": map[string]string{"voice": voice},
+		}
+	}
 	payload, err := json.Marshal(map[string]any{
-		"session": map[string]any{
-			"model":        "gpt-live-1",
-			"instructions": liveInstructions(profile.VoicePrompt, s.liveSituation(conversation)),
-			"input":        append(history, liveHistoryItem{Type: "message", Role: "developer", Content: []liveHistoryText{{Type: "input_text", Text: liveGreeting}}}),
-			"delegation":   map[string]string{"type": "client"},
-		},
+		"session":   session,
 		"transport": map[string]string{"type": "webrtc", "sdp": offer.SDP},
 	})
 	if err != nil {

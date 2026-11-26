@@ -265,6 +265,10 @@ These timestamps are private to the requesting identity.
   `live-call-events`: deliver one delegation the client decided on,
   `{"transcript", "voice_context"?, "model"?, "cwd"?,
   "conversation_options"?}` → chat's receipt.
+- `GET /api/live-voice` — `{"voice", "voices"}`: the global speaker voice
+  for live calls (defaulting to `"marin"`) and the available voice names.
+- `PUT /api/live-voice` — `{"voice"}` → `{"voice", "voices"}`: set the
+  global speaker voice for subsequent live calls (`""` resets to `"marin"`).
 - `GET /api/conversation/<id>/subagents` — direct child conversations. Clients
   can recurse through this endpoint when they need the complete descendant
   tree (for example, aggregate usage reporting).
