@@ -203,13 +203,16 @@ if (typeof window !== "undefined") {
   };
   // Baseline browser events worth correlating against: window resizes.
   window.addEventListener("resize", () => perfCount("browser.windowResize"));
-  if (typeof PerformanceObserver !== "undefined") {
+  if (
+    typeof PerformanceObserver !== "undefined" &&
+    PerformanceObserver.supportedEntryTypes?.includes("longtask")
+  ) {
     try {
       new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) noteLongTask(entry);
       }).observe({ type: "longtask", buffered: true });
     } catch {
-      // longtask unsupported in this browser (e.g. Safari); skip.
+      // Registration failed; leave long-task tracking disabled.
     }
   }
 }
