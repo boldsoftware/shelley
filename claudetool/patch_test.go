@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"shelley.exe.dev/llm"
 )
@@ -51,6 +52,53 @@ func TestPatchToolAliasesSharePathLock(t *testing.T) {
 	defer patch.pathLocksMu.Unlock()
 	if len(patch.pathLocks) != 2 {
 		t.Fatalf("aliases created %d path locks, want 2", len(patch.pathLocks))
+	}
+}
+
+func TestApplyPatchDoesNotRelockFileAliases(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(string, string) error
+	}{
+		{"hard link", os.Link},
+		{"old identity at new path", func(first, second string) error {
+			if err := os.Rename(first, second); err != nil {
+				return err
+			}
+			return os.WriteFile(first, []byte("replacement"), 0o600)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			first := filepath.Join(dir, "first.txt")
+			second := filepath.Join(dir, "second.txt")
+			if err := os.WriteFile(first, []byte("original"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			patch := &PatchTool{WorkingDir: NewMutableWorkingDir(dir)}
+			patch.lockPath(nil, first)()
+			if err := tc.setup(first, second); err != nil {
+				t.Fatal(err)
+			}
+
+			done := make(chan error, 1)
+			go func() {
+				done <- patch.runApplyPatch(t.Context(), "*** Begin Patch\n*** Delete File: first.txt\n*** Delete File: second.txt\n*** End Patch").Error
+			}()
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("apply_patch did not finish acquiring file locks")
+			}
+			for _, path := range []string{first, second} {
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Errorf("expected %s to be deleted, stat: %v", path, err)
+				}
+			}
+		})
 	}
 }
 
