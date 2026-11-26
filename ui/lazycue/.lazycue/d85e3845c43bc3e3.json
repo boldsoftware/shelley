@@ -1,0 +1,333 @@
+{
+  "_README": "This file is managed by LazyCue (see shelley/lazycue). Do NOT edit by hand — it is the cached, machine-generated DSL for a self-healing browser test. To change behavior, edit the test description and re-run LazyCue.",
+  "description": "Reset comments clears the entire draft review, including an unfinished edit, without touching the composer or sending a message. Use the supplied selectors directly; use condition waits, never sleep steps. Navigate to /c/{{SLUG}}. Wait for the message input (data-testid \"message-input\"). The conversation already has messages: record its user-message count with eval window.resetUserCount = document.querySelectorAll('.message-user').length, with no expectation. Fill the chat message input with \"Unrelated composer draft\". Open Diffs: on a phone it is in the overflow menu: click the button named \"More options\", then, in its popover (\".chat-overflow-popover\"), the button whose accessible name starts with \"%[1]s\" (\".overflow-toolbar-action[aria-label=\\\"%[1]s\\\"]\"). Wait for \".diff-viewer-overlay\". Click \".diff-viewer-overlay .commit-picker-trigger\"; in \".git-graph-container\" click the \".git-graph-row\" containing \"Working changes\". \n1. There are no \".diff-draft-review-toggle\" elements before saving a comment. Click \".diff-rethink-mobile-files [title='only.txt']\" and wait for \".diff-rethink-bottom-change-label\" to read \"Change 1 of 1\". Click the button with aria-label \"Comment on current hunk\", fill \".diff-rethink-rail-input\" with \"First comment\", and click \"Save Comment\".\n2. Repeat on the same hunk with \"Second comment\". Click \".diff-rethink-change-nav .diff-draft-review-toggle\" (the visible mobile rail's review button, not the hidden desktop viewer's duplicate). The dialog \".diff-draft-review[open]\" has exactly two articles.\n3. Click the first article's \"Edit\" button and fill the textarea with aria-label \"Edit draft comment\" with \"Unfinished edit\". Click \"Reset comments\" in the dialog.\n4. The dialog stays open, contains \"0 comments\" and \"Select a line in a diff to save a comment here.\", and has no articles or edit textarea. Its \"Reset comments\" and \"Send to Chat\" buttons are disabled. There are no \".diff-draft-review-toggle\" elements after resetting. The message input still has value exactly \"Unrelated composer draft\". Eval document.querySelectorAll('.message-user').length === window.resetUserCount should return true. Resize to 1280x900 and verify both footer buttons are visible and disabled, and there are still no \".diff-draft-review-toggle\" elements.\n5. Click \"Close draft review\". Resize to 390x844 and wait for the mobile hunk rail. There are no \".diff-draft-inline\" elements. Click \"Comment on current hunk\", fill \".diff-rethink-rail-input\" with \"Fresh comment\", and click \"Save Comment\". Open \".diff-rethink-change-nav .diff-draft-review-toggle\", whose accessible name is exactly \"Open draft review, 1 comment\". The dialog has exactly one article containing \"Fresh comment\", no edit textarea, and an enabled \"Send to Chat\" button. \"First comment\", \"Second comment\", and \"Unfinished edit\" are absent from the dialog. The composer is still unchanged.",
+  "version": 1,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "/c/{{SLUG}}"
+    },
+    {
+      "action": "wait_visible",
+      "selector": "[data-testid='message-input']",
+      "timeout": "15s"
+    },
+    {
+      "action": "eval",
+      "expression": "window.resetUserCount = document.querySelectorAll('.message-user').length"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid='message-input']",
+      "value": "Unrelated composer draft"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "More options"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".chat-overflow-popover"
+    },
+    {
+      "action": "click",
+      "selector": ".chat-overflow-popover .overflow-toolbar-action[aria-label='Diffs']"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-viewer-overlay",
+      "timeout": "15s"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-viewer-overlay .commit-picker-trigger"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".git-graph-container",
+      "timeout": "10s"
+    },
+    {
+      "action": "click",
+      "selector": ".git-graph-row",
+      "has_text": "Working changes"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-mobile-files [title='only.txt']",
+      "timeout": "15s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-draft-review-toggle",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-mobile-files [title='only.txt']"
+    },
+    {
+      "action": "wait_text",
+      "text": "Change 1 of 1",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text",
+      "selector": ".diff-rethink-bottom-change-label",
+      "text": "Change 1 of 1"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Comment on current hunk"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-rethink-rail-input",
+      "value": "First comment"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save Comment"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Comment on current hunk"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-rethink-rail-input",
+      "value": "Second comment"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save Comment"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-change-nav .diff-draft-review-toggle"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-draft-review[open]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-draft-review[open] article",
+      "count": 2
+    },
+    {
+      "action": "click",
+      "within": {
+        "selector": ".diff-draft-review[open] article",
+        "nth": 0
+      },
+      "role": "button",
+      "name": "Edit"
+    },
+    {
+      "action": "fill",
+      "selector": "textarea[aria-label='Edit draft comment']",
+      "value": "Unfinished edit"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Reset comments"
+    },
+    {
+      "action": "assert_visible",
+      "selector": ".diff-draft-review[open]"
+    },
+    {
+      "action": "wait_text",
+      "text": "0 comments",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-draft-review[open]",
+      "text": "0 comments"
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-draft-review[open]",
+      "text": "Select a line in a diff to save a comment here."
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-draft-review[open] article",
+      "count": 0
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "textarea[aria-label='Edit draft comment']"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": ".diff-draft-review[open]",
+      "role": "button",
+      "name": "Reset comments"
+    },
+    {
+      "action": "assert_disabled",
+      "selector": ".diff-draft-review[open]",
+      "role": "button",
+      "name": "Send to Chat"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-draft-review-toggle",
+      "count": 0
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Unrelated composer draft"
+    },
+    {
+      "action": "eval",
+      "expression": "document.querySelectorAll('.message-user').length === window.resetUserCount",
+      "expect": "true"
+    },
+    {
+      "action": "set_viewport",
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Reset comments"
+    },
+    {
+      "action": "assert_visible",
+      "role": "button",
+      "name": "Send to Chat"
+    },
+    {
+      "action": "assert_disabled",
+      "role": "button",
+      "name": "Reset comments"
+    },
+    {
+      "action": "assert_disabled",
+      "role": "button",
+      "name": "Send to Chat"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-draft-review-toggle",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close draft review"
+    },
+    {
+      "action": "wait_hidden",
+      "selector": ".diff-draft-review[open]",
+      "timeout": "10s"
+    },
+    {
+      "action": "set_viewport",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-rethink-change-nav",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-draft-inline",
+      "count": 0
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Comment on current hunk"
+    },
+    {
+      "action": "fill",
+      "selector": ".diff-rethink-rail-input",
+      "value": "Fresh comment"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save Comment"
+    },
+    {
+      "action": "assert_attribute",
+      "selector": ".diff-rethink-change-nav .diff-draft-review-toggle",
+      "attribute": "aria-label",
+      "value": "Open draft review, 1 comment"
+    },
+    {
+      "action": "click",
+      "selector": ".diff-rethink-change-nav .diff-draft-review-toggle"
+    },
+    {
+      "action": "wait_visible",
+      "selector": ".diff-draft-review[open]",
+      "timeout": "10s"
+    },
+    {
+      "action": "assert_count",
+      "selector": ".diff-draft-review[open] article",
+      "count": 1
+    },
+    {
+      "action": "assert_text_contains",
+      "selector": ".diff-draft-review[open] article",
+      "text": "Fresh comment"
+    },
+    {
+      "action": "assert_not_visible",
+      "selector": "textarea[aria-label='Edit draft comment']"
+    },
+    {
+      "action": "assert_enabled",
+      "selector": ".diff-draft-review[open]",
+      "role": "button",
+      "name": "Send to Chat"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".diff-draft-review[open]",
+      "text": "First comment"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".diff-draft-review[open]",
+      "text": "Second comment"
+    },
+    {
+      "action": "assert_text_not_contains",
+      "selector": ".diff-draft-review[open]",
+      "text": "Unfinished edit"
+    },
+    {
+      "action": "assert_value",
+      "selector": "[data-testid='message-input']",
+      "value": "Unrelated composer draft"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-11-26T00:10:14.417139498Z",
+    "hostname": "exedevwork",
+    "model": "claude-sonnet-4-6",
+    "input_tokens": 163493,
+    "output_tokens": 6732,
+    "estimated_cost_usd": 0.19846650000000002,
+    "mode": "generated"
+  }
+}

@@ -49,6 +49,22 @@ func TestE2EMobileDiffHunkNavigation(t *testing.T) {
 	})
 }
 
+func TestE2EDiffReviewResetComments(t *testing.T) {
+	e2e(t, useful(0), `Reset comments clears the entire draft review, including an unfinished edit, without touching the composer or sending a message. Use the supplied selectors directly; use condition waits, never sleep steps. Navigate to /c/{{SLUG}}. Wait for the message input (data-testid "message-input"). The conversation already has messages: record its user-message count with eval window.resetUserCount = document.querySelectorAll('.message-user').length, with no expectation. Fill the chat message input with "Unrelated composer draft". Open Diffs: `+openToolPhone+`. Wait for ".diff-viewer-overlay". `+mobileDiffWorking+`
+1. There are no ".diff-draft-review-toggle" elements before saving a comment. Click ".diff-rethink-mobile-files [title='only.txt']" and wait for ".diff-rethink-bottom-change-label" to read "Change 1 of 1". Click the button with aria-label "Comment on current hunk", fill ".diff-rethink-rail-input" with "First comment", and click "Save Comment".
+2. Repeat on the same hunk with "Second comment". Click ".diff-rethink-change-nav .diff-draft-review-toggle" (the visible mobile rail's review button, not the hidden desktop viewer's duplicate). The dialog ".diff-draft-review[open]" has exactly two articles.
+3. Click the first article's "Edit" button and fill the textarea with aria-label "Edit draft comment" with "Unfinished edit". Click "Reset comments" in the dialog.
+4. The dialog stays open, contains "0 comments" and "Select a line in a diff to save a comment here.", and has no articles or edit textarea. Its "Reset comments" and "Send to Chat" buttons are disabled. There are no ".diff-draft-review-toggle" elements after resetting. The message input still has value exactly "Unrelated composer draft". Eval document.querySelectorAll('.message-user').length === window.resetUserCount should return true. Resize to 1280x900 and verify both footer buttons are visible and disabled, and there are still no ".diff-draft-review-toggle" elements.
+5. Click "Close draft review". Resize to 390x844 and wait for the mobile hunk rail. There are no ".diff-draft-inline" elements. Click "Comment on current hunk", fill ".diff-rethink-rail-input" with "Fresh comment", and click "Save Comment". Open ".diff-rethink-change-nav .diff-draft-review-toggle", whose accessible name is exactly "Open draft review, 1 comment". The dialog has exactly one article containing "Fresh comment", no edit textarea, and an enabled "Send to Chat" button. "First comment", "Second comment", and "Unfinished edit" are absent from the dialog. The composer is still unchanged.`, func(s *shelley) {
+		dir := mobileDiffRepo(s)
+		file := filepath.Join(dir, "only.txt")
+		s.write(file, "before\n")
+		mobileDiffCommit(s, dir, "base")
+		s.write(file, "after\n")
+		mobileDiffConversation(s, dir)
+	})
+}
+
 func TestE2EMobileDiffOpenCommentFileNavigation(t *testing.T) {
 	e2e(t, useful(0), `An open phone comment rail navigates between files without losing focus or mixing their drafts. `+fmt.Sprintf(mobileDiffOpen, "Diffs")+mobileDiffWorking+`Use these selectors directly; wait for conditions, never sleep.
 1. Click button.diff-tree-row[title="first.txt"], wait for the modified Monaco editor, then click .diff-rethink-change-nav [aria-label="Comment on current hunk"]. Resize to 390x420. Save the textarea .diff-rethink-rail-input as window.railInput. Fill it with "First file draft" using the native textarea value setter and a bubbling input event.

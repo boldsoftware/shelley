@@ -1,5 +1,6 @@
 <template>
   <button
+    v-if="count > 0"
     type="button"
     class="diff-draft-review-toggle"
     :class="{ 'has-comments': count > 0 }"

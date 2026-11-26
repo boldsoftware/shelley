@@ -913,7 +913,7 @@
       </div>
       <footer>
         <p v-if="diffDraftSendError" class="text-error" role="alert">{{ diffDraftSendError }}</p>
-
+        <button class="diff-viewer-btn diff-viewer-btn-secondary" type="button" :disabled="!diffDraftNotes.length || diffDraftSending" @click="resetDiffDraftComments">Reset comments</button>
         <button class="diff-viewer-btn diff-viewer-btn-primary" type="button" :disabled="!diffDraftNotes.length || editingDiffDraftId !== null || sending || diffDraftSending" @click="onDiffReviewToChat">{{ diffDraftSending ? "Sending…" : "Send to Chat" }}</button>
       </footer>
     </dialog>
@@ -5521,6 +5521,13 @@ function applyDiffDraftEdit(note: DraftDiffComment) {
   if (!diffDraftEdit.value.trim()) return;
   note.text = diffDraftEdit.value.trim();
   editingDiffDraftId.value = null;
+}
+
+function resetDiffDraftComments() {
+  diffDraftNotes.value = [];
+  editingDiffDraftId.value = null;
+  diffDraftEdit.value = "";
+  diffDraftSendError.value = "";
 }
 
 function openDiffDraftFile(note: DraftDiffComment) {
