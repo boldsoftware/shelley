@@ -39,7 +39,7 @@ func TestLiveContextDigsPastToolRows(t *testing.T) {
 	if _, err := e.database.CreateMessages(t.Context(), rows); err != nil {
 		t.Fatal(err)
 	}
-	items, lastSeq, err := e.s.liveContext(t.Context(), id)
+	items, lastSeq, err := e.s.liveContext(t.Context(), id, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,5 +52,32 @@ func TestLiveContextDigsPastToolRows(t *testing.T) {
 	}
 	if lastSeq != 8*242 {
 		t.Errorf("lastSeq = %d, want the last row", lastSeq)
+	}
+
+	rows = nil
+	add(db.MessageTypeUser, llm.StringContent("Compare the builds."), false)
+	add(db.MessageTypeAgent, llm.StringContent("The control passed too."), false)
+	add(db.MessageTypeAgent, llm.Content{Type: llm.ContentTypeThinking, Thinking: "PRIVATE"}, false)
+	if _, err := e.database.CreateMessages(t.Context(), rows); err != nil {
+		t.Fatal(err)
+	}
+	items, _, err = e.s.liveContext(t.Context(), id, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectEqual(t, "latest public note on joining", items[len(items)-1].Content[0].Text, "The control passed too.")
+	rows = nil
+	add(db.MessageTypeUser, llm.StringContent("Try the union case."), false)
+	if _, err := e.database.CreateMessages(t.Context(), rows); err != nil {
+		t.Fatal(err)
+	}
+	items, _, err = e.s.liveContext(t.Context(), id, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		if item.Content[0].Text == "The control passed too." {
+			t.Fatal("replayed progress from before the new request")
+		}
 	}
 }

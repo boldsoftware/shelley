@@ -500,7 +500,7 @@ func TestCacheWarmRefreshesLastRequestBeforeIdleCompaction(t *testing.T) {
 			t.Fatalf("warms = %d, want 1", len(warms))
 		}
 		if !reflect.DeepEqual(warms[0].Messages, turn.Messages) || !reflect.DeepEqual(warms[0].System, turn.System) ||
-			!reflect.DeepEqual(warms[0].Tools, turn.Tools) || warms[0].OnStream != nil {
+			!reflect.DeepEqual(warms[0].Tools, turn.Tools) || warms[0].OnStream != nil || warms[0].OnPublicProgress != nil {
 			t.Fatal("warm did not replay the last turn's provider prefix")
 		}
 		if usage := cacheWarmUsage(t, h); len(usage) != 1 || usage[0].CacheReadInputTokens != 1024 {

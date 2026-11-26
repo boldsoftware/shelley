@@ -31,7 +31,7 @@ const (
 	// liveUserLeadMs: a delegation counts the user's speech when it follows
 	// within this long, of the user or of Live's answer to them.
 	liveUserLeadMs = 2500
-	// Replies in an ongoing exchange can take longer to start.
+	// Replies in an ongoing exchange or with progress enabled can start later.
 	liveResponseGapMs = 5000
 	// liveEchoTailMs: echo starts while Live speaks or this soon after.
 	liveEchoTailMs         = 1500
@@ -61,14 +61,14 @@ func liveSpeech(fragments []liveFragment) string {
 // The user's latest continuous speech counts when the delegation follows it
 // within 2.5 s, or follows Live's reply to it: Live often acknowledges first
 // ("Got it, handing that off") and delegates as it finishes, seconds after
-// the user stopped. A reply that starts more than 2.5 s after the user
-// stopped only bridges in an ongoing exchange, not from an old greeting.
-func liveUtterance(user []liveFragment, offsetMs float64, all []liveFragment) (text string, startMs float64, ok bool) {
+// the user stopped. A reply may start up to 5 s later in an ongoing
+// exchange or when progress is enabled; otherwise the limit is 2.5 s.
+func liveUtterance(user []liveFragment, offsetMs float64, all []liveFragment, progressEnabled bool) (text string, startMs float64, ok bool) {
 	user = liveRecentUser(user)
 	if len(user) == 0 {
 		return "", 0, false
 	}
-	if liveTurnEnd(user, all)+liveUserLeadMs < offsetMs {
+	if liveTurnEnd(user, all, progressEnabled)+liveUserLeadMs < offsetMs {
 		return "", 0, false
 	}
 	text = liveSpeech(user)
@@ -91,11 +91,9 @@ func liveRecentUser(user []liveFragment) []liveFragment {
 	return user[first:]
 }
 
-// liveTurnEnd extends the user's speech through Live's answer. Allow a
-// longer response pause when the user was replying to Live, but don't
-// revive an isolated greeting with unrelated later output. The user's
+// liveTurnEnd extends the user's speech through Live's answer. The user's
 // speech can span an intervening clarification question.
-func liveTurnEnd(user, all []liveFragment) float64 {
+func liveTurnEnd(user, all []liveFragment, progressEnabled bool) float64 {
 	end := user[len(user)-1].endMs
 	gap := float64(liveUserLeadMs)
 	for _, u := range user {
@@ -110,6 +108,9 @@ func liveTurnEnd(user, all []liveFragment) float64 {
 			gap = liveResponseGapMs
 			break
 		}
+	}
+	if progressEnabled {
+		gap = liveResponseGapMs
 	}
 	var live []liveFragment
 	for _, f := range all {

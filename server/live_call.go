@@ -152,6 +152,18 @@ type liveCall struct {
 	saveTimer   *time.Timer
 	saveMu      sync.Mutex // orders saves
 
+	progressWorking bool
+	progressPending string
+	progressTarget  *string
+	progressFinals  []liveFinal
+	progressSeen    []string
+	progressVersion uint64
+	progressEnabled bool
+	lastProgress    time.Time
+	lastFinal       time.Time
+	lastSpeech      time.Time
+	tick            *time.Timer
+
 	out    []liveInstruction
 	nextID int64
 	wake   chan struct{} // closed and replaced on each instruction
@@ -168,6 +180,9 @@ type liveRow struct {
 	seq            int64
 	user           bool
 	text, full     string
+	progress       []string // mid-turn notes, see liveProgress
+	activity       []string // raw tool events
+	endOfTurn      bool     // an agent finished, with or without text
 	liveDeliveryID string
 }
 
@@ -213,6 +228,9 @@ func (c *liveCall) handle(events []liveEvent) {
 		switch e.typ {
 		case "session.input_transcript.delta", "session.output_transcript.delta":
 			user := e.typ == "session.input_transcript.delta"
+			if c.progressEnabled {
+				c.lastSpeech = time.Now()
+			}
 			c.transcriptN++
 			f := liveFragment{n: c.transcriptN, user: user, text: e.delta, startMs: e.startMs, endMs: e.endMs}
 			c.fragments = append(c.fragments, f)
@@ -282,7 +300,7 @@ func (c *liveCall) delegation(e liveEvent) {
 	user := liveRecentUser(c.unclaimedUser())
 	if len(user) > 0 {
 		last := user[len(user)-1]
-		replyEnd := liveTurnEnd(user, c.fragments)
+		replyEnd := liveTurnEnd(user, c.fragments, c.progressEnabled)
 		if replyEnd+liveUserLeadMs >= offset {
 			p.output = replyEnd > last.endMs
 			c.settle(id)
@@ -343,7 +361,7 @@ func (c *liveCall) commit(id string) {
 	}()
 
 	since := c.claimed
-	speech, start, ok := liveUtterance(c.unclaimedUser(), p.offsetMs, c.fragments)
+	speech, start, ok := liveUtterance(c.unclaimedUser(), p.offsetMs, c.fragments, c.progressEnabled)
 	c.claimed = len(c.fragments)
 	echo := ok && liveEcho(speech, start, liveLatestReply(c.fragments))
 	if !ok || echo {
@@ -483,6 +501,7 @@ func (c *liveCall) deliverTask(t *liveTail, heading, speech, voiceContext string
 			} else {
 				c.thinking("The backend accepted this task: "+speech, &t.id)
 			}
+			c.startProgress()
 		}
 		if !continued {
 			t.delivered = true
@@ -498,6 +517,10 @@ func (c *liveCall) deliverTask(t *liveTail, heading, speech, voiceContext string
 func (c *liveCall) observe(rows []liveRow) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.observeLocked(rows)
+}
+
+func (c *liveCall) observeLocked(rows []liveRow) {
 	if !c.active {
 		return
 	}
@@ -528,10 +551,24 @@ func (c *liveCall) sync() {
 			continue
 		}
 		c.lastSeen = row.seq
+		if c.progressEnabled {
+			for _, note := range row.progress {
+				c.noteProgress(note)
+			}
+			if len(row.activity) > 0 {
+				for _, event := range row.activity {
+					c.noteProgress(event)
+				}
+			}
+			if row.endOfTurn || (row.user && row.text != "") {
+				c.stopProgress()
+			}
+		}
 		if row.text == "" {
 			continue
 		}
 		if row.user {
+			c.startProgress()
 			i := slices.IndexFunc(c.submitted, func(s *liveSubmitted) bool {
 				return s.userSeq == 0 && row.seq > s.afterSeq && s.deliveryID == row.liveDeliveryID
 			})
@@ -557,7 +594,23 @@ func (c *liveCall) sync() {
 				}
 			}
 		}
-		c.commentary("Backend reply: "+row.text, delegation)
+		reply := "Backend reply: " + row.text
+		if c.progressEnabled {
+			reply = liveResultHeading + row.text
+		}
+		// Cancellation can close the old turn between acceptance of a spoken
+		// correction and insertion of that correction's user row.
+		if c.progressEnabled && row.endOfTurn && row.text == operationCancelledText && slices.ContainsFunc(c.submitted, func(s *liveSubmitted) bool {
+			return !s.finished && s.userSeq == 0 && row.seq > s.afterSeq
+		}) {
+			reply = "The preceding turn was cancelled. This status belongs to the work before the newer spoken request."
+		}
+		if c.progressEnabled {
+			// lastSeen deduplicates result rows, including while delivery is pending.
+			c.queueFinal(reply, delegation)
+		} else {
+			c.commentary(reply, delegation)
+		}
 	}
 }
 
@@ -667,6 +720,8 @@ func (c *liveCall) endLocked(reason string) {
 	if !c.active {
 		return
 	}
+	c.progressFinals = nil
+	c.stopProgress()
 	c.logger.Info("Live call ended", "reason", reason)
 	c.idle.Stop()
 	for _, p := range c.pending {

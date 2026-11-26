@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 
 	"shelley.exe.dev/db/generated"
 )
@@ -27,11 +28,9 @@ type liveHistoryText struct {
 	Text string `json:"text"`
 }
 
-// liveContext returns only the user's typed messages and final backend
-// replies, the latest liveContextMessages of them however many tool rows
-// lie between. Tool results, subagent reports, background jobs and other
-// machine notices must not enter the Live session.
-func (s *Server) liveContext(ctx context.Context, conversationID string) (items []liveHistoryItem, lastSeq int64, err error) {
+// Include the latest public note when joining work in progress. Stop looking
+// for it at the current request or turn boundary.
+func (s *Server) liveContext(ctx context.Context, conversationID string, includeProgress bool) (items []liveHistoryItem, lastSeq int64, err error) {
 	before := int64(math.MaxInt64)
 	for len(items) < liveContextMessages {
 		var rows []generated.Message
@@ -51,6 +50,19 @@ func (s *Server) liveContext(ctx context.Context, conversationID string) (items 
 		}
 		before = rows[len(rows)-1].SequenceID
 		for _, row := range rows {
+			if includeProgress && (row.Type == "agent" || row.Type == "error") {
+				notes, _, ended := liveProgress(row)
+				if ended {
+					includeProgress = false
+				} else if len(notes) > 0 {
+					items = append(items, liveHistoryItem{Type: "message", Role: "assistant", Content: []liveHistoryText{{Type: "output_text", Text: strings.TrimPrefix(notes[len(notes)-1], "Agent note: ")}}})
+					includeProgress = false
+					if len(items) == liveContextMessages {
+						break
+					}
+					continue
+				}
+			}
 			if row.ExcludedFromContext {
 				continue
 			}
@@ -63,6 +75,7 @@ func (s *Server) liveContext(ctx context.Context, conversationID string) (items 
 			}
 			role, contentType := "assistant", "output_text"
 			if user {
+				includeProgress = false
 				role, contentType = "user", "input_text"
 			}
 			items = append(items, liveHistoryItem{Type: "message", Role: role, Content: []liveHistoryText{{Type: contentType, Text: truncateRunes(text, liveContextItemRunes)}}})

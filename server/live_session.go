@@ -69,7 +69,13 @@ Do not delegate when:
 - You can answer from what you already have, as above.
 - The user only asks you to stop talking or to repeat yourself.
 
-Create the client delegation before making any handoff or progress claim. "I'll check" by itself does not send a task. Until the client confirms acceptance or queuing, do not say the request was sent, that you are checking it or that work has started. Once accepted, acknowledge briefly and keep listening; if queued, say it is waiting behind earlier work. If delivery fails, say it was not sent and ask the user to repeat it. Do not invent or guess results, progress or completion; report only what the backend returns.`
+Create the client delegation before making any handoff or progress claim. "I'll check" by itself does not send a task. Until the client confirms acceptance or queuing, do not say the request was sent, that you are checking it or that work has started.`
+
+const (
+	liveAcceptedPolicy     = " Once accepted, acknowledge briefly and keep listening; if queued, say it is waiting behind earlier work."
+	liveQuietHandoffPolicy = " Delegate silently and keep listening. An accepted or queued handoff needs no spoken confirmation. Speak when there is a concrete development, a result, or a question that needs the caller."
+	liveFailurePolicy      = ` If delivery fails, say it was not sent and ask the user to repeat it. Do not invent or guess results, progress or completion; report only what the backend returns.`
+)
 
 // liveGreeting makes Live speak first, leading with where the conversation
 // stands. GPT-Live has no "respond now" event: a developer message closing
@@ -77,10 +83,21 @@ Create the client delegation before making any handoff or progress claim. "I'll 
 // improves the odds that it does.
 const liveGreeting = "The call just connected. Greet the user now with a brief hello in the language of the dialogue above, or else English. If there is dialogue above, add one sentence on where it stands: what the backend last reported and whether it is still working. Then pause and listen."
 
+const liveProgressGreeting = "The call just connected. Say a brief hello in the dialogue’s language, or English, then listen. Do not recap history, announce a handoff or describe the backend. If the user is already speaking, answer them instead."
+
+func livePaceInstruction(speakingPace int) string {
+	return map[int]string{
+		-2: "Speak very slowly and clearly, with generous pauses between thoughts.",
+		-1: "Speak slowly and clearly, with comfortable pauses.",
+		1:  "Speak briskly, with short pauses; stay clear.",
+		2:  "Speak at a very fast but intelligible pace, with only essential pauses; keep every word clear.",
+	}[speakingPace]
+}
+
 // liveInstructions are Live's instructions: who to speak as, from the
 // profile's voice prompt if it has one, then the voice and delegation
 // policies, then the state at the start of the call.
-func liveInstructions(voicePrompt, situation string) string {
+func liveInstructions(voicePrompt, situation string, speakingPace int, progressEnabled bool) string {
 	var b strings.Builder
 	b.WriteString("You are the live voice of the assistant in this conversation.")
 	if voicePrompt != "" {
@@ -90,7 +107,18 @@ func liveInstructions(voicePrompt, situation string) string {
 	if voicePrompt != "" {
 		b.WriteString(" Where the guidance conflicts with the policies after it, the policies win.\n\n<voice_guidance>\n" + voicePrompt + "\n</voice_guidance>")
 	}
-	b.WriteString("\n\n" + liveVoicePolicy + "\n\nAs of the start of this call: " + situation +
+	if speakingPace != 0 {
+		b.WriteString("\n\n" + livePaceInstruction(speakingPace) + " This overrides pace in the voice guidance, but follow the user's current voice-style requests for this call.")
+	}
+	handoffPolicy := liveAcceptedPolicy
+	if progressEnabled {
+		handoffPolicy = liveQuietHandoffPolicy
+	}
+	b.WriteString("\n\n" + liveVoicePolicy + handoffPolicy + liveFailurePolicy)
+	if progressEnabled {
+		b.WriteString("\n\n" + liveProgressPolicy)
+	}
+	b.WriteString("\n\nAs of the start of this call: " + situation +
 		" This may have changed since. The session history holds part of the recent conversation, not all of it.")
 	return b.String()
 }
@@ -144,7 +172,12 @@ func (s *Server) handleLiveSession(w http.ResponseWriter, r *http.Request, conve
 		s.internalError(w, "Load voice prompt", err)
 		return
 	}
-	history, lastSeq, err := s.liveContext(r.Context(), conversationID)
+	preferences, err := s.getLivePreferences(r.Context())
+	if err != nil {
+		s.internalError(w, "Load Live settings", err)
+		return
+	}
+	history, lastSeq, err := s.liveContext(r.Context(), conversationID, conversation.AgentWorking && preferences.ProgressUpdates)
 	if err != nil {
 		s.internalError(w, "Load Live context", err)
 		return
@@ -156,13 +189,21 @@ func (s *Server) handleLiveSession(w http.ResponseWriter, r *http.Request, conve
 			conversation.Model = &profile.Model
 		}
 	}
+	greeting := liveGreeting
+	if preferences.ProgressUpdates {
+		greeting = liveProgressGreeting
+	}
+	session := map[string]any{
+		"model":        "gpt-live-1",
+		"instructions": liveInstructions(profile.VoicePrompt, s.liveSituation(conversation), preferences.SpeakingPace, preferences.ProgressUpdates),
+		"input":        append(history, liveHistoryItem{Type: "message", Role: "developer", Content: []liveHistoryText{{Type: "input_text", Text: greeting}}}),
+		"delegation":   map[string]string{"type": "client"},
+	}
+	if preferences.Voice != defaultLiveVoice {
+		session["audio"] = map[string]any{"output": map[string]string{"voice": preferences.Voice}}
+	}
 	payload, err := json.Marshal(map[string]any{
-		"session": map[string]any{
-			"model":        "gpt-live-1",
-			"instructions": liveInstructions(profile.VoicePrompt, s.liveSituation(conversation)),
-			"input":        append(history, liveHistoryItem{Type: "message", Role: "developer", Content: []liveHistoryText{{Type: "input_text", Text: liveGreeting}}}),
-			"delegation":   map[string]string{"type": "client"},
-		},
+		"session":   session,
 		"transport": map[string]string{"type": "webrtc", "sdp": offer.SDP},
 	})
 	if err != nil {
@@ -205,7 +246,8 @@ func (s *Server) handleLiveSession(w http.ResponseWriter, r *http.Request, conve
 		http.Error(w, "Invalid Live session response", http.StatusBadGateway)
 		return
 	}
-	if err := s.startLiveCall(r, conversationID, result.Session.ID, lastSeq, offer.liveSettings); err != nil {
+
+	if err := s.startLiveCall(r, conversationID, result.Session.ID, lastSeq, offer.liveSettings, preferences.ProgressUpdates); err != nil {
 		s.internalError(w, "Failed to start the call", err)
 		return
 	}

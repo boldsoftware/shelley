@@ -745,6 +745,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 	s.registerMCPRoutes(api, mux)
 	s.registerProfileRoutes(api)
+	s.registerLivePreferenceRoutes(api)
 	s.registerWorkspaceRoutes(api)
 	s.registerSecretRoutes(api)
 
@@ -1749,6 +1750,7 @@ func (s *Server) notifySubscribers(ctx context.Context, conversationID string, n
 		if slices.ContainsFunc(newMsgs, func(m generated.Message) bool { return isAgentEndOfTurn(&m) }) {
 			go manager.drainPendingMessages()
 		}
+		s.liveCalls.workerActivity(conversation, newMsgs)
 		// Context window from the last message that carries usage. Zero is
 		// omitted from JSON, so the client keeps its cached value.
 		var ctxSize uint64

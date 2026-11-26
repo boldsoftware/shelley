@@ -78,6 +78,8 @@ type Config struct {
 	OnToolProgress llm.ToolProgressFunc
 	// OnStreamDelta is called when the LLM streams a partial content delta.
 	OnStreamDelta func(llm.StreamDelta)
+	// OnPublicProgress reports provider-confirmed public activity before the full response.
+	OnPublicProgress func(llm.PublicProgress)
 	// OnStreamDone is called when a streaming LLM response completes,
 	// before the assistant message is recorded. Use this to flush any
 	// buffered stream deltas so they reach the UI before the full message.
@@ -135,6 +137,7 @@ type Loop struct {
 	onGitStateChange GitStateChangeFunc
 	onToolProgress   llm.ToolProgressFunc
 	onStreamDelta    func(llm.StreamDelta)
+	onPublicProgress func(llm.PublicProgress)
 	onStreamDone     func()
 	onSuccess        func(*llm.Request)
 	injectMessages   func(ctx context.Context) (Injection, error)
@@ -171,6 +174,7 @@ func NewLoop(config Config) *Loop {
 		onGitStateChange: config.OnGitStateChange,
 		onToolProgress:   config.OnToolProgress,
 		onStreamDelta:    config.OnStreamDelta,
+		onPublicProgress: config.OnPublicProgress,
 		onStreamDone:     config.OnStreamDone,
 		onSuccess:        config.OnSuccessfulRequest,
 		injectMessages:   config.InjectMessages,
@@ -479,6 +483,7 @@ func (l *Loop) appendContext(messages ...llm.Message) {
 func (l *Loop) hooks() Hooks {
 	h := Hooks{
 		OnStreamDone:        l.onStreamDone,
+		OnPublicProgress:    l.onPublicProgress,
 		OnSuccessfulRequest: l.onSuccess,
 		RewriteFinalReply:   l.rewriteReply,
 		OnResponse: func(ctx context.Context, r Response) error {

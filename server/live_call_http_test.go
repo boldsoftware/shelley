@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"shelley.exe.dev/db"
+	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/llm"
 )
 
@@ -114,7 +115,7 @@ func (c *liveCallClient) expect(want ...string) {
 			if !strings.HasPrefix(got, w) {
 				c.e.t.Fatalf("instruction %q, want %q…", got, w)
 			}
-		case <-time.After(10 * time.Second):
+		case <-time.After(15 * time.Second):
 			c.e.t.Fatalf("no instruction; want %q", w)
 		}
 	}
@@ -206,6 +207,70 @@ func TestLiveCallOverHTTP(t *testing.T) {
 	if code, got := e.do("GET", "/api/conversation/"+id+"/call/1/transcript", ""); code != http.StatusOK || got != "" {
 		t.Errorf("transcript after delete = %d %q", code, got)
 	}
+}
+
+func TestLiveCallToolProgressBeforeReply(t *testing.T) {
+	t.Parallel()
+	e := newLiveMessageEnv(t)
+	e.liveProvider()
+	if code, body := e.do("PUT", "/api/live-settings", `{"voice":"marin","speaking_pace":0,"progress_updates":true}`); code != http.StatusOK {
+		t.Fatalf("enable progress: %d %s", code, body)
+	}
+	slug := "live-streaming-progress"
+	conv, err := e.database.CreateConversation(t.Context(), &slug, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := e.startCall(conv.ConversationID, "")
+	if code, body := e.post("/api/conversation/"+conv.ConversationID+"/chat", `{"message":"Check the implementation"}`); code != http.StatusAccepted {
+		t.Fatalf("chat: %d %s", code, body)
+	}
+	turn := e.held.waitCall(t, "Check the implementation")
+	call.expect("thinking [-]: New typed message to the backend: Check the implementation")
+	e.s.streamPub.Broadcast(StreamResponse{
+		ConversationID: "another-conversation",
+		streamDeltas:   []llm.StreamDelta{{Type: "text", Text: "PRIVATE OTHER TASK"}},
+	})
+	e.s.streamPub.Broadcast(StreamResponse{
+		ConversationID: conv.ConversationID,
+		streamDeltas:   []llm.StreamDelta{{Type: "thinking", Text: "PRIVATE REASONING"}},
+	})
+	err = e.s.recordMessage(t.Context(), conv.ConversationID, llm.Message{
+		Role: llm.MessageRoleAssistant, Content: []llm.Content{{Type: llm.ContentTypeToolUse, ToolName: "bash", ToolInput: json.RawMessage(`{"command":"go test ./server"}`)}},
+	}, "", llm.Usage{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-call.instructions:
+		if !strings.Contains(got, "thinking") || !strings.Contains(got, "go test ./server") {
+			t.Fatal(got)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("tool activity never reached Live while the model was held")
+	}
+	call.expect("commentary [-]: " + liveProgressHeading)
+	const note = "The timer starts after the first saved message; checking how to start it at handoff."
+	err = e.s.recordMessage(t.Context(), conv.ConversationID, llm.Message{
+		Role: llm.MessageRoleAssistant, Content: []llm.Content{llm.StringContent(note)},
+	}, "", llm.Usage{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-call.instructions:
+		if !strings.Contains(got, "thinking") || !strings.Contains(got, note) {
+			t.Fatal(got)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("public progress note never reached Live while the model was held")
+	}
+	call.expect("commentary [-]: " + liveProgressHeading)
+	e.finish(conv.ConversationID, turn)
+	call.expect("thinking [-]: Work evidence")
+	call.expect("commentary [-]: " + liveResultHeading)
+	e.do("DELETE", call.path, "")
+	<-call.ended
 }
 
 // A call in a blank draft promotes it with the composer's selection on its
@@ -404,4 +469,138 @@ func TestLiveDeliveryImmediateModelInputHasSequenceID(t *testing.T) {
 	}
 	call := e.held.waitCall(t, messageText(wrapped))
 	e.finish(conv.ConversationID, call)
+}
+
+func TestLiveCallProgressDoesNotChangeBackendRequest(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		enabled bool
+	}{
+		{"Off", false},
+		{"On", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newLiveMessageEnv(t)
+			e.liveProvider()
+			if tc.enabled {
+				if code, body := e.do("PUT", "/api/live-settings", `{"voice":"marin","speaking_pace":0,"progress_updates":true}`); code != http.StatusOK {
+					t.Fatalf("save progress preference: %d %s", code, body)
+				}
+			}
+			slug := "voice-progress-guidance"
+			conv, err := e.database.CreateConversation(t.Context(), &slug, true, nil, nil, db.ConversationOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			call := e.startCall(conv.ConversationID, "")
+			call.events(
+				`{"type":"session.input_transcript.delta","delta":"Check the implementation","start_ms":0,"end_ms":500}`,
+				`{"type":"session.delegation.created","delegation":{"id":"d1","target":"client"},"offset_ms":500}`,
+			)
+			want := "Spoken request:\nCheck the implementation" + exchange(1, 1, "USER: Check the implementation") + liveTranscriptReference(1)
+			turn := e.held.waitCall(t, want)
+			expectEqual(t, "backend request", lastRequestUserText(turn.request), want)
+			rows, err := e.database.ListMessagesByType(t.Context(), conv.ConversationID, db.MessageTypeUser)
+			if err != nil || len(rows) != 1 {
+				t.Fatalf("user messages: %d, %v", len(rows), err)
+			}
+			user, speech, full, err := liveDialogue(rows[0])
+			if err != nil || !user || speech != "Spoken request:\nCheck the implementation" || full != want {
+				t.Errorf("dialogue = %v, %q, %q, %v", user, speech, full, err)
+			}
+			e.finish(conv.ConversationID, turn)
+			if code, body := e.do("DELETE", call.path, ""); code != http.StatusNoContent {
+				t.Fatalf("hang up: %d %s", code, body)
+			}
+			<-call.ended
+		})
+	}
+}
+
+func TestLiveProgressDirectWorker(t *testing.T) {
+	e := newLiveMessageEnv(t)
+	parent, err := e.database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := e.database.CreateSubagentConversation(t.Context(), "schema-inventory", parent.ConversationID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.s.getOrCreateConversationManager(t.Context(), child.ConversationID, ""); err != nil {
+		t.Fatal(err)
+	}
+	call := newLiveCall("worker-test", parent.ConversationID, 0, nil, nil, e.s.logger)
+	call.progressEnabled = true
+	e.s.liveCalls.add(call)
+	defer call.end("done")
+	row := progressMessage(t, "agent", llm.Message{Content: []llm.Content{llm.StringContent("PRIVATE worker note"), {Type: llm.ContentTypeToolUse, ID: "read", ToolName: "bash", ToolInput: json.RawMessage(`{"command":"rg PRIVATE llm/gem/gem.go"}`)}}})
+	excluded := progressMessage(t, "agent", llm.Message{Content: []llm.Content{{Type: llm.ContentTypeToolUse, ToolName: "bash", ToolInput: json.RawMessage(`{"command":"cat excluded.go"}`)}}})
+	excluded.ExcludedFromContext = true
+	notify := func() { e.s.notifySubscribers(t.Context(), child.ConversationID, row, excluded) }
+	notify()
+	if call.tick != nil {
+		t.Fatal("worker started an idle parent timer")
+	}
+	call.observeWorking(true)
+	other := *child
+	other.ParentConversationID = strPtr("another-parent")
+	e.s.liveCalls.workerActivity(other, []generated.Message{row})
+	transcription := *child
+	transcription.ConversationOptions = `{"kind":"transcription"}`
+	e.s.liveCalls.workerActivity(transcription, []generated.Message{row})
+	if len(call.progressSeen) != 0 {
+		t.Fatal("unrelated worker reached call")
+	}
+	notify()
+	notify()
+	if got := strings.Join(call.progressSeen, "\n"); !strings.Contains(got, "Worker "+child.ConversationID) || !strings.Contains(got, "rg PRIVATE") || strings.Contains(got, "PRIVATE worker note") || strings.Contains(got, "excluded.go") {
+		t.Fatal(got)
+	}
+	if len(call.progressSeen) != 1 {
+		t.Fatal("duplicate worker event")
+	}
+	result := progressMessage(t, "user", llm.Message{Content: []llm.Content{{Type: llm.ContentTypeToolResult, ToolUseID: "read", ToolError: true}}})
+	e.s.liveCalls.workerActivity(*child, []generated.Message{result})
+	if got := strings.Join(call.progressSeen, "\n"); !strings.Contains(got, "[read]") || !strings.Contains(got, "tool_error=true") {
+		t.Fatal(got)
+	}
+	call.observeWorking(false)
+	notify()
+	if call.tick != nil || len(call.progressSeen) != 0 {
+		t.Fatal("worker reactivated parent")
+	}
+}
+
+func TestLiveEarlyPublicCommentaryWhileRequestIsRunning(t *testing.T) {
+	e := newLiveMessageEnv(t)
+	e.liveProvider()
+	if code, body := e.do("PUT", "/api/live-settings", `{"voice":"marin","speaking_pace":0,"progress_updates":true}`); code != 200 {
+		t.Fatal(code, body)
+	}
+	conv, err := e.database.CreateConversation(t.Context(), nil, true, nil, nil, db.ConversationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := e.startCall(conv.ConversationID, "")
+	defer e.do("DELETE", call.path, "")
+	if code, body := e.post("/api/conversation/"+conv.ConversationID+"/chat", `{"message":"compare the schemas"}`); code != http.StatusAccepted {
+		t.Fatal(code, body)
+	}
+	turn := e.held.waitCall(t, "compare the schemas")
+	defer turn.Release()
+	call.expect("thinking [-]: New typed message")
+	if turn.request.OnPublicProgress == nil {
+		t.Fatal("missing commentary callback")
+	}
+	turn.request.OnPublicProgress(llm.PublicProgress{WebLookupID: "lookup-1", WebAction: "open_page"})
+	call.expect("thinking [-]: Work evidence")
+	call.expect("commentary [-]: " + liveProgressHeading)
+	turn.request.OnPublicProgress(llm.PublicProgress{Commentary: "Both versions passed the same four tool calls."})
+	call.expect("thinking [-]: Work evidence")
+	call.expect("commentary [-]: " + liveProgressHeading)
+	e.finish(conv.ConversationID, turn)
+	call.expect("thinking [-]: Work evidence")
+	call.expect("commentary [-]: " + liveResultHeading)
 }

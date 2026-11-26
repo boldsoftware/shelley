@@ -193,6 +193,13 @@ export interface Settings {
   disable_notifications: boolean;
 }
 
+/** Preferences shared by all Live calls, independent of profiles. */
+export interface LiveSettings {
+  voice: string;
+  speaking_pace: number;
+  progress_updates: boolean;
+}
+
 /** A named Settings. Exactly one is the default. */
 export interface Profile extends Settings {
   name: string;

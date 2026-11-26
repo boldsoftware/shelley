@@ -1,6 +1,7 @@
 package server
 
 import (
+	_ "embed"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -17,6 +18,7 @@ type liveSessionRequest struct {
 	Session struct {
 		Model        string            `json:"model"`
 		Instructions string            `json:"instructions"`
+		Audio        json.RawMessage   `json:"audio"`
 		Input        []liveHistoryItem `json:"input"`
 	} `json:"session"`
 	Transport struct {
@@ -92,6 +94,9 @@ func TestLiveSession(t *testing.T) {
 	}
 
 	req := call(id, "")
+	if len(req.Session.Audio) != 0 || strings.Contains(req.Session.Instructions, liveProgressPolicy) || !strings.Contains(req.Session.Instructions, liveAcceptedPolicy) || strings.Contains(req.Session.Instructions, liveQuietHandoffPolicy) {
+		t.Fatalf("default call overrides upstream behavior: %+v", req.Session)
+	}
 	if req.Session.Model != "gpt-live-1" || req.Transport.SDP != "v=0\r\nm=audio test" || voicePrompt(req) != juniper {
 		t.Fatalf("session = %+v", req)
 	}
@@ -139,5 +144,62 @@ func TestLiveSession(t *testing.T) {
 	}
 	if row, err := e.database.GetConversationByID(t.Context(), draft.ConversationID); err != nil || !row.IsDraft || row.Model != nil {
 		t.Fatalf("calling changed the draft: %+v", row)
+	}
+	for _, tt := range []struct {
+		name, settings, voice string
+		pace                  int
+		progress              bool
+	}{
+		{"saved defaults", `{"voice":"marin","speaking_pace":0,"progress_updates":false}`, "", 0, false},
+		{"voice only", `{"voice":"cinder","speaking_pace":0,"progress_updates":false}`, "cinder", 0, false},
+		{"pace only", `{"voice":"marin","speaking_pace":1,"progress_updates":false}`, "", 1, false},
+		{"progress only", `{"voice":"marin","speaking_pace":0,"progress_updates":true}`, "", 0, true},
+		{"all enabled", `{"voice":"cinder","speaking_pace":1,"progress_updates":true}`, "cinder", 1, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			e.want(200, "PUT", "/api/live-settings", tt.settings)
+			req := call(id, "")
+			if tt.voice == "" {
+				if len(req.Session.Audio) != 0 {
+					t.Errorf("unexpected voice override: %s", req.Session.Audio)
+				}
+			} else if !strings.Contains(string(req.Session.Audio), `"voice":"`+tt.voice+`"`) {
+				t.Errorf("missing selected voice: %s", req.Session.Audio)
+			}
+			wantGreeting := liveGreeting
+			if tt.progress {
+				wantGreeting = liveProgressGreeting
+			}
+			if got := req.Session.Input[len(req.Session.Input)-1].Content[0].Text; got != wantGreeting {
+				t.Fatalf("greeting = %q, want %q", got, wantGreeting)
+			}
+			if strings.Contains(req.Session.Instructions, liveProgressPolicy) != tt.progress {
+				t.Error("progress policy does not match opt-in")
+			}
+			if strings.Contains(req.Session.Instructions, livePaceInstruction(1)) != (tt.pace == 1) {
+				t.Error("pace instruction does not match opt-in")
+			}
+		})
+	}
+}
+
+//go:embed testdata/live_baseline_instructions.txt
+var liveBaselineInstructions string
+
+func TestLiveInstructionsOptIn(t *testing.T) {
+	got := liveInstructions("Speak warmly.", "Backend state: idle.", 0, false)
+	if got != liveBaselineInstructions {
+		t.Fatal("default instructions differ from upstream baseline")
+	}
+	enabled := liveInstructions("Speak warmly.", "Backend state: idle.", 0, true)
+	if !strings.Contains(enabled, liveQuietHandoffPolicy) || strings.Contains(enabled, liveAcceptedPolicy) {
+		t.Fatal("opt-in handoffs must be silent")
+	}
+	if !strings.Contains(enabled, liveProgressPolicy) {
+		t.Fatal("opt-in instructions lack progress policy")
+	}
+	paced := liveInstructions("Speak warmly.", "Backend state: idle.", 1, false)
+	if !strings.Contains(paced, livePaceInstruction(1)) || strings.Contains(paced, liveProgressPolicy) {
+		t.Fatal("pace setting unexpectedly changes progress policy")
 	}
 }

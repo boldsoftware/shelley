@@ -27,7 +27,7 @@ func utterance(all []liveFragment, offsetMs float64) string {
 			user = append(user, f)
 		}
 	}
-	text, _, _ := liveUtterance(user, offsetMs, all)
+	text, _, _ := liveUtterance(user, offsetMs, all, false)
 	return text
 }
 

@@ -220,6 +220,7 @@ type responsesIncompleteDetails struct {
 }
 
 type responsesOutputItem struct {
+	Phase            string             `json:"phase,omitempty"`
 	ID               string             `json:"id"`
 	Type             string             `json:"type"`           // "message", "reasoning", "function_call", "web_search_call"
 	Role             string             `json:"role,omitempty"` // for messages: "assistant"
@@ -1066,7 +1067,7 @@ func (s *ResponsesService) doResponses(ctx context.Context, ir *llm.Request, req
 
 		var resp responsesResponse
 		if responsesShouldParseStream(req, httpResp.Header) {
-			streamResp, err := parseResponsesSSEStream(ctx, httpResp.Body, ir.OnStream)
+			streamResp, err := parseResponsesSSEStream(ctx, httpResp.Body, ir.OnPublicProgress, ir.OnStream)
 			httpResp.Body.Close()
 			if err != nil {
 				now := time.Now().Format(time.DateTime)
@@ -1269,7 +1270,7 @@ func responsesShouldParseStream(req responsesRequest, h http.Header) bool {
 	return !strings.Contains(strings.ToLower(h.Get("Content-Type")), "json")
 }
 
-func parseResponsesSSEStream(ctx context.Context, r io.Reader, onStream func(llm.StreamDelta)) (*responsesResponse, error) {
+func parseResponsesSSEStream(ctx context.Context, r io.Reader, onPublicProgress func(llm.PublicProgress), onStream func(llm.StreamDelta)) (*responsesResponse, error) {
 	var completed *responsesResponse
 	// Responses streams finalize message/tool output in output_item.done.
 	// response.completed may only carry completion metadata and usage.
@@ -1311,6 +1312,21 @@ func parseResponsesSSEStream(ctx context.Context, r io.Reader, onStream func(llm
 			}
 		case "response.output_item.done":
 			if event.Item != nil {
+				item := event.Item
+				if onPublicProgress != nil && item.Type == "message" && item.Role == "assistant" && item.Phase == "commentary" && item.Status == "completed" {
+					for _, part := range item.Content {
+						if part.Type == "output_text" && part.Text != "" {
+							onPublicProgress(llm.PublicProgress{Commentary: part.Text})
+						}
+					}
+				}
+				if onPublicProgress != nil && item.Type == "web_search_call" && item.Status == "completed" && item.ID != "" {
+					progress := llm.PublicProgress{WebLookupID: item.ID}
+					if item.Action != nil {
+						progress.WebAction = item.Action.Type
+					}
+					onPublicProgress(progress)
+				}
 				outputItems[event.OutputIndex] = *event.Item
 			}
 		case "response.completed", "response.incomplete":

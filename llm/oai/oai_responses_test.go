@@ -1253,7 +1253,7 @@ func TestParseResponsesSSEEmptyTerminalErrorMessage(t *testing.T) {
 		`data: {"type":"error","error":{"message":"","type":"invalid_request_error","code":"unsupported_value"}}`,
 		``,
 	}, "\n")
-	_, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil)
+	_, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil, nil)
 	if err == nil {
 		t.Fatal("parseResponsesSSEStream() error = nil, want terminal error")
 	}
@@ -2006,7 +2006,7 @@ func TestParseResponsesSSECustomToolCall(t *testing.T) {
 		`data: {"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}`,
 		``,
 	}, "\n")
-	response, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil)
+	response, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2021,7 +2021,7 @@ func TestParseResponsesSSEErrorAcceptsNumericCode(t *testing.T) {
 		`data: {"type":"error","error":{"message":"overloaded","type":"server_error","code":500}}`,
 		``,
 	}, "\n")
-	_, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil)
+	_, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "stream error event: overloaded") {
 		t.Fatalf("error = %v, want parsed stream error", err)
 	}
@@ -2068,7 +2068,7 @@ func TestParseResponsesSSETimestamps(t *testing.T) {
 	}, "\n")
 
 	var deltas []llm.StreamDelta
-	response, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), func(delta llm.StreamDelta) {
+	response, err := parseResponsesSSEStream(t.Context(), strings.NewReader(stream), nil, func(delta llm.StreamDelta) {
 		deltas = append(deltas, delta)
 	})
 	if err != nil {
@@ -2085,5 +2085,61 @@ func TestParseResponsesSSETimestamps(t *testing.T) {
 	}
 	if len(deltas) != 1 || deltas[0].Type != "text" || deltas[0].Text != "hello" || deltas[0].Index != 0 {
 		t.Fatalf("deltas = %+v", deltas)
+	}
+}
+
+func TestResponsesFinishedPublicCommentaryBeforeResponse(t *testing.T) {
+	r, w := io.Pipe()
+	defer r.Close()
+	defer w.Close()
+	comments := make(chan llm.PublicProgress, 16)
+	done := make(chan error, 1)
+	go func() {
+		_, err := parseResponsesSSEStream(t.Context(), r, func(p llm.PublicProgress) { comments <- p }, nil)
+		done <- err
+	}()
+	write := func(body string) {
+		t.Helper()
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, item := range []string{
+		`{"type":"message","role":"assistant","phase":"final_answer","status":"completed","content":[{"type":"output_text","text":"final"}]}`,
+		`{"type":"reasoning","phase":"commentary","role":"assistant","status":"completed","summary":[{"type":"summary_text","text":"private"}]}`,
+		`{"type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"unlabelled"}]}`,
+		`{"type":"message","role":"assistant","phase":"commentary","status":"incomplete","content":[{"type":"output_text","text":"unfinished"}]}`,
+		`{"type":"message","role":"user","phase":"commentary","status":"completed","content":[{"type":"output_text","text":"user input"}]}`,
+		`{"type":"message","role":"assistant","phase":"commentary","status":"completed","content":[{"type":"output_text","text":"Try integer enums, nullable types, and anyOf unions."}]}`,
+	} {
+		write(`{"type":"response.output_item.done","item":` + item + `}`)
+	}
+	// The reader must deliver while the writer is withholding the tool call and
+	// terminal response. A parser waiting for response.completed fails here.
+	select {
+	case got := <-comments:
+		if got.Commentary != "Try integer enums, nullable types, and anyOf unions." {
+			t.Fatalf("unexpected commentary %+v", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("commentary waited for the whole response")
+	}
+	write(`{"type":"response.output_item.done","item":{"type":"web_search_call","id":"unfinished","status":"incomplete"}}`)
+	write(`{"type":"response.output_item.done","item":{"type":"web_search_call","id":"ws1","status":"completed","action":{"type":"open_page","url":"https://example.org/private"}}}`)
+	select {
+	case got := <-comments:
+		if got != (llm.PublicProgress{WebLookupID: "ws1", WebAction: "open_page"}) {
+			t.Fatalf("unexpected lookup %+v", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("web lookup waited for the final response")
+	}
+	write(`{"type":"response.completed","response":{"status":"completed","output":[]}}`)
+	w.Close()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 0 {
+		t.Fatal("unexpected extra commentary")
 	}
 }
