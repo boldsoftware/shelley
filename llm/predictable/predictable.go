@@ -70,8 +70,8 @@ func requestMentions(req *llm.Request, needle string) bool {
 //   - "echo: <text>" - echoes the text back
 //   - "stream: <text>" - echoes the text back, streamed slowly enough for a
 //     client to see it grow
-//   - "stream <total>/<every>: <text>" - the same, a piece every <every>
-//     for <total> ("stream 3s/50ms: ..."), as a test asks a reply to grow
+//   - "stream <total>/<every>: <text>" - the same, growing evenly over
+//     <total>, every <every> ("stream 3s/50ms: ..."), as a test asks
 //   - Shelley's <background_job> completion notice - a short acknowledgement
 //   - "bash: <command>" - triggers bash tool with command
 //   - "bash-bg: <command>" - triggers bash tool with background=true
@@ -344,13 +344,13 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 		// returned without streaming: many tests take a turn's timing from
 		// this model.
 		if text, ok := strings.CutPrefix(inputText, "stream: "); ok {
-			if err := streamText(ctx, req, text, streamPieces, streamPace); err != nil {
+			if err := streamText(ctx, req, text, streamTotal, streamEvery); err != nil {
 				return nil, err
 			}
 			return s.makeResponse(text, inputTokens), nil
 		}
-		if pieces, every, text, ok := timedStream(inputText); ok {
-			if err := streamText(ctx, req, text, pieces, every); err != nil {
+		if total, every, text, ok := timedStream(inputText); ok {
+			if err := streamText(ctx, req, text, total, every); err != nil {
 				return nil, err
 			}
 			return s.makeResponse(text, inputTokens), nil
@@ -561,17 +561,15 @@ func (s *Service) makeRefusalResponse(inputTokens uint64) *llm.Response {
 	}
 }
 
-// A "stream: " reply goes out in at most streamPieces pieces, so that a long
-// one costs no more than a short one, with streamPace between them: long
-// enough for a client to see the reply grow.
+// A "stream: " reply takes streamTotal whatever its length, a piece every
+// streamEvery: long enough for a client to see it grow.
 const (
-	streamPieces = 4
-	streamPace   = 75 * time.Millisecond
+	streamTotal = 300 * time.Millisecond
+	streamEvery = 75 * time.Millisecond
 )
 
-// timedStream reads "stream <total>/<every>: <text>": a piece every <every>,
-// as many as <total> takes (at least one).
-func timedStream(input string) (pieces int, every time.Duration, text string, ok bool) {
+// timedStream reads "stream <total>/<every>: <text>".
+func timedStream(input string) (total, every time.Duration, text string, ok bool) {
 	spec, text, found := strings.Cut(input, ": ")
 	spec, isStream := strings.CutPrefix(spec, "stream ")
 	if !found || !isStream {
@@ -580,30 +578,34 @@ func timedStream(input string) (pieces int, every time.Duration, text string, ok
 	totalSpec, everySpec, found := strings.Cut(spec, "/")
 	total, err1 := time.ParseDuration(totalSpec)
 	every, err2 := time.ParseDuration(everySpec)
-	if !found || err1 != nil || err2 != nil || every <= 0 {
+	if !found || err1 != nil || err2 != nil || every <= 0 || total <= 0 {
 		return 0, 0, "", false
 	}
-	return max(1, int(total/every)), every, text, true
+	return total, every, text, true
 }
 
-// streamText sends text through req.OnStream in pieces, as a streaming
-// provider adapter does before it returns the reply. A piece never ends
-// inside a character. Cancelled part way, it returns the context's error.
-func streamText(ctx context.Context, req *llm.Request, text string, pieces int, pace time.Duration) error {
+// streamText sends text through req.OnStream over total, as a streaming
+// provider adapter does before it returns the reply: every <every>, and at
+// total, the characters due by then. Cancelled part way, it returns the
+// context's error.
+func streamText(ctx context.Context, req *llm.Request, text string, total, every time.Duration) error {
 	if req.OnStream == nil {
 		return nil
 	}
 	runes := []rune(text)
-	size := (len(runes) + pieces - 1) / pieces
-	for start := 0; start < len(runes); start += size {
-		if start > 0 {
-			select {
-			case <-time.After(pace):
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+	sent := 0
+	for elapsed := time.Duration(0); sent < len(runes); {
+		tick := min(elapsed+every, total)
+		select {
+		case <-time.After(tick - elapsed):
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-		req.OnStream(llm.StreamDelta{Type: "text", Text: string(runes[start:min(start+size, len(runes))])})
+		elapsed = tick
+		if due := len(runes) * int(elapsed) / int(total); due > sent {
+			req.OnStream(llm.StreamDelta{Type: "text", Text: string(runes[sent:due])})
+			sent = due
+		}
 	}
 	return nil
 }

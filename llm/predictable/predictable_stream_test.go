@@ -3,6 +3,7 @@ package predictable
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -43,35 +44,48 @@ func TestDoStreamsAStreamReply(t *testing.T) {
 	})
 }
 
-// A "stream <total>/<every>: " reply streams a piece every <every>, as
-// many as <total> takes.
-func TestDoStreamsATimedReplyAtItsPace(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		var streamed string
-		var times []time.Time
-		req := &llm.Request{
-			Messages: []llm.Message{llm.UserStringMessage("stream 2s/250ms: one two three four five six seven eight")},
-			OnStream: func(d llm.StreamDelta) {
-				streamed += d.Text
-				times = append(times, time.Now())
-			},
+// A "stream <total>/<every>: " reply grows evenly, whatever its length:
+// every <every> (and at <total>, when <every> doesn't divide it), the
+// text due by then, ending at <total>.
+func TestDoStreamsATimedReplyEvenly(t *testing.T) {
+	for _, text := range []string{"ab", "one two three four five six seven eight", "考え中💭 and then some more"} {
+		for _, spec := range []string{"2s/250ms", "1s/300ms"} {
+			t.Run(spec+" "+text, func(t *testing.T) {
+				synctest.Test(t, func(t *testing.T) {
+					total, every, _ := strings.Cut(spec, "/")
+					totalD, _ := time.ParseDuration(total)
+					everyD, _ := time.ParseDuration(every)
+					start := time.Now()
+					var streamed []rune
+					var at []time.Duration
+					req := &llm.Request{
+						Messages: []llm.Message{llm.UserStringMessage("stream " + spec + ": " + text)},
+						OnStream: func(d llm.StreamDelta) {
+							streamed = append(streamed, []rune(d.Text)...)
+							elapsed := time.Since(start)
+							at = append(at, elapsed)
+							if elapsed%everyD != 0 && elapsed != totalD {
+								t.Errorf("a piece at %v, not on a %v tick", elapsed, everyD)
+							}
+							if due := len([]rune(text)) * int(elapsed) / int(totalD); len(streamed) != due {
+								t.Errorf("at %v, %d characters streamed, want the %d due", elapsed, len(streamed), due)
+							}
+						},
+					}
+					resp, err := NewService().Do(t.Context(), req)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if string(streamed) != resp.Content[0].Text || string(streamed) != text {
+						t.Errorf("streamed %q, returned %q", string(streamed), resp.Content[0].Text)
+					}
+					if last := at[len(at)-1]; last != totalD {
+						t.Errorf("the last piece came at %v, want %v", last, totalD)
+					}
+				})
+			})
 		}
-		resp, err := NewService().Do(t.Context(), req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if streamed != resp.Content[0].Text || streamed != "one two three four five six seven eight" {
-			t.Errorf("streamed %q, returned %q", streamed, resp.Content[0].Text)
-		}
-		if len(times) != 8 {
-			t.Fatalf("streamed in %d pieces, want 8 (2s / 250ms)", len(times))
-		}
-		for i := 1; i < len(times); i++ {
-			if gap := times[i].Sub(times[i-1]); gap != 250*time.Millisecond {
-				t.Errorf("piece %d came %v after the last, want 250ms", i, gap)
-			}
-		}
-	})
+	}
 }
 
 // Any other reply comes back whole: nothing streams.
