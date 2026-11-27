@@ -113,11 +113,12 @@ interface BashDisplayData {
   background?: BackgroundJobDisplay;
 }
 
-type ReturnState = "finished" | "failed" | "lost" | "unknown";
+type ReturnState = "finished" | "failed" | "lost" | "running" | "unknown";
 const returnLabels: Record<ReturnState, string> = {
   finished: "Finished",
   failed: "Failed",
   lost: "Lost",
+  running: "Still running",
   unknown: "Background update",
 };
 

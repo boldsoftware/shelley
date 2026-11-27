@@ -1334,6 +1334,22 @@ func (cm *ConversationManager) queueMessage(ctx context.Context, modelID string,
 
 func (cm *ConversationManager) queueMessageLocked(ctx context.Context, modelID string, message llm.Message, midTurn bool) error {
 	s := cm.server
+	if data, ok := turnUserDataFromContext(ctx).(backgroundJobUserData); ok && data.CheckIn {
+		allowed, err := cm.backgroundCheckInAllowed(ctx, data.BackgroundJobID)
+		if err != nil || !allowed {
+			return err
+		}
+		queued, err := cm.db.GetQueuedMessages(ctx, cm.conversationID)
+		if err != nil {
+			return err
+		}
+		for _, qm := range queued {
+			var existing backgroundJobUserData
+			if json.Unmarshal(qm.UserData, &existing) == nil && existing.CheckIn && existing.BackgroundJobID == data.BackgroundJobID {
+				return nil
+			}
+		}
+	}
 	// A subagent report must not slip between Stop's initial check and its
 	// queue clear. Stop raises this fence before taking the same lifecycle
 	// lock; whichever obtains it first determines whether the report lands
@@ -1549,6 +1565,10 @@ func (cm *ConversationManager) takeInjectable(ctx context.Context, generation ui
 	if err != nil {
 		cm.logger.Error("Failed to read queued messages for injection", "error", err)
 		queued = nil
+	}
+	queued, err = cm.filterBackgroundCheckIns(ctx, queued)
+	if err != nil {
+		return inj, err
 	}
 	injectable, err := cm.injectable(ctx, queued, profileTurn)
 	if err != nil {
@@ -1772,6 +1792,11 @@ func (cm *ConversationManager) drainPendingMessagesOwned() {
 		queued, err = cm.feedableQueue(ctx)
 		if err != nil {
 			cm.logger.Error("Failed to read queued messages", "error", err)
+			return
+		}
+		queued, err = cm.filterBackgroundCheckIns(ctx, queued)
+		if err != nil {
+			cm.logger.Error("Failed to filter background check-ins", "error", err)
 			return
 		}
 		if len(queued) == 0 {

@@ -43,6 +43,7 @@ type liveDeliveryUserData struct {
 // finished; it is not from a human or another conversation.
 type backgroundJobUserData struct {
 	BackgroundJobID string `json:"background_job_id"`
+	CheckIn         bool   `json:"background_job_check_in,omitempty"`
 	Command         string `json:"command"`
 	// ExitCode is absent when the job was lost.
 	ExitCode *int `json:"exit_code,omitempty"`

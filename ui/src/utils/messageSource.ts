@@ -17,6 +17,7 @@ export interface BackgroundJobOutcome {
 
 export interface BackgroundJobMessageSource {
   backgroundJobId: string;
+  checkIn?: { command: string };
   // Absent on notices recorded before outcomes were stored structurally.
   outcome?: BackgroundJobOutcome;
 }
@@ -54,6 +55,12 @@ export function messageSource(userData: unknown): MessageSource | null {
 
   const { background_job_id: backgroundJobId } = parsed;
   if (typeof backgroundJobId === "string" && backgroundJobId) {
+    if (parsed.background_job_check_in === true) {
+      return {
+        backgroundJobId,
+        checkIn: { command: typeof parsed.command === "string" ? parsed.command : "" },
+      };
+    }
     const outcome = backgroundJobOutcome(parsed);
     return outcome ? { backgroundJobId, outcome } : { backgroundJobId };
   }

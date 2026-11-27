@@ -45,6 +45,17 @@ for (const data of [
   assert.deepEqual(messageSource(data), { backgroundJobId: "1a2b3c4d" });
 }
 assert.equal(messageSource({ background_job_id: "" }), null);
+assert.deepEqual(
+  messageSource({
+    background_job_id: "abc",
+    background_job_check_in: true,
+    command: "make",
+    duration: "",
+    log_path: "/tmp/job",
+    tail: "",
+  }),
+  { backgroundJobId: "abc", checkIn: { command: "make" } },
+);
 
 const finished = {
   background_job_id: "1a2b3c4d",

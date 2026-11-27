@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"slices"
 	"time"
 
@@ -98,14 +99,67 @@ func backgroundJobFromRow(r generated.BackgroundJob) claudetool.BackgroundJob {
 	}
 }
 
+const (
+	backgroundNudgeBase = time.Hour
+	backgroundNudgeCap  = 24 * time.Hour
+)
+
+func nextBackgroundCheck(elapsed time.Duration) time.Duration {
+	for offset := backgroundNudgeBase; offset < backgroundNudgeCap; offset *= 2 {
+		if elapsed < offset {
+			return offset
+		}
+	}
+	return (elapsed/backgroundNudgeCap + 1) * backgroundNudgeCap
+}
+
 // watchBackgroundJob reports job once it exits.
 func (s *Server) watchBackgroundJob(job claudetool.BackgroundJob, exited <-chan struct{}) {
 	go func() {
-		<-exited
+		offset := nextBackgroundCheck(time.Since(job.StartedAt))
+		timer := time.NewTimer(time.Until(job.StartedAt.Add(offset)))
+		defer timer.Stop()
+	watching:
+		for {
+			select {
+			case <-exited:
+				break watching
+			case <-timer.C:
+				select {
+				case <-exited:
+					break watching
+				default:
+				}
+				if err := s.nudgeBackgroundJob(job); err != nil {
+					s.logger.Error("Failed to deliver background job check-in", "job", job.ID, "error", err)
+				}
+				offset = nextBackgroundCheck(time.Since(job.StartedAt))
+				timer.Reset(time.Until(job.StartedAt.Add(offset)))
+			}
+		}
 		if err := s.reportBackgroundJobExit(context.Background(), job); err != nil {
 			s.logger.Error("Failed to record background job exit", "job", job.ID, "conversation", job.ConversationID, "error", err)
 		}
 	}()
+}
+
+func (s *Server) nudgeBackgroundJob(job claudetool.BackgroundJob) error {
+	ctx := context.Background()
+	command, err := s.secrets.Redact(ctx, job.Command)
+	if err != nil {
+		return err
+	}
+
+	if len(command) > 1024 {
+		command = command[:1024] + " [truncated]"
+	}
+
+	logInfo := "log metadata unavailable"
+	if info, err := os.Stat(job.LogPath); err == nil {
+		logInfo = fmt.Sprintf("%d bytes; last modified %s ago", info.Size(), max(0, time.Since(info.ModTime())).Round(time.Second))
+	}
+	text := fmt.Sprintf("Background job %s · running %s\nCommand: %s\nLog: %s (%s)\nCheck progress, intervene if needed, or keep waiting.", job.ID, time.Since(job.StartedAt).Round(time.Second), command, job.LogPath, logInfo)
+	return s.queueBackgroundJobNotice(ctx, job, backgroundJobUserData{BackgroundJobID: job.ID, CheckIn: true, Command: command, LogPath: job.LogPath, Text: text})
 }
 
 // runningBackgroundJobsOf returns conversationID's running jobs, oldest first.
@@ -178,18 +232,13 @@ func (s *Server) notifyBackgroundJobExit(job claudetool.BackgroundJob) {
 // <background_job> and the UI attributes it. A busy conversation takes it
 // at its next LLM request; an idle one starts a turn.
 func (s *Server) deliverBackgroundJobNotice(ctx context.Context, job claudetool.BackgroundJob) error {
-	cm, err := s.getOrCreateConversationManager(ctx, job.ConversationID, "")
-	if err != nil {
-		return fmt.Errorf("load conversation: %w", err)
-	}
-	cm.mu.Lock()
-	modelID := cm.modelID
-	cm.mu.Unlock()
 	outcome := job.Outcome()
 	// The notice carries the job's output to the model.
-	if outcome.Tail, err = s.secrets.Redact(ctx, outcome.Tail); err != nil {
+	tail, err := s.secrets.Redact(ctx, outcome.Tail)
+	if err != nil {
 		return err
 	}
+	outcome.Tail = tail
 	text := outcome.Notice()
 	data := backgroundJobUserData{
 		BackgroundJobID: job.ID,
@@ -202,14 +251,25 @@ func (s *Server) deliverBackgroundJobNotice(ctx context.Context, job claudetool.
 	if outcome.ExitCode != nil {
 		data.Duration = outcome.Elapsed.String()
 	}
-	ctx = contextWithTurnUserData(ctx, data)
-	if err := cm.InjectMessage(ctx, modelID, llm.UserStringMessage(text)); err != nil {
+	if err := s.queueBackgroundJobNotice(ctx, job, data); err != nil {
 		return err
 	}
 	s.liveCalls.withActiveProgress(job.ConversationID, func(c *liveCall) {
 		c.noteProgress(liveBackgroundProgress(data))
 	})
 	return nil
+}
+
+func (s *Server) queueBackgroundJobNotice(ctx context.Context, job claudetool.BackgroundJob, data backgroundJobUserData) error {
+	cm, err := s.getOrCreateConversationManager(ctx, job.ConversationID, "")
+	if err != nil {
+		return fmt.Errorf("load conversation: %w", err)
+	}
+	cm.mu.Lock()
+	modelID := cm.modelID
+	cm.mu.Unlock()
+	ctx = contextWithTurnUserData(ctx, data)
+	return cm.InjectMessage(ctx, modelID, llm.UserStringMessage(data.Text))
 }
 
 // BackgroundJobInfo describes a running background job to the UI.

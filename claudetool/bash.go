@@ -148,8 +148,14 @@ then run the remaining command directly.
 After 60s, commands move to the background, and the response's later calls
 are skipped. To run independent work at the same time, start it with
 background. A background command's output arrives as a new message when it
-exits; never poll or sleep for it. While it runs, only do work that doesn't
-need its output; otherwise end your turn.
+exits. For long jobs, prefer concise progress in the job log: native counters
+or timestamped milestones, not noisy debug output or invented percentages.
+A check-in is a cue to inspect progress once. Check the work itself (e.g.
+partial file size and modification time); a quiet log need not mean a stall.
+Leave healthy work running. If blocked, try one recovery that preserves
+completed work and won't duplicate side effects, then verify the result.
+If no safe recovery is clear, ask only if a decision is needed. Between
+notices, don't poll or sleep; if no independent work remains, end your turn.
 Do not use &, nohup, or disown.
 
 For servers and watch modes, which never exit, use tmux.

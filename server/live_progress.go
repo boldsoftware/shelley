@@ -256,5 +256,8 @@ func liveProgress(row generated.Message) (notes, events []string, ended bool) {
 
 func liveBackgroundProgress(job backgroundJobUserData) string {
 	data, _ := json.Marshal(job)
+	if job.CheckIn {
+		return "Background check-in (still running): " + string(data)
+	}
 	return "Background result: " + string(data)
 }
