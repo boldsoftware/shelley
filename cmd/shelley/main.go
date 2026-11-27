@@ -201,7 +201,13 @@ func runServe(global GlobalConfig, args []string) {
 	requireHeader := fs.String("require-header", "", "Require this header on all API requests (e.g., X-Exedev-Userid)")
 	socketPath := fs.String("socket", client.DefaultSocketPath(), "Path to Unix socket for local CLI client access (set to 'none' to disable)")
 	banner := fs.String("banner", "", "If set, shows this text in a banner at the top of the UI (useful for marking demo instances)")
+	userWaitingBackgroundAfter := fs.Duration("bash-user-waiting-background-after", claudetool.DefaultBashUserWaitingBackgroundAfter,
+		"How long a bash command runs, with a user message waiting, before it moves to the background")
 	fs.Parse(args)
+	if *userWaitingBackgroundAfter <= 0 {
+		fmt.Fprintln(os.Stderr, "-bash-user-waiting-background-after takes a positive duration")
+		os.Exit(2)
+	}
 
 	logger := setupLogging(global.Debug)
 	if err := server.ReapInheritedChildren(); err != nil {
@@ -254,6 +260,7 @@ func runServe(global GlobalConfig, args []string) {
 	// Browser tests, which run predictable-only, check exact bash output
 	// that a loaded test machine's notes would change.
 	toolSetConfig.BashResourceNotes = !global.PredictableOnly
+	toolSetConfig.BashUserWaitingBackgroundAfter = *userWaitingBackgroundAfter
 
 	// Create server
 	svr := server.NewServer(database, llmManager, toolSetConfig, logger, global.PredictableOnly, llmConfig.DefaultModel, *requireHeader)

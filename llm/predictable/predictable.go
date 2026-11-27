@@ -72,6 +72,8 @@ func requestMentions(req *llm.Request, needle string) bool {
 //     client to see it grow
 //   - "stream <total>/<every>: <text>" - the same, growing evenly over
 //     <total>, every <every> ("stream 3s/50ms: ..."), as a test asks
+//   - "stream until <gate>: <text>" - the same, its first half at once and
+//     the rest once any conversation says "release: <gate>"
 //   - Shelley's <background_job> completion notice - a short acknowledgement
 //   - "bash: <command>" - triggers bash tool with command
 //   - "bash-bg: <command>" - triggers bash tool with background=true
@@ -349,6 +351,16 @@ func (s *Service) Do(ctx context.Context, req *llm.Request) (*llm.Response, erro
 			}
 			return s.makeResponse(text, inputTokens), nil
 		}
+		if spec, text, ok := strings.Cut(inputText, ": "); ok && strings.HasPrefix(spec, "stream until ") {
+			if err := streamGated(ctx, req, text, strings.TrimPrefix(spec, "stream until ")); err != nil {
+				return nil, err
+			}
+			return s.makeResponse(text, inputTokens), nil
+		}
+		if name, ok := strings.CutPrefix(inputText, "release: "); ok {
+			release(name)
+			return s.makeResponse("Released "+name+".", inputTokens), nil
+		}
 		if total, every, text, ok := timedStream(inputText); ok {
 			if err := streamText(ctx, req, text, total, every); err != nil {
 				return nil, err
@@ -607,6 +619,82 @@ func streamText(ctx context.Context, req *llm.Request, text string, total, every
 			sent = due
 		}
 	}
+	return nil
+}
+
+// Gates of "stream until <gate>: " replies, by name, in this process. A
+// gate is open once a request says "release: <gate>", before or after a
+// reply waits on it, and is gone once no reply waits on it any more.
+var gates struct {
+	sync.Mutex
+	byName map[string]*gateState
+}
+
+type gateState struct {
+	open    chan struct{}
+	waiters int
+}
+
+// gate returns name's gate, made if need be. Call it with gates locked.
+func gate(name string) *gateState {
+	if gates.byName == nil {
+		gates.byName = map[string]*gateState{}
+	}
+	g := gates.byName[name]
+	if g == nil {
+		g = &gateState{open: make(chan struct{})}
+		gates.byName[name] = g
+	}
+	return g
+}
+
+func release(name string) {
+	gates.Lock()
+	defer gates.Unlock()
+	g := gate(name)
+	select {
+	case <-g.open:
+	default:
+		close(g.open)
+	}
+}
+
+// awaitGate returns once name's gate is open, or with the context's error.
+func awaitGate(ctx context.Context, name string) error {
+	gates.Lock()
+	g := gate(name)
+	g.waiters++
+	gates.Unlock()
+	defer func() {
+		gates.Lock()
+		defer gates.Unlock()
+		if g.waiters--; g.waiters == 0 {
+			delete(gates.byName, name)
+		}
+	}()
+	select {
+	case <-g.open:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// streamGated sends the first half of text through req.OnStream, then,
+// once the gate is open, the rest. Cancelled while it waits, it returns
+// the context's error. Without req.OnStream there's no part way to show,
+// so it returns at once, as a "stream: " reply does.
+func streamGated(ctx context.Context, req *llm.Request, text, name string) error {
+	if req.OnStream == nil {
+		return nil
+	}
+	runes := []rune(text)
+	half := len(runes) / 2
+	req.OnStream(llm.StreamDelta{Type: "text", Text: string(runes[:half])})
+	if err := awaitGate(ctx, name); err != nil {
+		return err
+	}
+	req.OnStream(llm.StreamDelta{Type: "text", Text: string(runes[half:])})
 	return nil
 }
 

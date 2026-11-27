@@ -88,6 +88,109 @@ func TestDoStreamsATimedReplyEvenly(t *testing.T) {
 	}
 }
 
+// A "stream until <gate>: " reply streams its first half, then nothing
+// more until another request says "release: <gate>", then the rest: a
+// client sees it part way for as long as it needs to.
+func TestDoHoldsAGatedReplyHalfWayUntilReleased(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		svc := NewService()
+		pieces := make(chan string, 2)
+		done := make(chan *llm.Response)
+		go func() {
+			resp, err := svc.Do(t.Context(), &llm.Request{
+				Messages: []llm.Message{llm.UserStringMessage("stream until g1: ping pong")},
+				OnStream: func(d llm.StreamDelta) { pieces <- d.Text },
+			})
+			if err != nil {
+				resp = nil
+			}
+			done <- resp
+		}()
+		synctest.Wait()
+		if got := <-pieces; got != "ping" {
+			t.Fatalf("first piece %q, want the first half", got)
+		}
+		select {
+		case p := <-pieces:
+			t.Fatalf("streamed %q before the release", p)
+		case <-done:
+			t.Fatal("answered before the release")
+		default:
+		}
+		resp, err := svc.Do(t.Context(), &llm.Request{Messages: []llm.Message{llm.UserStringMessage("release: g1")}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := resp.Content[0].Text; got != "Released g1." {
+			t.Errorf("release answered %q", got)
+		}
+		if got := <-pieces; got != " pong" {
+			t.Errorf("second piece %q, want the rest", got)
+		}
+		if resp := <-done; resp == nil || resp.Content[0].Text != "ping pong" {
+			t.Errorf("reply %v, want the whole text", resp)
+		}
+	})
+}
+
+// Released first, a gated reply streams whole at once; cancelled while
+// held, it returns the context's error.
+func TestDoGatedReplyReleasedEarlyOrCancelled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		svc := NewService()
+		if _, err := svc.Do(t.Context(), &llm.Request{Messages: []llm.Message{llm.UserStringMessage("release: g2")}}); err != nil {
+			t.Fatal(err)
+		}
+		resp, err := svc.Do(t.Context(), &llm.Request{
+			Messages: []llm.Message{llm.UserStringMessage("stream until g2: early bird")},
+			OnStream: func(llm.StreamDelta) {},
+		})
+		if err != nil || resp.Content[0].Text != "early bird" {
+			t.Fatalf("released early: response %v, error %v", resp, err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		resp, err = svc.Do(ctx, &llm.Request{
+			Messages: []llm.Message{llm.UserStringMessage("stream until g3: never released")},
+			OnStream: func(llm.StreamDelta) { cancel() },
+		})
+		if resp != nil || !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled: response %v, error %v; want context.Canceled", resp, err)
+		}
+	})
+}
+
+// A gate opens for the reply that waits on it, then closes again: the
+// next reply to name it waits for its own release.
+func TestDoGateOpensOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		svc := NewService()
+		if _, err := svc.Do(t.Context(), &llm.Request{Messages: []llm.Message{llm.UserStringMessage("release: g4")}}); err != nil {
+			t.Fatal(err)
+		}
+		gated := &llm.Request{
+			Messages: []llm.Message{llm.UserStringMessage("stream until g4: once only")},
+			OnStream: func(llm.StreamDelta) {},
+		}
+		if _, err := svc.Do(t.Context(), gated); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan error)
+		go func() {
+			_, err := svc.Do(ctx, gated)
+			done <- err
+		}()
+		synctest.Wait()
+		select {
+		case err := <-done:
+			t.Fatalf("the second reply passed an opened gate (error %v)", err)
+		default:
+		}
+		cancel()
+		<-done
+	})
+}
+
 // Any other reply comes back whole: nothing streams.
 func TestDoReturnsOtherRepliesWhole(t *testing.T) {
 	for _, message := range []string{"echo: a reply of some length", "think: about it"} {
