@@ -106,9 +106,29 @@ func transcriptionTestFile(t *testing.T, name string) string {
 func TestTranscriptionParentMessageOmitsWorkerMetadata(t *testing.T) {
 	message := transcriptionParentMessage("", "Spoken words.")
 	got := message.Content[0].Text
-	want := "Spoken words."
+	want := "Spoken words.\n\n(dictated)"
 	if got != want {
 		t.Fatalf("parent message = %q, want %q", got, want)
+	}
+}
+
+// A voice recording ends "(dictated)", as the iOS app's dictation does, so
+// the model reads odd words as mishearings. A screen recording's guidance
+// already says so.
+func TestTranscriptionParentMessageMarksDictation(t *testing.T) {
+	tests := []struct {
+		context string
+		details []string
+		want    string
+	}{
+		{"look at this", nil, "look at this\n\nSpoken words.\n\n(dictated)"},
+		{"", []string{"Screen recording: [x]", screenRecordingGuidance}, "Spoken words.\n\nScreen recording: [x]\n\n" + screenRecordingGuidance},
+	}
+	for _, tt := range tests {
+		got := transcriptionParentMessage(tt.context, "Spoken words.", tt.details...).Content[0].Text
+		if got != tt.want {
+			t.Errorf("transcriptionParentMessage(%q, %q) = %q, want %q", tt.context, tt.details, got, tt.want)
+		}
 	}
 }
 

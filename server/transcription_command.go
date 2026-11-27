@@ -397,6 +397,12 @@ func transcriptionParentMessage(transcriptionContext, text string, details ...st
 		parts = append(parts, transcriptionContext)
 	}
 	parts = append(parts, strings.TrimSpace(text))
+	if len(details) == 0 {
+		// A voice recording ends as the iOS app's dictation does, so the
+		// model reads odd words as mishearings rather than intent. A screen
+		// or review recording's details already say so.
+		details = []string{"(dictated)"}
+	}
 	return llm.UserStringMessage(strings.Join(append(parts, details...), "\n\n"))
 }
 
