@@ -16,9 +16,54 @@
     <title>Shelley Agent</title>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/main.css" />
-    <script type="module" src="/main.js"></script>
+    <style>
+      #startup-error button {
+        min-height: 48px;
+        padding: 0 1.75rem;
+        border: 1px solid #1d4ed8;
+        border-radius: 0.65rem;
+        background: #2563eb;
+        color: white;
+        font:
+          600 1rem system-ui,
+          sans-serif;
+        box-shadow: 0 2px 0 #1e40af;
+        cursor: pointer;
+      }
+      #startup-error button:active {
+        transform: translateY(2px);
+        box-shadow: none;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <section id="startup-error" hidden style="margin: auto; padding: 1rem; text-align: center">
+        <p role="status">Shelley couldn’t finish loading.</p>
+        <button type="button" onclick="location.reload()">Try again</button>
+      </section>
+    </div>
+    <script>
+      function retryStartup() {
+        function showError() {
+          document.getElementById("startup-error").hidden = false;
+        }
+        function retry() {
+          const script = document.createElement("script");
+          script.type = "module";
+          script.src = "/main.js?retry=1";
+          script.onerror = showError;
+          document.head.append(script);
+        }
+        setTimeout(() => {
+          if (navigator.onLine) retry();
+          else {
+            showError();
+            window.addEventListener("online", retry, { once: true });
+          }
+        }, 1500);
+      }
+    </script>
+    <script type="module" src="/main.js" onerror="retryStartup()"></script>
   </body>
 </html>
