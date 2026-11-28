@@ -400,6 +400,38 @@ func TestHandleGitDiffsIncludesRequestedCommit(t *testing.T) {
 	}
 }
 
+func TestGitReviewRequiresRecordedMachine(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+	dir := setupTestGitRepo(t)
+	for expected, want := range map[string]int{"": http.StatusOK, "previous-vm": http.StatusConflict} {
+		req := httptest.NewRequest(http.MethodGet, "/api/git/diffs?cwd="+dir+"&expected_machine="+expected, nil)
+		w := httptest.NewRecorder()
+		h.server.handleGitDiffs(w, req)
+		if w.Code != want {
+			t.Errorf("expected_machine=%q: got %d, want %d", expected, w.Code, want)
+		}
+	}
+}
+
+func TestGitReviewRequiresRecordedCheckout(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+	repo := setupTestGitRepo(t)
+	child := filepath.Join(repo, "removed-worktree")
+	if err := os.Mkdir(child, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]int{repo: http.StatusOK, child: http.StatusConflict} {
+		req := httptest.NewRequest(http.MethodGet, "/api/git/diffs?cwd="+path+"&expected_checkout="+path, nil)
+		w := httptest.NewRecorder()
+		h.server.handleGitDiffs(w, req)
+		if w.Code != want {
+			t.Errorf("expected_checkout=%q: got %d, want %d", path, w.Code, want)
+		}
+	}
+}
+
 func testGitOutput(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", args...)

@@ -61,6 +61,16 @@ func TestGetGitState_RegularRepo(t *testing.T) {
 	if len(state.Commit) < 7 {
 		t.Errorf("expected short commit hash, got %q", state.Commit)
 	}
+	head, err := exec.Command("git", "-C", tmpDir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantFull := strings.TrimSpace(string(head))
+	for _, got := range []*GitState{state, getGitStateFromGit(tmpDir)} {
+		if got.FullCommit != wantFull || !strings.HasPrefix(got.FullCommit, got.Commit) {
+			t.Errorf("commit = %q, full = %q, want prefix of %q", got.Commit, got.FullCommit, wantFull)
+		}
+	}
 }
 
 func TestGetGitState_Worktree(t *testing.T) {

@@ -229,8 +229,10 @@ func TestChangeDirTool_Method(t *testing.T) {
 	if llmTool.Description != changeDirDescription {
 		t.Errorf("expected description %q, got %q", changeDirDescription, llmTool.Description)
 	}
-	if !contains(llmTool.Description, "Omit redundant cd") {
-		t.Error("change_dir should tell the model to omit a redundant cd")
+	for _, want := range []string{"new default workspace", "not a prerequisite", "Skip this call if already in the intended workspace", "Use bash cwd"} {
+		if !contains(llmTool.Description, want) {
+			t.Errorf("change_dir description is missing %q", want)
+		}
 	}
 
 	if llmTool.Run == nil {

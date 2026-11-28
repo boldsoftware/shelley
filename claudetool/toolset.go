@@ -78,6 +78,7 @@ type ToolSetConfig struct {
 	// OnWorkingDirChange is called when the working directory changes.
 	// This can be used to persist the change to a database.
 	OnWorkingDirChange func(newDir string)
+	OnCheckoutEdit     func(context.Context, VM, string)
 	// SubagentRunner is the runner for subagent conversations.
 	// If set, the subagent tool will be available.
 	SubagentRunner SubagentRunner
@@ -284,7 +285,7 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 			patchProfile = llm.PatchProfile(svc)
 		}
 	}
-	patchTool := &PatchTool{WorkingDir: wd, Provider: patchProvider, Profile: patchProfile, VM: cfg.VM, HostDir: hostWD}
+	patchTool := &PatchTool{OnCheckoutEdit: cfg.OnCheckoutEdit, WorkingDir: wd, Provider: patchProvider, Profile: patchProfile, VM: cfg.VM, HostDir: hostWD}
 
 	changeDirTool := &ChangeDirTool{
 		WorkingDir: wd,

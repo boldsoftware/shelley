@@ -11,6 +11,7 @@ import {
   ChatRequest,
   BtwReaderDescriptor,
   CommitHighlights,
+  GitCheckout,
   GitDiffInfo,
   GitFileInfo,
   GitFileDiff,
@@ -129,20 +130,38 @@ export interface SkillDescriptor {
   parameters?: ToolSchema;
 }
 
+export interface MachineTarget {
+  conversationId?: string;
+  expectedMachine?: string;
+  expectedCheckout?: string;
+}
+
+export function checkoutTarget(machine: MachineTarget, checkout: GitCheckout): MachineTarget {
+  return {
+    conversationId: machine.conversationId,
+    expectedMachine: checkout.machine,
+    expectedCheckout: checkout.gitRoot,
+  };
+}
+
 // machineParams are query parameters naming the machine a request's paths are
 // on: conversationId's (its VM, if it has one), or with none, this host.
 export function machineParams(
-  conversationId: string | undefined,
+  machine: MachineTarget | string | undefined,
   params: Record<string, string>,
 ): URLSearchParams {
   const p = new URLSearchParams(params);
-  if (conversationId) p.set("conversation_id", conversationId);
+  const target = typeof machine === "string" ? { conversationId: machine } : machine;
+  if (target?.conversationId) p.set("conversation_id", target.conversationId);
+  if (target?.expectedMachine !== undefined) p.set("expected_machine", target.expectedMachine);
+  if (target?.expectedCheckout) p.set("expected_checkout", target.expectedCheckout);
   return p;
 }
 
 // onMachine is url, which has no query, on conversationId's machine.
-export function onMachine(url: string, conversationId: string | undefined): string {
-  return conversationId ? `${url}?${machineParams(conversationId, {})}` : url;
+export function onMachine(url: string, machine: MachineTarget | string | undefined): string {
+  const params = machineParams(machine, {}).toString();
+  return params ? `${url}?${params}` : url;
 }
 
 function mcpActivation(name: string): string {
@@ -822,11 +841,11 @@ class ApiService {
   // its VM) has cwd; without one, cwd is on this host.
   async getGitDiffs(
     cwd: string,
-    conversationId: string | undefined,
+    machine: MachineTarget,
     commit?: string,
     includeStats = true,
-  ): Promise<{ diffs: GitDiffInfo[]; gitRoot: string }> {
-    const params = machineParams(conversationId, { cwd });
+  ): Promise<GitCheckout & { diffs: GitDiffInfo[] }> {
+    const params = machineParams(machine, { cwd });
     if (commit) params.set("commit", commit);
     if (!includeStats) params.set("stats", "false");
     return apiJSON(`/api/git/diffs?${params}`, "Failed to get diffs");
@@ -835,10 +854,10 @@ class ApiService {
   // Null when the commit has no highlights, or they no longer match it.
   async getGitHighlights(
     cwd: string,
-    conversationId: string | undefined,
+    machine: MachineTarget,
     hash: string,
   ): Promise<CommitHighlights | null> {
-    const params = machineParams(conversationId, { cwd, hash });
+    const params = machineParams(machine, { cwd, hash });
     const response = await fetch(`/api/git/highlights?${params}`);
     if (response.status === 404) return null;
     if (!response.ok) {
@@ -847,32 +866,41 @@ class ApiService {
     return (await response.json()).highlights;
   }
 
+  async getRecentCheckouts(
+    cwd: string,
+    machine: MachineTarget,
+  ): Promise<{ workspace: string; paths: string[] }> {
+    const { conversationId, expectedMachine } = machine;
+    const params = machineParams({ conversationId, expectedMachine }, { cwd });
+    return apiJSON(`/api/git/checkouts?${params}`, "Failed to get recent checkouts");
+  }
+
   async getGitGraph(
     cwd: string,
-    conversationId: string | undefined,
+    machine: MachineTarget,
     limit = 500,
     scope: "all" | "current" = "all",
   ): Promise<import("../types").GitGraphResponse> {
-    const params = machineParams(conversationId, { cwd, limit: String(limit), scope });
+    const params = machineParams(machine, { cwd, limit: String(limit), scope });
     return apiJSON(`/api/git/graph?${params}`, "Failed to get git graph");
   }
 
   async getGitCommitDetail(
     cwd: string,
-    conversationId: string | undefined,
+    machine: MachineTarget,
     hash: string,
   ): Promise<import("../types").GitCommitDetail> {
-    const params = machineParams(conversationId, { cwd, hash });
+    const params = machineParams(machine, { cwd, hash });
     return apiJSON(`/api/git/commit-detail?${params}`, "Failed to get commit");
   }
 
   async getGitDiffFiles(
     diffId: string,
     cwd: string,
-    conversationId: string | undefined,
+    machine: MachineTarget,
     to?: string,
   ): Promise<GitFileInfo[]> {
-    const params = machineParams(conversationId, { cwd });
+    const params = machineParams(machine, { cwd });
     if (to) params.set("to", to);
     return apiJSON(`/api/git/diffs/${diffId}/files?${params}`, "Failed to get diff files");
   }
@@ -881,10 +909,10 @@ class ApiService {
     diffId: string,
     filePath: string,
     cwd: string,
-    conversationId: string | undefined,
+    machine: MachineTarget,
     to?: string,
   ): string {
-    const params = machineParams(conversationId, { cwd });
+    const params = machineParams(machine, { cwd });
     if (to) params.set("to", to);
     const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
     return `/api/git/file-diff/${diffId}/${encodedPath}?${params}`;
@@ -894,32 +922,28 @@ class ApiService {
     diffId: string,
     filePath: string,
     cwd: string,
-    conversationId: string | undefined,
+    machine: MachineTarget,
     to?: string,
     asText = false,
   ): Promise<GitFileDiff> {
-    const url = this.gitFileDiffURL(diffId, filePath, cwd, conversationId, to);
+    const url = this.gitFileDiffURL(diffId, filePath, cwd, machine, to);
     return apiJSON(url + (asText ? "&text=true" : ""), "Failed to get file diff");
   }
 
   async getGitCommitMessages(
     cwd: string,
-    conversationId: string | undefined,
+    machine: MachineTarget,
     from: string,
     to?: string,
   ): Promise<GitCommitMessage[]> {
-    const params = machineParams(conversationId, { cwd, from });
+    const params = machineParams(machine, { cwd, from });
     if (to) params.set("to", to);
     return apiJSON(`/api/git/commit-messages?${params}`, "Failed to get commit messages");
   }
 
-  async amendGitMessage(
-    cwd: string,
-    conversationId: string | undefined,
-    message: string,
-  ): Promise<void> {
+  async amendGitMessage(cwd: string, machine: MachineTarget, message: string): Promise<void> {
     await apiFetch(
-      onMachine("/api/git/amend-message", conversationId),
+      onMachine("/api/git/amend-message", machine),
       "Failed to amend",
       sendJSON("POST", { cwd, message }),
     );

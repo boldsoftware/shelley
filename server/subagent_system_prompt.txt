@@ -20,7 +20,9 @@ When a task matches a skill's description, run its activation command to read th
 {{.ExeDevIntegrationsXML}}
 {{end}}
 
-Working directory: {{.WorkingDirectory}}
+{{if .InitialWorkingDirectory}}
+Initial pwd: {{.InitialWorkingDirectory}}
+{{end}}
 {{if .GitInfo}}
 Git repository root: {{.GitInfo.Root}}
 {{end}}

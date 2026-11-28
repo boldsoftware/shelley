@@ -23,7 +23,7 @@
         />
         <span v-else class="bash-tool-command">Output</span>
         <span
-          v-if="displayData?.workingDir && !background"
+          v-if="displayData?.workingDir"
           class="bash-tool-cwd"
           :title="displayData.workingDir"
         >

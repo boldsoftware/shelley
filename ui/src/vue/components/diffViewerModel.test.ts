@@ -58,6 +58,16 @@ run("an explicit commit remains authoritative", () => {
   assertEqual(selection, { selectedDiff: "chosen", selectedTo: "self" }, "selection");
 });
 
+run("an unavailable requested commit never opens a different diff", () => {
+  let message = "";
+  try {
+    defaultDiffSelection([diff({ id: "working" }), diff({ id: "other" })], "missing");
+  } catch (error) {
+    message = String(error);
+  }
+  assertEqual(message.includes("Requested commit missing is unavailable"), true, "missing commit");
+});
+
 run("working changes status is explicit", () => {
   assertEqual(
     workingChangesStatus(diff({ id: "working", filesCount: 0 })),

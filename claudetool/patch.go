@@ -38,9 +38,10 @@ type patchPathLock struct {
 
 // PatchTool specifies an llm.Tool for patching files.
 type PatchTool struct {
-	Callback PatchCallback // may be nil; must support concurrent calls
-	Provider string
-	Profile  string
+	OnCheckoutEdit func(context.Context, VM, string)
+	Callback       PatchCallback // may be nil; must support concurrent calls
+	Provider       string
+	Profile        string
 	// WorkingDir is the shared mutable working directory.
 	WorkingDir *MutableWorkingDir
 	// VM, if set, is where the conversation's project work happens: each
@@ -633,6 +634,12 @@ func (p *PatchTool) runApplyPatch(ctx context.Context, text string) llm.ToolOut 
 
 	var diff strings.Builder
 	for _, mutation := range mutations {
+		if p.OnCheckoutEdit != nil && (mutation.created || mutation.deleted || mutation.movePath != "" || !bytes.Equal(mutation.old, mutation.new)) {
+			p.OnCheckoutEdit(ctx, nil, filepath.Dir(mutation.path))
+			if mutation.movePath != "" && filepath.Dir(mutation.movePath) != filepath.Dir(mutation.path) {
+				p.OnCheckoutEdit(ctx, nil, filepath.Dir(mutation.movePath))
+			}
+		}
 		path := mutation.path
 		if mutation.movePath != "" {
 			path = mutation.movePath
@@ -1035,6 +1042,7 @@ func (p *PatchTool) patchRun(ctx context.Context, input *PatchInput) llm.ToolOut
 
 	files := NewHostFS(input.vm)
 	orig, err := files.ReadFile(ctx, input.Path)
+	created := errors.Is(err, os.ErrNotExist)
 	// If the file doesn't exist, we can still apply patches
 	// that don't require finding existing text.
 	switch {
@@ -1205,6 +1213,9 @@ func (p *PatchTool) patchRun(ctx context.Context, input *PatchInput) llm.ToolOut
 		return llm.ErrorfToolOut("failed to write patched contents to file %q: %w", input.Path, err)
 	}
 
+	if p.OnCheckoutEdit != nil && (created || !bytes.Equal(orig, patched)) {
+		p.OnCheckoutEdit(ctx, input.vm, filepath.Dir(input.Path))
+	}
 	response := new(strings.Builder)
 	fmt.Fprintf(response, "<patches_applied>all</patches_applied>\n")
 	for _, msg := range clipboardsModified {

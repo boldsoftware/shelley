@@ -406,7 +406,7 @@ func TestParsePromptSkillsTemplates(t *testing.T) {
 				},
 			},
 		}},
-		{"child", subagentSystemPromptTemplate, SubagentSystemPromptData{SkillsXML: catalog, WorkingDirectory: "/project", ShelleyDBPath: "/tmp/shelley.db"}},
+		{"child", subagentSystemPromptTemplate, SubagentSystemPromptData{SkillsXML: catalog, InitialWorkingDirectory: "/project", ShelleyDBPath: "/tmp/shelley.db"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tmpl, err := template.New(tc.name).Parse(tc.source)

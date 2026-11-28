@@ -186,7 +186,7 @@ func TestE2EMobileDiffCompareRange(t *testing.T) {
 }
 
 func TestE2EMobileGitGraphSingleRail(t *testing.T) {
-	e2e(t, useful(0), `On a 320px phone, the mobile Git Graph fits All branches, Current branch, Select range, repository, and Close on one rail, without a title or second bar. Use waits, never sleep steps. `+fmt.Sprintf(mobileDiffOpen, "Diffs")+`Click ".commit-picker-trigger". Wait for ".git-graph-toolbar-mobile". Its buttons have aria-labels "All branches", "Current branch", "Select range", "Pick repository", and "Close"; their visible text matches those first three labels. Evaluate expecting true that the rail's scrollWidth is at most clientWidth, its buttons' bounding boxes lie within the viewport, and there is no ".git-graph-compare-bar" or "Git graph" title. Click ".git-graph-toolbar-mobile .git-graph-compare-tool"; evaluate expecting true that this same button now has visible text "Cancel" and aria-pressed="true" (not the All scope button). Click it again; its visible text is "Select range" and aria-pressed="false".`, func(s *shelley) {
+	e2e(t, useful(1), `On a 320px phone, the mobile Git Graph has a checkout row and a branch controls row. Use waits, never sleep steps. `+fmt.Sprintf(mobileDiffOpen, "Diffs")+`Wait for ".commit-picker-trigger .commit-picker-trigger-graph", then click ".commit-picker-trigger". In ".git-graph-header", the ".git-graph-checkout-picker" and button labeled "Close" are side by side and fully within the viewport. There is no button labeled "Pick repository". The buttons labeled "All branches", "Current branch", and "Select range" are fully within the viewport on a single row below the checkout picker. Click the checkout picker. The last option in ".git-graph-checkout-options" reads "Browse repositories…". Click it, wait for the dialog titled "Pick git repository", then dismiss it with Escape. The graph should still be visible. Click ".git-graph-toolbar-mobile .git-graph-compare-tool"; the button's text is now "Cancel" and aria-pressed is "true". Click it again; its text is "Select range" and aria-pressed is "false"`, func(s *shelley) {
 		dir := mobileDiffRepo(s)
 		s.viewport(320, 700)
 		s.write(filepath.Join(dir, "note.txt"), "before\n")
@@ -219,5 +219,30 @@ func TestE2EMobileDiffEOFDeletionRuler(t *testing.T) {
 		mobileDiffCommit(s, dir, "base")
 		s.write(file, "keep start\n"+survivor)
 		mobileDiffConversation(s, dir)
+	})
+}
+
+func TestE2EMobileReviewKeepsCheckout(t *testing.T) {
+	e2e(t, useful(0), `On a phone, continue reviewing the worktree from an inline commit, then start a fresh review in the chat workspace.
+Navigate to /c/{{SLUG}}. Click the Open Diff link in the gitinfo message containing "Commit from B".
+Click the commit picker (.commit-picker-trigger). The Checkout combobox (.git-graph-checkout-picker) has title {{B}}.
+Click the graph row "Working changes". The diff file picker or file heading shows only-in-B.txt.
+Close the diff. The Checkout combobox (.git-graph-checkout-picker) still has title {{B}} and its bounding rectangle is fully within the viewport, above the button labeled "All branches".
+Open the combobox and choose the option containing "worktree-c". The combobox now has title {{C}} and contains "Workspace". Click "Working changes" and verify the file is only-in-C.txt.
+Close the diff, then close the graph, returning to the chat.
+Use More options and the Diffs menu button to start a fresh review. Click its commit picker.
+The Checkout combobox has title {{C}}. Click "Working changes" and verify the file is only-in-C.txt.`, func(s *shelley) {
+		b := mobileDiffRepo(s)
+		s.write(filepath.Join(b, "base.txt"), "initial\n")
+		mobileDiffCommit(s, b, "initial")
+		chat := s.conversationIn(b, "bash: echo commit >>base.txt && git add base.txt && git commit -m 'Commit from B'")
+		c := filepath.Join(s.dir, "worktree-c")
+		s.gitIn(b, "worktree", "add", "--detach", c, "HEAD")
+		s.write(filepath.Join(b, "only-in-B.txt"), "B\n")
+		s.write(filepath.Join(c, "only-in-C.txt"), "C\n")
+		s.shelleyAPI("POST", "/api/conversation/"+chat.ID+"/cwd", map[string]string{"cwd": c}, nil)
+		s.v("B", b)
+		s.v("C", c)
+		s.v("SLUG", chat.Slug)
 	})
 }

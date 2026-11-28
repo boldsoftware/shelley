@@ -31,12 +31,12 @@ export function defaultDiffSelection(
     const matchingDiff = diffs.find(
       (diff) => diff.id === initialCommit || diff.id.startsWith(initialCommit),
     );
-    if (matchingDiff) {
-      return {
-        selectedDiff: matchingDiff.id,
-        selectedTo: matchingDiff.id === "working" ? "working" : "self",
-      };
-    }
+    if (!matchingDiff)
+      throw new Error(`Requested commit ${initialCommit} is unavailable in this checkout`);
+    return {
+      selectedDiff: matchingDiff.id,
+      selectedTo: matchingDiff.id === "working" ? "working" : "self",
+    };
   }
 
   const working = diffs.find((diff) => diff.id === "working");

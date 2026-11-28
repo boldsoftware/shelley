@@ -27,7 +27,7 @@ import { tildifyPath } from "../../utils/tildify";
 
 const props = defineProps<{
   message: MessageType;
-  onOpenDiffViewer?: (commit: string, cwd?: string) => void;
+  onOpenDiffViewer?: (commit: string, cwd: string, machine?: string) => void;
 }>();
 
 const copied = ref(false);
@@ -38,6 +38,7 @@ const parsed = computed(() => {
   let subject: string | null = null;
   let branch: string | null = null;
   let worktree: string | null = null;
+  let machine: string | undefined;
 
   if (props.message.user_data) {
     try {
@@ -48,12 +49,13 @@ const parsed = computed(() => {
       if (userData.commit) commitHash = userData.commit;
       if (userData.subject) subject = userData.subject;
       if (userData.branch) branch = userData.branch;
+      if (typeof userData.machine === "string") machine = userData.machine;
       if (userData.worktree) worktree = userData.worktree;
     } catch (err) {
       console.error("Failed to parse gitinfo user_data:", err);
     }
   }
-  return { commitHash, subject, branch, worktree };
+  return { commitHash, subject, branch, worktree, machine };
 });
 
 const commitHash = computed(() => parsed.value.commitHash);
@@ -88,20 +90,24 @@ onMounted(() => {
   if (document.fonts.status !== "loaded") void document.fonts.ready.then(updateLabel);
 });
 
-const canShowDiff = computed(() => !!commitHash.value && !!props.onOpenDiffViewer);
+const canShowDiff = computed(() => !!commitHash.value && !!worktree.value && !!props.onOpenDiffViewer);
 
 const diffHref = computed(() => {
   const params = new URLSearchParams();
   params.set("diff", commitHash.value!);
-  if (worktree.value) params.set("cwd", worktree.value);
+  if (worktree.value) {
+    params.set("cwd", worktree.value);
+    params.set("expected_checkout", worktree.value);
+  }
+  if (parsed.value.machine !== undefined) params.set("expected_machine", parsed.value.machine);
   return `${window.location.pathname}?${params.toString()}`;
 });
 
 function onDiffLinkClick(e: MouseEvent) {
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
   e.preventDefault();
-  if (commitHash.value && props.onOpenDiffViewer) {
-    props.onOpenDiffViewer(commitHash.value, worktree.value || undefined);
+  if (commitHash.value && worktree.value && props.onOpenDiffViewer) {
+    props.onOpenDiffViewer(commitHash.value, worktree.value, parsed.value.machine);
   }
 }
 

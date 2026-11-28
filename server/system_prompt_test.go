@@ -71,9 +71,15 @@ func TestSystemPromptEmptyCwdFallsBackToCurrentDir(t *testing.T) {
 		t.Fatalf("GenerateSystemPrompt failed: %v", err)
 	}
 
-	// Verify the current directory is mentioned in the prompt
-	if !strings.Contains(prompt, currentDir) {
-		t.Errorf("system prompt should contain current directory when cwd is empty")
+	explicit, err := GenerateSystemPrompt(currentDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prompt != explicit {
+		t.Error("empty cwd should load the same guidance as the current directory")
+	}
+	if !strings.Contains(prompt, "Initial pwd: "+currentDir+"\n") {
+		t.Errorf("system prompt should name the initial directory %q", currentDir)
 	}
 }
 
@@ -899,7 +905,7 @@ func TestSubagentSystemPromptIncludesGuidancePaths(t *testing.T) {
 	}
 
 	for _, delegated := range []bool{true, false} {
-		prompt, _, err := generateSubagentSystemPromptWithIntegrationSkills(cwd, delegated, nil, nil, nil)
+		prompt, _, err := generateSubagentSystemPromptWithIntegrationSkills(cwd, delegated, nil, nil, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -979,17 +985,22 @@ func TestSubagentSystemPromptKeepsStableSkillsFirst(t *testing.T) {
 	DBPath = "/tmp/shelley-test.db"
 	t.Cleanup(func() { DBPath = oldDBPath })
 
-	prompt, _, err := generateSubagentSystemPromptWithIntegrationSkills(t.TempDir(), true, []skills.Skill{{
+	dir := t.TempDir()
+	prompt, _, err := generateSubagentSystemPromptWithIntegrationSkills(dir, true, []skills.Skill{{
 		Name:        "stable-prefix",
 		Description: "Keep reusable guidance first.",
-	}}, nil, nil)
+	}}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	skillsAt := strings.Index(prompt, "<skills>")
-	workingDirAt := strings.Index(prompt, "Working directory:")
-	if skillsAt < 0 || workingDirAt < 0 || skillsAt > workingDirAt {
+	parentAt := strings.Index(prompt, "<parent_conversation>")
+	if skillsAt < 0 || parentAt < 0 || skillsAt > parentAt {
 		t.Fatalf("skills are not before dynamic context:\n%s", prompt)
+	}
+	pwdAt := strings.Index(prompt, "Initial pwd: "+dir+"\n")
+	if pwdAt < skillsAt || pwdAt > parentAt {
+		t.Fatalf("initial directory is absent or out of order:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "conversation_id='$SHELLEY_CONVERSATION_ID'") {
 		t.Fatalf("parent lookup does not use the child environment:\n%s", prompt)
@@ -1336,7 +1347,7 @@ func TestIntegrationSkillSnapshotIncludedInTopLevelAndSubagentPrompts(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	subagent, subSkills, err := generateSubagentSystemPromptWithIntegrationSkills(workingDir, true, integrationSkills, nil, nil)
+	subagent, subSkills, err := generateSubagentSystemPromptWithIntegrationSkills(workingDir, true, integrationSkills, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

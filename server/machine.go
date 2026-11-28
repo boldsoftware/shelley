@@ -26,9 +26,10 @@ import (
 type machine struct {
 	ctx context.Context
 	// vm is nil for this host.
-	vm      *conversationVMTarget
-	scratch string // the conversation's working directory here
-	files   claudetool.HostFS
+	vm         *conversationVMTarget
+	reviewRoot string // checkout verified for a pinned Git review
+	scratch    string // the conversation's working directory here
+	files      claudetool.HostFS
 }
 
 var localMachine = machine{ctx: context.Background(), files: claudetool.NewHostFS(nil)}
@@ -37,7 +38,26 @@ var localMachine = machine{ctx: context.Background(), files: claudetool.NewHostF
 // this host for no conversation or one without a VM. Viewing never provisions
 // a VM; it reconnects a ready one, as the next tool call would.
 func (s *Server) requestMachine(r *http.Request) (machine, error) {
-	return s.conversationMachine(r.Context(), r.URL.Query().Get("conversation_id"))
+	query := r.URL.Query()
+	m, err := s.conversationMachine(r.Context(), query.Get("conversation_id"))
+	if err != nil {
+		return machine{}, err
+	}
+	if query.Has("expected_machine") {
+		if m.name() != query.Get("expected_machine") {
+			return machine{}, fmt.Errorf("%w: this review belongs to a different machine", db.ErrConflict)
+		}
+	}
+	if root := query.Get("expected_checkout"); root != "" {
+		// The directory can survive removal of a nested worktree. Git would
+		// otherwise walk up and silently open its enclosing repository.
+		prefix, err := m.git(root, "rev-parse", "--show-prefix").Output()
+		if err != nil || string(prefix) != "\n" {
+			return machine{}, fmt.Errorf("%w: recorded checkout %q is unavailable", db.ErrConflict, root)
+		}
+		m.reviewRoot = root
+	}
+	return m, nil
 }
 
 // conversationMachine is the machine of conversation id: its VM, or this
@@ -75,6 +95,13 @@ func (s *Server) conversationMachine(ctx context.Context, id string) (machine, e
 	return machine{ctx: ctx, vm: &target, scratch: scratch, files: claudetool.NewHostFS(target)}, nil
 }
 
+func (m machine) name() string {
+	if m.vm == nil {
+		return ""
+	}
+	return m.vm.Name()
+}
+
 // machineError reports a requestMachine failure.
 func machineError(w http.ResponseWriter, err error) {
 	status := http.StatusBadGateway
@@ -87,6 +114,9 @@ func machineError(w http.ResponseWriter, err error) {
 // dir is the directory the UI means by cwd: on a VM, the conversation's
 // working directory here (or none) stands for the VM's.
 func (m machine) dir(cwd string) string {
+	if m.reviewRoot != "" && cwd == m.reviewRoot {
+		return cwd
+	}
 	if m.vm != nil && (cwd == "" || cwd == m.scratch) {
 		return m.vm.Dir()
 	}
@@ -183,6 +213,9 @@ func (m machine) writeFile(p string, data []byte) error {
 
 // gitRoot returns the root of the git repository containing dir.
 func (m machine) gitRoot(dir string) (string, error) {
+	if m.reviewRoot != "" && dir == m.reviewRoot {
+		return dir, nil
+	}
 	output, err := m.git(dir, "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return "", err

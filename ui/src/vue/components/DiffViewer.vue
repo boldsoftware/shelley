@@ -98,7 +98,7 @@
           v-tooltip.top="dirTooltip"
           class="diff-viewer-dir-btn"
           :aria-label="`Git directory: ${cwd}. Click to change`"
-          :aria-disabled="recordingLocked || onVm"
+          :aria-disabled="recordingLocked || !!checkout?.machine || onVm"
           @click="openDirPicker"
         >
           <span v-html="DIR_ICON" />
@@ -285,7 +285,7 @@
               v-tooltip.top="dirTooltip"
               class="diff-viewer-dir-btn"
               :aria-label="`Git directory: ${cwd}. Click to change`"
-              :aria-disabled="recordingLocked || onVm"
+              :aria-disabled="recordingLocked || !!checkout?.machine || onVm"
               @click="openDirPicker"
             >
               <span v-html="DIR_ICON" />
@@ -638,7 +638,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import type * as Monaco from "monaco-editor";
-import { api, onMachine } from "../../services/api";
+import { api, checkoutTarget, onMachine } from "../../services/api";
+import type { MachineTarget } from "../../services/api";
 import { loadMonaco } from "../../services/monaco";
 import { isDarkModeActive } from "../../services/theme";
 import { useVimEnabled, useMonacoVim } from "../composables/monacoVim";
@@ -676,6 +677,7 @@ import { highlightsByFile, orderByHighlights, showHighlights } from "./commitHig
 import { defaultDiffSelection, workingChangesStatus } from "./diffViewerModel";
 import type {
   CommitHighlights,
+  GitCheckout,
   GitDiffInfo,
   GitFileInfo,
   GitFileDiff,
@@ -685,13 +687,13 @@ import type {
 const props = defineProps<{
   cwd: string;
   // The conversation whose machine (this host, or its VM) cwd is on.
-  conversationId?: string;
+  machine: MachineTarget;
   // cwd is on that conversation's VM, where the repository picker, which
   // lists this host's repositories, can't pick.
   onVm?: boolean;
   isOpen: boolean;
   // Machine (VM name with namespace) the cwd is on; defaults to 'local'.
-  reviewMachine?: string;
+
   // A parent-owned review modal is open; skip the viewer's keyboard handler.
   reviewOpen?: boolean;
   initialCommit?: string;
@@ -712,7 +714,7 @@ const emit = defineEmits<{
   (e: "save-review-comment", note: NewDraftDiffComment): void;
   (e: "open-review", event: MouseEvent): void;
   (e: "open-git-graph"): void;
-  (e: "cwd-change", cwd: string): void;
+  (e: "cwd-change", cwd: string, machine?: string): void;
 }>();
 
 type ViewMode = "comment" | "edit";
@@ -756,14 +758,17 @@ const DIR_ICON =
 
 // --- Reactive state (mirrors React useState) ---
 const diffs = ref<GitDiffInfo[]>([]);
-const gitRoot = ref<string | null>(null);
 const showDirPicker = ref(false);
+const checkout = ref<GitCheckout | null>(null);
+const gitCwd = computed(() => checkout.value?.gitRoot ?? props.cwd);
+const gitMachine = computed(() => checkout.value ? checkoutTarget(props.machine, checkout.value) : props.machine);
 const selectedDiff = ref<string | null>(null);
 const selectedTo = ref("working");
 const files = ref<GitFileInfo[]>([]);
 const selectedFile = ref<string | null>(null);
 defineExpose({
   getSelection: () => ({
+    checkout: checkout.value,
     diff: selectedDiff.value,
     to: selectedTo.value,
     file: selectedFile.value,
@@ -809,8 +814,8 @@ function binaryDownloadURL(side: "before" | "after" | "patch"): string {
     api.gitFileDiffURL(
       selectedDiff.value,
       selectedFile.value,
-      props.cwd,
-      props.conversationId,
+      gitCwd.value,
+      gitMachine.value,
       selectedDiff.value === "working" ? undefined : selectedTo.value,
     ) + `&download=${side}`
   );
@@ -865,15 +870,15 @@ const mainRef = ref<HTMLDivElement | null>(null);
 let diffEditor: Monaco.editor.IStandaloneDiffEditor | null = null;
 let saveTimeout: number | null = null;
 let amendTimeout: number | null = null;
-let pendingSave: { path: string; content: string; conversationId?: string } | null = null;
-let pendingAmend: { cwd: string; content: string; conversationId?: string } | null = null;
+let pendingSave: { path: string; content: string; machine: MachineTarget } | null = null;
+let pendingAmend: { cwd: string; content: string; machine: MachineTarget } | null = null;
 let saveInFlight: Promise<void> = Promise.resolve();
 let hasShownKeyboardHint = false;
 let keyboardHintTimer: number | null = null;
 const navOrderRef = ref<string[]>([]);
 let isMobileVal = isMobile.value;
 let modeVal: ViewMode = mode.value;
-let cwdVal = props.cwd;
+
 let commitMessagesVal: GitCommitMessage[] = [];
 let currentFileIsHeadCommit = false;
 // Current split ratio for the active file. Monaco 0.44's updateOptions()
@@ -1058,21 +1063,21 @@ function requestClose() {
 }
 
 function openDirPicker() {
-  if (!recordingLocked.value && !props.onVm) showDirPicker.value = true;
+  if (!recordingLocked.value && !checkout.value?.machine && !props.onVm) showDirPicker.value = true;
 }
 
 function emitComment() {
   const target = showCommentDialog.value;
   const fd = fileDiff.value;
   const diff = selectedDiff.value;
-  const root = gitRoot.value;
-  if (!target || !fd || !diff || !root || fd.path !== selectedFile.value) return;
+  const repo = checkout.value;
+  if (!target || !fd || !diff || !repo || fd.path !== selectedFile.value) return;
   const snapshot = target.side === "left" ? fd.oldContent : fd.newContent;
   const line = target.startLine ?? target.line;
   const endLine = target.endLine ?? target.line;
   const quote = target.selectedText ?? snapshot.split("\n").slice(line - 1, endLine).join("\n");
   emit("save-review-comment", {
-    cwd: props.cwd, root, machine: props.reviewMachine ?? "local", diff, to: selectedTo.value,
+    cwd: props.cwd, root: repo.gitRoot, machine: repo.machine, diff, to: selectedTo.value,
     path: fd.path, side: target.side, line, endLine, snapshot,
     quote: target.highlight ? `${quote}\n${highlightQuote(target.highlight)}` : quote,
     text: commentText.value.trim(),
@@ -1087,11 +1092,7 @@ watch(
 
 // Keep mirror values in sync.
 watch(commitMessages, (v) => (commitMessagesVal = v), { immediate: true });
-watch(
-  () => props.cwd,
-  (v) => (cwdVal = v),
-  { immediate: true },
-);
+
 
 // vim adapter — only in edit mode (read-only comment mode would double-handle).
 useMonacoVim(
@@ -1162,29 +1163,29 @@ watch(showKeyboardHint, (v) => {
 
 // Load diffs when viewer opens; reset state when it closes.
 watch(
-  [() => props.isOpen, () => props.cwd, () => props.initialCommit],
+  [() => props.isOpen, () => props.cwd, () => props.machine, () => props.initialCommit],
   () => {
+    if (saveTimeout) saveImmediately();
+    if (amendTimeout) amendImmediately();
+    checkout.value = null;
+    loadDiffsRequestId++;
+    loadFilesRequestId++;
+    loadFileDiffRequestId++;
+    fileDiff.value = null;
+    selectedFile.value = null;
+    files.value = [];
+    highlights.value = null;
+    highlightsError.value = null;
+    selectedDiff.value = null;
+    selectedTo.value = "working";
+    diffs.value = [];
+    error.value = null;
+    resetComments();
+    commitMessages.value = [];
+    amendStatus.value = "idle";
     if (props.isOpen && props.cwd) {
       pendingInitialFile = props.initialFile;
       loadDiffs();
-    } else if (!props.isOpen) {
-      if (saveTimeout) saveImmediately();
-      if (amendTimeout) amendImmediately();
-      loadDiffsRequestId++;
-      loadFilesRequestId++;
-      loadFileDiffRequestId++;
-      fileDiff.value = null;
-      selectedFile.value = null;
-      files.value = [];
-      highlights.value = null;
-      highlightsError.value = null;
-      selectedDiff.value = null;
-      selectedTo.value = "working";
-      diffs.value = [];
-      error.value = null;
-      resetComments();
-      commitMessages.value = [];
-      amendStatus.value = "idle";
     }
   },
   { immediate: true },
@@ -1273,8 +1274,8 @@ function createEditor() {
     if (currentFileIsHeadCommit) {
       const model = modEditor.getModel();
       if (!model) return;
-      if (pendingAmend && (pendingAmend.cwd !== cwdVal || pendingAmend.conversationId !== props.conversationId)) amendImmediately();
-      pendingAmend = { cwd: cwdVal, content: model.getValue(), conversationId: props.conversationId };
+      if (pendingAmend && (pendingAmend.cwd !== gitCwd.value || pendingAmend.machine !== gitMachine.value)) amendImmediately();
+      pendingAmend = { cwd: gitCwd.value, content: model.getValue(), machine: gitMachine.value };
       if (amendTimeout) clearTimeout(amendTimeout);
       amendStatus.value = "saving";
       amendTimeout = window.setTimeout(() => {
@@ -1298,7 +1299,7 @@ function amendImmediately() {
 
 async function amendCurrentMessage(amend: NonNullable<typeof pendingAmend>) {
   try {
-    await api.amendGitMessage(amend.cwd, amend.conversationId, amend.content);
+    await api.amendGitMessage(amend.cwd, amend.machine, amend.content);
     amendStatus.value = "saved";
     setTimeout(() => (amendStatus.value = "idle"), 2000);
   } catch {
@@ -1484,12 +1485,12 @@ watch(
 
 // Keep notes in the review even when their original file snapshot no longer matches.
 watch(
-  [() => props.reviewNotes, fileDiff, modifiedEditor, () => props.isOpen],
+  [() => props.reviewNotes, fileDiff, modifiedEditor, checkout, () => props.isOpen],
   (_, __, onCleanup) => {
     const fd = fileDiff.value;
     if (!props.isOpen || !fd || !diffEditor || !props.reviewNotes?.length) return;
     const notes = props.reviewNotes.filter((note) =>
-      note.root === gitRoot.value && note.machine === (props.reviewMachine ?? "local") &&
+      note.root === checkout.value?.gitRoot && note.machine === checkout.value?.machine &&
       note.diff === selectedDiff.value && note.to === selectedTo.value && note.path === fd.path,
     );
     const cleanups = [
@@ -1533,13 +1534,13 @@ async function loadDiffs() {
     error.value = null;
     const response = await api.getGitDiffs(
       cwd,
-      props.conversationId,
+      props.machine,
       listedCommit(initialCommit),
       false,
     );
     if (requestId !== loadDiffsRequestId) return;
+    checkout.value = { gitRoot: response.gitRoot, machine: response.machine };
     diffs.value = response.diffs;
-    gitRoot.value = response.gitRoot;
 
     const selection = defaultDiffSelection(response.diffs, initialCommit);
     if (selection) {
@@ -1567,8 +1568,8 @@ async function loadCommitStats() {
   commitStatsRequestId = requestId;
   try {
     const response = await api.getGitDiffs(
-      props.cwd,
-      props.conversationId,
+      gitCwd.value,
+      gitMachine.value,
       listedCommit(props.initialCommit),
     );
     if (requestId !== loadDiffsRequestId) return;
@@ -1594,20 +1595,20 @@ async function loadCommitStats() {
 
 async function loadFiles(diffId: string) {
   const requestId = ++loadFilesRequestId;
-  const cwd = props.cwd;
+  const cwd = gitCwd.value;
   const toArg = diffId === "working" ? undefined : selectedTo.value;
   const initial = pendingInitialFile;
   pendingInitialFile = undefined;
-  const filesPromise = api.getGitDiffFiles(diffId, cwd, props.conversationId, toArg);
+  const filesPromise = api.getGitDiffFiles(diffId, cwd, gitMachine.value, toArg);
   const messagesPromise =
     diffId === "working"
       ? Promise.resolve<GitCommitMessage[]>([])
-      : api.getGitCommitMessages(cwd, props.conversationId, diffId, toArg).catch(() => []);
+      : api.getGitCommitMessages(cwd, gitMachine.value, diffId, toArg).catch(() => []);
   // Highlights describe one commit, so they apply only to its own diff.
   const hasHighlights =
     toArg === "self" && !!diffs.value.find((diff) => diff.id === diffId)?.hasHighlights;
   const highlightsPromise = hasHighlights
-    ? api.getGitHighlights(cwd, props.conversationId, diffId).catch((err) => {
+    ? api.getGitHighlights(cwd, gitMachine.value, diffId).catch((err) => {
         if (requestId === loadFilesRequestId) highlightsError.value = String(err);
         return null;
       })
@@ -1661,7 +1662,7 @@ async function loadFiles(diffId: string) {
 
 async function loadFileDiff(diffId: string, filePath: string, asText = false) {
   const requestId = ++loadFileDiffRequestId;
-  const cwd = props.cwd;
+  const cwd = gitCwd.value;
   const toArg = diffId === "working" ? undefined : selectedTo.value;
   try {
     loading.value = true;
@@ -1685,7 +1686,7 @@ async function loadFileDiff(diffId: string, filePath: string, asText = false) {
       diffId,
       filePath,
       cwd,
-      props.conversationId,
+      gitMachine.value,
       toArg,
       asText,
     );
@@ -1792,7 +1793,7 @@ function captureSave() {
     fileDiff.value.binary ||
     fileDiff.value.path !== selectedFile.value ||
     modeVal !== "edit" ||
-    !gitRoot.value ||
+    !checkout.value ||
     !isWorkingView
   ) {
     return null;
@@ -1800,16 +1801,16 @@ function captureSave() {
   const model = diffEditor.getModifiedEditor().getModel();
   if (!model) return null;
   return {
-    path: gitRoot.value + "/" + selectedFile.value,
+    path: checkout.value.gitRoot + "/" + selectedFile.value,
     content: model.getValue(),
-    conversationId: props.conversationId,
+    machine: gitMachine.value,
   };
 }
 
 async function saveCurrentFile(save: NonNullable<typeof pendingSave>) {
   try {
     saveStatus.value = "saving";
-    const response = await fetch(onMachine("/api/write-file", save.conversationId), {
+    const response = await fetch(onMachine("/api/write-file", save.machine), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: save.path, content: save.content }),
@@ -1831,7 +1832,7 @@ async function saveCurrentFile(save: NonNullable<typeof pendingSave>) {
 function scheduleSave() {
   const save = captureSave();
   if (!save) return;
-  if (pendingSave && (pendingSave.path !== save.path || pendingSave.conversationId !== save.conversationId)) saveImmediately();
+  if (pendingSave && (pendingSave.path !== save.path || pendingSave.machine !== save.machine)) saveImmediately();
   pendingSave = save;
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = window.setTimeout(() => {
@@ -2152,7 +2153,7 @@ function onCommitChange(diff: string, to: string) {
   selectedTo.value = to;
 }
 function onDirSelect(path: string) {
-  emit("cwd-change", path);
+  emit("cwd-change", path, checkout.value?.machine);
   showDirPicker.value = false;
 }
 

@@ -570,20 +570,8 @@ func TestSetConversationCwdBeforeFirstSend(t *testing.T) {
 	if !rec.turnMentioning(t, "hello", dest) {
 		t.Errorf("request never mentioned the new directory %q", dest)
 	}
-	// Moving before the first send makes the move itself trigger the hydrate that
-	// writes the system prompt, so that prompt names the directory being LEFT.
-	// That sounds alarming and isn't: a system prompt is written once, at the
-	// first send, and names whatever the cwd was then — so ANY later move leaves
-	// it equally stale. The notice is what reconciles the two, in this path and
-	// in the ordinary one alike. Asserting that keeps the two paths honest about
-	// being the same shape, and would catch a future change that started relying
-	// on the system prompt to carry the current directory.
 	system := rec.turnSystemPrompt(t, "hello")
-	if !strings.Contains(system, start) {
-		t.Errorf("expected the system prompt to name the directory it was written in (%q)", start)
-	}
-	if strings.Contains(system, dest) {
-		t.Errorf("system prompt unexpectedly names the new directory %q; if system prompts now track "+
-			"the live cwd, the notice may be redundant here", dest)
+	if !strings.Contains(system, "Initial pwd: "+start+"\n") || strings.Contains(system, dest) {
+		t.Errorf("system prompt should name the original directory %q: %s", start, system)
 	}
 }

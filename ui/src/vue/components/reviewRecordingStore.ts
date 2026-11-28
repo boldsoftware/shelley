@@ -7,6 +7,7 @@ import type { ReviewEvent } from "./reviewCapture";
 
 // How a conversation started by a recording is set up; taken at start.
 export interface NewReviewConversation {
+  cwd?: string;
   model: string;
   conversation_options?: ChatRequest["conversation_options"];
 }

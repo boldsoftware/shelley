@@ -128,7 +128,7 @@ export interface ReviewConversationStart {
   // That draft, created if need be, and the page's settings now; undefined
   // once the page has moved on or if it is archived.
   resolve: (
-    cwd: string,
+    cwd?: string,
   ) => Promise<{ conversationId: string; settings: NewReviewConversation } | undefined>;
 }
 
@@ -409,14 +409,14 @@ export function useReviewRecording(options: {
           // On the page it began on, or (after a reload or a return) on its
           // draft's page: that draft, with the page's settings now.
           const starter = showing(starters.get(id)) ?? (bound ? showing(pageStarter()) : undefined);
-          const page = starter ? await starter.resolve(session.cwd) : undefined;
+          const page = starter ? await starter.resolve(created.cwd) : undefined;
           if (page) {
             session = await store().update(id, {
               conversationId: page.conversationId,
               newConversation: page.settings,
             });
           } else if (!bound) {
-            const draft = await api.createDraft({ draft: "", cwd: session.cwd, ...created });
+            const draft = await api.createDraft({ draft: "", ...created });
             // Kept, so a retry goes to the same conversation.
             session = await store().update(id, {
               conversationId: draft.conversation_id,
@@ -444,10 +444,7 @@ export function useReviewRecording(options: {
           // Not the composer's text: it stays, even through a draft's promotion.
           draft_updated_at: "",
           // These promote a draft; a conversation ignores them.
-          ...(session.newConversation && {
-            ...session.newConversation,
-            cwd: session.cwd,
-          }),
+          ...session.newConversation,
         });
         break;
       }

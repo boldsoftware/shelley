@@ -406,9 +406,13 @@ export interface GitGraphCommit {
   isMergeBase?: boolean;
 }
 
-export interface GitGraphResponse {
-  commits: GitGraphCommit[];
+export interface GitCheckout {
   gitRoot: string;
+  machine: string;
+}
+
+export interface GitGraphResponse extends GitCheckout {
+  commits: GitGraphCommit[];
   currentBranch: string;
   githubBase?: string;
 }

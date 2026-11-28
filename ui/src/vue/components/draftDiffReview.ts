@@ -31,7 +31,7 @@ export function draftCommentLocation(note: NewDraftDiffComment): string {
 export function formatDraftDiffReview(notes: readonly DraftDiffComment[]): string {
   return notes
     .map((note) => {
-      const repo = note.machine === "local" ? note.root : `${note.machine}:${note.root}`;
+      const repo = note.machine ? `VM ${note.machine}:${note.root}` : note.root;
       const range = note.diff === "working" ? "working changes" : `${note.diff} → ${note.to}`;
       const lines = note.quote
         ? "\n" +

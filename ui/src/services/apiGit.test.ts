@@ -24,7 +24,7 @@ async function run(name: string, fn: () => Promise<void>): Promise<void> {
   }
 }
 
-await run("getGitDiffs requests an explicit commit", async () => {
+await run("getGitDiffs requests the recorded commit on its recorded host", async () => {
   let requestedUrl = "";
   await withFetch(
     (async (input) => {
@@ -32,11 +32,16 @@ await run("getGitDiffs requests an explicit commit", async () => {
       return Response.json({ diffs: [], gitRoot: "/tmp/repo" });
     }) as typeof globalThis.fetch,
     async () => {
-      await api.getGitDiffs("/tmp/a repo", "c1", "abc1234");
+      await api.getGitDiffs(
+        "/tmp/a repo",
+        { conversationId: "c1", expectedMachine: "", expectedCheckout: "/tmp/a repo" },
+        "abc1234",
+      );
     },
   );
   assert(
-    requestedUrl === "/api/git/diffs?cwd=%2Ftmp%2Fa+repo&conversation_id=c1&commit=abc1234",
+    requestedUrl ===
+      "/api/git/diffs?cwd=%2Ftmp%2Fa+repo&conversation_id=c1&expected_machine=&expected_checkout=%2Ftmp%2Fa+repo&commit=abc1234",
     `url = ${requestedUrl}`,
   );
 });

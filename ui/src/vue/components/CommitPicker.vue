@@ -7,7 +7,7 @@
       class="commit-picker-trigger"
       aria-haspopup="dialog"
       :aria-expanded="open"
-      aria-label="Commit"
+      :aria-label="isMobile ? `Open Git Graph: ${triggerPrimary}` : 'Commit'"
       @click="togglePicker"
     >
       <div class="commit-picker-trigger-text">
@@ -15,7 +15,8 @@
           <code>{{ triggerPrimary }}</code>
         </div>
       </div>
-      <span class="commit-picker-trigger-chevron" aria-hidden="true">{{ "\u25be" }}</span>
+      <WorkspaceActionIcon v-if="isMobile" action="gitGraph" class="commit-picker-trigger-graph" />
+      <span v-else class="commit-picker-trigger-chevron" aria-hidden="true">▾</span>
     </button>
 
     <!-- Desktop popover -->
@@ -37,6 +38,7 @@ import { computed, h, nextTick, onUnmounted, ref, watch, type VNode } from "vue"
 import type { GitDiffInfo } from "../../types";
 import { workingChangesStatus } from "./diffViewerModel";
 import RangeToggle from "./RangeToggle.vue";
+import WorkspaceActionIcon from "./WorkspaceActionIcon.vue";
 
 const props = defineProps<{
   diffs: GitDiffInfo[];

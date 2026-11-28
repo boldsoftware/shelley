@@ -32,6 +32,8 @@ var subagentSystemPromptTemplate string
 
 // SystemPromptData contains all the data needed to render the system prompt template
 type SystemPromptData struct {
+	InitialWorkingDirectory string
+
 	WorkingDirectory string
 	GitInfo          *GitInfo
 	Codebase         *CodebaseInfo
@@ -58,7 +60,8 @@ type SystemPromptVariable struct {
 
 // systemPromptVariables are the fields a system prompt template can use.
 var systemPromptVariables = []SystemPromptVariable{
-	{".WorkingDirectory", "The conversation's working directory."},
+	{".WorkingDirectory", "The working directory on the Shelley host at render time."},
+	{".InitialWorkingDirectory", "The conversation's initial working directory, if known."},
 	{".UserEmail", "The user's exe.dev email; empty if unknown."},
 	{".GitInfo.Root", "The git repository root. .GitInfo is nil outside a repository."},
 	{".IsExeDev", "Whether Shelley runs on an exe.dev VM."},
@@ -79,6 +82,8 @@ var systemPromptVariables = []SystemPromptVariable{
 // outside a git repository, say, GitInfo is nil.
 func validateSystemPromptTemplate(tmpl string) *TemplateProblem {
 	for _, data := range []*SystemPromptData{{template: tmpl}, {
+		InitialWorkingDirectory: "/home/user/project",
+
 		WorkingDirectory: "/home/user/project",
 		GitInfo:          &GitInfo{Root: "/home/user/project"},
 		Codebase: &CodebaseInfo{
@@ -866,7 +871,8 @@ func collectSystemData(workingDir string, integrationSkills []skills.Skill) (*Sy
 	}
 
 	data := &SystemPromptData{
-		WorkingDirectory: wd,
+		InitialWorkingDirectory: wd,
+		WorkingDirectory:        wd,
 	}
 
 	// collectGitInfo shells out to `git rev-parse`; resolve it first so the
@@ -1171,11 +1177,12 @@ func isSudoAvailable() bool {
 
 // SubagentSystemPromptData contains data for subagent system prompts (minimal subset).
 type SubagentSystemPromptData struct {
-	WorkingDirectory string
-	GitInfo          *GitInfo
-	Codebase         *CodebaseInfo
-	ShelleyDBPath    string
-	ConversationID   string
+	InitialWorkingDirectory string
+
+	GitInfo        *GitInfo
+	Codebase       *CodebaseInfo
+	ShelleyDBPath  string
+	ConversationID string
 	// MessageParent is set for delegated subagents, which have the
 	// message_parent tool.
 	MessageParent bool
@@ -1197,15 +1204,15 @@ func (d *SubagentSystemPromptData) ExeDevIntegrationsXML() string {
 
 // GenerateSubagentSystemPrompt generates a minimal system prompt for subagent conversations.
 func GenerateSubagentSystemPrompt(workingDir, parentConversationID string) (string, error) {
-	prompt, _, err := generateSubagentSystemPromptData(workingDir, parentConversationID, true, nil, nil, nil)
+	prompt, _, err := generateSubagentSystemPromptData(workingDir, parentConversationID, true, nil, nil, nil, nil)
 	return prompt, err
 }
 
-func generateSubagentSystemPromptWithIntegrationSkills(workingDir string, messageParent bool, integrationSkills []skills.Skill, mcpServers []MCPServerInfo, exeDev []ExeDevIntegrationInfo) (string, []skills.Skill, error) {
-	return generateSubagentSystemPromptData(workingDir, "", messageParent, integrationSkills, mcpServers, exeDev)
+func generateSubagentSystemPromptWithIntegrationSkills(workingDir string, messageParent bool, integrationSkills []skills.Skill, mcpServers []MCPServerInfo, exeDev []ExeDevIntegrationInfo, initialDir *string) (string, []skills.Skill, error) {
+	return generateSubagentSystemPromptData(workingDir, "", messageParent, integrationSkills, mcpServers, exeDev, initialDir)
 }
 
-func generateSubagentSystemPromptData(workingDir, parentConversationID string, messageParent bool, integrationSkills []skills.Skill, mcpServers []MCPServerInfo, exeDev []ExeDevIntegrationInfo) (string, []skills.Skill, error) {
+func generateSubagentSystemPromptData(workingDir, parentConversationID string, messageParent bool, integrationSkills []skills.Skill, mcpServers []MCPServerInfo, exeDev []ExeDevIntegrationInfo, initialDir *string) (string, []skills.Skill, error) {
 	wd := workingDir
 	if wd == "" {
 		var err error
@@ -1215,8 +1222,13 @@ func generateSubagentSystemPromptData(workingDir, parentConversationID string, m
 		}
 	}
 
+	initialWorkingDir := wd
+	if initialDir != nil {
+		initialWorkingDir = *initialDir
+	}
 	data := &SubagentSystemPromptData{
-		WorkingDirectory:   wd,
+		InitialWorkingDirectory: initialWorkingDir,
+
 		ShelleyDBPath:      DBPath,
 		ConversationID:     parentConversationID,
 		MessageParent:      messageParent,

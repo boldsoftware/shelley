@@ -136,14 +136,19 @@ func isNoTrailerSet() bool {
 const (
 	bashName        = "bash"
 	bashDescription = "Executes shell commands via bash --login -c, returning combined stdout/stderr.\n" +
-		"For commands like `cd app && make`, call change_dir with path `app`, then bash `make` without cd. " +
-		"These calls can share a response. " +
-		"Apply this before initial inspections and tests too, including README recipes. " +
-		"Skip change_dir if already there.\n\n" +
+		"Your working directory is this conversation's stable workspace, not the shell's cursor.\n\n" +
+		"| Intent | Mechanism |\n" +
+		"| --- | --- |\n" +
+		"| Work in this conversation's workspace | Ordinary relative commands and patches |\n" +
+		"| Run one command elsewhere | Set `cwd` for that command only |\n" +
+		"| Establish a new default for future relative paths and newly created helpers | `change_dir` |\n\n" +
+		"Use cwd for commands elsewhere. Change the workspace only to establish a better default for subsequent work, " +
+		"not as a prerequisite for inspecting, testing, building, or editing elsewhere. " +
+		"Do not switch back after a command-local excursion. " +
+		"Skip change_dir if already in the intended workspace.\n\n" +
 		`Shell state (cwd, variables, aliases) does not persist.
-Commands already start in the working directory; omit redundant cd.
-For 'cd dir && ...' or 'cd dir; ...', call change_dir first,
-then run the remaining command directly.
+Commands already start in the workspace; omit redundant cd.
+Guard commands after cd with && so they do not run if the directory change fails.
 
 After 60s, commands move to the background, and the response's later calls
 are skipped. To run independent work at the same time, start it with
@@ -178,6 +183,10 @@ write a file and run it; both can share one call.
       "type": "string",
       "description": "Shell to execute"
     },
+    "cwd": {
+      "type": "string",
+      "description": "Working directory for this command only, absolute or relative to the chat’s working directory"
+    },
     "background": {
       "type": "boolean",
       "description": "Start in the background immediately instead of after 60s"
@@ -188,6 +197,7 @@ write a file and run it; both can share one call.
 )
 
 type bashInput struct {
+	CWD        string `json:"cwd,omitempty"`
 	Command    string `json:"command"`
 	Background bool   `json:"background,omitempty"`
 	// SSHTarget is required when the conversation has a VM: its name, or
@@ -218,7 +228,11 @@ func (b *BashTool) run(ctx context.Context, req bashInput) llm.ToolOut {
 		return llm.ErrorToolOut(err)
 	}
 	req.vm = vm
-	wd := b.dirFor(vm)
+	base := b.dirFor(vm)
+	wd := base
+	if req.CWD != "" {
+		wd = resolvePath(base, req.CWD)
+	}
 	if vm != nil {
 		// A missing directory there fails there.
 		if err := vm.Prepare(ctx); err != nil {
@@ -281,7 +295,7 @@ func (b *BashTool) run(ctx context.Context, req bashInput) llm.ToolOut {
 	exitCode := 0
 	display.ExitCode = &exitCode
 	if chainedCdLeavesDir(bashkit.ChainedCdPaths(req.Command), wd) && b.cdHinted.CompareAndSwap(false, true) {
-		out = chainedCdHint(wd) + "\n\n" + out
+		out = chainedCdHint(base) + "\n\n" + out
 	}
 	return llm.ToolOut{LLMContent: llm.TextContent(out), Display: display}
 }
@@ -317,10 +331,9 @@ func chainedCdLeavesDir(paths []string, workingDir string) bool {
 	return false
 }
 
-// chainedCdHint tells the model the one fact it can act on: the cwd it
-// will see on the next call, and how to change it.
+// chainedCdHint reminds the model where the next call starts.
 func chainedCdHint(workingDir string) string {
-	return "[shelley: `cd` inside a bash call does not persist; the working directory is still " + workingDir + ". Use change_dir to move.]"
+	return "[shelley: Shell-local `cd` did not change the conversation's workspace: " + workingDir + ". No return switch is needed.]"
 }
 
 func cdPathIsCurrentDir(path, workingDir string) bool {

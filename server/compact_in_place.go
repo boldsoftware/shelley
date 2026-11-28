@@ -400,7 +400,11 @@ func buildCompaction(history []contextItem, keepRecentTokens int, tc tokenCounte
 }
 
 func collapsibleRow(row []contextItem, starts, ends map[int64]bool) bool {
-	return !orphanOutput(row) && !orphanCall(row) && starts[row[0].from] && ends[row[len(row)-1].to]
+	if orphanOutput(row) || orphanCall(row) || !starts[row[0].from] || !ends[row[len(row)-1].to] {
+		return false
+	}
+	calls := changeDirToolCalls(row)
+	return !slices.ContainsFunc(row, func(it contextItem) bool { return carriesWorkspaceMove(it, calls) })
 }
 
 type collapsePart struct {
@@ -526,9 +530,10 @@ func orphanCall(row []contextItem) bool {
 // rowTrims lists the trims of a row's tool outputs not trimmed yet.
 func rowTrims(row []contextItem) []db.CompactionTrim {
 	var trims []db.CompactionTrim
+	calls := changeDirToolCalls(row)
 	for _, it := range row {
 		for _, c := range it.message.Content {
-			if c.Type == llm.ContentTypeToolResult && !isTrimmedOutput(c) {
+			if c.Type == llm.ContentTypeToolResult && !isTrimmedOutput(c) && !isChangeDirResult(c, calls) {
 				trims = append(trims, db.CompactionTrim{SequenceID: it.from, ToolUseID: c.ToolUseID})
 			}
 		}

@@ -175,6 +175,10 @@ func stopActiveConversationLoops(server *Server) {
 // was queued behind it in the new one.
 func TestStartNewGenerationDuringTurn(t *testing.T) {
 	server, database, held, conv := newBtwTest(t)
+	dir := t.TempDir()
+	if err := database.UpdateConversationCwd(t.Context(), conv.ConversationID, dir); err != nil {
+		t.Fatal(err)
+	}
 	requireBtwStatus(t, postBtwChat(t, server, conv.ConversationID, ChatRequest{Message: "long job", Model: "predictable"}), http.StatusAccepted)
 	held.waitCall(t, "long job")
 	requireBtwStatus(t, postBtwChat(t, server, conv.ConversationID, ChatRequest{Message: "queued", Model: "predictable", Queue: true}), http.StatusAccepted)
@@ -182,8 +186,11 @@ func TestStartNewGenerationDuringTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	call := held.waitCall(t, "queued")
-	if n := len(call.request.Messages); n != 1 {
-		t.Errorf("queued message went out with %d messages of context, want just itself", n)
+	if messages := call.request.Messages; len(messages) != 1 || messageText(messages[0]) != "queued" {
+		t.Errorf("new generation contains context beyond the queued message: %+v", messages)
+	}
+	if system := systemText(call.request); !strings.Contains(system, "Initial pwd: "+dir+"\n") {
+		t.Error("new generation's system prompt is missing the initial directory")
 	}
 	releaseAndWaitIdle(t, server, conv.ConversationID, call)
 	requireTurnsEndOnce(t, database, conv.ConversationID, 2)

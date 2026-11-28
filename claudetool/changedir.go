@@ -31,11 +31,13 @@ type ChangeDirTool struct {
 
 const (
 	changeDirName        = "change_dir"
-	changeDirDescription = `Change the working directory for subsequent tool calls.
-The directory must exist; relative paths resolve against the current directory.
+	changeDirDescription = `Establish a new default workspace for future relative paths and newly created helpers.
+This changes the working directory for subsequent tool calls, including relative patches and newly created subagents.
+Use bash cwd to run a single command elsewhere; this tool is not a prerequisite.
+Change the workspace only to establish a better default for subsequent work.
+The directory must exist; relative paths resolve against the current workspace.
 If it fails, later calls in the response are skipped until an absolute change_dir succeeds.
-Call this before inspecting, testing, or editing in another directory.
-Omit redundant cd when already in the target directory.
+Skip this call if already in the intended workspace.
 `
 	changeDirInputSchema = `{
   "type": "object",

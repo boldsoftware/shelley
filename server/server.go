@@ -696,6 +696,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	api.Handle("GET /api/git/repos", compressionHandler(http.HandlerFunc(s.handleGitRepos)))
 	api.Handle("GET /api/git/diffs", compressionHandler(http.HandlerFunc(s.handleGitDiffs)))
 	api.Handle("GET /api/git/highlights", compressionHandler(http.HandlerFunc(s.handleGitHighlights)))
+	api.HandleFunc("GET /api/git/checkouts", s.handleRecentCheckouts)
 	api.Handle("GET /api/git/graph", compressionHandler(http.HandlerFunc(s.handleGitGraph)))
 	api.Handle("GET /api/git/commit-detail", compressionHandler(http.HandlerFunc(s.handleGitCommitDetail)))
 	api.Handle("GET /api/git/diffs/", compressionHandler(http.HandlerFunc(s.handleGitDiffFiles)))

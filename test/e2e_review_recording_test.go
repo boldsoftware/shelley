@@ -294,6 +294,7 @@ type sentReview struct {
 	Version  any              `json:"version"`
 	Source   any              `json:"source"`
 	MimeType any              `json:"mime_type"`
+	Cwd      string           `json:"cwd"`
 	Events   []map[string]any `json:"events"`
 }
 
@@ -583,7 +584,7 @@ func TestE2EReviewRecordingMobileRangeContext(t *testing.T) {
 }
 
 func TestE2EReviewRecordingOutsideConversation(t *testing.T) {
-	e2e(t, useful(0), `Outside a conversation, a recording starts one of its own. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`The server refuses audio uploads (/api/upload/raw answers 503 "unavailable") until call "accept uploads". Perform the steps in order.
+	e2e(t, useful(1), `Outside a conversation, a recording starts one of its own. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`The server refuses audio uploads (/api/upload/raw answers 503 "unavailable") until call "accept uploads". Perform the steps in order.
 1. Navigate to /new?{{QUERY}} and wait for the commit message.
 2. Hover the start button; the tooltip's text should be exactly "Record a narrated review for a new conversation".
 3. Click the start button. Hover the stop button; the tooltip's text should be exactly "Stop and send to a new conversation".
@@ -595,6 +596,7 @@ func TestE2EReviewRecordingOutsideConversation(t *testing.T) {
 9. Sent, the page moves to the new conversation behind the viewer (its URL waits for its title, so check the drawer): ".conversation-item[data-conversation-id='{{NEW_ID}}']" should have class "active" (eval classList.contains("active"), expect true).
 10. Hover the start button; the tooltip's text should be exactly "Record a narrated review".`, func(s *shelley) {
 		rv := newReview(s, true)
+		s.initScript(fmt.Sprintf(`localStorage.setItem("shelley_selected_cwd", %q);`, rv.repo))
 		rv.routeDrafts()
 		rv.routeChats(func() int { return chatText })
 		rv.failUploads()
@@ -664,7 +666,29 @@ new Promise((resolve, reject) => { const open = indexedDB.open("shelley-review-r
 		rv.routeDrafts()
 		rv.routeChats(func() int { return chatText })
 		rv.callDrafts()
-		rv.callChats()
+		s.call("chats", func() string {
+			chats, drafts, _ := rv.recorded()
+			if len(chats) != 1 || len(drafts) != 1 {
+				return fmt.Sprintf("%d chat requests, %d drafts", len(chats), len(drafts))
+			}
+			chat := chats[0]
+			got := rv.started(chat.ID)
+			if !like(drafts[0], map[string]any{"cwd": s.cwd}) ||
+				!like(chat.Body, map[string]any{"cwd": s.cwd}) ||
+				!like(got, map[string]any{"cwd": s.cwd, "is_draft": false}) {
+				return fmt.Sprintf("expected draft to stay in %q: draft cwd %v, chat cwd %v, saved cwd %v, is_draft %v",
+					s.cwd, drafts[0]["cwd"], chat.Body["cwd"], got["cwd"], got["is_draft"])
+			}
+			r, err := readSentReview(chat)
+			if err != nil {
+				return err.Error()
+			}
+			if r.Cwd != rv.repo || !containsLike(r.Events, map[string]any{"type": "view", "commit": rv.hash}) {
+				return fmt.Sprintf("expected the recording to show %s in %s, got cwd %q and events %s",
+					rv.hash, rv.repo, r.Cwd, mustJSON(r.Events))
+			}
+			return mustJSON([]string{"/api/conversation/" + chat.ID + "/chat"})
+		})
 		s.viewport(1500, 900)
 	})
 }
@@ -693,7 +717,7 @@ func TestE2EReviewRecordingSentFromLiveConversation(t *testing.T) {
 }
 
 func TestE2EReviewRecordingDeletedDraft(t *testing.T) {
-	e2e(t, useful(0), `A recording whose draft was deleted starts another. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`The server answers the recording's chat requests with 503 "unavailable" until call "accept chats". Perform the steps in order.
+	e2e(t, useful(1), `A recording whose draft was deleted starts another. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`The server answers the recording's chat requests with 503 "unavailable" until call "accept chats". Perform the steps in order.
 1. Navigate to /new?{{QUERY}} and wait for the commit message.
 2. Click the start button, wait for the clock to start, then click the stop button. data-testid "review-recording-error" should contain "unavailable".
 3. Call "delete draft" should return exactly "deleted": it checks the recording made exactly one draft and deletes it on the server (POST /api/conversation/<id>/delete).
@@ -701,6 +725,7 @@ func TestE2EReviewRecordingDeletedDraft(t *testing.T) {
 5. Call "check send" should return exactly "ok": it checks that exactly two drafts were made, that the chat requests went exactly to the deleted draft (the refused attempt) and then the new one, so nothing more went to the deleted draft, and that the server has the new one as a conversation that is not a draft, in the repository. It makes {{NEW_ID}} the new draft's id.
 6. ".conversation-item[data-conversation-id='{{NEW_ID}}']" should have class "active" (eval classList.contains("active"), expect true).`, func(s *shelley) {
 		rv := newReview(s, true)
+		s.initScript(fmt.Sprintf(`localStorage.setItem("shelley_selected_cwd", %q);`, rv.repo))
 		rv.routeDrafts()
 		var accept atomic.Bool
 		rv.routeChats(func() int {
@@ -741,7 +766,7 @@ func TestE2EReviewRecordingDeletedDraft(t *testing.T) {
 }
 
 func TestE2EReviewRecordingArchivedStartsNew(t *testing.T) {
-	e2e(t, useful(0), `A recording on an archived conversation starts a new one. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`There is an archived conversation /c/archived in the repository. Perform the steps in order.
+	e2e(t, useful(1), `A recording on an archived conversation starts a new one. `+reviewTerms+reviewCommitMessage+reviewQuery+reviewSent+reviewTick+`There is an archived conversation /c/archived in the repository. Perform the steps in order.
 1. Navigate to /c/archived?{{QUERY}} and wait for the commit message.
 2. Hover the start button; the tooltip's text should be exactly "Record a narrated review for a new conversation".
 3. Click the start button, wait for the clock to start, then click the stop button. It is sent.

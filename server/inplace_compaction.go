@@ -91,14 +91,56 @@ func decodeInPlaceCompaction(msg generated.Message) (db.InPlaceCompaction, error
 	return c, nil
 }
 
+func isCwdChangeNotice(it contextItem) bool {
+	if it.source == nil || it.source.Type != string(db.MessageTypeUser) || it.source.UserData == nil {
+		return false
+	}
+	var data struct {
+		CwdChange bool `json:"cwd_change"`
+	}
+	return json.Unmarshal([]byte(*it.source.UserData), &data) == nil && data.CwdChange
+}
+
+func changeDirToolCalls(items []contextItem) map[string]bool {
+	calls := map[string]bool{}
+	for _, it := range items {
+		for _, c := range it.message.Content {
+			if c.Type == llm.ContentTypeToolUse && c.ToolName == "change_dir" {
+				calls[c.ID] = true
+			}
+		}
+	}
+	return calls
+}
+
+func isChangeDirResult(c llm.Content, calls map[string]bool) bool {
+	return c.Type == llm.ContentTypeToolResult && !c.ToolError && calls[c.ToolUseID]
+}
+
+func carriesWorkspaceMove(it contextItem, calls map[string]bool) bool {
+	return isCwdChangeNotice(it) || slices.ContainsFunc(it.message.Content, func(c llm.Content) bool {
+		return isChangeDirResult(c, calls)
+	})
+}
+
 // applyInPlaceCompaction applies c, recorded as recordSeq in conversationID,
 // to items, returning the new view. items is not modified.
 func applyInPlaceCompaction(items []contextItem, c db.InPlaceCompaction, conversationID string, recordSeq int64) ([]contextItem, error) {
 	out := append([]contextItem(nil), items...)
+	// Validate new records without rejecting earlier compaction records on replay.
+	var cwdCalls map[string]bool
+	if recordSeq == 0 {
+		cwdCalls = changeDirToolCalls(items)
+	}
 	for _, t := range c.Trims {
 		i := indexOfItem(out, func(it contextItem) bool { return it.source != nil && it.from == t.SequenceID })
 		if i < 0 {
 			return nil, fmt.Errorf("trim: no message with sequence id %d in context", t.SequenceID)
+		}
+		for _, content := range out[i].message.Content {
+			if content.ToolUseID == t.ToolUseID && isChangeDirResult(content, cwdCalls) {
+				return nil, fmt.Errorf("trim: message %d records a workspace move", t.SequenceID)
+			}
 		}
 		trimmed, ok := trimToolResult(out[i].message, t.ToolUseID, trimmedToolOutputText(conversationID, t.SequenceID))
 		if !ok {
@@ -111,6 +153,9 @@ func applyInPlaceCompaction(items []contextItem, c db.InPlaceCompaction, convers
 		j := indexOfItem(out, func(it contextItem) bool { return it.to == s.ToSequenceID })
 		if i < 0 || j < 0 || j < i {
 			return nil, fmt.Errorf("squish: range %d-%d does not align with messages in context", s.FromSequenceID, s.ToSequenceID)
+		}
+		if recordSeq == 0 && slices.ContainsFunc(out[i:j+1], func(it contextItem) bool { return carriesWorkspaceMove(it, cwdCalls) }) {
+			return nil, fmt.Errorf("squish: range %d-%d contains a workspace move", s.FromSequenceID, s.ToSequenceID)
 		}
 		for _, p := range toolPairs(out) {
 			if !p.call || !p.result {

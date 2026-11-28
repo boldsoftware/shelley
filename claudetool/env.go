@@ -40,6 +40,8 @@ type ShelleyEnv struct {
 // strip these from an inherited environment before appending fresh values so a
 // stale value from a parent process can't leak through.
 var shelleyEnvKeys = []string{
+	"SHELLEY_COMMIT_LOG",
+	"SHELLEY_COMMIT_OBSERVER",
 	"SHELLEY_CONVERSATION_ID",
 	"SHELLEY_CONVERSATION_SLUG",
 	"SHELLEY_MODEL",
