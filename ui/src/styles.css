@@ -15733,18 +15733,14 @@ kbd {
 }
 
 @media (max-width: 768px) {
-  .git-graph-author {
-    display: none;
-  }
-  /* Hide SHAs on mobile to save horizontal space; the detail sheet
-     surfaces the full hash when a row is tapped. */
-  .git-graph-hash {
-    display: none;
-  }
-
-  /* Hide the desktop divider on mobile — the detail pane becomes a
+  /* Hide the author and SHAs on mobile to save horizontal space; the
+     detail sheet surfaces the full hash when a row is tapped. The
+     desktop divider and its grip go too — the detail pane becomes a
      bottom sheet there, so there's nothing to drag. */
-  .git-graph-divider {
+  .git-graph-author,
+  .git-graph-hash,
+  .git-graph-divider,
+  .git-graph-sheet-grip {
     display: none;
   }
 
@@ -15791,10 +15787,6 @@ kbd {
     z-index: 2;
     pointer-events: none;
     flex-shrink: 0;
-  }
-
-  .git-graph-sheet-grip {
-    display: none;
   }
 
   .git-graph-sheet-close {
@@ -16175,7 +16167,9 @@ kbd {
 
 .git-graph-checkout-picker .p-select-label {
   padding: 0.25rem 0.5rem;
-  font: var(--font-size-14)/1.2 var(--font-sans);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-14);
+  line-height: 1.2;
 }
 
 .git-graph-checkout-picker .p-select-dropdown {
